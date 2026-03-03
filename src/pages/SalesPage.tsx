@@ -81,7 +81,7 @@ export default function SalesPage() {
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
               <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
-              <th className="text-right p-3">Preço Un.</th><th className="text-right p-3">Total</th>
+              <th className="text-right p-3">Preço Un.</th><th className="text-right p-3">Total</th><th className="text-left p-3">Obs.</th>
             </tr></thead>
             <tbody>
               {[...sales].reverse().map(s => (
@@ -91,6 +91,7 @@ export default function SalesPage() {
                   <td className="p-3 text-right mono">{s.quantity}</td>
                   <td className="p-3 text-right mono text-primary">{formatCurrency(s.unitPrice)}</td>
                   <td className="p-3 text-right mono font-semibold text-primary">{formatCurrency(s.totalPrice)}</td>
+                  <td className="p-3 text-xs text-muted-foreground">{s.notes || '—'}</td>
                 </tr>
               ))}
             </tbody>

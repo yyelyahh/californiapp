@@ -73,7 +73,7 @@ export default function StockEntryPage() {
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
               <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
-              <th className="text-right p-3">Custo Un.</th><th className="text-right p-3">Total</th>
+              <th className="text-right p-3">Custo Un.</th><th className="text-right p-3">Total</th><th className="text-left p-3">Obs.</th>
             </tr></thead>
             <tbody>
               {[...stockEntries].reverse().map(e => (
@@ -83,6 +83,7 @@ export default function StockEntryPage() {
                   <td className="p-3 text-right mono">{e.quantity}</td>
                   <td className="p-3 text-right mono text-accent">{formatCurrency(e.unitCost)}</td>
                   <td className="p-3 text-right mono font-semibold text-accent">{formatCurrency(e.totalCost)}</td>
+                  <td className="p-3 text-xs text-muted-foreground">{e.notes || '—'}</td>
                 </tr>
               ))}
             </tbody>
