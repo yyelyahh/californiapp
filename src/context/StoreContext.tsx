@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Product, StockEntry, Sale, Expense, Investor, Dividend } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface StoreContextType {
   products: Product[];
@@ -8,18 +10,19 @@ interface StoreContextType {
   expenses: Expense[];
   investors: Investor[];
   dividends: Dividend[];
-  addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => void;
-  updateProduct: (id: string, p: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => void;
-  addSale: (s: Omit<Sale, "id" | "totalPrice">) => void;
-  addExpense: (e: Omit<Expense, "id">) => void;
-  deleteExpense: (id: string) => void;
-  addInvestor: (i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => void;
-  updateInvestor: (id: string, i: Partial<Investor>) => void;
-  deleteInvestor: (id: string) => void;
-  addDividend: (d: Omit<Dividend, "id">) => void;
-  deleteDividend: (id: string) => void;
+  loading: boolean;
+  addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
+  updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
+  addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
+  addExpense: (e: Omit<Expense, "id">) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  addInvestor: (i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => Promise<void>;
+  updateInvestor: (id: string, i: Partial<Investor>) => Promise<void>;
+  deleteInvestor: (id: string) => Promise<void>;
+  addDividend: (d: Omit<Dividend, "id">) => Promise<void>;
+  deleteDividend: (id: string) => Promise<void>;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
   getTotalExpenses: () => number;
@@ -33,92 +36,205 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-function load<T>(key: string, fallback: T[]): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch { return fallback; }
-}
-
-function save(key: string, data: unknown) {
-  localStorage.setItem(key, JSON.stringify(data));
-}
-
-const uid = () => crypto.randomUUID();
-
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(() => load("pods_products", []));
-  const [stockEntries, setStockEntries] = useState<StockEntry[]>(() => load("pods_stock_entries", []));
-  const [sales, setSales] = useState<Sale[]>(() => load("pods_sales", []));
-  const [expenses, setExpenses] = useState<Expense[]>(() => load("pods_expenses", []));
-  const [investors, setInvestors] = useState<Investor[]>(() => load("pods_investors", []));
-  const [dividends, setDividends] = useState<Dividend[]>(() => load("pods_dividends", []));
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stockEntries, setStockEntries] = useState<StockEntry[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [investors, setInvestors] = useState<Investor[]>([]);
+  const [dividends, setDividends] = useState<Dividend[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => save("pods_products", products), [products]);
-  useEffect(() => save("pods_stock_entries", stockEntries), [stockEntries]);
-  useEffect(() => save("pods_sales", sales), [sales]);
-  useEffect(() => save("pods_expenses", expenses), [expenses]);
-  useEffect(() => save("pods_investors", investors), [investors]);
-  useEffect(() => save("pods_dividends", dividends), [dividends]);
+  // Fetch all data on mount
+  useEffect(() => {
+    const fetchAll = async () => {
+      setLoading(true);
+      try {
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes] = await Promise.all([
+          supabase.from("products").select("*").order("created_at", { ascending: true }),
+          supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
+          supabase.from("sales").select("*").order("created_at", { ascending: true }),
+          supabase.from("expenses").select("*").order("created_at", { ascending: true }),
+          supabase.from("investors").select("*").order("created_at", { ascending: true }),
+          supabase.from("dividends").select("*").order("created_at", { ascending: true }),
+        ]);
 
-  const addProduct = useCallback((p: Omit<Product, "id" | "createdAt" | "stock">) => {
-    setProducts(prev => [...prev, { ...p, id: uid(), stock: 0, createdAt: new Date().toISOString() }]);
+        if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
+        if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
+        if (salesRes.data) setSales(salesRes.data.map(mapSale));
+        if (expRes.data) setExpenses(expRes.data.map(mapExpense));
+        if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
+        if (divRes.data) setDividends(divRes.data.map(mapDividend));
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        toast.error("Erro ao carregar dados");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAll();
   }, []);
 
-  const updateProduct = useCallback((id: string, updates: Partial<Product>) => {
+  // Mappers from DB snake_case to app camelCase
+  const mapProduct = (r: any): Product => ({
+    id: r.id, name: r.name, brand: r.brand, flavor: r.flavor,
+    purchasePrice: Number(r.purchase_price), salePrice: Number(r.sale_price),
+    stock: r.stock, createdAt: r.created_at,
+  });
+
+  const mapStockEntry = (r: any): StockEntry => ({
+    id: r.id, productId: r.product_id, quantity: r.quantity,
+    unitCost: Number(r.unit_cost), totalCost: Number(r.total_cost),
+    date: r.date, notes: r.notes,
+  });
+
+  const mapSale = (r: any): Sale => ({
+    id: r.id, productId: r.product_id, quantity: r.quantity,
+    unitPrice: Number(r.unit_price), totalPrice: Number(r.total_price),
+    date: r.date, notes: r.notes,
+  });
+
+  const mapExpense = (r: any): Expense => ({
+    id: r.id, description: r.description, category: r.category,
+    amount: Number(r.amount), date: r.date,
+  });
+
+  const mapInvestor = (r: any): Investor => ({
+    id: r.id, name: r.name, investedAmount: Number(r.invested_amount),
+    returnPercentage: Number(r.return_percentage), totalReturn: Number(r.total_return),
+    createdAt: r.created_at,
+  });
+
+  const mapDividend = (r: any): Dividend => ({
+    id: r.id, investorId: r.investor_id, amount: Number(r.amount),
+    date: r.date, notes: r.notes,
+  });
+
+  const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
+    const { data, error } = await supabase.from("products").insert({
+      name: p.name, brand: p.brand, flavor: p.flavor,
+      purchase_price: p.purchasePrice, sale_price: p.salePrice, stock: 0,
+    }).select().single();
+    if (error) { toast.error("Erro ao adicionar produto"); return; }
+    setProducts(prev => [...prev, mapProduct(data)]);
+  }, []);
+
+  const updateProduct = useCallback(async (id: string, updates: Partial<Product>) => {
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
+    if (updates.flavor !== undefined) dbUpdates.flavor = updates.flavor;
+    if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
+    if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
+    if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
+
+    const { error } = await supabase.from("products").update(dbUpdates).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar produto"); return; }
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   }, []);
 
-  const deleteProduct = useCallback((id: string) => {
+  const deleteProduct = useCallback(async (id: string) => {
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir produto"); return; }
     setProducts(prev => prev.filter(p => p.id !== id));
   }, []);
 
-  const addStockEntry = useCallback((e: Omit<StockEntry, "id" | "totalCost">) => {
-    const entry: StockEntry = { ...e, id: uid(), totalCost: e.quantity * e.unitCost };
-    setStockEntries(prev => [...prev, entry]);
-    setProducts(prev => prev.map(p => p.id === e.productId ? { ...p, stock: p.stock + e.quantity, purchasePrice: e.unitCost } : p));
+  const addStockEntry = useCallback(async (e: Omit<StockEntry, "id" | "totalCost">) => {
+    const totalCost = e.quantity * e.unitCost;
+    const { data, error } = await supabase.from("stock_entries").insert({
+      product_id: e.productId, quantity: e.quantity,
+      unit_cost: e.unitCost, total_cost: totalCost, date: e.date, notes: e.notes,
+    }).select().single();
+    if (error) { toast.error("Erro ao registrar entrada"); return; }
+    setStockEntries(prev => [...prev, mapStockEntry(data)]);
+
+    // Update product stock and purchase price
+    const product = products.find(p => p.id === e.productId);
+    if (product) {
+      await supabase.from("products").update({
+        stock: product.stock + e.quantity, purchase_price: e.unitCost,
+      }).eq("id", e.productId);
+      setProducts(prev => prev.map(p => p.id === e.productId
+        ? { ...p, stock: p.stock + e.quantity, purchasePrice: e.unitCost } : p));
+    }
+  }, [products]);
+
+  const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
+    const totalPrice = s.quantity * s.unitPrice;
+    const { data, error } = await supabase.from("sales").insert({
+      product_id: s.productId, quantity: s.quantity,
+      unit_price: s.unitPrice, total_price: totalPrice, date: s.date, notes: s.notes,
+    }).select().single();
+    if (error) { toast.error("Erro ao registrar venda"); return; }
+    setSales(prev => [...prev, mapSale(data)]);
+
+    // Update product stock and sale price
+    const product = products.find(p => p.id === s.productId);
+    if (product) {
+      await supabase.from("products").update({
+        stock: Math.max(0, product.stock - s.quantity), sale_price: s.unitPrice,
+      }).eq("id", s.productId);
+      setProducts(prev => prev.map(p => p.id === s.productId
+        ? { ...p, stock: Math.max(0, p.stock - s.quantity), salePrice: s.unitPrice } : p));
+    }
+  }, [products]);
+
+  const addExpense = useCallback(async (e: Omit<Expense, "id">) => {
+    const { data, error } = await supabase.from("expenses").insert({
+      description: e.description, category: e.category, amount: e.amount, date: e.date,
+    }).select().single();
+    if (error) { toast.error("Erro ao adicionar despesa"); return; }
+    setExpenses(prev => [...prev, mapExpense(data)]);
   }, []);
 
-  const addSale = useCallback((s: Omit<Sale, "id" | "totalPrice">) => {
-    const sale: Sale = { ...s, id: uid(), totalPrice: s.quantity * s.unitPrice };
-    setSales(prev => [...prev, sale]);
-    setProducts(prev => prev.map(p => p.id === s.productId ? { ...p, stock: Math.max(0, p.stock - s.quantity), salePrice: s.unitPrice } : p));
-  }, []);
-
-  const addExpense = useCallback((e: Omit<Expense, "id">) => {
-    setExpenses(prev => [...prev, { ...e, id: uid() }]);
-  }, []);
-
-  const deleteExpense = useCallback((id: string) => {
+  const deleteExpense = useCallback(async (id: string) => {
+    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir despesa"); return; }
     setExpenses(prev => prev.filter(e => e.id !== id));
   }, []);
 
-  const addInvestor = useCallback((i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => {
+  const addInvestor = useCallback(async (i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => {
     const totalReturn = i.investedAmount * (1 + i.returnPercentage / 100);
-    setInvestors(prev => [...prev, { ...i, id: uid(), totalReturn, createdAt: new Date().toISOString() }]);
+    const { data, error } = await supabase.from("investors").insert({
+      name: i.name, invested_amount: i.investedAmount,
+      return_percentage: i.returnPercentage, total_return: totalReturn,
+    }).select().single();
+    if (error) { toast.error("Erro ao adicionar investidor"); return; }
+    setInvestors(prev => [...prev, mapInvestor(data)]);
   }, []);
 
-  const updateInvestor = useCallback((id: string, updates: Partial<Investor>) => {
-    setInvestors(prev => prev.map(i => {
-      if (i.id !== id) return i;
-      const updated = { ...i, ...updates };
-      // Recalculate totalReturn if amount or percentage changed
-      if (updates.investedAmount !== undefined || updates.returnPercentage !== undefined) {
-        updated.totalReturn = updated.investedAmount * (1 + updated.returnPercentage / 100);
-      }
-      return updated;
-    }));
-  }, []);
+  const updateInvestor = useCallback(async (id: string, updates: Partial<Investor>) => {
+    const current = investors.find(i => i.id === id);
+    if (!current) return;
+    const updated = { ...current, ...updates };
+    if (updates.investedAmount !== undefined || updates.returnPercentage !== undefined) {
+      updated.totalReturn = updated.investedAmount * (1 + updated.returnPercentage / 100);
+    }
+    const { error } = await supabase.from("investors").update({
+      name: updated.name, invested_amount: updated.investedAmount,
+      return_percentage: updated.returnPercentage, total_return: updated.totalReturn,
+    }).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar investidor"); return; }
+    setInvestors(prev => prev.map(i => i.id === id ? updated : i));
+  }, [investors]);
 
-  const deleteInvestor = useCallback((id: string) => {
+  const deleteInvestor = useCallback(async (id: string) => {
+    const { error } = await supabase.from("investors").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir investidor"); return; }
     setInvestors(prev => prev.filter(i => i.id !== id));
   }, []);
 
-  const addDividend = useCallback((d: Omit<Dividend, "id">) => {
-    setDividends(prev => [...prev, { ...d, id: uid() }]);
+  const addDividend = useCallback(async (d: Omit<Dividend, "id">) => {
+    const { data, error } = await supabase.from("dividends").insert({
+      investor_id: d.investorId, amount: d.amount, date: d.date, notes: d.notes,
+    }).select().single();
+    if (error) { toast.error("Erro ao registrar pagamento"); return; }
+    setDividends(prev => [...prev, mapDividend(data)]);
   }, []);
 
-  const deleteDividend = useCallback((id: string) => {
+  const deleteDividend = useCallback(async (id: string) => {
+    const { error } = await supabase.from("dividends").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir pagamento"); return; }
     setDividends(prev => prev.filter(d => d.id !== id));
   }, []);
 
@@ -142,7 +258,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends,
+      products, stockEntries, sales, expenses, investors, dividends, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, addSale,
       addExpense, deleteExpense,
