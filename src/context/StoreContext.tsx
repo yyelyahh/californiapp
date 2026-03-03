@@ -15,11 +15,11 @@ interface StoreContextType {
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => void;
   addExpense: (e: Omit<Expense, "id">) => void;
   deleteExpense: (id: string) => void;
-  addInvestor: (i: Omit<Investor, "id" | "createdAt">) => void;
+  addInvestor: (i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => void;
   updateInvestor: (id: string, i: Partial<Investor>) => void;
   deleteInvestor: (id: string) => void;
   addDividend: (d: Omit<Dividend, "id">) => void;
-  markDividendPaid: (id: string) => void;
+  deleteDividend: (id: string) => void;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
   getTotalExpenses: () => number;
@@ -27,6 +27,8 @@ interface StoreContextType {
   getNetProfit: () => number;
   getProductName: (id: string) => string;
   getInvestorName: (id: string) => string;
+  getPaidToInvestor: (id: string) => number;
+  getRemainingForInvestor: (id: string) => number;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -91,12 +93,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setExpenses(prev => prev.filter(e => e.id !== id));
   }, []);
 
-  const addInvestor = useCallback((i: Omit<Investor, "id" | "createdAt">) => {
-    setInvestors(prev => [...prev, { ...i, id: uid(), createdAt: new Date().toISOString() }]);
+  const addInvestor = useCallback((i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => {
+    const totalReturn = i.investedAmount * (1 + i.returnPercentage / 100);
+    setInvestors(prev => [...prev, { ...i, id: uid(), totalReturn, createdAt: new Date().toISOString() }]);
   }, []);
 
   const updateInvestor = useCallback((id: string, updates: Partial<Investor>) => {
-    setInvestors(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    setInvestors(prev => prev.map(i => {
+      if (i.id !== id) return i;
+      const updated = { ...i, ...updates };
+      // Recalculate totalReturn if amount or percentage changed
+      if (updates.investedAmount !== undefined || updates.returnPercentage !== undefined) {
+        updated.totalReturn = updated.investedAmount * (1 + updated.returnPercentage / 100);
+      }
+      return updated;
+    }));
   }, []);
 
   const deleteInvestor = useCallback((id: string) => {
@@ -107,8 +118,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setDividends(prev => [...prev, { ...d, id: uid() }]);
   }, []);
 
-  const markDividendPaid = useCallback((id: string) => {
-    setDividends(prev => prev.map(d => d.id === id ? { ...d, paid: true, paidAt: new Date().toISOString() } : d));
+  const deleteDividend = useCallback((id: string) => {
+    setDividends(prev => prev.filter(d => d.id !== id));
   }, []);
 
   const getTotalRevenue = useCallback(() => sales.reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
@@ -119,6 +130,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const getProductName = useCallback((id: string) => products.find(p => p.id === id)?.name ?? "Produto desconhecido", [products]);
   const getInvestorName = useCallback((id: string) => investors.find(i => i.id === id)?.name ?? "Investidor desconhecido", [investors]);
 
+  const getPaidToInvestor = useCallback((id: string) => {
+    return dividends.filter(d => d.investorId === id).reduce((sum, d) => sum + d.amount, 0);
+  }, [dividends]);
+
+  const getRemainingForInvestor = useCallback((id: string) => {
+    const investor = investors.find(i => i.id === id);
+    if (!investor) return 0;
+    return Math.max(0, investor.totalReturn - getPaidToInvestor(id));
+  }, [investors, getPaidToInvestor]);
+
   return (
     <StoreContext.Provider value={{
       products, stockEntries, sales, expenses, investors, dividends,
@@ -126,9 +147,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addStockEntry, addSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
-      addDividend, markDividendPaid,
+      addDividend, deleteDividend,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
-      getProductName, getInvestorName,
+      getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
     }}>
       {children}
     </StoreContext.Provider>

@@ -41,7 +41,8 @@ export interface Investor {
   id: string;
   name: string;
   investedAmount: number;
-  sharePercentage: number;
+  returnPercentage: number;
+  totalReturn: number; // investedAmount * (1 + returnPercentage/100)
   createdAt: string;
 }
 
@@ -49,7 +50,6 @@ export interface Dividend {
   id: string;
   investorId: string;
   amount: number;
-  month: string;
-  paid: boolean;
-  paidAt?: string;
+  date: string;
+  notes?: string;
 }
