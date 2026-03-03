@@ -14,7 +14,210 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dividends: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          investor_id: string
+          notes: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          id?: string
+          investor_id: string
+          notes?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          investor_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dividends_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "investors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          description: string
+          id: string
+        }
+        Insert: {
+          amount: number
+          category?: string
+          created_at?: string
+          date?: string
+          description: string
+          id?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      investors: {
+        Row: {
+          created_at: string
+          id: string
+          invested_amount: number
+          name: string
+          return_percentage: number
+          total_return: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invested_amount?: number
+          name: string
+          return_percentage?: number
+          total_return?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invested_amount?: number
+          name?: string
+          return_percentage?: number
+          total_return?: number
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          brand: string
+          created_at: string
+          flavor: string
+          id: string
+          name: string
+          purchase_price: number
+          sale_price: number
+          stock: number
+        }
+        Insert: {
+          brand?: string
+          created_at?: string
+          flavor?: string
+          id?: string
+          name: string
+          purchase_price?: number
+          sale_price?: number
+          stock?: number
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          flavor?: string
+          id?: string
+          name?: string
+          purchase_price?: number
+          sale_price?: number
+          stock?: number
+        }
+        Relationships: []
+      }
+      sales: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_entries: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          total_cost: number
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          total_cost?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_entries_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
