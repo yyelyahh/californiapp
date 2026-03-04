@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { format } from "date-fns";
+import { todayDateString } from "@/lib/date-utils";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -17,7 +17,7 @@ export default function InvestorsPage() {
   const [openInvestor, setOpenInvestor] = useState(false);
   const [openPayment, setOpenPayment] = useState(false);
   const [investorForm, setInvestorForm] = useState({ name: "", investedAmount: "", returnPercentage: "" });
-  const [paymentForm, setPaymentForm] = useState({ investorId: "", amount: "", date: format(new Date(), "yyyy-MM-dd"), notes: "" });
+  const [paymentForm, setPaymentForm] = useState({ investorId: "", amount: "", date: todayDateString(), notes: "" });
 
   const handleAddInvestor = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +40,7 @@ export default function InvestorsPage() {
       date: paymentForm.date,
       notes: paymentForm.notes.trim() || undefined,
     });
-    setPaymentForm({ investorId: "", amount: "", date: format(new Date(), "yyyy-MM-dd"), notes: "" });
+    setPaymentForm({ investorId: "", amount: "", date: todayDateString(), notes: "" });
     setOpenPayment(false);
   };
 

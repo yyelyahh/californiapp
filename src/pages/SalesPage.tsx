@@ -6,14 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { format, parseISO } from "date-fns";
+import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: new Date().toISOString().split("T")[0], notes: "", installments: "1", paidAmount: "0" };
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0" };
 
 export default function SalesPage() {
   const { products, sales, addSale, updateSale, deleteSale, getProductName } = useStore();
@@ -35,7 +35,7 @@ export default function SalesPage() {
       productId: s.productId,
       quantity: String(s.quantity),
       unitPrice: String(s.unitPrice),
-      date: s.date?.split("T")[0] || new Date().toISOString().split("T")[0],
+      date: s.date?.split("T")[0] || todayDateString(),
       notes: s.notes || "",
       installments: String(s.installments || 1),
       paidAmount: String(s.paidAmount || 0),
@@ -53,7 +53,7 @@ export default function SalesPage() {
         quantity: Number(form.quantity),
         unitPrice: Number(form.unitPrice) || 0,
         totalPrice,
-        date: new Date(form.date).toISOString(),
+        date: localDateToISO(form.date),
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
@@ -63,7 +63,7 @@ export default function SalesPage() {
         productId: form.productId,
         quantity: Number(form.quantity),
         unitPrice: Number(form.unitPrice) || 0,
-        date: new Date(form.date).toISOString(),
+        date: localDateToISO(form.date),
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
@@ -149,7 +149,7 @@ export default function SalesPage() {
                 const remaining = Math.max(0, s.totalPrice - s.paidAmount);
                 return (
                   <tr key={s.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
-                    <td className="p-3 mono text-xs">{format(parseISO(s.date), "dd/MM/yyyy")}</td>
+                    <td className="p-3 mono text-xs">{formatDateBR(s.date)}</td>
                     <td className="p-3">{getProductName(s.productId)}</td>
                     <td className="p-3 text-right mono">{s.quantity}</td>
                     <td className="p-3 text-right mono font-semibold text-primary">{formatCurrency(s.totalPrice)}</td>
