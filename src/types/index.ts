@@ -27,6 +27,8 @@ export interface Sale {
   totalPrice: number;
   date: string;
   notes?: string;
+  installments: number;
+  paidAmount: number;
 }
 
 export interface Expense {

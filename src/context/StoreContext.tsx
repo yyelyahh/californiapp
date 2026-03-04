@@ -16,6 +16,8 @@ interface StoreContextType {
   deleteProduct: (id: string) => Promise<void>;
   addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
+  updateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
   addExpense: (e: Omit<Expense, "id">) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   addInvestor: (i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => Promise<void>;
@@ -92,6 +94,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     id: r.id, productId: r.product_id, quantity: r.quantity,
     unitPrice: Number(r.unit_price), totalPrice: Number(r.total_price),
     date: r.date, notes: r.notes,
+    installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
   });
 
   const mapExpense = (r: any): Expense => ({
@@ -164,11 +167,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.from("sales").insert({
       product_id: s.productId, quantity: s.quantity,
       unit_price: s.unitPrice, total_price: totalPrice, date: s.date, notes: s.notes,
+      installments: s.installments || 1, paid_amount: s.paidAmount || 0,
     }).select().single();
     if (error) { toast.error("Erro ao registrar venda"); return; }
     setSales(prev => [...prev, mapSale(data)]);
 
-    // Update product stock and sale price
     const product = products.find(p => p.id === s.productId);
     if (product) {
       await supabase.from("products").update({
@@ -178,6 +181,39 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ? { ...p, stock: Math.max(0, p.stock - s.quantity), salePrice: s.unitPrice } : p));
     }
   }, [products]);
+
+  const updateSale = useCallback(async (id: string, updates: Partial<Sale>) => {
+    const dbUpdates: any = {};
+    if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity;
+    if (updates.unitPrice !== undefined) dbUpdates.unit_price = updates.unitPrice;
+    if (updates.totalPrice !== undefined) dbUpdates.total_price = updates.totalPrice;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.installments !== undefined) dbUpdates.installments = updates.installments;
+    if (updates.paidAmount !== undefined) dbUpdates.paid_amount = updates.paidAmount;
+
+    const { error } = await supabase.from("sales").update(dbUpdates).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar venda"); return; }
+    setSales(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, []);
+
+  const deleteSale = useCallback(async (id: string) => {
+    const sale = sales.find(s => s.id === id);
+    const { error } = await supabase.from("sales").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir venda"); return; }
+    setSales(prev => prev.filter(s => s.id !== id));
+
+    if (sale) {
+      const product = products.find(p => p.id === sale.productId);
+      if (product) {
+        await supabase.from("products").update({
+          stock: product.stock + sale.quantity,
+        }).eq("id", sale.productId);
+        setProducts(prev => prev.map(p => p.id === sale.productId
+          ? { ...p, stock: p.stock + sale.quantity } : p));
+      }
+    }
+  }, [sales, products]);
 
   const addExpense = useCallback(async (e: Omit<Expense, "id">) => {
     const { data, error } = await supabase.from("expenses").insert({
@@ -260,7 +296,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     <StoreContext.Provider value={{
       products, stockEntries, sales, expenses, investors, dividends, loading,
       addProduct, updateProduct, deleteProduct,
-      addStockEntry, addSale,
+      addStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
