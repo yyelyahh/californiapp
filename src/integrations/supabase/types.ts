@@ -141,7 +141,9 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          installments: number
           notes: string | null
+          paid_amount: number
           product_id: string
           quantity: number
           total_price: number
@@ -151,7 +153,9 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          installments?: number
           notes?: string | null
+          paid_amount?: number
           product_id: string
           quantity: number
           total_price: number
@@ -161,7 +165,9 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          installments?: number
           notes?: string | null
+          paid_amount?: number
           product_id?: string
           quantity?: number
           total_price?: number
