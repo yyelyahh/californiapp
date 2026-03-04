@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { format, parseISO } from "date-fns";
+import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 
 const categories = ["Frete", "Embalagem", "Marketing", "Aluguel", "Outros"];
 
@@ -17,7 +17,7 @@ function formatCurrency(v: number) {
 export default function ExpensesPage() {
   const { expenses, addExpense, deleteExpense } = useStore();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ description: "", category: "", amount: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ description: "", category: "", amount: "", date: todayDateString() });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +26,9 @@ export default function ExpensesPage() {
       description: form.description.trim(),
       category: form.category || "Outros",
       amount: Number(form.amount),
-      date: new Date(form.date).toISOString(),
+      date: localDateToISO(form.date),
     });
-    setForm({ description: "", category: "", amount: "", date: new Date().toISOString().split("T")[0] });
+    setForm({ description: "", category: "", amount: "", date: todayDateString() });
     setOpen(false);
   };
 
@@ -78,7 +78,7 @@ export default function ExpensesPage() {
             <tbody>
               {[...expenses].reverse().map(e => (
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
-                  <td className="p-3 mono text-xs">{format(parseISO(e.date), "dd/MM/yyyy")}</td>
+                  <td className="p-3 mono text-xs">{formatDateBR(e.date)}</td>
                   <td className="p-3">{e.description}</td>
                   <td className="p-3"><span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">{e.category}</span></td>
                   <td className="p-3 text-right mono font-semibold text-accent">{formatCurrency(e.amount)}</td>

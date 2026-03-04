@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { format, parseISO } from "date-fns";
+import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -15,7 +15,7 @@ function formatCurrency(v: number) {
 export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: new Date().toISOString().split("T")[0], notes: "" });
+  const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,10 +24,10 @@ export default function StockEntryPage() {
       productId: form.productId,
       quantity: Number(form.quantity),
       unitCost: Number(form.unitCost) || 0,
-      date: new Date(form.date).toISOString(),
+      date: localDateToISO(form.date),
       notes: form.notes || undefined,
     });
-    setForm({ productId: "", quantity: "", unitCost: "", date: new Date().toISOString().split("T")[0], notes: "" });
+    setForm({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
     setOpen(false);
   };
 
@@ -78,7 +78,7 @@ export default function StockEntryPage() {
             <tbody>
               {[...stockEntries].reverse().map(e => (
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
-                  <td className="p-3 mono text-xs">{format(parseISO(e.date), "dd/MM/yyyy")}</td>
+                  <td className="p-3 mono text-xs">{formatDateBR(e.date)}</td>
                   <td className="p-3">{getProductName(e.productId)}</td>
                   <td className="p-3 text-right mono">{e.quantity}</td>
                   <td className="p-3 text-right mono text-accent">{formatCurrency(e.unitCost)}</td>
