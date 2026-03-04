@@ -24,7 +24,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="p-4 flex items-center gap-2 border-b border-sidebar-border">
           {!collapsed && (
-            <h1 className="text-lg font-bold text-gradient-primary tracking-tight">PodStock</h1>
+            <h1 className="text-lg font-bold text-gradient-primary tracking-tight">California</h1>
           )}
           <button onClick={() => setCollapsed(!collapsed)} className="ml-auto text-sidebar-foreground hover:text-foreground transition-colors p-1">
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -49,7 +49,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
         {!collapsed && (
           <div className="p-4 border-t border-sidebar-border">
-            <p className="text-xs text-muted-foreground">PodStock v1.0</p>
+            <p className="text-xs text-muted-foreground">California Contabilidade</p>
           </div>
         )}
       </aside>
