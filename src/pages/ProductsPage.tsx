@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -14,6 +14,17 @@ export default function ProductsPage() {
   const { products, addProduct, deleteProduct } = useStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "" });
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return products;
+    const q = search.toLowerCase();
+    return products.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.brand.toLowerCase().includes(q) ||
+      p.flavor.toLowerCase().includes(q)
+    );
+  }, [products, search]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,13 +67,23 @@ export default function ProductsPage() {
         </Dialog>
       </div>
 
-      {products.length === 0 ? (
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por nome, marca ou sabor..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="glass-card p-12 text-center">
-          <p className="text-muted-foreground">Nenhum produto cadastrado ainda.</p>
+          <p className="text-muted-foreground">{products.length === 0 ? "Nenhum produto cadastrado ainda." : "Nenhum produto encontrado."}</p>
         </div>
       ) : (
         <div className="grid gap-3">
-          {products.map(p => (
+          {filtered.map(p => (
             <div key={p.id} className="glass-card p-4 flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2">

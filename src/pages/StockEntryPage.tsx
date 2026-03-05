@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +16,24 @@ export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const filtered = useMemo(() => {
+    let items = [...stockEntries].reverse();
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      items = items.filter(e => getProductName(e.productId).toLowerCase().includes(q));
+    }
+    if (dateFrom) {
+      items = items.filter(e => e.date.slice(0, 10) >= dateFrom);
+    }
+    if (dateTo) {
+      items = items.filter(e => e.date.slice(0, 10) <= dateTo);
+    }
+    return items;
+  }, [stockEntries, search, dateFrom, dateTo, getProductName]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,8 +84,19 @@ export default function StockEntryPage() {
         </Dialog>
       </div>
 
-      {stockEntries.length === 0 ? (
-        <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma entrada registrada.</p></div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Buscar por produto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <div className="flex gap-2">
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" placeholder="De" />
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" placeholder="Até" />
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="glass-card p-12 text-center"><p className="text-muted-foreground">{stockEntries.length === 0 ? "Nenhuma entrada registrada." : "Nenhuma entrada encontrada."}</p></div>
       ) : (
         <div className="glass-card overflow-hidden">
           <table className="w-full text-sm">
@@ -76,7 +105,7 @@ export default function StockEntryPage() {
               <th className="text-right p-3">Custo Un.</th><th className="text-right p-3">Total</th><th className="text-left p-3">Obs.</th>
             </tr></thead>
             <tbody>
-              {[...stockEntries].reverse().map(e => (
+              {filtered.map(e => (
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
                   <td className="p-3 mono text-xs">{formatDateBR(e.date)}</td>
                   <td className="p-3">{getProductName(e.productId)}</td>
