@@ -55,3 +55,10 @@ export interface Dividend {
   date: string;
   notes?: string;
 }
+
+export interface Partner {
+  id: string;
+  name: string;
+  percentage: number;
+  createdAt: string;
+}
