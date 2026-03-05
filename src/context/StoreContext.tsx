@@ -15,6 +15,7 @@ interface StoreContextType {
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
+  deleteStockEntry: (id: string) => Promise<void>;
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
   updateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
@@ -162,6 +163,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [products]);
 
+  const deleteStockEntry = useCallback(async (id: string) => {
+    const entry = stockEntries.find(e => e.id === id);
+    const { error } = await supabase.from("stock_entries").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir entrada"); return; }
+    setStockEntries(prev => prev.filter(e => e.id !== id));
+
+    if (entry) {
+      const product = products.find(p => p.id === entry.productId);
+      if (product) {
+        const newStock = Math.max(0, product.stock - entry.quantity);
+        await supabase.from("products").update({ stock: newStock }).eq("id", entry.productId);
+        setProducts(prev => prev.map(p => p.id === entry.productId ? { ...p, stock: newStock } : p));
+      }
+    }
+  }, [stockEntries, products]);
+
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
     const totalPrice = s.quantity * s.unitPrice;
     const { data, error } = await supabase.from("sales").insert({
@@ -296,7 +313,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     <StoreContext.Provider value={{
       products, stockEntries, sales, expenses, investors, dividends, loading,
       addProduct, updateProduct, deleteProduct,
-      addStockEntry, addSale, updateSale, deleteSale,
+      addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
