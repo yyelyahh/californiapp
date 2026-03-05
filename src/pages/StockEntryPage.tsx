@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +13,7 @@ function formatCurrency(v: number) {
 }
 
 export default function StockEntryPage() {
-  const { products, stockEntries, addStockEntry, getProductName } = useStore();
+  const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
   const [search, setSearch] = useState("");
@@ -102,7 +102,7 @@ export default function StockEntryPage() {
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
               <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
-              <th className="text-right p-3">Custo Un.</th><th className="text-right p-3">Total</th><th className="text-left p-3">Obs.</th>
+              <th className="text-right p-3">Custo Un.</th><th className="text-right p-3">Total</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
             </tr></thead>
             <tbody>
               {filtered.map(e => (
@@ -113,6 +113,11 @@ export default function StockEntryPage() {
                   <td className="p-3 text-right mono text-accent">{formatCurrency(e.unitCost)}</td>
                   <td className="p-3 text-right mono font-semibold text-accent">{formatCurrency(e.totalCost)}</td>
                   <td className="p-3 text-xs text-muted-foreground">{e.notes || '—'}</td>
+                  <td className="p-3 text-right">
+                    <Button variant="ghost" size="icon" onClick={() => deleteStockEntry(e.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                      <Trash2 size={14} />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
