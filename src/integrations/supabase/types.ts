@@ -103,6 +103,27 @@ export type Database = {
         }
         Relationships: []
       }
+      partners: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          percentage: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          percentage?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          percentage?: number
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           brand: string

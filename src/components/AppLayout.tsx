@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, DollarSign, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: "/sales", icon: ShoppingCart, label: "Vendas" },
   { to: "/expenses", icon: Receipt, label: "Despesas" },
   { to: "/investors", icon: Users, label: "Investidores" },
+  { to: "/revenue", icon: DollarSign, label: "Receita" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

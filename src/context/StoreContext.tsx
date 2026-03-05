@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ interface StoreContextType {
   expenses: Expense[];
   investors: Investor[];
   dividends: Dividend[];
+  partners: Partner[];
   loading: boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
@@ -26,6 +27,9 @@ interface StoreContextType {
   deleteInvestor: (id: string) => Promise<void>;
   addDividend: (d: Omit<Dividend, "id">) => Promise<void>;
   deleteDividend: (id: string) => Promise<void>;
+  addPartner: (p: Omit<Partner, "id" | "createdAt">) => Promise<void>;
+  updatePartner: (id: string, p: Partial<Partner>) => Promise<void>;
+  deletePartner: (id: string) => Promise<void>;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
   getTotalExpenses: () => number;
@@ -46,6 +50,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch all data on mount
@@ -53,13 +58,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
           supabase.from("expenses").select("*").order("created_at", { ascending: true }),
           supabase.from("investors").select("*").order("created_at", { ascending: true }),
           supabase.from("dividends").select("*").order("created_at", { ascending: true }),
+          supabase.from("partners").select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -68,6 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (expRes.data) setExpenses(expRes.data.map(mapExpense));
         if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
         if (divRes.data) setDividends(divRes.data.map(mapDividend));
+        if (partRes.data) setPartners(partRes.data.map(mapPartner));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -291,6 +298,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setDividends(prev => prev.filter(d => d.id !== id));
   }, []);
 
+  const mapPartner = (r: any): Partner => ({
+    id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
+  });
+
+  const addPartner = useCallback(async (p: Omit<Partner, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("partners").insert({
+      name: p.name, percentage: p.percentage,
+    }).select().single();
+    if (error) { toast.error("Erro ao adicionar sócio"); return; }
+    setPartners(prev => [...prev, mapPartner(data)]);
+  }, []);
+
+  const updatePartner = useCallback(async (id: string, updates: Partial<Partner>) => {
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.percentage !== undefined) dbUpdates.percentage = updates.percentage;
+    const { error } = await supabase.from("partners").update(dbUpdates).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar sócio"); return; }
+    setPartners(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+  }, []);
+
+  const deletePartner = useCallback(async (id: string) => {
+    const { error } = await supabase.from("partners").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir sócio"); return; }
+    setPartners(prev => prev.filter(p => p.id !== id));
+  }, []);
+
   const getTotalRevenue = useCallback(() => sales.reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
   const getTotalCosts = useCallback(() => stockEntries.reduce((sum, e) => sum + e.totalCost, 0), [stockEntries]);
   const getTotalExpenses = useCallback(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
@@ -311,12 +345,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
+      addPartner, updatePartner, deletePartner,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
     }}>
