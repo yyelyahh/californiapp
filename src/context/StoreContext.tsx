@@ -211,11 +211,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
     const totalPrice = s.quantity * s.unitPrice;
-    const { data, error } = await supabase.from("sales").insert({
+    const insertData: any = {
       product_id: s.productId, quantity: s.quantity,
       unit_price: s.unitPrice, total_price: totalPrice, date: s.date, notes: s.notes,
       installments: s.installments || 1, paid_amount: s.paidAmount || 0,
-    }).select().single();
+    };
+    if (s.sellerId) insertData.seller_id = s.sellerId;
+    const { data, error } = await supabase.from("sales").insert(insertData).select().single();
     if (error) { toast.error("Erro ao registrar venda"); return; }
     setSales(prev => [...prev, mapSale(data)]);
 
