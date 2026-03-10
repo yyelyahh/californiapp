@@ -16,7 +16,7 @@ function formatCurrency(v: number) {
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "" };
 
 export default function SalesPage() {
-  const { products, sales, addSale, updateSale, deleteSale, getProductName } = useStore();
+  const { products, sales, sellers, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
