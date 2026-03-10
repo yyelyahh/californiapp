@@ -154,7 +154,7 @@ export default function SalesPage() {
             <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
               <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
               <th className="text-right p-3">Total</th><th className="text-center p-3">Parcelas</th><th className="text-right p-3">Recebido</th>
-              <th className="text-right p-3">Falta</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
+              <th className="text-right p-3">Falta</th><th className="text-left p-3">Vendedor</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
             </tr></thead>
             <tbody>
               {[...sales].reverse().map(s => {
