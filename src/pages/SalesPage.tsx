@@ -39,6 +39,7 @@ export default function SalesPage() {
       notes: s.notes || "",
       installments: String(s.installments || 1),
       paidAmount: String(s.paidAmount || 0),
+      sellerId: s.sellerId || "",
     });
     setOpen(true);
   };
