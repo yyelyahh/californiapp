@@ -32,6 +32,11 @@ interface StoreContextType {
   addPartner: (p: Omit<Partner, "id" | "createdAt">) => Promise<void>;
   updatePartner: (id: string, p: Partial<Partner>) => Promise<void>;
   deletePartner: (id: string) => Promise<void>;
+  addSeller: (s: Omit<Seller, "id" | "createdAt">) => Promise<void>;
+  deleteSeller: (id: string) => Promise<void>;
+  addProductAssignment: (a: Omit<ProductAssignment, "id" | "createdAt">) => Promise<void>;
+  deleteProductAssignment: (id: string) => Promise<void>;
+  getSellerName: (id: string) => string;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
   getTotalExpenses: () => number;
