@@ -11,6 +11,8 @@ interface StoreContextType {
   investors: Investor[];
   dividends: Dividend[];
   partners: Partner[];
+  sellers: Seller[];
+  productAssignments: ProductAssignment[];
   loading: boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
