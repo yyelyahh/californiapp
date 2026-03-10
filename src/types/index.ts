@@ -29,6 +29,7 @@ export interface Sale {
   notes?: string;
   installments: number;
   paidAmount: number;
+  sellerId?: string;
 }
 
 export interface Expense {
@@ -60,5 +61,20 @@ export interface Partner {
   id: string;
   name: string;
   percentage: number;
+  createdAt: string;
+}
+
+export interface Seller {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface ProductAssignment {
+  id: string;
+  sellerId: string;
+  productId: string;
+  quantity: number;
+  notes?: string;
   createdAt: string;
 }

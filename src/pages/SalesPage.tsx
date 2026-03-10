@@ -13,10 +13,10 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0" };
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "" };
 
 export default function SalesPage() {
-  const { products, sales, addSale, updateSale, deleteSale, getProductName } = useStore();
+  const { products, sales, sellers, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -39,6 +39,7 @@ export default function SalesPage() {
       notes: s.notes || "",
       installments: String(s.installments || 1),
       paidAmount: String(s.paidAmount || 0),
+      sellerId: s.sellerId || "",
     });
     setOpen(true);
   };
@@ -57,6 +58,7 @@ export default function SalesPage() {
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
+        sellerId: form.sellerId || undefined,
       });
     } else {
       addSale({
@@ -67,6 +69,7 @@ export default function SalesPage() {
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
+        sellerId: form.sellerId || undefined,
       });
     }
     setForm(emptyForm);
@@ -127,6 +130,15 @@ export default function SalesPage() {
                 </div>
               )}
               <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div>
+                <Label>Vendedor</Label>
+                <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Sem vendedor" /></SelectTrigger>
+                  <SelectContent>
+                    {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
               <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : "Registrar Venda"}</Button>
             </form>
@@ -142,7 +154,7 @@ export default function SalesPage() {
             <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
               <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
               <th className="text-right p-3">Total</th><th className="text-center p-3">Parcelas</th><th className="text-right p-3">Recebido</th>
-              <th className="text-right p-3">Falta</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
+              <th className="text-right p-3">Falta</th><th className="text-left p-3">Vendedor</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
             </tr></thead>
             <tbody>
               {[...sales].reverse().map(s => {
@@ -158,6 +170,7 @@ export default function SalesPage() {
                     <td className="p-3 text-right mono">
                       {remaining > 0 ? <span className="text-destructive font-semibold">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground">—</span>}
                     </td>
+                    <td className="p-3 text-sm">{s.sellerId ? getSellerName(s.sellerId) : <span className="text-muted-foreground">—</span>}</td>
                     <td className="p-3 text-xs text-muted-foreground max-w-[120px] truncate">{s.notes || '—'}</td>
                     <td className="p-3">
                       <div className="flex gap-1">
