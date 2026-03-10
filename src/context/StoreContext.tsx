@@ -67,7 +67,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -75,6 +75,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("investors").select("*").order("created_at", { ascending: true }),
           supabase.from("dividends").select("*").order("created_at", { ascending: true }),
           supabase.from("partners").select("*").order("created_at", { ascending: true }),
+          supabase.from("sellers").select("*").order("created_at", { ascending: true }),
+          supabase.from("product_assignments").select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -84,6 +86,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
         if (divRes.data) setDividends(divRes.data.map(mapDividend));
         if (partRes.data) setPartners(partRes.data.map(mapPartner));
+        if (selRes.data) setSellers(selRes.data.map(mapSeller));
+        if (paRes.data) setProductAssignments(paRes.data.map(mapProductAssignment));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
