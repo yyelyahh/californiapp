@@ -116,6 +116,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     unitPrice: Number(r.unit_price), totalPrice: Number(r.total_price),
     date: r.date, notes: r.notes,
     installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
+    sellerId: r.seller_id || undefined,
+  });
+
+  const mapSeller = (r: any): Seller => ({
+    id: r.id, name: r.name, createdAt: r.created_at,
+  });
+
+  const mapProductAssignment = (r: any): ProductAssignment => ({
+    id: r.id, sellerId: r.seller_id, productId: r.product_id,
+    quantity: r.quantity, notes: r.notes, createdAt: r.created_at,
   });
 
   const mapExpense = (r: any): Expense => ({
