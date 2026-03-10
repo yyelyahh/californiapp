@@ -58,6 +58,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch all data on mount
