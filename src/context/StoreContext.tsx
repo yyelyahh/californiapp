@@ -62,7 +62,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all data on mount
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
@@ -75,8 +74,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("investors").select("*").order("created_at", { ascending: true }),
           supabase.from("dividends").select("*").order("created_at", { ascending: true }),
           supabase.from("partners").select("*").order("created_at", { ascending: true }),
-          supabase.from("sellers").select("*").order("created_at", { ascending: true }),
-          supabase.from("product_assignments").select("*").order("created_at", { ascending: true }),
+          supabase.from("sellers" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -86,8 +85,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
         if (divRes.data) setDividends(divRes.data.map(mapDividend));
         if (partRes.data) setPartners(partRes.data.map(mapPartner));
-        if (selRes.data) setSellers(selRes.data.map(mapSeller));
-        if (paRes.data) setProductAssignments(paRes.data.map(mapProductAssignment));
+        if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
+        if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -98,7 +97,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     fetchAll();
   }, []);
 
-  // Mappers from DB snake_case to app camelCase
   const mapProduct = (r: any): Product => ({
     id: r.id, name: r.name, brand: r.brand, flavor: r.flavor,
     purchasePrice: Number(r.purchase_price), salePrice: Number(r.sale_price),
@@ -144,6 +142,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     date: r.date, notes: r.notes,
   });
 
+  const mapPartner = (r: any): Partner => ({
+    id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
+  });
+
+  // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
     const { data, error } = await supabase.from("products").insert({
       name: p.name, brand: p.brand, flavor: p.flavor,
@@ -161,7 +164,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
     if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
     if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
-
     const { error } = await supabase.from("products").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar produto"); return; }
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -173,6 +175,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setProducts(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ---- Stock Entries ----
   const addStockEntry = useCallback(async (e: Omit<StockEntry, "id" | "totalCost">) => {
     const totalCost = e.quantity * e.unitCost;
     const { data, error } = await supabase.from("stock_entries").insert({
@@ -181,8 +184,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }).select().single();
     if (error) { toast.error("Erro ao registrar entrada"); return; }
     setStockEntries(prev => [...prev, mapStockEntry(data)]);
-
-    // Update product stock and purchase price
     const product = products.find(p => p.id === e.productId);
     if (product) {
       await supabase.from("products").update({
@@ -198,7 +199,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from("stock_entries").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir entrada"); return; }
     setStockEntries(prev => prev.filter(e => e.id !== id));
-
     if (entry) {
       const product = products.find(p => p.id === entry.productId);
       if (product) {
@@ -209,6 +209,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [stockEntries, products]);
 
+  // ---- Sales ----
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
     const totalPrice = s.quantity * s.unitPrice;
     const insertData: any = {
@@ -220,7 +221,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.from("sales").insert(insertData).select().single();
     if (error) { toast.error("Erro ao registrar venda"); return; }
     setSales(prev => [...prev, mapSale(data)]);
-
     const product = products.find(p => p.id === s.productId);
     if (product) {
       await supabase.from("products").update({
@@ -241,7 +241,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.installments !== undefined) dbUpdates.installments = updates.installments;
     if (updates.paidAmount !== undefined) dbUpdates.paid_amount = updates.paidAmount;
     if (updates.sellerId !== undefined) dbUpdates.seller_id = updates.sellerId || null;
-
     const { error } = await supabase.from("sales").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar venda"); return; }
     setSales(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
@@ -252,19 +251,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from("sales").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir venda"); return; }
     setSales(prev => prev.filter(s => s.id !== id));
-
     if (sale) {
       const product = products.find(p => p.id === sale.productId);
       if (product) {
-        await supabase.from("products").update({
-          stock: product.stock + sale.quantity,
-        }).eq("id", sale.productId);
-        setProducts(prev => prev.map(p => p.id === sale.productId
-          ? { ...p, stock: p.stock + sale.quantity } : p));
+        await supabase.from("products").update({ stock: product.stock + sale.quantity }).eq("id", sale.productId);
+        setProducts(prev => prev.map(p => p.id === sale.productId ? { ...p, stock: p.stock + sale.quantity } : p));
       }
     }
   }, [sales, products]);
 
+  // ---- Expenses ----
   const addExpense = useCallback(async (e: Omit<Expense, "id">) => {
     const { data, error } = await supabase.from("expenses").insert({
       description: e.description, category: e.category, amount: e.amount, date: e.date,
@@ -279,6 +275,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setExpenses(prev => prev.filter(e => e.id !== id));
   }, []);
 
+  // ---- Investors ----
   const addInvestor = useCallback(async (i: Omit<Investor, "id" | "createdAt" | "totalReturn">) => {
     const totalReturn = i.investedAmount * (1 + i.returnPercentage / 100);
     const { data, error } = await supabase.from("investors").insert({
@@ -310,6 +307,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setInvestors(prev => prev.filter(i => i.id !== id));
   }, []);
 
+  // ---- Dividends ----
   const addDividend = useCallback(async (d: Omit<Dividend, "id">) => {
     const { data, error } = await supabase.from("dividends").insert({
       investor_id: d.investorId, amount: d.amount, date: d.date, notes: d.notes,
@@ -324,10 +322,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setDividends(prev => prev.filter(d => d.id !== id));
   }, []);
 
-  const mapPartner = (r: any): Partner => ({
-    id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
-  });
-
+  // ---- Partners ----
   const addPartner = useCallback(async (p: Omit<Partner, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("partners").insert({
       name: p.name, percentage: p.percentage,
@@ -351,6 +346,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPartners(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ---- Sellers ----
+  const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("sellers" as any).insert({ name: s.name }).select().single();
+    if (error) { toast.error("Erro ao adicionar vendedor"); return; }
+    setSellers(prev => [...prev, mapSeller(data)]);
+  }, []);
+
+  const deleteSeller = useCallback(async (id: string) => {
+    const { error } = await supabase.from("sellers" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir vendedor"); return; }
+    setSellers(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  // ---- Product Assignments ----
+  const addProductAssignment = useCallback(async (a: Omit<ProductAssignment, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("product_assignments" as any).insert({
+      seller_id: a.sellerId, product_id: a.productId, quantity: a.quantity, notes: a.notes,
+    }).select().single();
+    if (error) { toast.error("Erro ao atribuir produto"); return; }
+    setProductAssignments(prev => [...prev, mapProductAssignment(data)]);
+  }, []);
+
+  const deleteProductAssignment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("product_assignments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover atribuição"); return; }
+    setProductAssignments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  // ---- Computed ----
+  const getSellerName = useCallback((id: string) => sellers.find(s => s.id === id)?.name ?? "Vendedor desconhecido", [sellers]);
   const getTotalRevenue = useCallback(() => sales.reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
   const getTotalCosts = useCallback(() => stockEntries.reduce((sum, e) => sum + e.totalCost, 0), [stockEntries]);
   const getTotalExpenses = useCallback(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
