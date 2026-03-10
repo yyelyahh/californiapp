@@ -11,6 +11,7 @@ const navItems = [
   { to: "/expenses", icon: Receipt, label: "Despesas" },
   { to: "/investors", icon: Users, label: "Investidores" },
   { to: "/revenue", icon: DollarSign, label: "Receita" },
+  { to: "/sellers", icon: UserCheck, label: "Vendedores" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

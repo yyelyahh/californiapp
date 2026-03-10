@@ -170,6 +170,7 @@ export default function SalesPage() {
                     <td className="p-3 text-right mono">
                       {remaining > 0 ? <span className="text-destructive font-semibold">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground">—</span>}
                     </td>
+                    <td className="p-3 text-sm">{s.sellerId ? getSellerName(s.sellerId) : <span className="text-muted-foreground">—</span>}</td>
                     <td className="p-3 text-xs text-muted-foreground max-w-[120px] truncate">{s.notes || '—'}</td>
                     <td className="p-3">
                       <div className="flex gap-1">

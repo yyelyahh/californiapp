@@ -29,6 +29,7 @@ export interface Sale {
   notes?: string;
   installments: number;
   paidAmount: number;
+  sellerId?: string;
 }
 
 export interface Expense {
