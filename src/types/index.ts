@@ -62,3 +62,18 @@ export interface Partner {
   percentage: number;
   createdAt: string;
 }
+
+export interface Seller {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface ProductAssignment {
+  id: string;
+  sellerId: string;
+  productId: string;
+  quantity: number;
+  notes?: string;
+  createdAt: string;
+}
