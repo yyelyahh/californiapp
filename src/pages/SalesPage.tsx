@@ -58,6 +58,7 @@ export default function SalesPage() {
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
+        sellerId: form.sellerId || undefined,
       });
     } else {
       addSale({
@@ -68,6 +69,7 @@ export default function SalesPage() {
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
+        sellerId: form.sellerId || undefined,
       });
     }
     setForm(emptyForm);
