@@ -124,6 +124,48 @@ export type Database = {
         }
         Relationships: []
       }
+      product_assignments: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          seller_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity?: number
+          seller_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          seller_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_assignments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_assignments_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand: string
@@ -167,6 +209,7 @@ export type Database = {
           paid_amount: number
           product_id: string
           quantity: number
+          seller_id: string | null
           total_price: number
           unit_price: number
         }
@@ -179,6 +222,7 @@ export type Database = {
           paid_amount?: number
           product_id: string
           quantity: number
+          seller_id?: string | null
           total_price: number
           unit_price: number
         }
@@ -191,6 +235,7 @@ export type Database = {
           paid_amount?: number
           product_id?: string
           quantity?: number
+          seller_id?: string | null
           total_price?: number
           unit_price?: number
         }
@@ -202,7 +247,32 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sales_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      sellers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       stock_entries: {
         Row: {
