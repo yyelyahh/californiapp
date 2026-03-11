@@ -93,7 +93,7 @@ export default function SellersPage() {
                 <div>
                   <Label className="mb-2 block">Produtos</Label>
                   <div className="space-y-2 max-h-60 overflow-y-auto rounded-md border p-3">
-                    {products.map(p => {
+                    {products.filter(p => p.stock > 0).map(p => {
                       const isChecked = assignForm.selectedProducts.hasOwnProperty(p.id);
                       return (
                         <div key={p.id} className="space-y-1">
