@@ -78,8 +78,8 @@ export default function SellersPage() {
             <DialogTrigger asChild>
               <Button variant="outline"><Package size={16} className="mr-2" />Atribuir Produto</Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Atribuir Produto a Vendedor</DialogTitle></DialogHeader>
+            <DialogContent className="max-h-[85vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>Atribuir Produtos a Vendedor</DialogTitle></DialogHeader>
               <form onSubmit={handleAssign} className="space-y-4">
                 <div>
                   <Label>Vendedor</Label>
@@ -91,23 +91,43 @@ export default function SellersPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Produto</Label>
-                  <Select value={assignForm.productId} onValueChange={v => setAssignForm(f => ({ ...f, productId: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
-                    <SelectContent>
-                      {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.stock} em estoque)</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label className="mb-2 block">Produtos</Label>
+                  <div className="space-y-2 max-h-60 overflow-y-auto rounded-md border p-3">
+                    {products.map(p => {
+                      const isChecked = assignForm.selectedProducts.hasOwnProperty(p.id);
+                      return (
+                        <div key={p.id} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`prod-${p.id}`}
+                              checked={isChecked}
+                              onCheckedChange={(checked) => toggleProduct(p.id, !!checked)}
+                            />
+                            <label htmlFor={`prod-${p.id}`} className="text-sm cursor-pointer flex-1">
+                              {p.name} <span className="text-muted-foreground">({p.stock} em estoque)</span>
+                            </label>
+                          </div>
+                          {isChecked && (
+                            <Input
+                              type="number"
+                              min="1"
+                              placeholder="Quantidade"
+                              value={assignForm.selectedProducts[p.id]}
+                              onChange={e => setAssignForm(f => ({
+                                ...f,
+                                selectedProducts: { ...f.selectedProducts, [p.id]: e.target.value }
+                              }))}
+                              className="ml-6 w-32 h-8 text-sm"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div>
-                  <Label>Quantidade</Label>
-                  <Input type="number" min="1" value={assignForm.quantity} onChange={e => setAssignForm(f => ({ ...f, quantity: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Observações</Label>
-                  <Input value={assignForm.notes} onChange={e => setAssignForm(f => ({ ...f, notes: e.target.value }))} />
-                </div>
-                <Button type="submit" className="w-full">Atribuir</Button>
+                <Button type="submit" className="w-full" disabled={Object.keys(assignForm.selectedProducts).length === 0}>
+                  Atribuir ({Object.keys(assignForm.selectedProducts).length} produto{Object.keys(assignForm.selectedProducts).length !== 1 ? 's' : ''})
+                </Button>
               </form>
             </DialogContent>
           </Dialog>
