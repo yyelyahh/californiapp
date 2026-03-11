@@ -15,7 +15,7 @@ export default function SellersPage() {
   const [sellerOpen, setSellerOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [sellerName, setSellerName] = useState("");
-  const [assignForm, setAssignForm] = useState({ sellerId: "", productId: "", quantity: "", notes: "" });
+  const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
   const [search, setSearch] = useState("");
 
   const filteredSellers = useMemo(() => {
@@ -32,16 +32,31 @@ export default function SellersPage() {
     setSellerOpen(false);
   };
 
+  const toggleProduct = (productId: string, checked: boolean) => {
+    setAssignForm(f => {
+      const next = { ...f.selectedProducts };
+      if (checked) {
+        next[productId] = "1";
+      } else {
+        delete next[productId];
+      }
+      return { ...f, selectedProducts: next };
+    });
+  };
+
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignForm.sellerId || !assignForm.productId || !assignForm.quantity) return;
-    await addProductAssignment({
-      sellerId: assignForm.sellerId,
-      productId: assignForm.productId,
-      quantity: Number(assignForm.quantity),
-      notes: assignForm.notes || undefined,
-    });
-    setAssignForm({ sellerId: "", productId: "", quantity: "", notes: "" });
+    if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
+    for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
+      if (Number(qty) > 0) {
+        await addProductAssignment({
+          sellerId: assignForm.sellerId,
+          productId,
+          quantity: Number(qty),
+        });
+      }
+    }
+    setAssignForm({ sellerId: "", selectedProducts: {} });
     setAssignOpen(false);
   };
 
