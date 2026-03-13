@@ -45,7 +45,7 @@ export default function LoginPage() {
         <Card className="glass-card">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Lock size={18} className="text-primary" />
+              <Lock size={18} className="text-muted-foreground" />
               Login
             </CardTitle>
           </CardHeader>
