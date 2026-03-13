@@ -1,7 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, DollarSign, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, DollarSign, UserCheck, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -17,6 +18,7 @@ const navItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { signOut } = useAuth();
 
   return (
     <div className="flex min-h-screen">
@@ -51,7 +53,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
         {!collapsed && (
           <div className="p-4 border-t border-sidebar-border">
-            <p className="text-xs text-muted-foreground">California Contabilidade</p>
+            <p className="text-xs text-muted-foreground mb-3">California Contabilidade</p>
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-destructive transition-colors w-full"
+            >
+              <LogOut size={16} />
+              <span>Sair</span>
+            </button>
+          </div>
+        )}
+        {collapsed && (
+          <div className="p-2 border-t border-sidebar-border flex justify-center">
+            <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors p-2">
+              <LogOut size={16} />
+            </button>
           </div>
         )}
       </aside>
