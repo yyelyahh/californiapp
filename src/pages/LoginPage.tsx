@@ -32,7 +32,7 @@ export default function LoginPage() {
           <h1
             className="text-3xl font-bold tracking-tight mb-1"
             style={{
-              background: "linear-gradient(135deg, hsl(160 60% 45%), hsl(170 65% 35%))",
+              background: "linear-gradient(135deg, hsl(270 60% 55%), hsl(285 55% 45%))",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
             }}
