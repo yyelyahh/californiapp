@@ -21,9 +21,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { signOut } = useAuth();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen">
       <aside className={cn(
-        "bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300",
+        "bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 h-screen sticky top-0 overflow-y-auto",
         collapsed ? "w-16" : "w-56"
       )}>
         <div className="p-4 flex items-center gap-2 border-b border-sidebar-border">
