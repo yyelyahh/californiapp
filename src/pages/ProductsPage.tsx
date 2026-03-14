@@ -64,19 +64,6 @@ export default function ProductsPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    addProduct({
-      name: form.name.trim(),
-      brand: form.brand.trim() || form.name.trim().split(" ")[0],
-      flavor: form.flavor.trim(),
-      purchasePrice: Number(form.purchasePrice) || 0,
-      salePrice: Number(form.salePrice) || 0,
-    });
-    setForm({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "" });
-    setOpen(false);
-  };
 
   const startEdit = (p: typeof products[0]) => {
     setEditId(p.id);
