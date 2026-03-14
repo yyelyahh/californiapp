@@ -13,8 +13,6 @@ function formatCurrency(v: number) {
 
 
 export default function ProductsPage() {
-  const { products, addProduct, updateProduct, deleteProduct } = useStore();
-  const [search, setSearch] = useState("");
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [editId, setEditId] = useState<string | null>(null);
