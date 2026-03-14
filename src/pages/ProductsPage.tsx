@@ -180,21 +180,21 @@ export default function ProductsPage() {
               <div key={group.brand} className="glass-card overflow-hidden">
                 <button
                   onClick={() => toggleBrand(group.brand)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors text-left"
+                  className="w-full flex items-center justify-between p-3 md:p-4 hover:bg-secondary/50 transition-colors text-left"
                 >
-                  <div className="flex items-center gap-3">
-                    {isCollapsed ? <ChevronRight size={18} className="text-muted-foreground" /> : <ChevronDown size={18} className="text-muted-foreground" />}
+                  <div className="flex items-center gap-2 md:gap-3">
+                    {isCollapsed ? <ChevronRight size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
                     <div>
-                      <h2 className="text-lg font-bold">{group.brand}</h2>
-                      <p className="text-xs text-muted-foreground">{group.products.length} produto{group.products.length !== 1 ? 's' : ''} · {group.totalStock} un.</p>
+                      <h2 className="text-base md:text-lg font-bold">{group.brand}</h2>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">{group.products.length} produto{group.products.length !== 1 ? 's' : ''} · {group.totalStock} un.</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-5 text-xs">
-                    <div className="text-right">
+                  <div className="flex items-center gap-3 md:gap-5 text-[10px] md:text-xs">
+                    <div className="text-right hidden sm:block">
                       <p className="text-muted-foreground">Investido</p>
                       <p className="mono text-accent font-medium">{formatCurrency(group.totalInvested)}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right hidden sm:block">
                       <p className="text-muted-foreground">Potencial</p>
                       <p className="mono text-primary font-medium">{formatCurrency(group.totalSaleValue)}</p>
                     </div>
