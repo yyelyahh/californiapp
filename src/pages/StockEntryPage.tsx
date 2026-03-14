@@ -60,7 +60,7 @@ export default function StockEntryPage() {
   const entries = useMemo(() => {
     if (!brand || !model.trim()) return [];
     return parsedLines.map(({ flavor, quantity }) => {
-      const fullName = `${brand} ${model.trim()} ${flavor}`;
+      const fullName = `${model.trim()} ${flavor}`;
       const product = products.find(p => p.name.toLowerCase() === fullName.toLowerCase());
       return { flavor, quantity, fullName, product };
     });
