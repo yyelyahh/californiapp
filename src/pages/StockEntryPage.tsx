@@ -191,7 +191,6 @@ export default function StockEntryPage() {
     </div>
   );
 }
-export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
