@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN model text NOT NULL DEFAULT '';

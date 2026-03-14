@@ -17,7 +17,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
+  const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -70,6 +70,7 @@ export default function ProductsPage() {
     setEditForm({
       name: p.name,
       brand: p.brand,
+      model: p.model || '',
       flavor: p.flavor,
       purchasePrice: String(p.purchasePrice),
       salePrice: String(p.salePrice),
@@ -83,6 +84,7 @@ export default function ProductsPage() {
     await updateProduct(editId, {
       name: editForm.name.trim(),
       brand: editForm.brand.trim() || editForm.name.trim().split(" ")[0],
+      model: editForm.model.trim(),
       flavor: editForm.flavor.trim(),
       purchasePrice: Number(editForm.purchasePrice) || 0,
       salePrice: Number(editForm.salePrice) || 0,
@@ -108,6 +110,7 @@ export default function ProductsPage() {
           <form onSubmit={handleEdit} className="space-y-4">
             <div><Label>Nome</Label><Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div><Label>Marca</Label><Input value={editForm.brand} onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))} placeholder="Auto: primeira palavra do nome" /></div>
+            <div><Label>Modelo / Puffs</Label><Input value={editForm.model} onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))} placeholder="Ex: V155, 30K" /></div>
             <div><Label>Sabor</Label><Input value={editForm.flavor} onChange={e => setEditForm(f => ({ ...f, flavor: e.target.value }))} /></div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Preço Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>

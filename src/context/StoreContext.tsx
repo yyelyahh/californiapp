@@ -98,7 +98,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const mapProduct = (r: any): Product => ({
-    id: r.id, name: r.name, brand: r.brand, flavor: r.flavor,
+    id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
     purchasePrice: Number(r.purchase_price), salePrice: Number(r.sale_price),
     stock: r.stock, createdAt: r.created_at,
   });
@@ -149,7 +149,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
     const { data, error } = await supabase.from("products").insert({
-      name: p.name, brand: p.brand, flavor: p.flavor,
+      name: p.name, brand: p.brand, model: p.model, flavor: p.flavor,
       purchase_price: p.purchasePrice, sale_price: p.salePrice, stock: 0,
     }).select().single();
     if (error) { toast.error("Erro ao adicionar produto"); return; }
@@ -161,6 +161,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
     if (updates.flavor !== undefined) dbUpdates.flavor = updates.flavor;
+    if (updates.model !== undefined) dbUpdates.model = updates.model;
     if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
     if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
     if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
