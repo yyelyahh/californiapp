@@ -210,38 +210,42 @@ export default function ProductsPage() {
                 {!isCollapsed && (
                   <div className="border-t border-border">
                     {group.products.map(p => (
-                      <div key={p.id} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm truncate">{p.name}</h3>
-                            {p.flavor && <span className="text-xs text-muted-foreground shrink-0">· {p.flavor}</span>}
+                      <div key={p.id} className="px-3 md:px-4 py-2.5 md:py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="font-medium text-sm truncate">{p.name}</h3>
+                              {p.flavor && <span className="text-xs text-muted-foreground shrink-0">· {p.flavor}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <Button variant="ghost" size="icon" onClick={() => startEdit(p)} className="text-muted-foreground hover:text-primary h-7 w-7">
+                              <Pencil size={14} />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                              <Trash2 size={14} />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-5 text-sm shrink-0">
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Compra</p>
-                            <p className="mono text-xs text-accent">{formatCurrency(p.purchasePrice)}</p>
+                        <div className="flex items-center gap-3 md:gap-5 mt-1 text-[10px] md:text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Compra </span>
+                            <span className="mono text-accent">{formatCurrency(p.purchasePrice)}</span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Venda</p>
-                            <p className="mono text-xs text-primary">{formatCurrency(p.salePrice)}</p>
+                          <div>
+                            <span className="text-muted-foreground">Venda </span>
+                            <span className="mono text-primary">{formatCurrency(p.salePrice)}</span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Lucro/un</p>
-                            <p className="mono text-xs font-medium" style={{ color: (p.salePrice - p.purchasePrice) >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+                          <div>
+                            <span className="text-muted-foreground">Lucro </span>
+                            <span className="mono font-medium" style={{ color: (p.salePrice - p.purchasePrice) >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
                               {formatCurrency(p.salePrice - p.purchasePrice)}
-                            </p>
+                            </span>
                           </div>
-                          <div className="text-right w-12">
-                            <p className="text-[10px] text-muted-foreground">Estoque</p>
-                            <p className="mono text-xs font-semibold">{p.stock}</p>
+                          <div>
+                            <span className="text-muted-foreground">Est. </span>
+                            <span className="mono font-semibold">{p.stock}</span>
                           </div>
-                          <Button variant="ghost" size="icon" onClick={() => startEdit(p)} className="text-muted-foreground hover:text-primary h-7 w-7">
-                            <Pencil size={14} />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
-                            <Trash2 size={14} />
-                          </Button>
                         </div>
                       </div>
                     ))}
