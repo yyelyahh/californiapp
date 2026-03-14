@@ -10,14 +10,6 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-interface BrandGroup {
-  brand: string;
-  products: typeof import("@/types").prototype[];
-  totalInvested: number;
-  totalSaleValue: number;
-  totalProfit: number;
-  totalStock: number;
-}
 
 export default function ProductsPage() {
   const { products, addProduct, deleteProduct } = useStore();
