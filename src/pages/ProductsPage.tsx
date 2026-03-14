@@ -1,10 +1,11 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import AddProductDialog from "@/components/AddProductDialog";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
