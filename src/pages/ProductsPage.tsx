@@ -94,11 +94,11 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Produtos</h1>
-          <p className="text-muted-foreground text-sm">Catálogo de pods descartáveis</p>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">Produtos</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">Catálogo de pods descartáveis</p>
         </div>
         <AddProductDialog />
       </div>
@@ -123,36 +123,36 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* Dashboard de indicadores */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="stat-card">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <DollarSign size={14} />
-            <span>Investido em Estoque</span>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
+        <div className="stat-card !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <DollarSign size={12} />
+            <span>Investido</span>
           </div>
-          <p className="mono text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
+          <p className="mono text-sm md:text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <TrendingUp size={14} />
-            <span>Valor Potencial de Venda</span>
+        <div className="stat-card !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <TrendingUp size={12} />
+            <span>Potencial</span>
           </div>
-          <p className="mono text-lg font-semibold text-primary">{formatCurrency(totals.saleValue)}</p>
+          <p className="mono text-sm md:text-lg font-semibold text-primary">{formatCurrency(totals.saleValue)}</p>
         </div>
-        <div className="stat-card stat-card-accent">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <TrendingUp size={14} />
-            <span>Lucro Potencial</span>
+        <div className="stat-card stat-card-accent !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <TrendingUp size={12} />
+            <span>Lucro</span>
           </div>
-          <p className="mono text-lg font-semibold" style={{ color: totals.profit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+          <p className="mono text-sm md:text-lg font-semibold" style={{ color: totals.profit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
             {formatCurrency(totals.profit)}
           </p>
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <Package size={14} />
-            <span>Itens em Estoque</span>
+        <div className="stat-card !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <Package size={12} />
+            <span>Estoque</span>
           </div>
-          <p className="mono text-lg font-semibold">{totals.stock}</p>
+          <p className="mono text-sm md:text-lg font-semibold">{totals.stock}</p>
         </div>
       </div>
 
@@ -180,21 +180,21 @@ export default function ProductsPage() {
               <div key={group.brand} className="glass-card overflow-hidden">
                 <button
                   onClick={() => toggleBrand(group.brand)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors text-left"
+                  className="w-full flex items-center justify-between p-3 md:p-4 hover:bg-secondary/50 transition-colors text-left"
                 >
-                  <div className="flex items-center gap-3">
-                    {isCollapsed ? <ChevronRight size={18} className="text-muted-foreground" /> : <ChevronDown size={18} className="text-muted-foreground" />}
+                  <div className="flex items-center gap-2 md:gap-3">
+                    {isCollapsed ? <ChevronRight size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
                     <div>
-                      <h2 className="text-lg font-bold">{group.brand}</h2>
-                      <p className="text-xs text-muted-foreground">{group.products.length} produto{group.products.length !== 1 ? 's' : ''} · {group.totalStock} un.</p>
+                      <h2 className="text-base md:text-lg font-bold">{group.brand}</h2>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">{group.products.length} produto{group.products.length !== 1 ? 's' : ''} · {group.totalStock} un.</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-5 text-xs">
-                    <div className="text-right">
+                  <div className="flex items-center gap-3 md:gap-5 text-[10px] md:text-xs">
+                    <div className="text-right hidden sm:block">
                       <p className="text-muted-foreground">Investido</p>
                       <p className="mono text-accent font-medium">{formatCurrency(group.totalInvested)}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right hidden sm:block">
                       <p className="text-muted-foreground">Potencial</p>
                       <p className="mono text-primary font-medium">{formatCurrency(group.totalSaleValue)}</p>
                     </div>
@@ -210,38 +210,42 @@ export default function ProductsPage() {
                 {!isCollapsed && (
                   <div className="border-t border-border">
                     {group.products.map(p => (
-                      <div key={p.id} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm truncate">{p.name}</h3>
-                            {p.flavor && <span className="text-xs text-muted-foreground shrink-0">· {p.flavor}</span>}
+                      <div key={p.id} className="px-3 md:px-4 py-2.5 md:py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="font-medium text-sm truncate">{p.name}</h3>
+                              {p.flavor && <span className="text-xs text-muted-foreground shrink-0">· {p.flavor}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <Button variant="ghost" size="icon" onClick={() => startEdit(p)} className="text-muted-foreground hover:text-primary h-7 w-7">
+                              <Pencil size={14} />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                              <Trash2 size={14} />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-5 text-sm shrink-0">
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Compra</p>
-                            <p className="mono text-xs text-accent">{formatCurrency(p.purchasePrice)}</p>
+                        <div className="flex items-center gap-3 md:gap-5 mt-1 text-[10px] md:text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Compra </span>
+                            <span className="mono text-accent">{formatCurrency(p.purchasePrice)}</span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Venda</p>
-                            <p className="mono text-xs text-primary">{formatCurrency(p.salePrice)}</p>
+                          <div>
+                            <span className="text-muted-foreground">Venda </span>
+                            <span className="mono text-primary">{formatCurrency(p.salePrice)}</span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Lucro/un</p>
-                            <p className="mono text-xs font-medium" style={{ color: (p.salePrice - p.purchasePrice) >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+                          <div>
+                            <span className="text-muted-foreground">Lucro </span>
+                            <span className="mono font-medium" style={{ color: (p.salePrice - p.purchasePrice) >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
                               {formatCurrency(p.salePrice - p.purchasePrice)}
-                            </p>
+                            </span>
                           </div>
-                          <div className="text-right w-12">
-                            <p className="text-[10px] text-muted-foreground">Estoque</p>
-                            <p className="mono text-xs font-semibold">{p.stock}</p>
+                          <div>
+                            <span className="text-muted-foreground">Est. </span>
+                            <span className="mono font-semibold">{p.stock}</span>
                           </div>
-                          <Button variant="ghost" size="icon" onClick={() => startEdit(p)} className="text-muted-foreground hover:text-primary h-7 w-7">
-                            <Pencil size={14} />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
-                            <Trash2 size={14} />
-                          </Button>
                         </div>
                       </div>
                     ))}
