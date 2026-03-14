@@ -70,6 +70,7 @@ export default function ProductsPage() {
     setEditForm({
       name: p.name,
       brand: p.brand,
+      model: p.model || '',
       flavor: p.flavor,
       purchasePrice: String(p.purchasePrice),
       salePrice: String(p.salePrice),
