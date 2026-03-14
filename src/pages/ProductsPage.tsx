@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Search } from "lucide-react";
+import { Plus, Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -10,11 +10,21 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+interface BrandGroup {
+  brand: string;
+  products: typeof import("@/types").prototype[];
+  totalInvested: number;
+  totalSaleValue: number;
+  totalProfit: number;
+  totalStock: number;
+}
+
 export default function ProductsPage() {
   const { products, addProduct, deleteProduct } = useStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "" });
   const [search, setSearch] = useState("");
+  const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -25,6 +35,41 @@ export default function ProductsPage() {
       p.flavor.toLowerCase().includes(q)
     );
   }, [products, search]);
+
+  const brandGroups = useMemo(() => {
+    const groups = new Map<string, typeof filtered>();
+    filtered.forEach(p => {
+      const brand = p.brand || "Sem Marca";
+      if (!groups.has(brand)) groups.set(brand, []);
+      groups.get(brand)!.push(p);
+    });
+    return Array.from(groups.entries())
+      .map(([brand, prods]) => ({
+        brand,
+        products: prods,
+        totalInvested: prods.reduce((s, p) => s + p.purchasePrice * p.stock, 0),
+        totalSaleValue: prods.reduce((s, p) => s + p.salePrice * p.stock, 0),
+        totalProfit: prods.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
+        totalStock: prods.reduce((s, p) => s + p.stock, 0),
+      }))
+      .sort((a, b) => a.brand.localeCompare(b.brand));
+  }, [filtered]);
+
+  const totals = useMemo(() => ({
+    invested: products.reduce((s, p) => s + p.purchasePrice * p.stock, 0),
+    saleValue: products.reduce((s, p) => s + p.salePrice * p.stock, 0),
+    profit: products.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
+    stock: products.reduce((s, p) => s + p.stock, 0),
+  }), [products]);
+
+  const toggleBrand = (brand: string) => {
+    setCollapsedBrands(prev => {
+      const next = new Set(prev);
+      if (next.has(brand)) next.delete(brand);
+      else next.add(brand);
+      return next;
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +112,41 @@ export default function ProductsPage() {
         </Dialog>
       </div>
 
+      {/* Dashboard de indicadores */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="stat-card">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+            <DollarSign size={14} />
+            <span>Investido em Estoque</span>
+          </div>
+          <p className="mono text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+            <TrendingUp size={14} />
+            <span>Valor Potencial de Venda</span>
+          </div>
+          <p className="mono text-lg font-semibold text-primary">{formatCurrency(totals.saleValue)}</p>
+        </div>
+        <div className="stat-card stat-card-accent">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+            <TrendingUp size={14} />
+            <span>Lucro Potencial</span>
+          </div>
+          <p className="mono text-lg font-semibold" style={{ color: totals.profit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+            {formatCurrency(totals.profit)}
+          </p>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+            <Package size={14} />
+            <span>Itens em Estoque</span>
+          </div>
+          <p className="mono text-lg font-semibold">{totals.stock}</p>
+        </div>
+      </div>
+
+      {/* Busca */}
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -77,40 +157,88 @@ export default function ProductsPage() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {/* Grupos por marca */}
+      {brandGroups.length === 0 ? (
         <div className="glass-card p-12 text-center">
           <p className="text-muted-foreground">{products.length === 0 ? "Nenhum produto cadastrado ainda." : "Nenhum produto encontrado."}</p>
         </div>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map(p => (
-            <div key={p.id} className="glass-card p-4 flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{p.name}</h3>
-                  {p.brand && <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">{p.brand}</span>}
-                </div>
-                {p.flavor && <p className="text-xs text-muted-foreground mt-0.5">{p.flavor}</p>}
+        <div className="space-y-4">
+          {brandGroups.map(group => {
+            const isCollapsed = collapsedBrands.has(group.brand);
+            return (
+              <div key={group.brand} className="glass-card overflow-hidden">
+                {/* Cabeçalho da marca */}
+                <button
+                  onClick={() => toggleBrand(group.brand)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    {isCollapsed ? <ChevronRight size={18} className="text-muted-foreground" /> : <ChevronDown size={18} className="text-muted-foreground" />}
+                    <div>
+                      <h2 className="text-lg font-bold">{group.brand}</h2>
+                      <p className="text-xs text-muted-foreground">{group.products.length} produto{group.products.length !== 1 ? 's' : ''} · {group.totalStock} un.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-5 text-xs">
+                    <div className="text-right">
+                      <p className="text-muted-foreground">Investido</p>
+                      <p className="mono text-accent font-medium">{formatCurrency(group.totalInvested)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-muted-foreground">Potencial</p>
+                      <p className="mono text-primary font-medium">{formatCurrency(group.totalSaleValue)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-muted-foreground">Lucro</p>
+                      <p className="mono font-medium" style={{ color: group.totalProfit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+                        {formatCurrency(group.totalProfit)}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Lista de produtos */}
+                {!isCollapsed && (
+                  <div className="border-t border-border">
+                    {group.products.map(p => (
+                      <div key={p.id} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-sm truncate">{p.name}</h3>
+                            {p.flavor && <span className="text-xs text-muted-foreground shrink-0">· {p.flavor}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-5 text-sm shrink-0">
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Compra</p>
+                            <p className="mono text-xs text-accent">{formatCurrency(p.purchasePrice)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Venda</p>
+                            <p className="mono text-xs text-primary">{formatCurrency(p.salePrice)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Lucro/un</p>
+                            <p className="mono text-xs font-medium" style={{ color: (p.salePrice - p.purchasePrice) >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+                              {formatCurrency(p.salePrice - p.purchasePrice)}
+                            </p>
+                          </div>
+                          <div className="text-right w-12">
+                            <p className="text-[10px] text-muted-foreground">Estoque</p>
+                            <p className="mono text-xs font-semibold">{p.stock}</p>
+                          </div>
+                          <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-6 text-sm">
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Compra</p>
-                  <p className="mono text-accent">{formatCurrency(p.purchasePrice)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Venda</p>
-                  <p className="mono text-primary">{formatCurrency(p.salePrice)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Estoque</p>
-                  <p className="mono font-semibold">{p.stock}</p>
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive">
-                  <Trash2 size={16} />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
