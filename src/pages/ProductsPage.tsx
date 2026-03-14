@@ -94,11 +94,11 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Produtos</h1>
-          <p className="text-muted-foreground text-sm">Catálogo de pods descartáveis</p>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">Produtos</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">Catálogo de pods descartáveis</p>
         </div>
         <AddProductDialog />
       </div>
