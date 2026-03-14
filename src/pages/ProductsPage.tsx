@@ -113,24 +113,7 @@ export default function ProductsPage() {
           <h1 className="text-2xl font-bold">Produtos</h1>
           <p className="text-muted-foreground text-sm">Catálogo de pods descartáveis</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus size={16} className="mr-2" />Novo Produto</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Adicionar Produto</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div><Label>Nome</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Ignite V80" /></div>
-              <div><Label>Marca</Label><Input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="Auto: primeira palavra do nome" /></div>
-              <div><Label>Sabor</Label><Input value={form.flavor} onChange={e => setForm(f => ({ ...f, flavor: e.target.value }))} placeholder="Ex: Mango Ice" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Preço Compra (R$)</Label><Input type="number" step="0.01" value={form.purchasePrice} onChange={e => setForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
-                <div><Label>Preço Venda (R$)</Label><Input type="number" step="0.01" value={form.salePrice} onChange={e => setForm(f => ({ ...f, salePrice: e.target.value }))} /></div>
-              </div>
-              <Button type="submit" className="w-full">Adicionar</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <AddProductDialog />
       </div>
 
       {/* Dialog de edição */}
