@@ -44,7 +44,7 @@ export default function AddProductDialog() {
   const previewProducts = useMemo(() => {
     if (!brand || !model.trim()) return [];
     return flavors.map(flavor => {
-      const name = `${brand} ${model.trim()} ${flavor}`;
+      const name = `${model.trim()} ${flavor}`;
       const isDuplicate = existingNames.has(name.toLowerCase());
       return { name, flavor, isDuplicate };
     });
