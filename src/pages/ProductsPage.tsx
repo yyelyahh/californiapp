@@ -17,7 +17,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
+  const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
