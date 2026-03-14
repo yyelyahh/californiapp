@@ -129,7 +129,7 @@ export default function ProductsPage() {
             <DollarSign size={14} />
             <span>Investido em Estoque</span>
           </div>
-          <p className="mono text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
+          <p className="mono text-base md:text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
