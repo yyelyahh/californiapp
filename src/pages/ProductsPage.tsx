@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -12,11 +12,13 @@ function formatCurrency(v: number) {
 
 
 export default function ProductsPage() {
-  const { products, addProduct, deleteProduct } = useStore();
+  const { products, addProduct, updateProduct, deleteProduct } = useStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "" });
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -68,13 +70,39 @@ export default function ProductsPage() {
     if (!form.name.trim()) return;
     addProduct({
       name: form.name.trim(),
-      brand: form.brand.trim(),
+      brand: form.brand.trim() || form.name.trim().split(" ")[0],
       flavor: form.flavor.trim(),
       purchasePrice: Number(form.purchasePrice) || 0,
       salePrice: Number(form.salePrice) || 0,
     });
     setForm({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "" });
     setOpen(false);
+  };
+
+  const startEdit = (p: typeof products[0]) => {
+    setEditId(p.id);
+    setEditForm({
+      name: p.name,
+      brand: p.brand,
+      flavor: p.flavor,
+      purchasePrice: String(p.purchasePrice),
+      salePrice: String(p.salePrice),
+      stock: String(p.stock),
+    });
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editId || !editForm.name.trim()) return;
+    await updateProduct(editId, {
+      name: editForm.name.trim(),
+      brand: editForm.brand.trim() || editForm.name.trim().split(" ")[0],
+      flavor: editForm.flavor.trim(),
+      purchasePrice: Number(editForm.purchasePrice) || 0,
+      salePrice: Number(editForm.salePrice) || 0,
+      stock: Number(editForm.stock) || 0,
+    });
+    setEditId(null);
   };
 
   return (
@@ -92,7 +120,7 @@ export default function ProductsPage() {
             <DialogHeader><DialogTitle>Adicionar Produto</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div><Label>Nome</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Ignite V80" /></div>
-              <div><Label>Marca</Label><Input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="Ex: Ignite" /></div>
+              <div><Label>Marca</Label><Input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="Auto: primeira palavra do nome" /></div>
               <div><Label>Sabor</Label><Input value={form.flavor} onChange={e => setForm(f => ({ ...f, flavor: e.target.value }))} placeholder="Ex: Mango Ice" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Preço Compra (R$)</Label><Input type="number" step="0.01" value={form.purchasePrice} onChange={e => setForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
@@ -103,6 +131,24 @@ export default function ProductsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Dialog de edição */}
+      <Dialog open={!!editId} onOpenChange={v => { if (!v) setEditId(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Produto</DialogTitle></DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div><Label>Nome</Label><Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>Marca</Label><Input value={editForm.brand} onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))} placeholder="Auto: primeira palavra do nome" /></div>
+            <div><Label>Sabor</Label><Input value={editForm.flavor} onChange={e => setEditForm(f => ({ ...f, flavor: e.target.value }))} /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Preço Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
+              <div><Label>Preço Venda (R$)</Label><Input type="number" step="0.01" value={editForm.salePrice} onChange={e => setEditForm(f => ({ ...f, salePrice: e.target.value }))} /></div>
+              <div><Label>Estoque</Label><Input type="number" value={editForm.stock} onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} /></div>
+            </div>
+            <Button type="submit" className="w-full">Salvar Alterações</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Dashboard de indicadores */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -160,7 +206,6 @@ export default function ProductsPage() {
             const isCollapsed = collapsedBrands.has(group.brand);
             return (
               <div key={group.brand} className="glass-card overflow-hidden">
-                {/* Cabeçalho da marca */}
                 <button
                   onClick={() => toggleBrand(group.brand)}
                   className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors text-left"
@@ -190,7 +235,6 @@ export default function ProductsPage() {
                   </div>
                 </button>
 
-                {/* Lista de produtos */}
                 {!isCollapsed && (
                   <div className="border-t border-border">
                     {group.products.map(p => (
@@ -220,6 +264,9 @@ export default function ProductsPage() {
                             <p className="text-[10px] text-muted-foreground">Estoque</p>
                             <p className="mono text-xs font-semibold">{p.stock}</p>
                           </div>
+                          <Button variant="ghost" size="icon" onClick={() => startEdit(p)} className="text-muted-foreground hover:text-primary h-7 w-7">
+                            <Pencil size={14} />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
                             <Trash2 size={14} />
                           </Button>
