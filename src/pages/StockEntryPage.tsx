@@ -1,25 +1,124 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Search, Trash2, ChevronDown, ChevronRight, Package } from "lucide-react";
+import { Plus, Search, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
+import { toast } from "sonner";
+
+const BRAND_PRESETS: Record<string, number> = {
+  Ignite: 68.5,
+  Elfbar: 68,
+  Nikbar: 0,
+};
+const BRANDS = Object.keys(BRAND_PRESETS);
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+function parseFlavorLines(text: string) {
+  return text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const match = line.match(/^(.+?)\s+(\d+)x?\s*$/i);
+      if (match) {
+        return { flavor: match[1].trim(), quantity: parseInt(match[2], 10) };
+      }
+      // Try trailing number without x
+      const match2 = line.match(/^(.+?)\s+(\d+)\s*$/);
+      if (match2) {
+        return { flavor: match2[1].trim(), quantity: parseInt(match2[2], 10) };
+      }
+      return { flavor: line, quantity: 1 };
+    });
+}
+
 export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+  const [date, setDate] = useState(todayDateString());
+  const [notes, setNotes] = useState("");
+  const [flavorsText, setFlavorsText] = useState("");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+
+  const parsedLines = useMemo(() => parseFlavorLines(flavorsText), [flavorsText]);
+
+  const entries = useMemo(() => {
+    if (!brand || !model.trim()) return [];
+    return parsedLines.map(({ flavor, quantity }) => {
+      const fullName = `${brand} ${model.trim()} ${flavor}`;
+      const product = products.find(p => p.name.toLowerCase() === fullName.toLowerCase());
+      return { flavor, quantity, fullName, product };
+    });
+  }, [brand, model, parsedLines, products]);
+
+  const validEntries = entries.filter(e => e.product);
+  const missingEntries = entries.filter(e => !e.product);
+
+  const handleBrandChange = (value: string) => {
+    setBrand(value);
+    const preset = BRAND_PRESETS[value];
+    if (preset) setUnitCost(String(preset));
+    else setUnitCost("");
+  };
+
+  const handleSubmit = async () => {
+    if (validEntries.length === 0) {
+      toast.error("Nenhum produto encontrado para registrar.");
+      return;
+    }
+    setSubmitting(true);
+    const cost = Number(unitCost) || 0;
+    let created = 0;
+    for (const entry of validEntries) {
+      try {
+        await addStockEntry({
+          productId: entry.product!.id,
+          quantity: entry.quantity,
+          unitCost: cost,
+          date: localDateToISO(date),
+          notes: notes || undefined,
+        });
+        created++;
+      } catch {
+        toast.error(`Erro ao registrar: ${entry.fullName}`);
+      }
+    }
+    if (created > 0) {
+      toast.success(`${created} entrada${created > 1 ? "s" : ""} registrada${created > 1 ? "s" : ""}!`);
+    }
+    setBrand("");
+    setModel("");
+    setUnitCost("");
+    setDate(todayDateString());
+    setNotes("");
+    setFlavorsText("");
+    setOpen(false);
+    setSubmitting(false);
+  };
+
+  const handleReset = () => {
+    setBrand("");
+    setModel("");
+    setUnitCost("");
+    setDate(todayDateString());
+    setNotes("");
+    setFlavorsText("");
+  };
 
   const filtered = useMemo(() => {
     let items = [...stockEntries].reverse();
@@ -45,12 +144,12 @@ export default function StockEntryPage() {
     });
     return Array.from(groups.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([dateKey, entries]) => ({
+      .map(([dateKey, items]) => ({
         dateKey,
-        dateLabel: formatDateBR(entries[0].date),
-        entries,
-        totalQty: entries.reduce((s, e) => s + e.quantity, 0),
-        totalCost: entries.reduce((s, e) => s + e.totalCost, 0),
+        dateLabel: formatDateBR(items[0].date),
+        entries: items,
+        totalQty: items.reduce((s, e) => s + e.quantity, 0),
+        totalCost: items.reduce((s, e) => s + e.totalCost, 0),
       }));
   }, [filtered]);
 
@@ -63,20 +162,6 @@ export default function StockEntryPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.productId || !form.quantity) return;
-    addStockEntry({
-      productId: form.productId,
-      quantity: Number(form.quantity),
-      unitCost: Number(form.unitCost) || 0,
-      date: localDateToISO(form.date),
-      notes: form.notes || undefined,
-    });
-    setForm({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
-    setOpen(false);
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -84,30 +169,97 @@ export default function StockEntryPage() {
           <h1 className="text-2xl font-bold">Entrada de Estoque</h1>
           <p className="text-muted-foreground text-sm">Registrar compras de pods</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
           <DialogTrigger asChild>
             <Button><Plus size={16} className="mr-2" />Nova Entrada</Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Registrar Entrada</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Produto</Label>
-                <Select value={form.productId} onValueChange={v => setForm(f => ({ ...f, productId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Entrada Rápida de Estoque</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              {/* Marca */}
+              <div className="space-y-1.5">
+                <Label>Marca</Label>
+                <Select value={brand} onValueChange={handleBrandChange}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a marca" /></SelectTrigger>
                   <SelectContent>
-                    {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    {BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
-                <div><Label>Custo Unitário (R$)</Label><Input type="number" step="0.01" value={form.unitCost} onChange={e => setForm(f => ({ ...f, unitCost: e.target.value }))} /></div>
+
+              {/* Modelo */}
+              <div className="space-y-1.5">
+                <Label>Modelo / Puffs</Label>
+                <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, TE 30K" />
               </div>
-              <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-              <Button type="submit" className="w-full">Registrar</Button>
-            </form>
+
+              {/* Custo + Data */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Custo Unitário (R$)</Label>
+                  <Input type="number" step="0.01" value={unitCost} onChange={e => setUnitCost(e.target.value)} placeholder="0,00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Data</Label>
+                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Observações */}
+              <div className="space-y-1.5">
+                <Label>Observações</Label>
+                <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" />
+              </div>
+
+              {/* Sabores em lote */}
+              <div className="space-y-1.5">
+                <Label>Entrada rápida de sabores (sabor + quantidade)</Label>
+                <textarea
+                  value={flavorsText}
+                  onChange={e => setFlavorsText(e.target.value)}
+                  placeholder={"Blueberry Ice 2x\nStrawberry Ice 3x\nWatermelon Ice 1x"}
+                  rows={5}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+
+              {/* Preview */}
+              {entries.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Pré-visualização ({validEntries.length} encontrado{validEntries.length !== 1 ? "s" : ""}
+                    {missingEntries.length > 0 && `, ${missingEntries.length} não cadastrado${missingEntries.length !== 1 ? "s" : ""}`})
+                  </Label>
+                  <div className="space-y-1 max-h-40 overflow-y-auto rounded-md border border-border p-2">
+                    {entries.map((e, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center justify-between text-sm px-2 py-1 rounded ${!e.product ? "opacity-40 line-through" : ""}`}
+                      >
+                        <span>{e.fullName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="mono text-xs">{e.quantity}x</span>
+                          {!e.product && <Badge variant="secondary" className="text-[10px]">não cadastrado</Badge>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {unitCost && validEntries.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Total: {formatCurrency(Number(unitCost) * validEntries.reduce((s, e) => s + e.quantity, 0))} ({validEntries.reduce((s, e) => s + e.quantity, 0)} un.)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <Button
+                onClick={handleSubmit}
+                disabled={validEntries.length === 0 || submitting}
+                className="w-full"
+              >
+                {submitting ? "Registrando..." : `Registrar ${validEntries.length} entrada${validEntries.length !== 1 ? "s" : ""}`}
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
