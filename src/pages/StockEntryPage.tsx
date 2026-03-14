@@ -311,7 +311,10 @@ export default function StockEntryPage() {
                     {group.entries.map(e => (
                       <div key={e.id} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-sm truncate">{getProductName(e.productId)}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-sm truncate">{getProductName(e.productId)}</h3>
+                            {(() => { const prod = products.find(p => p.id === e.productId); return prod?.flavor ? <span className="text-xs text-muted-foreground shrink-0">· {prod.flavor}</span> : null; })()}
+                          </div>
                           {e.notes && <p className="text-xs text-muted-foreground truncate">{e.notes}</p>}
                         </div>
                         <div className="flex items-center gap-5 text-sm shrink-0">
