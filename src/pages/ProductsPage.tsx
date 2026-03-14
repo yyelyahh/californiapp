@@ -14,8 +14,7 @@ function formatCurrency(v: number) {
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useStore();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", brand: "", flavor: "", purchasePrice: "", salePrice: "" });
+  const [search, setSearch] = useState("");
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [editId, setEditId] = useState<string | null>(null);
