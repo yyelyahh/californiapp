@@ -1,0 +1,1 @@
+UPDATE products SET brand = split_part(name, ' ', 1) WHERE brand = '' OR brand IS NULL;
