@@ -123,36 +123,36 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* Dashboard de indicadores */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="stat-card">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <DollarSign size={14} />
-            <span>Investido em Estoque</span>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
+        <div className="stat-card !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <DollarSign size={12} />
+            <span>Investido</span>
           </div>
-          <p className="mono text-base md:text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
+          <p className="mono text-sm md:text-lg font-semibold text-accent">{formatCurrency(totals.invested)}</p>
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <TrendingUp size={14} />
-            <span>Valor Potencial de Venda</span>
+        <div className="stat-card !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <TrendingUp size={12} />
+            <span>Potencial</span>
           </div>
-          <p className="mono text-lg font-semibold text-primary">{formatCurrency(totals.saleValue)}</p>
+          <p className="mono text-sm md:text-lg font-semibold text-primary">{formatCurrency(totals.saleValue)}</p>
         </div>
-        <div className="stat-card stat-card-accent">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <TrendingUp size={14} />
-            <span>Lucro Potencial</span>
+        <div className="stat-card stat-card-accent !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <TrendingUp size={12} />
+            <span>Lucro</span>
           </div>
-          <p className="mono text-lg font-semibold" style={{ color: totals.profit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
+          <p className="mono text-sm md:text-lg font-semibold" style={{ color: totals.profit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}>
             {formatCurrency(totals.profit)}
           </p>
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-            <Package size={14} />
-            <span>Itens em Estoque</span>
+        <div className="stat-card !p-3 md:!p-5">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] md:text-xs mb-1">
+            <Package size={12} />
+            <span>Estoque</span>
           </div>
-          <p className="mono text-lg font-semibold">{totals.stock}</p>
+          <p className="mono text-sm md:text-lg font-semibold">{totals.stock}</p>
         </div>
       </div>
 
