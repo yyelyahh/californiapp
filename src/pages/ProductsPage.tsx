@@ -84,6 +84,7 @@ export default function ProductsPage() {
     await updateProduct(editId, {
       name: editForm.name.trim(),
       brand: editForm.brand.trim() || editForm.name.trim().split(" ")[0],
+      model: editForm.model.trim(),
       flavor: editForm.flavor.trim(),
       purchasePrice: Number(editForm.purchasePrice) || 0,
       salePrice: Number(editForm.salePrice) || 0,
