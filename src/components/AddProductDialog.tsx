@@ -77,6 +77,7 @@ export default function AddProductDialog() {
         await addProduct({
           name: p.name,
           brand,
+          model: model.trim(),
           flavor: p.flavor,
           purchasePrice: pPrice,
           salePrice: sPrice,

@@ -161,6 +161,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
     if (updates.flavor !== undefined) dbUpdates.flavor = updates.flavor;
+    if (updates.model !== undefined) dbUpdates.model = updates.model;
     if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
     if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
     if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
