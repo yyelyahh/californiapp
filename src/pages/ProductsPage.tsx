@@ -110,6 +110,7 @@ export default function ProductsPage() {
           <form onSubmit={handleEdit} className="space-y-4">
             <div><Label>Nome</Label><Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div><Label>Marca</Label><Input value={editForm.brand} onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))} placeholder="Auto: primeira palavra do nome" /></div>
+            <div><Label>Modelo / Puffs</Label><Input value={editForm.model} onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))} placeholder="Ex: V155, 30K" /></div>
             <div><Label>Sabor</Label><Input value={editForm.flavor} onChange={e => setEditForm(f => ({ ...f, flavor: e.target.value }))} /></div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Preço Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
