@@ -37,18 +37,19 @@ export default function AddProductDialog() {
       .filter(Boolean);
   }, [flavorsText]);
 
-  const existingNames = useMemo(() => {
-    return new Set(products.map(p => p.name.toLowerCase()));
+  const existingKeys = useMemo(() => {
+    return new Set(products.map(p => `${p.brand}|${p.model}|${p.flavor}`.toLowerCase()));
   }, [products]);
 
   const previewProducts = useMemo(() => {
     if (!brand || !model.trim()) return [];
     return flavors.map(flavor => {
-      const name = `${model.trim()}`;
-      const isDuplicate = existingNames.has(name.toLowerCase());
+      const name = model.trim();
+      const key = `${brand}|${model.trim()}|${flavor}`.toLowerCase();
+      const isDuplicate = existingKeys.has(key);
       return { name, flavor, isDuplicate };
     });
-  }, [brand, model, flavors, existingNames]);
+  }, [brand, model, flavors, existingKeys]);
 
   const newProducts = previewProducts.filter(p => !p.isDuplicate);
   const duplicates = previewProducts.filter(p => p.isDuplicate);
