@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2, ChevronDown, ChevronRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,185 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+export default function StockEntryPage() {
+  const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+
+  const filtered = useMemo(() => {
+    let items = [...stockEntries].reverse();
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      items = items.filter(e => getProductName(e.productId).toLowerCase().includes(q));
+    }
+    if (dateFrom) {
+      items = items.filter(e => e.date.slice(0, 10) >= dateFrom);
+    }
+    if (dateTo) {
+      items = items.filter(e => e.date.slice(0, 10) <= dateTo);
+    }
+    return items;
+  }, [stockEntries, search, dateFrom, dateTo, getProductName]);
+
+  const dateGroups = useMemo(() => {
+    const groups = new Map<string, typeof filtered>();
+    filtered.forEach(e => {
+      const dateKey = e.date.slice(0, 10);
+      if (!groups.has(dateKey)) groups.set(dateKey, []);
+      groups.get(dateKey)!.push(e);
+    });
+    return Array.from(groups.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([dateKey, entries]) => ({
+        dateKey,
+        dateLabel: formatDateBR(entries[0].date),
+        entries,
+        totalQty: entries.reduce((s, e) => s + e.quantity, 0),
+        totalCost: entries.reduce((s, e) => s + e.totalCost, 0),
+      }));
+  }, [filtered]);
+
+  const toggleDate = (dateKey: string) => {
+    setCollapsedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(dateKey)) next.delete(dateKey);
+      else next.add(dateKey);
+      return next;
+    });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.productId || !form.quantity) return;
+    addStockEntry({
+      productId: form.productId,
+      quantity: Number(form.quantity),
+      unitCost: Number(form.unitCost) || 0,
+      date: localDateToISO(form.date),
+      notes: form.notes || undefined,
+    });
+    setForm({ productId: "", quantity: "", unitCost: "", date: todayDateString(), notes: "" });
+    setOpen(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Entrada de Estoque</h1>
+          <p className="text-muted-foreground text-sm">Registrar compras de pods</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button><Plus size={16} className="mr-2" />Nova Entrada</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Registrar Entrada</DialogTitle></DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label>Produto</Label>
+                <Select value={form.productId} onValueChange={v => setForm(f => ({ ...f, productId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
+                <div><Label>Custo Unitário (R$)</Label><Input type="number" step="0.01" value={form.unitCost} onChange={e => setForm(f => ({ ...f, unitCost: e.target.value }))} /></div>
+              </div>
+              <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+              <Button type="submit" className="w-full">Registrar</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Buscar por produto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <div className="flex gap-2">
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" placeholder="De" />
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" placeholder="Até" />
+        </div>
+      </div>
+
+      {dateGroups.length === 0 ? (
+        <div className="glass-card p-12 text-center"><p className="text-muted-foreground">{stockEntries.length === 0 ? "Nenhuma entrada registrada." : "Nenhuma entrada encontrada."}</p></div>
+      ) : (
+        <div className="space-y-3">
+          {dateGroups.map(group => {
+            const isCollapsed = collapsedDates.has(group.dateKey);
+            return (
+              <div key={group.dateKey} className="glass-card overflow-hidden">
+                <button
+                  onClick={() => toggleDate(group.dateKey)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    {isCollapsed ? <ChevronRight size={18} className="text-muted-foreground" /> : <ChevronDown size={18} className="text-muted-foreground" />}
+                    <div>
+                      <h2 className="text-base font-bold">{group.dateLabel}</h2>
+                      <p className="text-xs text-muted-foreground">{group.entries.length} entrada{group.entries.length !== 1 ? "s" : ""}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-5 text-xs">
+                    <div className="text-right">
+                      <p className="text-muted-foreground">Quantidade</p>
+                      <p className="mono font-medium">{group.totalQty} un.</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-muted-foreground">Custo Total</p>
+                      <p className="mono font-medium text-accent">{formatCurrency(group.totalCost)}</p>
+                    </div>
+                  </div>
+                </button>
+
+                {!isCollapsed && (
+                  <div className="border-t border-border">
+                    {group.entries.map(e => (
+                      <div key={e.id} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-sm truncate">{getProductName(e.productId)}</h3>
+                          {e.notes && <p className="text-xs text-muted-foreground truncate">{e.notes}</p>}
+                        </div>
+                        <div className="flex items-center gap-5 text-sm shrink-0">
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Qtd</p>
+                            <p className="mono text-xs font-semibold">{e.quantity}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Custo Un.</p>
+                            <p className="mono text-xs text-accent">{formatCurrency(e.unitCost)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Total</p>
+                            <p className="mono text-xs font-semibold text-accent">{formatCurrency(e.totalCost)}</p>
+                          </div>
+                          <Button variant="ghost" size="icon" onClick={(ev) => { ev.stopPropagation(); deleteStockEntry(e.id); }} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
