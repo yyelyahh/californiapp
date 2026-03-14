@@ -149,7 +149,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
     const { data, error } = await supabase.from("products").insert({
-      name: p.name, brand: p.brand, flavor: p.flavor,
+      name: p.name, brand: p.brand, model: p.model, flavor: p.flavor,
       purchase_price: p.purchasePrice, sale_price: p.salePrice, stock: 0,
     }).select().single();
     if (error) { toast.error("Erro ao adicionar produto"); return; }
