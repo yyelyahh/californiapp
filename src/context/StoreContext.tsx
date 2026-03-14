@@ -223,11 +223,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSales(prev => [...prev, mapSale(data)]);
     const product = products.find(p => p.id === s.productId);
     if (product) {
-      await supabase.from("products").update({
-        stock: Math.max(0, product.stock - s.quantity), sale_price: s.unitPrice,
-      }).eq("id", s.productId);
+      const newStock = Math.max(0, product.stock - s.quantity);
+      await supabase.from("products").update({ stock: newStock }).eq("id", s.productId);
       setProducts(prev => prev.map(p => p.id === s.productId
-        ? { ...p, stock: Math.max(0, p.stock - s.quantity), salePrice: s.unitPrice } : p));
+        ? { ...p, stock: newStock } : p));
     }
   }, [products]);
 
