@@ -99,8 +99,17 @@ export default function Dashboard() {
             {store.sales.slice(-5).reverse().map(s => (
               <div key={s.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div>
-                  <p className="text-sm font-medium">{store.getProductName(s.productId)}</p>
-                  <p className="text-xs text-muted-foreground">{format(parseISO(s.date), "dd/MM/yyyy")} · {s.quantity} un.</p>
+                  {(() => {
+                    const product = store.products.find(product => product.id === s.productId);
+                    const productLabel = product ? `${product.model} * ${product.flavor}` : store.getProductName(s.productId);
+
+                    return (
+                      <>
+                        <p className="text-sm font-medium">{productLabel}</p>
+                        <p className="text-xs text-muted-foreground">{format(parseISO(s.date), "dd/MM/yyyy")} · {s.quantity} un.</p>
+                      </>
+                    );
+                  })()}
                 </div>
                 <span className="text-sm font-semibold mono text-primary">{formatCurrency(s.totalPrice)}</span>
               </div>

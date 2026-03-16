@@ -22,6 +22,10 @@ export default function SalesPage() {
   const [form, setForm] = useState(emptyForm);
 
   const selectedProduct = products.find(p => p.id === form.productId);
+  const getProductDisplayName = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    return product ? `${product.model} * ${product.flavor}` : getProductName(productId);
+  };
 
   const openNew = () => {
     setEditingSale(null);
@@ -105,7 +109,7 @@ export default function SalesPage() {
                 }} disabled={!!editingSale}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.stock} em estoque)</SelectItem>)}
+                    {products.map(p => <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({p.stock} em estoque)</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -162,7 +166,7 @@ export default function SalesPage() {
                 return (
                   <tr key={s.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
                     <td className="p-3 mono text-xs">{formatDateBR(s.date)}</td>
-                    <td className="p-3">{getProductName(s.productId)}</td>
+                    <td className="p-3">{getProductDisplayName(s.productId)}</td>
                     <td className="p-3 text-right mono">{s.quantity}</td>
                     <td className="p-3 text-right mono font-semibold text-primary">{formatCurrency(s.totalPrice)}</td>
                     <td className="p-3 text-center">{s.installments > 1 ? <Badge variant="secondary">{s.installments}x</Badge> : "1x"}</td>
