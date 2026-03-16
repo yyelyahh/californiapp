@@ -111,39 +111,47 @@ export default function SellersPage() {
                 <div>
                   <Label className="mb-2 block">Produtos</Label>
                   <div className="space-y-2 max-h-60 overflow-y-auto rounded-md border p-3">
-                    {products.filter(p => p.stock > 0).map(p => {
-                      const isChecked = assignForm.selectedProducts.hasOwnProperty(p.id);
-                      return (
-                        <div key={p.id} className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`prod-${p.id}`}
-                              checked={isChecked}
-                              onCheckedChange={(checked) => toggleProduct(p.id, !!checked)}
-                            />
-                            <label htmlFor={`prod-${p.id}`} className="text-sm cursor-pointer flex-1">
-                              {`${p.model} * ${p.flavor}`} <span className="text-muted-foreground">({p.stock} em estoque)</span>
-                            </label>
+                    {availableProducts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Todos os produtos já estão totalmente atribuídos.</p>
+                    ) : (
+                      availableProducts.map(p => {
+                        const isChecked = assignForm.selectedProducts.hasOwnProperty(p.id);
+                        return (
+                          <div key={p.id} className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`prod-${p.id}`}
+                                checked={isChecked}
+                                onCheckedChange={(checked) => toggleProduct(p.id, !!checked)}
+                              />
+                              <label htmlFor={`prod-${p.id}`} className="text-sm cursor-pointer flex-1">
+                                {`${p.model} * ${p.flavor}`} <span className="text-muted-foreground">({p.availableToAssign} disponível{p.availableToAssign !== 1 ? 'eis' : ''} para atribuir)</span>
+                              </label>
+                            </div>
+                            {isChecked && (
+                              <Input
+                                type="number"
+                                min="1"
+                                max={p.availableToAssign}
+                                placeholder="Quantidade"
+                                value={assignForm.selectedProducts[p.id]}
+                                onChange={e => setAssignForm(f => ({
+                                  ...f,
+                                  selectedProducts: {
+                                    ...f.selectedProducts,
+                                    [p.id]: String(Math.max(1, Math.min(Number(e.target.value) || 1, p.availableToAssign)))
+                                  }
+                                }))}
+                                className="ml-6 w-32 h-8 text-sm"
+                              />
+                            )}
                           </div>
-                          {isChecked && (
-                            <Input
-                              type="number"
-                              min="1"
-                              placeholder="Quantidade"
-                              value={assignForm.selectedProducts[p.id]}
-                              onChange={e => setAssignForm(f => ({
-                                ...f,
-                                selectedProducts: { ...f.selectedProducts, [p.id]: e.target.value }
-                              }))}
-                              className="ml-6 w-32 h-8 text-sm"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={Object.keys(assignForm.selectedProducts).length === 0}>
+                <Button type="submit" className="w-full" disabled={Object.keys(assignForm.selectedProducts).length === 0 || availableProducts.length === 0}>
                   Atribuir ({Object.keys(assignForm.selectedProducts).length} produto{Object.keys(assignForm.selectedProducts).length !== 1 ? 's' : ''})
                 </Button>
               </form>
