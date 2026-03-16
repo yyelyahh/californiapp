@@ -24,6 +24,21 @@ export default function SellersPage() {
     return sellers.filter(s => s.name.toLowerCase().includes(q));
   }, [sellers, search]);
 
+  const availableProducts = useMemo(() => {
+    return products
+      .map(product => {
+        const assignedQuantity = productAssignments
+          .filter(assignment => assignment.productId === product.id)
+          .reduce((sum, assignment) => sum + assignment.quantity, 0);
+
+        return {
+          ...product,
+          availableToAssign: Math.max(0, product.stock - assignedQuantity),
+        };
+      })
+      .filter(product => product.availableToAssign > 0);
+  }, [products, productAssignments]);
+
   const handleAddSeller = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sellerName.trim()) return;
@@ -48,11 +63,14 @@ export default function SellersPage() {
     e.preventDefault();
     if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
     for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
-      if (Number(qty) > 0) {
+      const product = availableProducts.find(item => item.id === productId);
+      const quantity = Math.min(Number(qty), product?.availableToAssign ?? 0);
+
+      if (quantity > 0) {
         await addProductAssignment({
           sellerId: assignForm.sellerId,
           productId,
-          quantity: Number(qty),
+          quantity,
         });
       }
     }
