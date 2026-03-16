@@ -361,8 +361,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Product Assignments ----
   const addProductAssignment = useCallback(async (a: Omit<ProductAssignment, "id" | "createdAt">) => {
-    const { data: existingAssignments, error: fetchError } = await supabase
-      .from("product_assignments" as any)
+    const { data: existingAssignments = [], error: fetchError } = await supabase
+      .from("product_assignments")
       .select("*")
       .eq("seller_id", a.sellerId)
       .eq("product_id", a.productId)
@@ -373,12 +373,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (existingAssignments && existingAssignments.length > 0) {
+    if (existingAssignments.length > 0) {
       const [primaryAssignment, ...duplicateAssignments] = existingAssignments;
-      const mergedQuantity = existingAssignments.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0) + a.quantity;
+      const mergedQuantity = existingAssignments.reduce((sum, item) => sum + item.quantity, 0) + a.quantity;
 
       const { data: updatedAssignment, error: updateError } = await supabase
-        .from("product_assignments" as any)
+        .from("product_assignments")
         .update({
           quantity: mergedQuantity,
           notes: a.notes ?? primaryAssignment.notes,
@@ -395,7 +395,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (duplicateAssignments.length > 0) {
         const duplicateIds = duplicateAssignments.map(item => item.id);
         const { error: deleteError } = await supabase
-          .from("product_assignments" as any)
+          .from("product_assignments")
           .delete()
           .in("id", duplicateIds);
 
@@ -406,10 +406,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
 
       setProductAssignments(prev => {
-        const filteredAssignments = prev.filter(item => {
-          if (item.id === primaryAssignment.id) return false;
-          return !duplicateAssignments.some(duplicate => duplicate.id === item.id);
-        });
+        const duplicateIdSet = new Set(duplicateAssignments.map(item => item.id));
+        const filteredAssignments = prev.filter(item => item.id !== primaryAssignment.id && !duplicateIdSet.has(item.id));
 
         return [...filteredAssignments, mapProductAssignment(updatedAssignment)];
       });
@@ -417,7 +415,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase.from("product_assignments" as any).insert({
+    const { data, error } = await supabase.from("product_assignments").insert({
       seller_id: a.sellerId, product_id: a.productId, quantity: a.quantity, notes: a.notes,
     }).select().single();
 
