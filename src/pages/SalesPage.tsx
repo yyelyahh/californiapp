@@ -109,7 +109,7 @@ export default function SalesPage() {
                 }} disabled={!!editingSale}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.stock} em estoque)</SelectItem>)}
+                    {products.map(p => <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({p.stock} em estoque)</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
