@@ -104,7 +104,7 @@ export default function SellersPage() {
                               onCheckedChange={(checked) => toggleProduct(p.id, !!checked)}
                             />
                             <label htmlFor={`prod-${p.id}`} className="text-sm cursor-pointer flex-1">
-                              {p.name} <span className="text-muted-foreground">({p.stock} em estoque)</span>
+                              {`${p.model} * ${p.flavor}`} <span className="text-muted-foreground">({p.stock} em estoque)</span>
                             </label>
                           </div>
                           {isChecked && (
