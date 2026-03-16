@@ -22,6 +22,10 @@ export default function SalesPage() {
   const [form, setForm] = useState(emptyForm);
 
   const selectedProduct = products.find(p => p.id === form.productId);
+  const getProductDisplayName = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    return product ? `${product.model} * ${product.flavor}` : getProductName(productId);
+  };
 
   const openNew = () => {
     setEditingSale(null);
