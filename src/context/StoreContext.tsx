@@ -361,10 +361,69 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Product Assignments ----
   const addProductAssignment = useCallback(async (a: Omit<ProductAssignment, "id" | "createdAt">) => {
-    const { data, error } = await supabase.from("product_assignments" as any).insert({
+    const { data: existingAssignments = [], error: fetchError } = await supabase
+      .from("product_assignments")
+      .select("*")
+      .eq("seller_id", a.sellerId)
+      .eq("product_id", a.productId)
+      .order("created_at", { ascending: true });
+
+    if (fetchError) {
+      toast.error("Erro ao atribuir produto");
+      return;
+    }
+
+    if (existingAssignments.length > 0) {
+      const [primaryAssignment, ...duplicateAssignments] = existingAssignments;
+      const mergedQuantity = existingAssignments.reduce((sum, item) => sum + item.quantity, 0) + a.quantity;
+
+      const { data: updatedAssignment, error: updateError } = await supabase
+        .from("product_assignments")
+        .update({
+          quantity: mergedQuantity,
+          notes: a.notes ?? primaryAssignment.notes,
+        })
+        .eq("id", primaryAssignment.id)
+        .select()
+        .single();
+
+      if (updateError || !updatedAssignment) {
+        toast.error("Erro ao atribuir produto");
+        return;
+      }
+
+      if (duplicateAssignments.length > 0) {
+        const duplicateIds = duplicateAssignments.map(item => item.id);
+        const { error: deleteError } = await supabase
+          .from("product_assignments")
+          .delete()
+          .in("id", duplicateIds);
+
+        if (deleteError) {
+          toast.error("Erro ao consolidar atribuições");
+          return;
+        }
+      }
+
+      setProductAssignments(prev => {
+        const duplicateIdSet = new Set(duplicateAssignments.map(item => item.id));
+        const filteredAssignments = prev.filter(item => item.id !== primaryAssignment.id && !duplicateIdSet.has(item.id));
+
+        return [...filteredAssignments, mapProductAssignment(updatedAssignment)];
+      });
+
+      return;
+    }
+
+    const { data, error } = await supabase.from("product_assignments").insert({
       seller_id: a.sellerId, product_id: a.productId, quantity: a.quantity, notes: a.notes,
     }).select().single();
-    if (error) { toast.error("Erro ao atribuir produto"); return; }
+
+    if (error) {
+      toast.error("Erro ao atribuir produto");
+      return;
+    }
+
     setProductAssignments(prev => [...prev, mapProductAssignment(data)]);
   }, []);
 
