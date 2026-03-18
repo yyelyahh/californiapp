@@ -9,6 +9,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   role: AppRole | null;
+  sellerId: string | null;
   signOut: () => Promise<void>;
 }
 
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   role: null,
+  sellerId: null,
   signOut: async () => {},
 });
 
@@ -25,14 +27,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [sellerId, setSellerId] = useState<string | null>(null);
 
-  const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setRole((data?.role as AppRole) ?? null);
+  const fetchUserData = async (userId: string) => {
+    const [roleRes, sellerRes] = await Promise.all([
+      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+      supabase.from("sellers").select("id").eq("user_id", userId).maybeSingle(),
+    ]);
+    setRole((roleRes.data?.role as AppRole) ?? null);
+    setSellerId(sellerRes.data?.id ?? null);
   };
 
   useEffect(() => {
@@ -41,9 +44,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          setTimeout(() => fetchRole(session.user.id), 0);
+          setTimeout(() => fetchUserData(session.user.id), 0);
         } else {
           setRole(null);
+          setSellerId(null);
           setLoading(false);
         }
       }
@@ -53,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchRole(session.user.id).then(() => setLoading(false));
+        fetchUserData(session.user.id).then(() => setLoading(false));
       } else {
         setLoading(false);
       }
@@ -67,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, role, sellerId, signOut }}>
       {children}
     </AuthContext.Provider>
   );

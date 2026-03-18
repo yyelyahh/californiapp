@@ -17,9 +17,23 @@ function formatCurrency(v: number) {
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "" };
 
 export default function SalesPage() {
-  const { products, sales, sellers, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
-  const { role } = useAuth();
+  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
+  const { role, sellerId } = useAuth();
   const isSeller = role === "seller";
+
+  // For sellers, only show products assigned to them with available quantity
+  const availableProducts = isSeller && sellerId
+    ? products.filter(p => {
+        const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === sellerId);
+        return assignment && assignment.quantity > 0;
+      })
+    : products;
+
+  const getAssignedQuantity = (productId: string) => {
+    if (!isSeller || !sellerId) return null;
+    const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === sellerId);
+    return assignment?.quantity ?? 0;
+  };
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -68,6 +82,7 @@ export default function SalesPage() {
         sellerId: form.sellerId || undefined,
       });
     } else {
+      const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
       addSale({
         productId: form.productId,
         quantity: Number(form.quantity),
@@ -76,7 +91,7 @@ export default function SalesPage() {
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
-        sellerId: form.sellerId || undefined,
+        sellerId: effectiveSellerId,
       });
     }
     setForm(emptyForm);
@@ -100,12 +115,16 @@ export default function SalesPage() {
         }} disabled={!!editingSale}>
           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
-            {products.map(p => <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({p.stock} em estoque)</SelectItem>)}
+            {availableProducts.map(p => {
+              const assignedQty = getAssignedQuantity(p.id);
+              const displayStock = assignedQty !== null ? assignedQty : p.stock;
+              return <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({displayStock} disponível)</SelectItem>;
+            })}
           </SelectContent>
         </Select>
       </div>
       {selectedProduct && !editingSale && (
-        <p className="text-xs text-muted-foreground">Estoque disponível: <span className="mono font-semibold text-foreground">{selectedProduct.stock}</span></p>
+        <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{isSeller ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
       )}
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
@@ -125,15 +144,17 @@ export default function SalesPage() {
         </div>
       )}
       <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-      <div>
-        <Label>Vendedor</Label>
-        <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
-          <SelectTrigger><SelectValue placeholder="Sem vendedor" /></SelectTrigger>
-          <SelectContent>
-            {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      {!isSeller && (
+        <div>
+          <Label>Vendedor</Label>
+          <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
+            <SelectTrigger><SelectValue placeholder="Sem vendedor" /></SelectTrigger>
+            <SelectContent>
+              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
       <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : "Registrar Venda"}</Button>
     </form>
