@@ -17,9 +17,23 @@ function formatCurrency(v: number) {
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "" };
 
 export default function SalesPage() {
-  const { products, sales, sellers, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
-  const { role } = useAuth();
+  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
+  const { role, sellerId } = useAuth();
   const isSeller = role === "seller";
+
+  // For sellers, only show products assigned to them with available quantity
+  const availableProducts = isSeller && sellerId
+    ? products.filter(p => {
+        const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === sellerId);
+        return assignment && assignment.quantity > 0;
+      })
+    : products;
+
+  const getAssignedQuantity = (productId: string) => {
+    if (!isSeller || !sellerId) return null;
+    const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === sellerId);
+    return assignment?.quantity ?? 0;
+  };
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
