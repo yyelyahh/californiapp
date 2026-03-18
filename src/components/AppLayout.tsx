@@ -4,25 +4,25 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/products", icon: Package, label: "Produtos" },
-  { to: "/stock", icon: ArrowDownToLine, label: "Entrada" },
-  { to: "/sales", icon: ShoppingCart, label: "Vendas" },
-  { to: "/expenses", icon: Receipt, label: "Despesas" },
-  { to: "/investors", icon: Users, label: "Investidores" },
-  { to: "/revenue", icon: DollarSign, label: "Receita" },
-  { to: "/sellers", icon: UserCheck, label: "Vendedores" },
+const allNavItems = [
+  { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: true },
+  { to: "/products", icon: Package, label: "Produtos", adminOnly: true },
+  { to: "/stock", icon: ArrowDownToLine, label: "Entrada", adminOnly: true },
+  { to: "/sales", icon: ShoppingCart, label: "Vendas", adminOnly: false },
+  { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
+  { to: "/investors", icon: Users, label: "Investidores", adminOnly: true },
+  { to: "/revenue", icon: DollarSign, label: "Receita", adminOnly: true },
+  { to: "/sellers", icon: UserCheck, label: "Vendedores", adminOnly: true },
 ];
-
-// Bottom nav shows only the 5 most used items
-const mobileNavItems = navItems.slice(0, 5);
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, role } = useAuth();
+
+  const navItems = allNavItems.filter(item => role === "admin" || !item.adminOnly);
+  const mobileNavItems = navItems.slice(0, 5);
 
   return (
     <div className="flex h-screen">

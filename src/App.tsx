@@ -20,7 +20,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function ProtectedRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, role } = useAuth();
 
   if (loading) {
     return (
@@ -34,19 +34,21 @@ function ProtectedRoutes() {
     return <Navigate to="/login" replace />;
   }
 
+  const isSeller = role === "seller";
+
   return (
     <StoreProvider>
       <AppLayout>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/stock" element={<StockEntryPage />} />
+          {!isSeller && <Route path="/" element={<Dashboard />} />}
+          {!isSeller && <Route path="/products" element={<ProductsPage />} />}
+          {!isSeller && <Route path="/stock" element={<StockEntryPage />} />}
           <Route path="/sales" element={<SalesPage />} />
-          <Route path="/expenses" element={<ExpensesPage />} />
-          <Route path="/investors" element={<InvestorsPage />} />
-          <Route path="/revenue" element={<MonthlyRevenuePage />} />
-          <Route path="/sellers" element={<SellersPage />} />
-          <Route path="*" element={<NotFound />} />
+          {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
+          {!isSeller && <Route path="/investors" element={<InvestorsPage />} />}
+          {!isSeller && <Route path="/revenue" element={<MonthlyRevenuePage />} />}
+          {!isSeller && <Route path="/sellers" element={<SellersPage />} />}
+          <Route path="*" element={isSeller ? <Navigate to="/sales" replace /> : <NotFound />} />
         </Routes>
       </AppLayout>
     </StoreProvider>
