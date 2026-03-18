@@ -1,4 +1,5 @@
 import { useStore } from "@/context/StoreContext";
+import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateS
 
 export default function SalesPage() {
   const { products, sales, sellers, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
+  const { role } = useAuth();
+  const isSeller = role === "seller";
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -87,6 +90,69 @@ export default function SalesPage() {
     }
   };
 
+  const saleForm = (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label>Produto</Label>
+        <Select value={form.productId} onValueChange={v => {
+          const prod = products.find(p => p.id === v);
+          setForm(f => ({ ...f, productId: v, unitPrice: prod?.salePrice?.toString() || f.unitPrice }));
+        }} disabled={!!editingSale}>
+          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+          <SelectContent>
+            {products.map(p => <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({p.stock} em estoque)</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {selectedProduct && !editingSale && (
+        <p className="text-xs text-muted-foreground">Estoque disponível: <span className="mono font-semibold text-foreground">{selectedProduct.stock}</span></p>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
+        <div><Label>Preço Unitário (R$)</Label><Input type="number" step="0.01" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Parcelas</Label><Input type="number" min="1" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} /></div>
+        <div><Label>Valor Recebido (R$)</Label><Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} /></div>
+      </div>
+      {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
+        <div className="rounded-md bg-secondary/50 p-3 space-y-1 text-sm">
+          <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
+          {Number(form.installments) > 1 && (
+            <div className="flex justify-between"><span className="text-muted-foreground">Valor por parcela:</span><span>{formatCurrency((Number(form.quantity) * Number(form.unitPrice)) / Number(form.installments))}</span></div>
+          )}
+          <div className="flex justify-between"><span className="text-muted-foreground">Falta receber:</span><span className="font-semibold text-destructive">{formatCurrency(Math.max(0, (Number(form.quantity) * Number(form.unitPrice)) - Number(form.paidAmount)))}</span></div>
+        </div>
+      )}
+      <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+      <div>
+        <Label>Vendedor</Label>
+        <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
+          <SelectTrigger><SelectValue placeholder="Sem vendedor" /></SelectTrigger>
+          <SelectContent>
+            {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+      <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : "Registrar Venda"}</Button>
+    </form>
+  );
+
+  if (isSeller) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Registrar Venda</h1>
+          <p className="text-muted-foreground text-sm">Preencha os dados da venda</p>
+        </div>
+        <div className="glass-card p-6">
+          {saleForm}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -100,52 +166,7 @@ export default function SalesPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editingSale ? "Editar Venda" : "Registrar Venda"}</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Produto</Label>
-                <Select value={form.productId} onValueChange={v => {
-                  const prod = products.find(p => p.id === v);
-                  setForm(f => ({ ...f, productId: v, unitPrice: prod?.salePrice?.toString() || f.unitPrice }));
-                }} disabled={!!editingSale}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {products.map(p => <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({p.stock} em estoque)</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedProduct && !editingSale && (
-                <p className="text-xs text-muted-foreground">Estoque disponível: <span className="mono font-semibold text-foreground">{selectedProduct.stock}</span></p>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
-                <div><Label>Preço Unitário (R$)</Label><Input type="number" step="0.01" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Parcelas</Label><Input type="number" min="1" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} /></div>
-                <div><Label>Valor Recebido (R$)</Label><Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} /></div>
-              </div>
-              {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
-                <div className="rounded-md bg-secondary/50 p-3 space-y-1 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
-                  {Number(form.installments) > 1 && (
-                    <div className="flex justify-between"><span className="text-muted-foreground">Valor por parcela:</span><span>{formatCurrency((Number(form.quantity) * Number(form.unitPrice)) / Number(form.installments))}</span></div>
-                  )}
-                  <div className="flex justify-between"><span className="text-muted-foreground">Falta receber:</span><span className="font-semibold text-destructive">{formatCurrency(Math.max(0, (Number(form.quantity) * Number(form.unitPrice)) - Number(form.paidAmount)))}</span></div>
-                </div>
-              )}
-              <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div>
-                <Label>Vendedor</Label>
-                <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sem vendedor" /></SelectTrigger>
-                  <SelectContent>
-                    {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-              <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : "Registrar Venda"}</Button>
-            </form>
+            {saleForm}
           </DialogContent>
         </Dialog>
       </div>
