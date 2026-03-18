@@ -19,7 +19,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, role } = useAuth();
+
+  const navItems = allNavItems.filter(item => role === "admin" || !item.adminOnly);
+  const mobileNavItems = navItems.slice(0, 5);
 
   return (
     <div className="flex h-screen">
