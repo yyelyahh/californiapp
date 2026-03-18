@@ -82,6 +82,7 @@ export default function SalesPage() {
         sellerId: form.sellerId || undefined,
       });
     } else {
+      const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
       addSale({
         productId: form.productId,
         quantity: Number(form.quantity),
@@ -90,7 +91,7 @@ export default function SalesPage() {
         notes: form.notes || undefined,
         installments: Number(form.installments) || 1,
         paidAmount: Number(form.paidAmount) || 0,
-        sellerId: form.sellerId || undefined,
+        sellerId: effectiveSellerId,
       });
     }
     setForm(emptyForm);
