@@ -114,12 +114,16 @@ export default function SalesPage() {
         }} disabled={!!editingSale}>
           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
-            {products.map(p => <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({p.stock} em estoque)</SelectItem>)}
+            {availableProducts.map(p => {
+              const assignedQty = getAssignedQuantity(p.id);
+              const displayStock = assignedQty !== null ? assignedQty : p.stock;
+              return <SelectItem key={p.id} value={p.id}>{getProductDisplayName(p.id)} ({displayStock} disponível)</SelectItem>;
+            })}
           </SelectContent>
         </Select>
       </div>
       {selectedProduct && !editingSale && (
-        <p className="text-xs text-muted-foreground">Estoque disponível: <span className="mono font-semibold text-foreground">{selectedProduct.stock}</span></p>
+        <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{isSeller ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
       )}
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
