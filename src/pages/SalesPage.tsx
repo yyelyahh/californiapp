@@ -18,6 +18,8 @@ const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateS
 
 export default function SalesPage() {
   const { products, sales, sellers, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
+  const { role } = useAuth();
+  const isSeller = role === "seller";
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
