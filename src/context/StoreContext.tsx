@@ -238,7 +238,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: newQty } : a));
       }
     }
-  }, [products]);
+  }, [products, productAssignments]);
 
   const updateSale = useCallback(async (id: string, updates: Partial<Sale>) => {
     const dbUpdates: any = {};
