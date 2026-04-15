@@ -161,7 +161,7 @@ export default function MonthlyRevenuePage() {
                 </tr></thead>
                 <tbody>
                   {partners.map(p => {
-                    const share = monthlyData.profit * (p.percentage / 100);
+                    const share = Math.max(0, monthlyData.revenue) * (p.percentage / 100);
                     return (
                       <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="p-3 font-medium">{p.name}</td>
