@@ -229,6 +229,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setProducts(prev => prev.map(p => p.id === s.productId
         ? { ...p, stock: newStock } : p));
     }
+    // Deduct from seller's product assignment if sale has a seller
+    if (s.sellerId) {
+      const assignment = productAssignments.find(a => a.sellerId === s.sellerId && a.productId === s.productId);
+      if (assignment) {
+        const newQty = Math.max(0, assignment.quantity - s.quantity);
+        await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
+        setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: newQty } : a));
+      }
+    }
   }, [products]);
 
   const updateSale = useCallback(async (id: string, updates: Partial<Sale>) => {
