@@ -156,7 +156,7 @@ export default function MonthlyRevenuePage() {
                 <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
                   <th className="text-left p-3">Sócio</th>
                   <th className="text-right p-3">%</th>
-                  <th className="text-right p-3">Lucro do Mês</th>
+                  <th className="text-right p-3">Receita do Mês</th>
                   <th className="p-3"></th>
                 </tr></thead>
                 <tbody>
