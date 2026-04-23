@@ -508,9 +508,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setProductAssignments(prev => prev.filter(a => a.id !== id));
   }, []);
 
+  // ---- Seller Debt Payments ----
+  const addSellerDebtPayment = useCallback(async (p: Omit<SellerDebtPayment, "id">) => {
+    const { data, error } = await supabase.from("seller_debt_payments" as any).insert({
+      seller_id: p.sellerId, sale_id: p.saleId || null,
+      amount: p.amount, date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pagamento"); return; }
+    setSellerDebtPayments(prev => [...prev, mapSellerDebtPayment(data)]);
+  }, []);
+
+  const deleteSellerDebtPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("seller_debt_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir pagamento"); return; }
+    setSellerDebtPayments(prev => prev.filter(p => p.id !== id));
+  }, []);
+
   // ---- Computed ----
   const getSellerName = useCallback((id: string) => sellers.find(s => s.id === id)?.name ?? "Vendedor desconhecido", [sellers]);
-  const getTotalRevenue = useCallback(() => sales.reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
+  const getTotalRevenue = useCallback(() => sales.filter(s => s.type === "venda").reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
   const getTotalCosts = useCallback(() => stockEntries.reduce((sum, e) => sum + e.totalCost, 0), [stockEntries]);
   const getTotalExpenses = useCallback(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
   const getTotalInvested = useCallback(() => investors.reduce((sum, i) => sum + i.investedAmount, 0), [investors]);
@@ -528,18 +544,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return Math.max(0, investor.totalReturn - getPaidToInvestor(id));
   }, [investors, getPaidToInvestor]);
 
+  const getSellerDebt = useCallback((id: string) => {
+    return sales.filter(s => s.sellerId === id && s.type === "retirada_funcionario").reduce((sum, s) => sum + s.totalPrice, 0);
+  }, [sales]);
+
+  const getSellerPaid = useCallback((id: string) => {
+    return sellerDebtPayments.filter(p => p.sellerId === id).reduce((sum, p) => sum + p.amount, 0);
+  }, [sellerDebtPayments]);
+
+  const getSellerBalance = useCallback((id: string) => {
+    return Math.max(0, getSellerDebt(id) - getSellerPaid(id));
+  }, [getSellerDebt, getSellerPaid]);
+
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
       addPartner, updatePartner, deletePartner,
-      addSeller, deleteSeller, addProductAssignment, deleteProductAssignment, getSellerName,
+      addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment,
+      addSellerDebtPayment, deleteSellerDebtPayment, getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
+      getSellerDebt, getSellerPaid, getSellerBalance,
     }}>
       {children}
     </StoreContext.Provider>
