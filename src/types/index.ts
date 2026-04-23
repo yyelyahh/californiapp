@@ -20,6 +20,8 @@ export interface StockEntry {
   notes?: string;
 }
 
+export type SaleType = "venda" | "retirada_funcionario";
+
 export interface Sale {
   id: string;
   productId: string;
@@ -31,6 +33,16 @@ export interface Sale {
   installments: number;
   paidAmount: number;
   sellerId?: string;
+  type: SaleType;
+}
+
+export interface SellerDebtPayment {
+  id: string;
+  sellerId: string;
+  saleId?: string;
+  amount: number;
+  date: string;
+  notes?: string;
 }
 
 export interface Expense {
@@ -68,6 +80,7 @@ export interface Partner {
 export interface Seller {
   id: string;
   name: string;
+  debtPercentage: number;
   createdAt: string;
 }
 

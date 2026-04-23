@@ -41,7 +41,7 @@ export default function MonthlyRevenuePage() {
 
   // Monthly calculations
   const monthlyData = useMemo(() => {
-    const monthSales = sales.filter(s => isInMonth(s.date, selectedMonth));
+    const monthSales = sales.filter(s => s.type === "venda" && isInMonth(s.date, selectedMonth));
     const monthStockEntries = stockEntries.filter(e => isInMonth(e.date, selectedMonth));
     const monthExpenses = expenses.filter(e => isInMonth(e.date, selectedMonth));
     const monthDividends = dividends.filter(d => isInMonth(d.date, selectedMonth));
