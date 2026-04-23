@@ -230,15 +230,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Sales ----
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
     const totalPrice = s.quantity * s.unitPrice;
+    const saleType = s.type || "venda";
     const insertData: any = {
       product_id: s.productId, quantity: s.quantity,
       unit_price: s.unitPrice, total_price: totalPrice, date: s.date, notes: s.notes,
-      installments: s.installments || 1, paid_amount: s.paidAmount || 0,
+      installments: s.installments || 1,
+      paid_amount: saleType === "retirada_funcionario" ? 0 : (s.paidAmount || 0),
+      type: saleType,
     };
     if (s.sellerId) insertData.seller_id = s.sellerId;
     const { data, error } = await supabase.from("sales").insert(insertData).select().single();
     if (error) { toast.error("Erro ao registrar venda"); return; }
-    setSales(prev => [...prev, mapSale(data)]);
+    const newSale = mapSale(data);
+    setSales(prev => [...prev, newSale]);
     const product = products.find(p => p.id === s.productId);
     if (product) {
       const newStock = Math.max(0, product.stock - s.quantity);
@@ -254,8 +258,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
         setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: newQty } : a));
       }
+      // Auto-debit X% from seller's debt on a regular sale (not retirada)
+      if (saleType === "venda") {
+        const seller = sellers.find(sl => sl.id === s.sellerId);
+        const pct = seller?.debtPercentage ?? 0;
+        const debt = sellerDebtPayments
+          .filter(p => p.sellerId === s.sellerId && !p.saleId)
+          .reduce((sum, p) => sum + p.amount, 0);
+        const retiradas = (sales.concat([newSale]))
+          .filter(sl => sl.sellerId === s.sellerId && sl.type === "retirada_funcionario")
+          .reduce((sum, sl) => sum + sl.totalPrice, 0);
+        const auto = sellerDebtPayments
+          .filter(p => p.sellerId === s.sellerId && p.saleId)
+          .reduce((sum, p) => sum + p.amount, 0);
+        const balance = Math.max(0, retiradas - debt - auto);
+        const abatement = Math.min(balance, totalPrice * (pct / 100));
+        if (pct > 0 && abatement > 0) {
+          const { data: pData, error: pErr } = await supabase.from("seller_debt_payments" as any).insert({
+            seller_id: s.sellerId, sale_id: newSale.id, amount: abatement,
+            date: s.date, notes: `Abatimento automático (${pct}%)`,
+          }).select().single();
+          if (!pErr && pData) {
+            setSellerDebtPayments(prev => [...prev, mapSellerDebtPayment(pData)]);
+          }
+        }
+      }
     }
-  }, [products, productAssignments]);
+  }, [products, productAssignments, sellers, sellerDebtPayments, sales]);
 
   const updateSale = useCallback(async (id: string, updates: Partial<Sale>) => {
     const dbUpdates: any = {};
@@ -383,9 +412,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Sellers ----
   const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
-    const { data, error } = await supabase.from("sellers" as any).insert({ name: s.name }).select().single();
+    const { data, error } = await supabase.from("sellers" as any).insert({
+      name: s.name, debt_percentage: s.debtPercentage ?? 10,
+    } as any).select().single();
     if (error) { toast.error("Erro ao adicionar vendedor"); return; }
     setSellers(prev => [...prev, mapSeller(data)]);
+  }, []);
+
+  const updateSeller = useCallback(async (id: string, updates: Partial<Seller>) => {
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.debtPercentage !== undefined) dbUpdates.debt_percentage = updates.debtPercentage;
+    const { error } = await supabase.from("sellers" as any).update(dbUpdates).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar vendedor"); return; }
+    setSellers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   }, []);
 
   const deleteSeller = useCallback(async (id: string) => {
