@@ -214,6 +214,7 @@ export type Database = {
           quantity: number
           seller_id: string | null
           total_price: number
+          type: string
           unit_price: number
         }
         Insert: {
@@ -227,6 +228,7 @@ export type Database = {
           quantity: number
           seller_id?: string | null
           total_price: number
+          type?: string
           unit_price: number
         }
         Update: {
@@ -240,6 +242,7 @@ export type Database = {
           quantity?: number
           seller_id?: string | null
           total_price?: number
+          type?: string
           unit_price?: number
         }
         Relationships: [
@@ -259,21 +262,54 @@ export type Database = {
           },
         ]
       }
+      seller_debt_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          sale_id: string | null
+          seller_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          sale_id?: string | null
+          seller_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          sale_id?: string | null
+          seller_id?: string
+        }
+        Relationships: []
+      }
       sellers: {
         Row: {
           created_at: string
+          debt_percentage: number
           id: string
           name: string
           user_id: string | null
         }
         Insert: {
           created_at?: string
+          debt_percentage?: number
           id?: string
           name: string
           user_id?: string | null
         }
         Update: {
           created_at?: string
+          debt_percentage?: number
           id?: string
           name?: string
           user_id?: string | null
