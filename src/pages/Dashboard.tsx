@@ -27,7 +27,7 @@ export default function Dashboard() {
       const interval = { start, end };
 
       const monthRevenue = store.sales
-        .filter(s => isWithinInterval(parseISO(s.date), interval))
+        .filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval))
         .reduce((sum, s) => sum + s.totalPrice, 0);
       const monthCost = store.stockEntries
         .filter(e => isWithinInterval(parseISO(e.date), interval))
@@ -96,7 +96,7 @@ export default function Dashboard() {
         <div className="glass-card p-5">
           <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">Últimas Vendas</h2>
           <div className="space-y-2">
-            {store.sales.slice(-5).reverse().map(s => (
+            {store.sales.filter(s => s.type === "venda").slice(-5).reverse().map(s => (
               <div key={s.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div>
                   {(() => {
