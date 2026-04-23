@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, Seller, ProductAssignment } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, Seller, ProductAssignment, SellerDebtPayment } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ interface StoreContextType {
   partners: Partner[];
   sellers: Seller[];
   productAssignments: ProductAssignment[];
+  sellerDebtPayments: SellerDebtPayment[];
   loading: boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
@@ -33,9 +34,12 @@ interface StoreContextType {
   updatePartner: (id: string, p: Partial<Partner>) => Promise<void>;
   deletePartner: (id: string) => Promise<void>;
   addSeller: (s: Omit<Seller, "id" | "createdAt">) => Promise<void>;
+  updateSeller: (id: string, s: Partial<Seller>) => Promise<void>;
   deleteSeller: (id: string) => Promise<void>;
   addProductAssignment: (a: Omit<ProductAssignment, "id" | "createdAt">) => Promise<void>;
   deleteProductAssignment: (id: string) => Promise<void>;
+  addSellerDebtPayment: (p: Omit<SellerDebtPayment, "id">) => Promise<void>;
+  deleteSellerDebtPayment: (id: string) => Promise<void>;
   getSellerName: (id: string) => string;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
@@ -46,6 +50,9 @@ interface StoreContextType {
   getInvestorName: (id: string) => string;
   getPaidToInvestor: (id: string) => number;
   getRemainingForInvestor: (id: string) => number;
+  getSellerDebt: (id: string) => number;
+  getSellerPaid: (id: string) => number;
+  getSellerBalance: (id: string) => number;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -60,13 +67,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([]);
+  const [sellerDebtPayments, setSellerDebtPayments] = useState<SellerDebtPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -76,6 +84,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("partners").select("*").order("created_at", { ascending: true }),
           supabase.from("sellers" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -87,6 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (partRes.data) setPartners(partRes.data.map(mapPartner));
         if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
         if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
+        if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -115,15 +125,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     date: r.date, notes: r.notes,
     installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
     sellerId: r.seller_id || undefined,
+    type: (r.type === "retirada_funcionario" ? "retirada_funcionario" : "venda"),
   });
 
   const mapSeller = (r: any): Seller => ({
     id: r.id, name: r.name, createdAt: r.created_at,
+    debtPercentage: r.debt_percentage != null ? Number(r.debt_percentage) : 10,
   });
 
   const mapProductAssignment = (r: any): ProductAssignment => ({
     id: r.id, sellerId: r.seller_id, productId: r.product_id,
     quantity: r.quantity, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapSellerDebtPayment = (r: any): SellerDebtPayment => ({
+    id: r.id, sellerId: r.seller_id, saleId: r.sale_id || undefined,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
   const mapExpense = (r: any): Expense => ({
