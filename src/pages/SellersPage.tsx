@@ -11,10 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function SellersPage() {
-  const { sellers, products, productAssignments, addSeller, deleteSeller, addProductAssignment, deleteProductAssignment, getProductName } = useStore();
+  const { sellers, products, productAssignments, addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, getProductName } = useStore();
   const [sellerOpen, setSellerOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [sellerName, setSellerName] = useState("");
+  const [sellerPct, setSellerPct] = useState("10");
+  const [editingSellerId, setEditingSellerId] = useState<string | null>(null);
   const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
   const [search, setSearch] = useState("");
 
@@ -42,9 +44,23 @@ export default function SellersPage() {
   const handleAddSeller = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sellerName.trim()) return;
-    await addSeller({ name: sellerName.trim() });
+    const pct = Number(sellerPct) || 0;
+    if (editingSellerId) {
+      await updateSeller(editingSellerId, { name: sellerName.trim(), debtPercentage: pct });
+    } else {
+      await addSeller({ name: sellerName.trim(), debtPercentage: pct });
+    }
     setSellerName("");
+    setSellerPct("10");
+    setEditingSellerId(null);
     setSellerOpen(false);
+  };
+
+  const openEditSeller = (s: typeof sellers[0]) => {
+    setEditingSellerId(s.id);
+    setSellerName(s.name);
+    setSellerPct(String(s.debtPercentage ?? 10));
+    setSellerOpen(true);
   };
 
   const toggleProduct = (productId: string, checked: boolean) => {
