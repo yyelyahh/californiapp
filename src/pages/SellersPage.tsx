@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Package, Search } from "lucide-react";
+import { Plus, Trash2, Package, Search, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -173,15 +173,20 @@ export default function SellersPage() {
               </form>
             </DialogContent>
           </Dialog>
-          <Dialog open={sellerOpen} onOpenChange={setSellerOpen}>
+          <Dialog open={sellerOpen} onOpenChange={(v) => { setSellerOpen(v); if (!v) { setEditingSellerId(null); setSellerName(""); setSellerPct("10"); } }}>
             <DialogTrigger asChild>
-              <Button><Plus size={16} className="mr-2" />Novo Vendedor</Button>
+              <Button onClick={() => { setEditingSellerId(null); setSellerName(""); setSellerPct("10"); }}><Plus size={16} className="mr-2" />Novo Vendedor</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Adicionar Vendedor</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingSellerId ? "Editar Vendedor" : "Adicionar Vendedor"}</DialogTitle></DialogHeader>
               <form onSubmit={handleAddSeller} className="space-y-4">
                 <div><Label>Nome</Label><Input value={sellerName} onChange={e => setSellerName(e.target.value)} placeholder="Nome do vendedor" /></div>
-                <Button type="submit" className="w-full">Adicionar</Button>
+                <div>
+                  <Label>% de cada venda para abater dívida</Label>
+                  <Input type="number" min="0" max="100" step="1" value={sellerPct} onChange={e => setSellerPct(e.target.value)} />
+                  <p className="text-xs text-muted-foreground mt-1">A cada venda do funcionário, esse % é descontado automaticamente do saldo devedor das retiradas.</p>
+                </div>
+                <Button type="submit" className="w-full">{editingSellerId ? "Salvar" : "Adicionar"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -205,11 +210,17 @@ export default function SellersPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{seller.name}</CardTitle>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
-                      if (confirm("Excluir vendedor?")) deleteSeller(seller.id);
-                    }}><Trash2 size={14} /></Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditSeller(seller)}><Pencil size={14} /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
+                        if (confirm("Excluir vendedor?")) deleteSeller(seller.id);
+                      }}><Trash2 size={14} /></Button>
+                    </div>
                   </div>
-                  <Badge variant="secondary" className="w-fit">{totalItems} itens</Badge>
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="secondary">{totalItems} itens</Badge>
+                    <Badge variant="outline" className="border-amber-500/40 text-amber-400">Abate {seller.debtPercentage ?? 10}%</Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {assignments.length === 0 ? (
