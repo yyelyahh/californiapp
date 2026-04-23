@@ -14,6 +14,7 @@ import ExpensesPage from "@/pages/ExpensesPage";
 import InvestorsPage from "@/pages/InvestorsPage";
 import MonthlyRevenuePage from "@/pages/MonthlyRevenuePage";
 import SellersPage from "@/pages/SellersPage";
+import SellerAccountsPage from "@/pages/SellerAccountsPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +49,7 @@ function ProtectedRoutes() {
           {!isSeller && <Route path="/investors" element={<InvestorsPage />} />}
           {!isSeller && <Route path="/revenue" element={<MonthlyRevenuePage />} />}
           {!isSeller && <Route path="/sellers" element={<SellersPage />} />}
+          {!isSeller && <Route path="/seller-accounts" element={<SellerAccountsPage />} />}
           <Route path="*" element={isSeller ? <Navigate to="/sales" replace /> : <NotFound />} />
         </Routes>
       </AppLayout>
