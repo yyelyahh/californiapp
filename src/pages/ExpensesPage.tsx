@@ -39,7 +39,7 @@ export default function ExpensesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Despesas</h1>
-          <p className="text-muted-foreground text-sm">Total: <span className="mono text-accent font-semibold">{formatCurrency(total)}</span></p>
+          <p className="text-muted-foreground text-sm">Total: <span className="mono font-semibold text-white">{formatCurrency(total)}</span></p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
