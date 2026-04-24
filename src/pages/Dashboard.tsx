@@ -1,22 +1,63 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Receipt } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Package, Receipt } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+const GERAL = "geral";
+
 export default function Dashboard() {
   const store = useStore();
-  const revenue = store.getTotalRevenue();
-  const costs = store.getTotalCosts();
-  const expenses = store.getTotalExpenses();
-  const invested = store.getTotalInvested();
-  const profit = store.getNetProfit();
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
+  const investedCapital = store.getTotalInvested();
+
+  // Opções de filtro: últimos 12 meses + Geral
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [{ value: GERAL, label: "Geral (todo período)" }];
+    for (let i = 0; i < 12; i++) {
+      const d = subMonths(new Date(), i);
+      opts.push({
+        value: format(d, "yyyy-MM"),
+        label: format(d, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
+      });
+    }
+    return opts;
+  }, []);
+
+  const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
+
+  // Calcula métricas de acordo com o filtro
+  const periodStats = useMemo(() => {
+    let filterFn: (dateISO: string) => boolean;
+    if (filter === GERAL) {
+      filterFn = () => true;
+    } else {
+      const [y, m] = filter.split("-").map(Number);
+      const ref = new Date(y, m - 1, 15);
+      const start = startOfMonth(ref);
+      const end = endOfMonth(ref);
+      filterFn = (dateISO: string) => isWithinInterval(parseISO(dateISO), { start, end });
+    }
+
+    const revenue = store.sales
+      .filter(s => s.type === "venda" && filterFn(s.date))
+      .reduce((sum, s) => sum + s.totalPrice, 0);
+    const costs = store.stockEntries
+      .filter(e => filterFn(e.date))
+      .reduce((sum, e) => sum + e.totalCost, 0);
+    const expenses = store.expenses
+      .filter(e => filterFn(e.date))
+      .reduce((sum, e) => sum + e.amount, 0);
+    const profit = revenue - costs - expenses;
+
+    return { revenue, costs, expenses, profit };
+  }, [filter, store.sales, store.stockEntries, store.expenses]);
 
   const monthlyData = useMemo(() => {
     const months = [];
@@ -45,20 +86,40 @@ export default function Dashboard() {
     return months;
   }, [store.sales, store.stockEntries, store.expenses]);
 
+  const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
+  const isGeral = filter === GERAL;
+
   const stats = [
-    { label: "Receita Total", value: formatCurrency(revenue), icon: TrendingUp, accent: false },
-    { label: "Custos (Compra)", value: formatCurrency(costs), icon: DollarSign, accent: true },
-    { label: "Despesas", value: formatCurrency(expenses), icon: Receipt, accent: true },
-    { label: "Lucro Líquido", value: formatCurrency(profit), icon: profit >= 0 ? TrendingUp : TrendingDown, accent: false },
-    { label: "Estoque Total", value: `${totalStock} un.`, icon: Package, accent: false },
-    { label: "Capital Investido", value: formatCurrency(invested), icon: DollarSign, accent: true },
+    { label: `Receita${isGeral ? " Total" : ""}`, value: formatCurrency(periodStats.revenue), icon: TrendingUp, accent: false },
+    { label: "Custos (Compra)", value: formatCurrency(periodStats.costs), icon: DollarSign, accent: true },
+    { label: "Despesas", value: formatCurrency(periodStats.expenses), icon: Receipt, accent: true },
+    { label: "Lucro Líquido", value: formatCurrency(periodStats.profit), icon: periodStats.profit >= 0 ? TrendingUp : TrendingDown, accent: false },
+    // Estoque e capital investido são sempre "snapshot atual" - não dependem do mês
+    { label: "Estoque Atual", value: `${totalStock} un.`, icon: Package, accent: false },
+    { label: "Capital Investido", value: formatCurrency(investedCapital), icon: DollarSign, accent: true },
   ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Visão geral do seu negócio de pods</p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">
+            {isGeral ? "Visão geral consolidada" : `Visão de ${filterLabel}`}
+          </p>
+        </div>
+        <div className="w-full sm:w-64">
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
