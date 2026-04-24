@@ -81,7 +81,7 @@ export default function ExpensesPage() {
                   <td className="p-3 mono text-xs">{formatDateBR(e.date)}</td>
                   <td className="p-3">{e.description}</td>
                   <td className="p-3"><span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">{e.category}</span></td>
-                  <td className="p-3 text-right mono font-semibold text-accent">{formatCurrency(e.amount)}</td>
+                  <td className="p-3 text-right mono font-semibold text-white">{formatCurrency(e.amount)}</td>
                   <td className="p-3"><Button variant="ghost" size="icon" onClick={() => deleteExpense(e.id)} className="text-muted-foreground hover:text-destructive h-7 w-7"><Trash2 size={14} /></Button></td>
                 </tr>
               ))}
