@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, Receipt } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -74,20 +74,35 @@ export default function Dashboard() {
       </div>
 
       <div className="glass-card p-5">
-        <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Receita vs Custos (6 meses)</h2>
-        <div className="h-64">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-base font-display font-bold">Evolução (6 meses)</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Receitas vs gastos totais</p>
+          </div>
+        </div>
+        <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 14% 18%)" />
-              <XAxis dataKey="month" stroke="hsl(215 15% 55%)" fontSize={12} />
-              <YAxis stroke="hsl(215 15% 55%)" fontSize={12} tickFormatter={v => `R$${v}`} />
+            <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--income))" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="hsl(var(--income))" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradCustos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--expense))" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="hsl(var(--expense))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `R$${v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
               <Tooltip
-                contentStyle={{ background: "hsl(220 18% 12%)", border: "1px solid hsl(220 14% 18%)", borderRadius: "8px", color: "hsl(210 20% 92%)" }}
+                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "12px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
                 formatter={(value: number) => formatCurrency(value)}
               />
-              <Bar dataKey="receita" fill="hsl(160 60% 45%)" radius={[4, 4, 0, 0]} name="Receita" />
-              <Bar dataKey="custos" fill="hsl(38 90% 55%)" radius={[4, 4, 0, 0]} name="Custos" />
-            </BarChart>
+              <Area type="monotone" dataKey="receita" stroke="hsl(var(--income))" strokeWidth={2.5} fill="url(#gradReceita)" name="Receita" />
+              <Area type="monotone" dataKey="custos" stroke="hsl(var(--expense))" strokeWidth={2.5} fill="url(#gradCustos)" name="Custos" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
