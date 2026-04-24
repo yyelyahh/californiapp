@@ -324,11 +324,11 @@ export default function StockEntryPage() {
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] text-muted-foreground">Custo Un.</p>
-                            <p className="mono text-xs text-accent">{formatCurrency(e.unitCost)}</p>
+                            <p className="mono text-xs text-[#ff4242]">{formatCurrency(e.unitCost)}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] text-muted-foreground">Total</p>
-                            <p className="mono text-xs font-semibold text-accent">{formatCurrency(e.totalCost)}</p>
+                            <p className="mono text-xs font-semibold text-[#ff9100]">{formatCurrency(e.totalCost)}</p>
                           </div>
                           <Button variant="ghost" size="icon" onClick={(ev) => { ev.stopPropagation(); deleteStockEntry(e.id); }} className="text-muted-foreground hover:text-destructive h-7 w-7">
                             <Trash2 size={14} />
