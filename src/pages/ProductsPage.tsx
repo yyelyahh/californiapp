@@ -230,7 +230,7 @@ export default function ProductsPage() {
                         <div className="flex items-center gap-3 md:gap-5 mt-1 text-[10px] md:text-xs">
                           <div>
                             <span className="text-muted-foreground">Compra </span>
-                            <span className="mono text-accent">{formatCurrency(p.purchasePrice)}</span>
+                            <span className="mono text-foreground">{formatCurrency(p.purchasePrice)}</span>
                           </div>
                           <div>
                             <span className="text-muted-foreground">Venda </span>
