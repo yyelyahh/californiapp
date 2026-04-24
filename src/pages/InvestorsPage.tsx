@@ -133,7 +133,7 @@ export default function InvestorsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="mono text-accent font-semibold">{formatCurrency(inv.totalReturn)}</p>
+                    <p className="mono font-semibold text-white">{formatCurrency(inv.totalReturn)}</p>
                   </div>
                 </div>
                 <div className="space-y-1">
