@@ -49,7 +49,7 @@ export default function InvestorsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Investidores</h1>
-          <p className="text-muted-foreground text-sm">Capital investido: <span className="mono text-accent font-semibold">{formatCurrency(store.getTotalInvested())}</span></p>
+          <p className="text-muted-foreground text-sm">Capital investido: <span className="mono text-foreground font-semibold">{formatCurrency(store.getTotalInvested())}</span></p>
         </div>
         <div className="flex gap-2">
           <Dialog open={openPayment} onOpenChange={setOpenPayment}>
