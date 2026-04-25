@@ -296,6 +296,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.installments !== undefined) dbUpdates.installments = updates.installments;
     if (updates.paidAmount !== undefined) dbUpdates.paid_amount = updates.paidAmount;
     if (updates.sellerId !== undefined) dbUpdates.seller_id = updates.sellerId || null;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
     const { error } = await supabase.from("sales").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar venda"); return; }
     setSales(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
