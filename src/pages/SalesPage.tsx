@@ -256,7 +256,7 @@ export default function SalesPage() {
               <th className="text-right p-3">Falta</th><th className="text-left p-3">Funcionário</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
             </tr></thead>
             <tbody>
-              {[...sales].reverse().map(s => {
+              {[...sales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(s => {
                 const remaining = Math.max(0, s.totalPrice - s.paidAmount);
                 const isRet = s.type === "retirada_funcionario";
                 return (
