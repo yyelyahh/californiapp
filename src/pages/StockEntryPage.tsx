@@ -301,7 +301,7 @@ export default function StockEntryPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-muted-foreground">Custo Total</p>
-                      <p className="mono font-medium text-accent">{formatCurrency(group.totalCost)}</p>
+                      <p className="mono font-medium text-white">{formatCurrency(group.totalCost)}</p>
                     </div>
                   </div>
                 </button>
