@@ -192,7 +192,7 @@ export default function ProductsPage() {
                   <div className="flex items-center gap-3 md:gap-5 text-[10px] md:text-xs">
                     <div className="text-right hidden sm:block">
                       <p className="text-muted-foreground">Investido</p>
-                      <p className="mono text-accent font-medium">{formatCurrency(group.totalInvested)}</p>
+                      <p className="mono font-medium text-white">{formatCurrency(group.totalInvested)}</p>
                     </div>
                     <div className="text-right hidden sm:block">
                       <p className="text-muted-foreground">Potencial</p>
