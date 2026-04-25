@@ -69,7 +69,7 @@ export default function Dashboard() {
 
       const monthRevenue = store.sales
         .filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval))
-        .reduce((sum, s) => sum + s.totalPrice, 0);
+        .reduce((sum, s) => sum + (s.paidAmount || 0), 0);
       const monthCost = store.stockEntries
         .filter(e => isWithinInterval(parseISO(e.date), interval))
         .reduce((sum, e) => sum + e.totalCost, 0);
