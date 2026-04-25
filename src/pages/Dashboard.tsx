@@ -46,7 +46,7 @@ export default function Dashboard() {
     }
 
     const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
-    const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
+    const revenue = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
     const costs = store.stockEntries
       .filter(e => filterFn(e.date))
