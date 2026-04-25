@@ -1,5 +1,5 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, DollarSign, Package, Receipt } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Package, Clock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
@@ -45,9 +45,9 @@ export default function Dashboard() {
       filterFn = (dateISO: string) => isWithinInterval(parseISO(dateISO), { start, end });
     }
 
-    const revenue = store.sales
-      .filter(s => s.type === "venda" && filterFn(s.date))
-      .reduce((sum, s) => sum + s.totalPrice, 0);
+    const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
+    const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
+    const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
     const costs = store.stockEntries
       .filter(e => filterFn(e.date))
       .reduce((sum, e) => sum + e.totalCost, 0);
@@ -56,7 +56,7 @@ export default function Dashboard() {
       .reduce((sum, e) => sum + e.amount, 0);
     const profit = revenue - costs - expenses;
 
-    return { revenue, costs, expenses, profit };
+    return { revenue, costs, expenses, profit, receivable };
   }, [filter, store.sales, store.stockEntries, store.expenses]);
 
   const monthlyData = useMemo(() => {
@@ -92,7 +92,7 @@ export default function Dashboard() {
   const stats = [
     { label: `Receita${isGeral ? " Total" : ""}`, value: formatCurrency(periodStats.revenue), icon: TrendingUp, accent: false },
     { label: "Custos (Compra)", value: formatCurrency(periodStats.costs), icon: DollarSign, accent: true },
-    { label: "Despesas", value: formatCurrency(periodStats.expenses), icon: Receipt, accent: true },
+    { label: "A Receber", value: formatCurrency(periodStats.receivable), icon: Clock, accent: true },
     { label: "Lucro Líquido", value: formatCurrency(periodStats.profit), icon: periodStats.profit >= 0 ? TrendingUp : TrendingDown, accent: false },
     // Estoque e capital investido são sempre "snapshot atual" - não dependem do mês
     { label: "Estoque Atual", value: `${totalStock} un.`, icon: Package, accent: false },
