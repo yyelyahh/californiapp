@@ -45,9 +45,9 @@ export default function Dashboard() {
       filterFn = (dateISO: string) => isWithinInterval(parseISO(dateISO), { start, end });
     }
 
-    const revenue = store.sales
-      .filter(s => s.type === "venda" && filterFn(s.date))
-      .reduce((sum, s) => sum + s.totalPrice, 0);
+    const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
+    const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
+    const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
     const costs = store.stockEntries
       .filter(e => filterFn(e.date))
       .reduce((sum, e) => sum + e.totalCost, 0);
@@ -56,7 +56,7 @@ export default function Dashboard() {
       .reduce((sum, e) => sum + e.amount, 0);
     const profit = revenue - costs - expenses;
 
-    return { revenue, costs, expenses, profit };
+    return { revenue, costs, expenses, profit, receivable };
   }, [filter, store.sales, store.stockEntries, store.expenses]);
 
   const monthlyData = useMemo(() => {
