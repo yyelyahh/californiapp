@@ -1,10 +1,13 @@
 import { useStore } from "@/context/StoreContext";
+import type { Product } from "@/types";
 import { useState, useMemo } from "react";
-import { Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 import AddProductDialog from "@/components/AddProductDialog";
 
 function formatCurrency(v: number) {
@@ -18,6 +21,8 @@ export default function ProductsPage() {
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -93,6 +98,54 @@ export default function ProductsPage() {
     setEditId(null);
   };
 
+  // Lista única de modelos (e marcas) presentes no catálogo
+  const availableModels = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach(p => { if (p.model && p.model.trim()) set.add(p.model.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const availableBrands = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach(p => { if (p.brand && p.brand.trim()) set.add(p.brand.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  // Produtos que serão afetados pela atualização em massa
+  const bulkAffected = useMemo(() => {
+    if (!bulkForm.model) return [];
+    return products.filter(p =>
+      p.model.trim().toLowerCase() === bulkForm.model.trim().toLowerCase() &&
+      (bulkForm.brand === "all" || p.brand.trim().toLowerCase() === bulkForm.brand.trim().toLowerCase())
+    );
+  }, [products, bulkForm.model, bulkForm.brand]);
+
+  const handleBulkUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkForm.model) {
+      toast.error("Selecione um modelo");
+      return;
+    }
+    const newPurchase = bulkForm.purchasePrice.trim() === "" ? null : Number(bulkForm.purchasePrice);
+    const newSale = bulkForm.salePrice.trim() === "" ? null : Number(bulkForm.salePrice);
+    if (newPurchase === null && newSale === null) {
+      toast.error("Informe ao menos um preço");
+      return;
+    }
+    if (bulkAffected.length === 0) {
+      toast.error("Nenhum produto encontrado para esse modelo");
+      return;
+    }
+    const updates: Partial<Product> = {};
+    if (newPurchase !== null && !isNaN(newPurchase)) updates.purchasePrice = newPurchase;
+    if (newSale !== null && !isNaN(newSale)) updates.salePrice = newSale;
+
+    await Promise.all(bulkAffected.map(p => updateProduct(p.id, updates)));
+    toast.success(`${bulkAffected.length} produto(s) atualizado(s)`);
+    setBulkOpen(false);
+    setBulkForm({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between gap-2">
@@ -100,8 +153,94 @@ export default function ProductsPage() {
           <h1 className="text-xl md:text-2xl font-bold">Produtos</h1>
           <p className="text-muted-foreground text-xs md:text-sm">Catálogo de pods descartáveis</p>
         </div>
-        <AddProductDialog />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="gap-1.5">
+            <Tag size={14} /> <span className="hidden sm:inline">Preço por Modelo</span><span className="sm:hidden">Modelo</span>
+          </Button>
+          <AddProductDialog />
+        </div>
       </div>
+
+      {/* Dialog de atualização em massa por modelo */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Preço por Modelo</DialogTitle>
+            <DialogDescription>
+              Atualize o preço de compra e/ou venda de todos os produtos de um determinado modelo de uma só vez.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBulkUpdate} className="space-y-4">
+            <div>
+              <Label>Modelo</Label>
+              <Select value={bulkForm.model} onValueChange={v => setBulkForm(f => ({ ...f, model: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione um modelo (ex: 10K, V155)" /></SelectTrigger>
+                <SelectContent>
+                  {availableModels.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo cadastrado</div>
+                  ) : availableModels.map(m => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Marca (opcional)</Label>
+              <Select value={bulkForm.brand} onValueChange={v => setBulkForm(f => ({ ...f, brand: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as marcas</SelectItem>
+                  {availableBrands.map(b => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Preço Compra (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Deixe vazio para manter"
+                  value={bulkForm.purchasePrice}
+                  onChange={e => setBulkForm(f => ({ ...f, purchasePrice: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Preço Venda (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Deixe vazio para manter"
+                  value={bulkForm.salePrice}
+                  onChange={e => setBulkForm(f => ({ ...f, salePrice: e.target.value }))}
+                />
+              </div>
+            </div>
+            {bulkForm.model && (
+              <div className="rounded-md border border-border bg-secondary/30 p-3 text-xs">
+                <p className="text-muted-foreground mb-1">
+                  Produtos afetados: <span className="text-foreground font-medium">{bulkAffected.length}</span>
+                </p>
+                {bulkAffected.length > 0 && (
+                  <ul className="space-y-0.5 max-h-32 overflow-auto">
+                    {bulkAffected.slice(0, 8).map(p => (
+                      <li key={p.id} className="truncate">• {p.brand} {p.name} {p.flavor && `· ${p.flavor}`}</li>
+                    ))}
+                    {bulkAffected.length > 8 && (
+                      <li className="text-muted-foreground">+ {bulkAffected.length - 8} outros…</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={bulkAffected.length === 0}>
+              Atualizar {bulkAffected.length > 0 && `(${bulkAffected.length})`}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de edição */}
       <Dialog open={!!editId} onOpenChange={v => { if (!v) setEditId(null); }}>
