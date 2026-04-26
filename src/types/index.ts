@@ -77,6 +77,15 @@ export interface Partner {
   createdAt: string;
 }
 
+export interface PartnerPayment {
+  id: string;
+  partnerId: string;
+  month: string; // YYYY-MM
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
 export interface Seller {
   id: string;
   name: string;
