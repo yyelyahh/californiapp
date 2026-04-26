@@ -300,14 +300,25 @@ export default function ProductsPage() {
       </div>
 
       {/* Busca */}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, marca ou sabor..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, marca ou sabor..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button
+          type="button"
+          variant={showOutOfStock ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowOutOfStock(v => !v)}
+          className="shrink-0"
+        >
+          {showOutOfStock ? "Ocultar zerados" : `Mostrar zerados${outOfStockCount > 0 ? ` (${outOfStockCount})` : ""}`}
+        </Button>
       </div>
 
       {/* Grupos por marca */}
