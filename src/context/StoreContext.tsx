@@ -79,7 +79,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -90,6 +90,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("sellers" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
