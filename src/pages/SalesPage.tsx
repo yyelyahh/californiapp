@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 function formatCurrency(v: number) {
@@ -245,50 +246,84 @@ export default function SalesPage() {
         </Dialog>
       </div>
 
-      {sales.length === 0 ? (
-        <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma venda registrada.</p></div>
-      ) : (
-        <div className="glass-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
-              <th className="text-left p-3">Data</th><th className="text-left p-3">Tipo</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
-              <th className="text-right p-3">Total</th><th className="text-right p-3">Recebido</th>
-              <th className="text-right p-3">Falta</th><th className="text-left p-3">Funcionário</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
-            </tr></thead>
-            <tbody>
-              {[...sales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(s => {
-                const remaining = Math.max(0, s.totalPrice - s.paidAmount);
-                const isRet = s.type === "retirada_funcionario";
-                return (
-                  <tr key={s.id} className={cn("border-b border-border last:border-0 hover:bg-secondary/30 transition-colors", isRet && "bg-amber-500/5")}>
-                    <td className="p-3 mono text-xs">{formatDateBR(s.date)}</td>
-                    <td className="p-3">
-                      {isRet
-                        ? <Badge variant="outline" className="border-amber-500/40 text-amber-400 bg-amber-500/10">Retirada</Badge>
-                        : <Badge variant="secondary">Venda</Badge>}
-                    </td>
-                    <td className="p-3">{getProductDisplayName(s.productId)}</td>
-                    <td className="p-3 text-right mono">{s.quantity}</td>
-                    <td className={cn("p-3 text-right mono font-semibold", isRet ? "text-amber-400" : "text-primary")}>{formatCurrency(s.totalPrice)}</td>
-                    <td className="p-3 text-right mono text-primary">{isRet ? "—" : formatCurrency(s.paidAmount)}</td>
-                    <td className="p-3 text-right mono">
-                      {isRet ? <span className="text-amber-400 font-semibold">{formatCurrency(s.totalPrice)}</span> : (remaining > 0 ? <span className="text-destructive font-semibold">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground">—</span>)}
-                    </td>
-                    <td className="p-3 text-sm">{s.sellerId ? getSellerName(s.sellerId) : <span className="text-muted-foreground">—</span>}</td>
-                    <td className="p-3 text-xs text-muted-foreground max-w-[120px] truncate">{s.notes || '—'}</td>
-                    <td className="p-3">
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil size={14} /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s.id)}><Trash2 size={14} /></Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {(() => {
+        const sortedSales = [...sales]
+          .filter(s => (s.type || "venda") !== "retirada_funcionario")
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const sortedRetiradas = [...sales]
+          .filter(s => s.type === "retirada_funcionario")
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const renderRow = (s: typeof sales[number]) => {
+          const remaining = Math.max(0, s.totalPrice - s.paidAmount);
+          const isRet = s.type === "retirada_funcionario";
+          return (
+            <tr key={s.id} className={cn("border-b border-border last:border-0 hover:bg-secondary/30 transition-colors", isRet && "bg-amber-500/5")}>
+              <td className="p-3 mono text-xs">{formatDateBR(s.date)}</td>
+              <td className="p-3">{getProductDisplayName(s.productId)}</td>
+              <td className="p-3 text-right mono">{s.quantity}</td>
+              <td className={cn("p-3 text-right mono font-semibold", isRet ? "text-amber-400" : "text-primary")}>{formatCurrency(s.totalPrice)}</td>
+              {!isRet && <td className="p-3 text-right mono text-primary">{formatCurrency(s.paidAmount)}</td>}
+              {!isRet && (
+                <td className="p-3 text-right mono">
+                  {remaining > 0 ? <span className="text-destructive font-semibold">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground">—</span>}
+                </td>
+              )}
+              <td className="p-3 text-sm">{s.sellerId ? getSellerName(s.sellerId) : <span className="text-muted-foreground">—</span>}</td>
+              <td className="p-3 text-xs text-muted-foreground max-w-[120px] truncate">{s.notes || '—'}</td>
+              <td className="p-3">
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil size={14} /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s.id)}><Trash2 size={14} /></Button>
+                </div>
+              </td>
+            </tr>
+          );
+        };
+
+        return (
+          <Tabs defaultValue="vendas" className="w-full">
+            <TabsList>
+              <TabsTrigger value="vendas">Vendas ({sortedSales.length})</TabsTrigger>
+              <TabsTrigger value="retiradas">Retiradas ({sortedRetiradas.length})</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="vendas" className="mt-4">
+              {sortedSales.length === 0 ? (
+                <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma venda registrada.</p></div>
+              ) : (
+                <div className="glass-card overflow-hidden overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
+                      <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
+                      <th className="text-right p-3">Total</th><th className="text-right p-3">Recebido</th>
+                      <th className="text-right p-3">Falta</th><th className="text-left p-3">Funcionário</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
+                    </tr></thead>
+                    <tbody>{sortedSales.map(renderRow)}</tbody>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="retiradas" className="mt-4">
+              {sortedRetiradas.length === 0 ? (
+                <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma retirada registrada.</p></div>
+              ) : (
+                <div className="glass-card overflow-hidden overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
+                      <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
+                      <th className="text-right p-3">Valor</th>
+                      <th className="text-left p-3">Funcionário</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
+                    </tr></thead>
+                    <tbody>{sortedRetiradas.map(renderRow)}</tbody>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        );
+      })()}
     </div>
   );
 }
