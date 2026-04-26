@@ -1,4 +1,5 @@
 import { useStore } from "@/context/StoreContext";
+import type { Product } from "@/types";
 import { useState, useMemo } from "react";
 import { Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
