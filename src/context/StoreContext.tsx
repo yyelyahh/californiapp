@@ -594,13 +594,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
       addPartner, updatePartner, deletePartner,
+      addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment,
       addSellerDebtPayment, deleteSellerDebtPayment, getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
