@@ -259,6 +259,26 @@ export default function MonthlyRevenuePage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Registrar pagamento ao sócio</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Valor</Label>
+              <Input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
+              {payTarget && payTarget.suggested > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Sugerido: {formatCurrency(payTarget.suggested)}</p>
+              )}
+            </div>
+            <div>
+              <Label>Observações (opcional)</Label>
+              <Input value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="Ex.: PIX, dinheiro..." />
+            </div>
+            <Button onClick={handlePay} className="w-full">Confirmar pagamento</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
