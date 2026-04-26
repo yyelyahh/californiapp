@@ -29,7 +29,11 @@ function isInMonth(dateStr: string, month: string) {
 }
 
 export default function MonthlyRevenuePage() {
-  const { sales, stockEntries, expenses, dividends, partners, addPartner, updatePartner, deletePartner, getProductName } = useStore();
+  const {
+    sales, stockEntries, expenses, dividends, partners,
+    partnerPayments, addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
+    addPartner, updatePartner, deletePartner,
+  } = useStore();
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -40,14 +44,19 @@ export default function MonthlyRevenuePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", percentage: "" });
 
-  // Monthly calculations
+  const [payOpen, setPayOpen] = useState(false);
+  const [payTarget, setPayTarget] = useState<{ partnerId: string; suggested: number } | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNotes, setPayNotes] = useState("");
+
+  // Monthly calculations — receita conta apenas o que foi recebido
   const monthlyData = useMemo(() => {
     const monthSales = sales.filter(s => s.type === "venda" && isInMonth(s.date, selectedMonth));
     const monthStockEntries = stockEntries.filter(e => isInMonth(e.date, selectedMonth));
     const monthExpenses = expenses.filter(e => isInMonth(e.date, selectedMonth));
     const monthDividends = dividends.filter(d => isInMonth(d.date, selectedMonth));
 
-    const revenue = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
+    const revenue = monthSales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const costs = monthStockEntries.reduce((sum, e) => sum + e.totalCost, 0);
     const expenseTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
     const dividendTotal = monthDividends.reduce((sum, d) => sum + d.amount, 0);
@@ -69,6 +78,28 @@ export default function MonthlyRevenuePage() {
       await addPartner({ name: form.name, percentage: Number(form.percentage) });
     }
     setOpen(false);
+  };
+
+  const openPay = (partnerId: string, suggested: number) => {
+    setPayTarget({ partnerId, suggested });
+    setPayAmount(suggested > 0 ? suggested.toFixed(2) : "");
+    setPayNotes("");
+    setPayOpen(true);
+  };
+
+  const handlePay = async () => {
+    if (!payTarget) return;
+    const amount = Number(payAmount);
+    if (!amount || amount <= 0) return;
+    await addPartnerPayment({
+      partnerId: payTarget.partnerId,
+      month: selectedMonth,
+      amount,
+      date: new Date().toISOString(),
+      notes: payNotes || undefined,
+    });
+    setPayOpen(false);
+    setPayTarget(null);
   };
 
   return (
