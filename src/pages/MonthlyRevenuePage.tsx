@@ -184,25 +184,63 @@ export default function MonthlyRevenuePage() {
                   ⚠️ A soma das porcentagens é {totalPercentage}% (deveria ser 100%)
                 </div>
               )}
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
                   <th className="text-left p-3">Sócio</th>
                   <th className="text-right p-3">%</th>
-                  <th className="text-right p-3">Receita do Mês</th>
+                  <th className="text-right p-3">Devido</th>
+                  <th className="text-right p-3">Pago</th>
+                  <th className="text-center p-3">Status</th>
                   <th className="p-3"></th>
                 </tr></thead>
                 <tbody>
                   {partners.map(p => {
-                    const share = Math.max(0, monthlyData.revenue) * (p.percentage / 100);
+                    const profitBase = Math.max(0, monthlyData.profit);
+                    const share = profitBase * (p.percentage / 100);
+                    const paid = getPartnerPaidForMonth(p.id, selectedMonth);
+                    const remaining = Math.max(0, share - paid);
+                    const isPaid = share > 0 && remaining <= 0.005;
+                    const monthPayments = partnerPayments.filter(pp => pp.partnerId === p.id && pp.month === selectedMonth);
                     return (
                       <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="p-3 font-medium">{p.name}</td>
                         <td className="p-3 text-right text-muted-foreground">{p.percentage}%</td>
-                        <td className={`p-3 text-right font-semibold ${share >= 0 ? "text-primary" : "text-destructive"}`}>
+                        <td className="p-3 text-right font-semibold text-primary">
                           {formatCurrency(share)}
                         </td>
+                        <td className="p-3 text-right text-muted-foreground">
+                          {formatCurrency(paid)}
+                        </td>
+                        <td className="p-3 text-center">
+                          {isPaid ? (
+                            <Badge className="bg-primary/15 text-primary hover:bg-primary/20 border-0">Pago</Badge>
+                          ) : remaining > 0 && share > 0 ? (
+                            <Badge variant="outline" className="text-accent border-accent/40">
+                              Falta {formatCurrency(remaining)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                          )}
+                        </td>
                         <td className="p-3 text-right">
-                          <div className="flex gap-1 justify-end">
+                          <div className="flex gap-1 justify-end items-center">
+                            {!isPaid && share > 0 && (
+                              <Button size="sm" variant="outline" onClick={() => openPay(p.id, remaining)} className="h-7 px-2 text-xs">
+                                <Check size={14} className="mr-1" /> Pagar
+                              </Button>
+                            )}
+                            {monthPayments.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Desfazer pagamentos do mês"
+                                onClick={() => monthPayments.forEach(mp => deletePartnerPayment(mp.id))}
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              >
+                                <X size={14} />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" onClick={() => openEdit(p)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
                               <Pencil size={14} />
                             </Button>
@@ -216,6 +254,7 @@ export default function MonthlyRevenuePage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </CardContent>
