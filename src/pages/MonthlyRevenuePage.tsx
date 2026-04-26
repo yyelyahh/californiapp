@@ -1,11 +1,12 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Pencil, Users, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Plus, Trash2, Pencil, Users, TrendingUp, TrendingDown, DollarSign, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -28,7 +29,11 @@ function isInMonth(dateStr: string, month: string) {
 }
 
 export default function MonthlyRevenuePage() {
-  const { sales, stockEntries, expenses, dividends, partners, addPartner, updatePartner, deletePartner, getProductName } = useStore();
+  const {
+    sales, stockEntries, expenses, dividends, partners,
+    partnerPayments, addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
+    addPartner, updatePartner, deletePartner,
+  } = useStore();
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -39,14 +44,19 @@ export default function MonthlyRevenuePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", percentage: "" });
 
-  // Monthly calculations
+  const [payOpen, setPayOpen] = useState(false);
+  const [payTarget, setPayTarget] = useState<{ partnerId: string; suggested: number } | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNotes, setPayNotes] = useState("");
+
+  // Monthly calculations — receita conta apenas o que foi recebido
   const monthlyData = useMemo(() => {
     const monthSales = sales.filter(s => s.type === "venda" && isInMonth(s.date, selectedMonth));
     const monthStockEntries = stockEntries.filter(e => isInMonth(e.date, selectedMonth));
     const monthExpenses = expenses.filter(e => isInMonth(e.date, selectedMonth));
     const monthDividends = dividends.filter(d => isInMonth(d.date, selectedMonth));
 
-    const revenue = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
+    const revenue = monthSales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const costs = monthStockEntries.reduce((sum, e) => sum + e.totalCost, 0);
     const expenseTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
     const dividendTotal = monthDividends.reduce((sum, d) => sum + d.amount, 0);
@@ -68,6 +78,28 @@ export default function MonthlyRevenuePage() {
       await addPartner({ name: form.name, percentage: Number(form.percentage) });
     }
     setOpen(false);
+  };
+
+  const openPay = (partnerId: string, suggested: number) => {
+    setPayTarget({ partnerId, suggested });
+    setPayAmount(suggested > 0 ? suggested.toFixed(2) : "");
+    setPayNotes("");
+    setPayOpen(true);
+  };
+
+  const handlePay = async () => {
+    if (!payTarget) return;
+    const amount = Number(payAmount);
+    if (!amount || amount <= 0) return;
+    await addPartnerPayment({
+      partnerId: payTarget.partnerId,
+      month: selectedMonth,
+      amount,
+      date: new Date().toISOString(),
+      notes: payNotes || undefined,
+    });
+    setPayOpen(false);
+    setPayTarget(null);
   };
 
   return (
@@ -152,25 +184,63 @@ export default function MonthlyRevenuePage() {
                   ⚠️ A soma das porcentagens é {totalPercentage}% (deveria ser 100%)
                 </div>
               )}
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
                   <th className="text-left p-3">Sócio</th>
                   <th className="text-right p-3">%</th>
-                  <th className="text-right p-3">Receita do Mês</th>
+                  <th className="text-right p-3">Devido</th>
+                  <th className="text-right p-3">Pago</th>
+                  <th className="text-center p-3">Status</th>
                   <th className="p-3"></th>
                 </tr></thead>
                 <tbody>
                   {partners.map(p => {
-                    const share = Math.max(0, monthlyData.revenue) * (p.percentage / 100);
+                    const profitBase = Math.max(0, monthlyData.profit);
+                    const share = profitBase * (p.percentage / 100);
+                    const paid = getPartnerPaidForMonth(p.id, selectedMonth);
+                    const remaining = Math.max(0, share - paid);
+                    const isPaid = share > 0 && remaining <= 0.005;
+                    const monthPayments = partnerPayments.filter(pp => pp.partnerId === p.id && pp.month === selectedMonth);
                     return (
                       <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="p-3 font-medium">{p.name}</td>
                         <td className="p-3 text-right text-muted-foreground">{p.percentage}%</td>
-                        <td className={`p-3 text-right font-semibold ${share >= 0 ? "text-primary" : "text-destructive"}`}>
+                        <td className="p-3 text-right font-semibold text-primary">
                           {formatCurrency(share)}
                         </td>
+                        <td className="p-3 text-right text-muted-foreground">
+                          {formatCurrency(paid)}
+                        </td>
+                        <td className="p-3 text-center">
+                          {isPaid ? (
+                            <Badge className="bg-primary/15 text-primary hover:bg-primary/20 border-0">Pago</Badge>
+                          ) : remaining > 0 && share > 0 ? (
+                            <Badge variant="outline" className="text-accent border-accent/40">
+                              Falta {formatCurrency(remaining)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                          )}
+                        </td>
                         <td className="p-3 text-right">
-                          <div className="flex gap-1 justify-end">
+                          <div className="flex gap-1 justify-end items-center">
+                            {!isPaid && share > 0 && (
+                              <Button size="sm" variant="outline" onClick={() => openPay(p.id, remaining)} className="h-7 px-2 text-xs">
+                                <Check size={14} className="mr-1" /> Pagar
+                              </Button>
+                            )}
+                            {monthPayments.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Desfazer pagamentos do mês"
+                                onClick={() => monthPayments.forEach(mp => deletePartnerPayment(mp.id))}
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              >
+                                <X size={14} />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" onClick={() => openEdit(p)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
                               <Pencil size={14} />
                             </Button>
@@ -184,10 +254,31 @@ export default function MonthlyRevenuePage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Registrar pagamento ao sócio</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Valor</Label>
+              <Input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
+              {payTarget && payTarget.suggested > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Sugerido: {formatCurrency(payTarget.suggested)}</p>
+              )}
+            </div>
+            <div>
+              <Label>Observações (opcional)</Label>
+              <Input value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="Ex.: PIX, dinheiro..." />
+            </div>
+            <Button onClick={handlePay} className="w-full">Confirmar pagamento</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

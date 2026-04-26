@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, Seller, ProductAssignment, SellerDebtPayment } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -14,6 +14,7 @@ interface StoreContextType {
   sellers: Seller[];
   productAssignments: ProductAssignment[];
   sellerDebtPayments: SellerDebtPayment[];
+  partnerPayments: PartnerPayment[];
   loading: boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
@@ -33,6 +34,9 @@ interface StoreContextType {
   addPartner: (p: Omit<Partner, "id" | "createdAt">) => Promise<void>;
   updatePartner: (id: string, p: Partial<Partner>) => Promise<void>;
   deletePartner: (id: string) => Promise<void>;
+  addPartnerPayment: (p: Omit<PartnerPayment, "id">) => Promise<void>;
+  deletePartnerPayment: (id: string) => Promise<void>;
+  getPartnerPaidForMonth: (partnerId: string, month: string) => number;
   addSeller: (s: Omit<Seller, "id" | "createdAt">) => Promise<void>;
   updateSeller: (id: string, s: Partial<Seller>) => Promise<void>;
   deleteSeller: (id: string) => Promise<void>;
@@ -68,13 +72,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([]);
   const [sellerDebtPayments, setSellerDebtPayments] = useState<SellerDebtPayment[]>([]);
+  const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -85,6 +90,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("sellers" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -97,6 +103,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
         if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
         if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
+        if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -161,6 +168,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const mapPartner = (r: any): Partner => ({
     id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
+  });
+
+  const mapPartnerPayment = (r: any): PartnerPayment => ({
+    id: r.id, partnerId: r.partner_id, month: r.month,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
   // ---- Products ----
@@ -411,6 +423,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPartners(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ---- Partner Payments ----
+  const addPartnerPayment = useCallback(async (p: Omit<PartnerPayment, "id">) => {
+    const { data, error } = await supabase.from("partner_payments" as any).insert({
+      partner_id: p.partnerId, month: p.month, amount: p.amount,
+      date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pagamento"); return; }
+    setPartnerPayments(prev => [...prev, mapPartnerPayment(data)]);
+    toast.success("Pagamento registrado");
+  }, []);
+
+  const deletePartnerPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("partner_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir pagamento"); return; }
+    setPartnerPayments(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  const getPartnerPaidForMonth = useCallback((partnerId: string, month: string) => {
+    return partnerPayments
+      .filter(p => p.partnerId === partnerId && p.month === month)
+      .reduce((sum, p) => sum + p.amount, 0);
+  }, [partnerPayments]);
+
   // ---- Sellers ----
   const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("sellers" as any).insert({
@@ -559,13 +594,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
       addPartner, updatePartner, deletePartner,
+      addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment,
       addSellerDebtPayment, deleteSellerDebtPayment, getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,

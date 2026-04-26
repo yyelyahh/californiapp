@@ -103,6 +103,36 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          month: string
+          notes: string | null
+          partner_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          month: string
+          notes?: string | null
+          partner_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          month?: string
+          notes?: string | null
+          partner_id?: string
+        }
+        Relationships: []
+      }
       partners: {
         Row: {
           created_at: string
