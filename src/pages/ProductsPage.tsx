@@ -19,20 +19,24 @@ export default function ProductsPage() {
   const { products, updateProduct, deleteProduct } = useStore();
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
+  const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
 
+  const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return products;
+    const base = showOutOfStock ? products : products.filter(p => p.stock > 0);
+    if (!search.trim()) return base;
     const q = search.toLowerCase();
-    return products.filter(p =>
+    return base.filter(p =>
       p.name.toLowerCase().includes(q) ||
       p.brand.toLowerCase().includes(q) ||
       p.flavor.toLowerCase().includes(q)
     );
-  }, [products, search]);
+  }, [products, search, showOutOfStock]);
 
   const brandGroups = useMemo(() => {
     const groups = new Map<string, typeof filtered>();
