@@ -22,6 +22,8 @@ export default function ProductsPage() {
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
+
+  const filtered = useMemo(() => {
     if (!search.trim()) return products;
     const q = search.toLowerCase();
     return products.filter(p =>
