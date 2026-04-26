@@ -170,6 +170,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
   });
 
+  const mapPartnerPayment = (r: any): PartnerPayment => ({
+    id: r.id, partnerId: r.partner_id, month: r.month,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
   // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
     const { data, error } = await supabase.from("products").insert({
