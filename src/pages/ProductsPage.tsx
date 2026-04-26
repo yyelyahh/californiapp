@@ -19,20 +19,24 @@ export default function ProductsPage() {
   const { products, updateProduct, deleteProduct } = useStore();
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
+  const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
 
+  const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return products;
+    const base = showOutOfStock ? products : products.filter(p => p.stock > 0);
+    if (!search.trim()) return base;
     const q = search.toLowerCase();
-    return products.filter(p =>
+    return base.filter(p =>
       p.name.toLowerCase().includes(q) ||
       p.brand.toLowerCase().includes(q) ||
       p.flavor.toLowerCase().includes(q)
     );
-  }, [products, search]);
+  }, [products, search, showOutOfStock]);
 
   const brandGroups = useMemo(() => {
     const groups = new Map<string, typeof filtered>();
@@ -296,14 +300,25 @@ export default function ProductsPage() {
       </div>
 
       {/* Busca */}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, marca ou sabor..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, marca ou sabor..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button
+          type="button"
+          variant={showOutOfStock ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowOutOfStock(v => !v)}
+          className="shrink-0"
+        >
+          {showOutOfStock ? "Ocultar zerados" : `Mostrar zerados${outOfStockCount > 0 ? ` (${outOfStockCount})` : ""}`}
+        </Button>
       </div>
 
       {/* Grupos por marca */}
