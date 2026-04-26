@@ -423,6 +423,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPartners(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ---- Partner Payments ----
+  const addPartnerPayment = useCallback(async (p: Omit<PartnerPayment, "id">) => {
+    const { data, error } = await supabase.from("partner_payments" as any).insert({
+      partner_id: p.partnerId, month: p.month, amount: p.amount,
+      date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pagamento"); return; }
+    setPartnerPayments(prev => [...prev, mapPartnerPayment(data)]);
+    toast.success("Pagamento registrado");
+  }, []);
+
+  const deletePartnerPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("partner_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir pagamento"); return; }
+    setPartnerPayments(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  const getPartnerPaidForMonth = useCallback((partnerId: string, month: string) => {
+    return partnerPayments
+      .filter(p => p.partnerId === partnerId && p.month === month)
+      .reduce((sum, p) => sum + p.amount, 0);
+  }, [partnerPayments]);
+
   // ---- Sellers ----
   const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("sellers" as any).insert({
