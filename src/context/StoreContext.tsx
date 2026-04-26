@@ -14,6 +14,7 @@ interface StoreContextType {
   sellers: Seller[];
   productAssignments: ProductAssignment[];
   sellerDebtPayments: SellerDebtPayment[];
+  partnerPayments: PartnerPayment[];
   loading: boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
