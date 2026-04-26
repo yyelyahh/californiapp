@@ -225,7 +225,7 @@ export default function MonthlyRevenuePage() {
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex gap-1 justify-end items-center">
-                            {!isPaid && share > 0 && (
+                            {!isPaid && (
                               <Button size="sm" variant="outline" onClick={() => openPay(p.id, remaining)} className="h-7 px-2 text-xs">
                                 <Check size={14} className="mr-1" /> Pagar
                               </Button>
