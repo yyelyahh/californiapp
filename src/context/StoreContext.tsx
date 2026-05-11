@@ -254,6 +254,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
     const totalPrice = s.quantity * s.unitPrice;
     const saleType = s.type || "venda";
+
+    // ---- Integrity validations (single source of truth) ----
+    const product = products.find(p => p.id === s.productId);
+    if (!product) { toast.error("Produto não encontrado"); throw new Error("product_not_found"); }
+    if (s.quantity <= 0) { toast.error("Quantidade inválida"); throw new Error("invalid_qty"); }
+
+    if (s.sellerId) {
+      // Vendedor só pode vender o que tem atribuído
+      const assignment = productAssignments.find(a => a.sellerId === s.sellerId && a.productId === s.productId);
+      const available = assignment?.quantity ?? 0;
+      if (available < s.quantity) {
+        toast.error(`Vendedor possui apenas ${available} unidade(s) deste produto`);
+        throw new Error("seller_insufficient_stock");
+      }
+    } else {
+      if (product.stock < s.quantity) {
+        toast.error(`Estoque insuficiente (disponível: ${product.stock})`);
+        throw new Error("insufficient_stock");
+      }
+    }
+
     const insertData: any = {
       product_id: s.productId, quantity: s.quantity,
       unit_price: s.unitPrice, total_price: totalPrice, date: s.date, notes: s.notes,
@@ -263,23 +284,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
     if (s.sellerId) insertData.seller_id = s.sellerId;
     const { data, error } = await supabase.from("sales").insert(insertData).select().single();
-    if (error) { toast.error("Erro ao registrar venda"); return; }
+    if (error) { toast.error("Erro ao registrar venda"); throw error; }
     const newSale = mapSale(data);
     setSales(prev => [...prev, newSale]);
-    const product = products.find(p => p.id === s.productId);
-    if (product) {
-      const newStock = Math.max(0, product.stock - s.quantity);
-      await supabase.from("products").update({ stock: newStock }).eq("id", s.productId);
-      setProducts(prev => prev.map(p => p.id === s.productId
-        ? { ...p, stock: newStock } : p));
-    }
-    // Deduct from seller's product assignment if sale has a seller
+
+    // Sempre reduz estoque global do produto
+    const newStock = Math.max(0, product.stock - s.quantity);
+    await supabase.from("products").update({ stock: newStock }).eq("id", s.productId);
+    setProducts(prev => prev.map(p => p.id === s.productId ? { ...p, stock: newStock } : p));
+
+    // Atualiza/remove atribuição do vendedor
     if (s.sellerId) {
       const assignment = productAssignments.find(a => a.sellerId === s.sellerId && a.productId === s.productId);
       if (assignment) {
         const newQty = Math.max(0, assignment.quantity - s.quantity);
-        await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
-        setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: newQty } : a));
+        if (newQty === 0) {
+          // Remove vínculo automaticamente quando zera
+          await supabase.from("product_assignments").delete().eq("id", assignment.id);
+          setProductAssignments(prev => prev.filter(a => a.id !== assignment.id));
+        } else {
+          await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
+          setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: newQty } : a));
+        }
       }
       // Auto-debit X% from seller's debt on a regular sale (not retirada)
       if (saleType === "venda") {
