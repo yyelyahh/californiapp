@@ -459,8 +459,8 @@ function Heatmap({ cells, mode }: { cells: ReturnType<typeof gerarHeatmap>; mode
           <div key={w} className="text-[10px] text-muted-foreground text-center">S{w + 1}</div>
         ))}
         {WEEKDAY_LABELS.map((wd, i) => (
-          <>
-            <div key={`l${i}`} className="text-[10px] text-muted-foreground pr-2 flex items-center">{wd}</div>
+          <Fragment key={`row-${i}`}>
+            <div className="text-[10px] text-muted-foreground pr-2 flex items-center">{wd}</div>
             {grid[i].map((cell, w) => {
               const v = cell ? (mode === "count" ? cell.count : cell.revenue) : 0;
               return (
