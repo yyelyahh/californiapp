@@ -45,6 +45,14 @@ export interface SellerDebtPayment {
   notes?: string;
 }
 
+export interface SellerManualDebt {
+  id: string;
+  sellerId: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
 export interface Expense {
   id: string;
   description: string;
