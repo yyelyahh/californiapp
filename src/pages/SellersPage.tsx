@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function SellersPage() {
-  const { sellers, products, productAssignments, addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, getProductName } = useStore();
+  const { sellers, products, productAssignments, addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment, getProductName } = useStore();
   const [sellerOpen, setSellerOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [sellerName, setSellerName] = useState("");
