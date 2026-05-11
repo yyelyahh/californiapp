@@ -623,7 +623,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
