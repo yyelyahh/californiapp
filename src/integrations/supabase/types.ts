@@ -322,6 +322,33 @@ export type Database = {
         }
         Relationships: []
       }
+      seller_manual_debts: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          seller_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          seller_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          seller_id?: string
+        }
+        Relationships: []
+      }
       sellers: {
         Row: {
           created_at: string
