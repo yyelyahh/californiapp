@@ -19,6 +19,7 @@ export default function SellersPage() {
   const [editingSellerId, setEditingSellerId] = useState<string | null>(null);
   const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
   const [search, setSearch] = useState("");
+  const [transferState, setTransferState] = useState<{ assignmentId: string; toSellerId: string; quantity: string } | null>(null);
 
   const filteredSellers = useMemo(() => {
     if (!search) return sellers;
