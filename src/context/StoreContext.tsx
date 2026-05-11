@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -44,6 +44,9 @@ interface StoreContextType {
   deleteProductAssignment: (id: string) => Promise<void>;
   addSellerDebtPayment: (p: Omit<SellerDebtPayment, "id">) => Promise<void>;
   deleteSellerDebtPayment: (id: string) => Promise<void>;
+  sellerManualDebts: SellerManualDebt[];
+  addSellerManualDebt: (d: Omit<SellerManualDebt, "id">) => Promise<void>;
+  deleteSellerManualDebt: (id: string) => Promise<void>;
   getSellerName: (id: string) => string;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
@@ -73,13 +76,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([]);
   const [sellerDebtPayments, setSellerDebtPayments] = useState<SellerDebtPayment[]>([]);
   const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
+  const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -91,6 +95,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("seller_manual_debts" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -104,6 +109,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
         if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
         if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
+        if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -147,6 +153,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const mapSellerDebtPayment = (r: any): SellerDebtPayment => ({
     id: r.id, sellerId: r.seller_id, saleId: r.sale_id || undefined,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
+  const mapSellerManualDebt = (r: any): SellerManualDebt => ({
+    id: r.id, sellerId: r.seller_id,
     amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
@@ -560,6 +571,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSellerDebtPayments(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ---- Seller Manual Debts ----
+  const addSellerManualDebt = useCallback(async (d: Omit<SellerManualDebt, "id">) => {
+    const { data, error } = await supabase.from("seller_manual_debts" as any).insert({
+      seller_id: d.sellerId, amount: d.amount, date: d.date, notes: d.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar saldo devedor"); return; }
+    setSellerManualDebts(prev => [...prev, mapSellerManualDebt(data)]);
+    toast.success("Saldo devedor registrado");
+  }, []);
+
+  const deleteSellerManualDebt = useCallback(async (id: string) => {
+    const { error } = await supabase.from("seller_manual_debts" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    setSellerManualDebts(prev => prev.filter(d => d.id !== id));
+  }, []);
+
   // ---- Computed ----
   const getSellerName = useCallback((id: string) => sellers.find(s => s.id === id)?.name ?? "Vendedor desconhecido", [sellers]);
   const getTotalRevenue = useCallback(() => sales.filter(s => s.type === "venda").reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
@@ -581,8 +608,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [investors, getPaidToInvestor]);
 
   const getSellerDebt = useCallback((id: string) => {
-    return sales.filter(s => s.sellerId === id && s.type === "retirada_funcionario").reduce((sum, s) => sum + s.totalPrice, 0);
-  }, [sales]);
+    const fromRetiradas = sales.filter(s => s.sellerId === id && s.type === "retirada_funcionario").reduce((sum, s) => sum + s.totalPrice, 0);
+    const fromManual = sellerManualDebts.filter(d => d.sellerId === id).reduce((sum, d) => sum + d.amount, 0);
+    return fromRetiradas + fromManual;
+  }, [sales, sellerManualDebts]);
 
   const getSellerPaid = useCallback((id: string) => {
     return sellerDebtPayments.filter(p => p.sellerId === id).reduce((sum, p) => sum + p.amount, 0);
@@ -594,7 +623,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
@@ -603,7 +632,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addPartner, updatePartner, deletePartner,
       addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment,
-      addSellerDebtPayment, deleteSellerDebtPayment, getSellerName,
+      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt, getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
       getSellerDebt, getSellerPaid, getSellerBalance,

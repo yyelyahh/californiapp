@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Wallet, TrendingDown, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Wallet, TrendingDown, CheckCircle2, HandCoins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,13 +16,16 @@ function formatCurrency(v: number) {
 
 export default function SellerAccountsPage() {
   const {
-    sellers, sales, sellerDebtPayments,
+    sellers, sales, sellerDebtPayments, sellerManualDebts,
     addSellerDebtPayment, deleteSellerDebtPayment,
+    addSellerManualDebt, deleteSellerManualDebt,
     getSellerDebt, getSellerPaid, getSellerBalance, getProductName,
   } = useStore();
 
   const [open, setOpen] = useState(false);
+  const [debtOpen, setDebtOpen] = useState(false);
   const [form, setForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+  const [debtForm, setDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const totals = useMemo(() => {
@@ -44,6 +47,19 @@ export default function SellerAccountsPage() {
     setOpen(false);
   };
 
+  const handleDebtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!debtForm.sellerId || !debtForm.amount) return;
+    await addSellerManualDebt({
+      sellerId: debtForm.sellerId,
+      amount: Number(debtForm.amount),
+      date: localDateToISO(debtForm.date),
+      notes: debtForm.notes || undefined,
+    });
+    setDebtForm({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+    setDebtOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -51,33 +67,64 @@ export default function SellerAccountsPage() {
           <h1 className="text-2xl font-bold">Contas de Funcionários</h1>
           <p className="text-muted-foreground text-sm">Saldo devedor das retiradas</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus size={16} className="mr-2" />Registrar Pagamento</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Pagamento Manual de Funcionário</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Funcionário</Label>
-                <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {sellers.map(s => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} /></div>
-              <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: pagou em dinheiro" /></div>
-              <Button type="submit" className="w-full">Registrar</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={debtOpen} onOpenChange={setDebtOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="border-amber-500/40 text-amber-400 hover:text-amber-300">
+                <HandCoins size={16} className="mr-2" />Adicionar Saldo Devedor
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Adicionar Saldo Devedor</DialogTitle></DialogHeader>
+              <form onSubmit={handleDebtSubmit} className="space-y-4">
+                <div>
+                  <Label>Funcionário</Label>
+                  <Select value={debtForm.sellerId} onValueChange={v => setDebtForm(f => ({ ...f, sellerId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={debtForm.amount} onChange={e => setDebtForm(f => ({ ...f, amount: e.target.value }))} /></div>
+                <div><Label>Data</Label><Input type="date" value={debtForm.date} onChange={e => setDebtForm(f => ({ ...f, date: e.target.value }))} /></div>
+                <div><Label>Observações</Label><Input value={debtForm.notes} onChange={e => setDebtForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: dinheiro emprestado, adiantamento" /></div>
+                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-white">Adicionar Dívida</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus size={16} className="mr-2" />Registrar Pagamento</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Pagamento Manual de Funcionário</DialogTitle></DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label>Funcionário</Label>
+                  <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} /></div>
+                <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+                <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: pagou em dinheiro" /></div>
+                <Button type="submit" className="w-full">Registrar</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Resumo geral */}
@@ -112,6 +159,7 @@ export default function SellerAccountsPage() {
             const balance = getSellerBalance(seller.id);
             const sellerRetiradas = sales.filter(s => s.sellerId === seller.id && s.type === "retirada_funcionario");
             const sellerPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id);
+            const sellerDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
             const isExpanded = expandedId === seller.id;
 
             return (
@@ -154,6 +202,29 @@ export default function SellerAccountsPage() {
                               <div key={s.id} className="flex justify-between text-xs px-2 py-1 rounded bg-amber-500/5">
                                 <span>{formatDateBR(s.date)} · {s.quantity}x {getProductName(s.productId)}</span>
                                 <span className="font-semibold text-amber-400 mono">{formatCurrency(s.totalPrice)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground mb-1">Saldo Devedor Manual</p>
+                        {sellerDebts.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Nenhuma dívida manual.</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {sellerDebts.slice().reverse().map(d => (
+                              <div key={d.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-amber-500/10">
+                                <div className="flex-1">
+                                  <p>{formatDateBR(d.date)}</p>
+                                  {d.notes && <p className="text-muted-foreground">{d.notes}</p>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-semibold text-amber-400 mono">{formatCurrency(d.amount)}</span>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => { if (confirm("Excluir esta dívida?")) deleteSellerManualDebt(d.id); }}>
+                                    <Trash2 size={10} />
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
