@@ -26,19 +26,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const mobileNavItems = navItems.slice(0, 5);
 
   return (
-    <div className="flex h-screen">
-      {/* Desktop sidebar */}
+    <div className="flex h-screen flex-row-reverse">
+      {/* Desktop sidebar (right) */}
       <aside className={cn(
-        "hidden md:flex bg-sidebar border-r border-sidebar-border flex-col transition-all duration-300 h-screen sticky top-0 overflow-y-auto",
+        "hidden md:flex bg-sidebar border-l border-sidebar-border flex-col transition-all duration-300 h-screen sticky top-0 overflow-y-auto",
         collapsed ? "w-16" : "w-56"
       )}>
         <div className="p-4 flex items-center gap-2 border-b border-sidebar-border">
+          <button onClick={() => setCollapsed(!collapsed)} className="mr-auto text-sidebar-foreground hover:text-foreground transition-colors p-1">
+            {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
           {!collapsed && (
             <h1 className="text-lg font-bold tracking-tight" style={{ background: 'linear-gradient(135deg, hsl(270 60% 55%), hsl(285 55% 45%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>California</h1>
           )}
-          <button onClick={() => setCollapsed(!collapsed)} className="ml-auto text-sidebar-foreground hover:text-foreground transition-colors p-1">
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
         </div>
         <nav className="flex-1 py-3 space-y-1 px-2">
           {navItems.map(item => (
@@ -78,8 +78,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
       </aside>
 
-      {/* Mobile top header */}
+      {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0">
+        {/* Mobile top header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-sidebar sticky top-0 z-40">
           <h1 className="text-base font-bold tracking-tight" style={{ background: 'linear-gradient(135deg, hsl(270 60% 55%), hsl(285 55% 45%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>California</h1>
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-sidebar-foreground hover:text-foreground p-1">
