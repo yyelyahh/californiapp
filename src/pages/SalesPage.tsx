@@ -67,7 +67,7 @@ export default function SalesPage() {
     setOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.productId || !form.quantity) return;
 
@@ -77,36 +77,40 @@ export default function SalesPage() {
       return;
     }
 
-    if (editingSale) {
-      const totalPrice = Number(form.quantity) * Number(form.unitPrice);
-      updateSale(editingSale, {
-        quantity: Number(form.quantity),
-        unitPrice: Number(form.unitPrice) || 0,
-        totalPrice,
-        date: localDateToISO(form.date),
-        notes: form.notes || undefined,
-        installments: Number(form.installments) || 1,
-        paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
-        sellerId: form.sellerId || undefined,
-        type: form.type,
-      });
-    } else {
-      const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
-      addSale({
-        productId: form.productId,
-        quantity: Number(form.quantity),
-        unitPrice: Number(form.unitPrice) || 0,
-        date: localDateToISO(form.date),
-        notes: form.notes || undefined,
-        installments: Number(form.installments) || 1,
-        paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
-        sellerId: effectiveSellerId,
-        type: form.type,
-      });
+    try {
+      if (editingSale) {
+        const totalPrice = Number(form.quantity) * Number(form.unitPrice);
+        await updateSale(editingSale, {
+          quantity: Number(form.quantity),
+          unitPrice: Number(form.unitPrice) || 0,
+          totalPrice,
+          date: localDateToISO(form.date),
+          notes: form.notes || undefined,
+          installments: Number(form.installments) || 1,
+          paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
+          sellerId: form.sellerId || undefined,
+          type: form.type,
+        });
+      } else {
+        const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
+        await addSale({
+          productId: form.productId,
+          quantity: Number(form.quantity),
+          unitPrice: Number(form.unitPrice) || 0,
+          date: localDateToISO(form.date),
+          notes: form.notes || undefined,
+          installments: Number(form.installments) || 1,
+          paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
+          sellerId: effectiveSellerId,
+          type: form.type,
+        });
+      }
+      setForm(emptyForm);
+      setEditingSale(null);
+      setOpen(false);
+    } catch {
+      // erro já reportado via toast pelo store; mantém modal aberto para correção
     }
-    setForm(emptyForm);
-    setEditingSale(null);
-    setOpen(false);
   };
 
   const handleDelete = async (id: string) => {
