@@ -208,6 +208,29 @@ export default function SellerAccountsPage() {
                         )}
                       </div>
                       <div>
+                        <p className="text-xs uppercase text-muted-foreground mb-1">Saldo Devedor Manual</p>
+                        {sellerDebts.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Nenhuma dívida manual.</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {sellerDebts.slice().reverse().map(d => (
+                              <div key={d.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-amber-500/10">
+                                <div className="flex-1">
+                                  <p>{formatDateBR(d.date)}</p>
+                                  {d.notes && <p className="text-muted-foreground">{d.notes}</p>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-semibold text-amber-400 mono">{formatCurrency(d.amount)}</span>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => { if (confirm("Excluir esta dívida?")) deleteSellerManualDebt(d.id); }}>
+                                    <Trash2 size={10} />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
                         <p className="text-xs uppercase text-muted-foreground mb-1">Pagamentos / Abatimentos</p>
                         {sellerPayments.length === 0 ? (
                           <p className="text-xs text-muted-foreground">Nenhum pagamento.</p>
