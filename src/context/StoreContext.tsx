@@ -571,6 +571,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSellerDebtPayments(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ---- Seller Manual Debts ----
+  const addSellerManualDebt = useCallback(async (d: Omit<SellerManualDebt, "id">) => {
+    const { data, error } = await supabase.from("seller_manual_debts" as any).insert({
+      seller_id: d.sellerId, amount: d.amount, date: d.date, notes: d.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar saldo devedor"); return; }
+    setSellerManualDebts(prev => [...prev, mapSellerManualDebt(data)]);
+    toast.success("Saldo devedor registrado");
+  }, []);
+
+  const deleteSellerManualDebt = useCallback(async (id: string) => {
+    const { error } = await supabase.from("seller_manual_debts" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    setSellerManualDebts(prev => prev.filter(d => d.id !== id));
+  }, []);
+
   // ---- Computed ----
   const getSellerName = useCallback((id: string) => sellers.find(s => s.id === id)?.name ?? "Vendedor desconhecido", [sellers]);
   const getTotalRevenue = useCallback(() => sales.filter(s => s.type === "venda").reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
@@ -592,8 +608,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [investors, getPaidToInvestor]);
 
   const getSellerDebt = useCallback((id: string) => {
-    return sales.filter(s => s.sellerId === id && s.type === "retirada_funcionario").reduce((sum, s) => sum + s.totalPrice, 0);
-  }, [sales]);
+    const fromRetiradas = sales.filter(s => s.sellerId === id && s.type === "retirada_funcionario").reduce((sum, s) => sum + s.totalPrice, 0);
+    const fromManual = sellerManualDebts.filter(d => d.sellerId === id).reduce((sum, d) => sum + d.amount, 0);
+    return fromRetiradas + fromManual;
+  }, [sales, sellerManualDebts]);
 
   const getSellerPaid = useCallback((id: string) => {
     return sellerDebtPayments.filter(p => p.sellerId === id).reduce((sum, p) => sum + p.amount, 0);
