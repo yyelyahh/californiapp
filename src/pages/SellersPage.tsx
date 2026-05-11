@@ -235,9 +235,14 @@ export default function SellersPage() {
                             <span className="ml-2 text-muted-foreground">×{a.quantity}</span>
                             {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => {
-                            if (confirm("Remover atribuição?")) deleteProductAssignment(a.id);
-                          }}><Trash2 size={12} /></Button>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-primary" title="Transferir" onClick={() => setTransferState({ assignmentId: a.id, toSellerId: "", quantity: String(a.quantity) })}>
+                              <ArrowRightLeft size={12} />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => {
+                              if (confirm("Remover atribuição?")) deleteProductAssignment(a.id);
+                            }}><Trash2 size={12} /></Button>
+                          </div>
                         </div>
                       ))}
                     </div>
