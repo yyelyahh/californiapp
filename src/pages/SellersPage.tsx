@@ -253,6 +253,51 @@ export default function SellersPage() {
           })}
         </div>
       )}
+
+      <Dialog open={!!transferState} onOpenChange={(v) => { if (!v) setTransferState(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Transferir Atribuição</DialogTitle></DialogHeader>
+          {transferState && (() => {
+            const a = productAssignments.find(x => x.id === transferState.assignmentId);
+            if (!a) return null;
+            const product = products.find(p => p.id === a.productId);
+            const fromSeller = sellers.find(s => s.id === a.sellerId);
+            const max = a.quantity;
+            return (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const qty = Math.max(1, Math.min(Number(transferState.quantity) || 0, max));
+                  if (!transferState.toSellerId) return;
+                  await transferProductAssignment(transferState.assignmentId, transferState.toSellerId, qty);
+                  setTransferState(null);
+                }}
+                className="space-y-4"
+              >
+                <div className="text-sm text-muted-foreground">
+                  <p><span className="font-medium text-foreground">Produto:</span> {product ? `${product.model} * ${product.flavor}` : getProductName(a.productId)}</p>
+                  <p><span className="font-medium text-foreground">De:</span> {fromSeller?.name} ({max} disponível{max !== 1 ? 'eis' : ''})</p>
+                </div>
+                <div>
+                  <Label>Para vendedor</Label>
+                  <Select value={transferState.toSellerId} onValueChange={v => setTransferState(s => s ? { ...s, toSellerId: v } : s)}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o destino" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.filter(s => s.id !== a.sellerId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Quantidade</Label>
+                  <Input type="number" min="1" max={max} value={transferState.quantity}
+                    onChange={e => setTransferState(s => s ? { ...s, quantity: e.target.value } : s)} />
+                </div>
+                <Button type="submit" className="w-full" disabled={!transferState.toSellerId}>Transferir</Button>
+              </form>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
