@@ -47,6 +47,19 @@ export default function SellerAccountsPage() {
     setOpen(false);
   };
 
+  const handleDebtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!debtForm.sellerId || !debtForm.amount) return;
+    await addSellerManualDebt({
+      sellerId: debtForm.sellerId,
+      amount: Number(debtForm.amount),
+      date: localDateToISO(debtForm.date),
+      notes: debtForm.notes || undefined,
+    });
+    setDebtForm({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+    setDebtOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
