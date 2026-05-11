@@ -67,33 +67,64 @@ export default function SellerAccountsPage() {
           <h1 className="text-2xl font-bold">Contas de Funcionários</h1>
           <p className="text-muted-foreground text-sm">Saldo devedor das retiradas</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus size={16} className="mr-2" />Registrar Pagamento</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Pagamento Manual de Funcionário</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Funcionário</Label>
-                <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {sellers.map(s => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} /></div>
-              <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: pagou em dinheiro" /></div>
-              <Button type="submit" className="w-full">Registrar</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={debtOpen} onOpenChange={setDebtOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="border-amber-500/40 text-amber-400 hover:text-amber-300">
+                <HandCoins size={16} className="mr-2" />Adicionar Saldo Devedor
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Adicionar Saldo Devedor</DialogTitle></DialogHeader>
+              <form onSubmit={handleDebtSubmit} className="space-y-4">
+                <div>
+                  <Label>Funcionário</Label>
+                  <Select value={debtForm.sellerId} onValueChange={v => setDebtForm(f => ({ ...f, sellerId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={debtForm.amount} onChange={e => setDebtForm(f => ({ ...f, amount: e.target.value }))} /></div>
+                <div><Label>Data</Label><Input type="date" value={debtForm.date} onChange={e => setDebtForm(f => ({ ...f, date: e.target.value }))} /></div>
+                <div><Label>Observações</Label><Input value={debtForm.notes} onChange={e => setDebtForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: dinheiro emprestado, adiantamento" /></div>
+                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-white">Adicionar Dívida</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus size={16} className="mr-2" />Registrar Pagamento</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Pagamento Manual de Funcionário</DialogTitle></DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label>Funcionário</Label>
+                  <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} /></div>
+                <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+                <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: pagou em dinheiro" /></div>
+                <Button type="submit" className="w-full">Registrar</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Resumo geral */}
