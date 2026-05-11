@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Package, Search, Pencil } from "lucide-react";
+import { Plus, Trash2, Package, Search, Pencil, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function SellersPage() {
-  const { sellers, products, productAssignments, addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, getProductName } = useStore();
+  const { sellers, products, productAssignments, addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment, getProductName } = useStore();
   const [sellerOpen, setSellerOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [sellerName, setSellerName] = useState("");
@@ -19,6 +19,7 @@ export default function SellersPage() {
   const [editingSellerId, setEditingSellerId] = useState<string | null>(null);
   const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
   const [search, setSearch] = useState("");
+  const [transferState, setTransferState] = useState<{ assignmentId: string; toSellerId: string; quantity: string } | null>(null);
 
   const filteredSellers = useMemo(() => {
     if (!search) return sellers;
@@ -234,9 +235,14 @@ export default function SellersPage() {
                             <span className="ml-2 text-muted-foreground">×{a.quantity}</span>
                             {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => {
-                            if (confirm("Remover atribuição?")) deleteProductAssignment(a.id);
-                          }}><Trash2 size={12} /></Button>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-primary" title="Transferir" onClick={() => setTransferState({ assignmentId: a.id, toSellerId: "", quantity: String(a.quantity) })}>
+                              <ArrowRightLeft size={12} />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => {
+                              if (confirm("Remover atribuição?")) deleteProductAssignment(a.id);
+                            }}><Trash2 size={12} /></Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -247,6 +253,51 @@ export default function SellersPage() {
           })}
         </div>
       )}
+
+      <Dialog open={!!transferState} onOpenChange={(v) => { if (!v) setTransferState(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Transferir Atribuição</DialogTitle></DialogHeader>
+          {transferState && (() => {
+            const a = productAssignments.find(x => x.id === transferState.assignmentId);
+            if (!a) return null;
+            const product = products.find(p => p.id === a.productId);
+            const fromSeller = sellers.find(s => s.id === a.sellerId);
+            const max = a.quantity;
+            return (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const qty = Math.max(1, Math.min(Number(transferState.quantity) || 0, max));
+                  if (!transferState.toSellerId) return;
+                  await transferProductAssignment(transferState.assignmentId, transferState.toSellerId, qty);
+                  setTransferState(null);
+                }}
+                className="space-y-4"
+              >
+                <div className="text-sm text-muted-foreground">
+                  <p><span className="font-medium text-foreground">Produto:</span> {product ? `${product.model} * ${product.flavor}` : getProductName(a.productId)}</p>
+                  <p><span className="font-medium text-foreground">De:</span> {fromSeller?.name} ({max} disponível{max !== 1 ? 'eis' : ''})</p>
+                </div>
+                <div>
+                  <Label>Para vendedor</Label>
+                  <Select value={transferState.toSellerId} onValueChange={v => setTransferState(s => s ? { ...s, toSellerId: v } : s)}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o destino" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.filter(s => s.id !== a.sellerId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Quantidade</Label>
+                  <Input type="number" min="1" max={max} value={transferState.quantity}
+                    onChange={e => setTransferState(s => s ? { ...s, quantity: e.target.value } : s)} />
+                </div>
+                <Button type="submit" className="w-full" disabled={!transferState.toSellerId}>Transferir</Button>
+              </form>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
