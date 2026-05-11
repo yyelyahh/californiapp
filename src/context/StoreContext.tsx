@@ -76,6 +76,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([]);
   const [sellerDebtPayments, setSellerDebtPayments] = useState<SellerDebtPayment[]>([]);
   const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
+  const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
