@@ -614,6 +614,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setProductAssignments(prev => prev.filter(a => a.id !== id));
   }, []);
 
+  const transferProductAssignment = useCallback(async (assignmentId: string, toSellerId: string, quantity: number) => {
+    const source = productAssignments.find(a => a.id === assignmentId);
+    if (!source) { toast.error("Atribuição não encontrada"); return; }
+    if (quantity <= 0) { toast.error("Quantidade inválida"); return; }
+    if (quantity > source.quantity) { toast.error(`Disponível apenas ${source.quantity}`); return; }
+    if (toSellerId === source.sellerId) { toast.error("Selecione outro vendedor"); return; }
+
+    const remaining = source.quantity - quantity;
+    if (remaining > 0) {
+      const { error: updErr } = await supabase.from("product_assignments").update({ quantity: remaining }).eq("id", assignmentId);
+      if (updErr) { toast.error("Erro ao transferir"); return; }
+      setProductAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, quantity: remaining } : a));
+    } else {
+      const { error: delErr } = await supabase.from("product_assignments").delete().eq("id", assignmentId);
+      if (delErr) { toast.error("Erro ao transferir"); return; }
+      setProductAssignments(prev => prev.filter(a => a.id !== assignmentId));
+    }
+
+    await addProductAssignment({ sellerId: toSellerId, productId: source.productId, quantity, notes: source.notes });
+    toast.success("Atribuição transferida");
+  }, [productAssignments, addProductAssignment]);
+
   // ---- Seller Debt Payments ----
   const addSellerDebtPayment = useCallback(async (p: Omit<SellerDebtPayment, "id">) => {
     const { data, error } = await supabase.from("seller_debt_payments" as any).insert({
