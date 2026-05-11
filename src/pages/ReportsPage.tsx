@@ -479,7 +479,8 @@ function Heatmap({ cells, mode }: { cells: ReturnType<typeof gerarHeatmap>; mode
                 </Tooltip>
               );
             })}
-          </>
+          </Fragment>
+
         ))}
       </div>
     </div>
