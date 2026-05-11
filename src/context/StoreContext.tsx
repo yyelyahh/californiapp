@@ -42,6 +42,7 @@ interface StoreContextType {
   deleteSeller: (id: string) => Promise<void>;
   addProductAssignment: (a: Omit<ProductAssignment, "id" | "createdAt">) => Promise<void>;
   deleteProductAssignment: (id: string) => Promise<void>;
+  transferProductAssignment: (assignmentId: string, toSellerId: string, quantity: number) => Promise<void>;
   addSellerDebtPayment: (p: Omit<SellerDebtPayment, "id">) => Promise<void>;
   deleteSellerDebtPayment: (id: string) => Promise<void>;
   sellerManualDebts: SellerManualDebt[];
