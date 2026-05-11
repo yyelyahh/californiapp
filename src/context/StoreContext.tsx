@@ -632,7 +632,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addPartner, updatePartner, deletePartner,
       addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment,
-      addSellerDebtPayment, deleteSellerDebtPayment, getSellerName,
+      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt, getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
       getSellerDebt, getSellerPaid, getSellerBalance,
