@@ -28,7 +28,7 @@ export default function SalesPage() {
         const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === sellerId);
         return assignment && assignment.quantity > 0;
       })
-    : products;
+    : products.filter(p => p.stock > 0);
 
   const getAssignedQuantity = (productId: string) => {
     if (!isSeller || !sellerId) return null;
