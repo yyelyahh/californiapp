@@ -118,6 +118,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
     };
     fetchAll();
+
+    // ---- Realtime sync: any change in shared tables refreshes the affected slice ----
+    const channel = supabase
+      .channel("store-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async () => {
+        const { data } = await supabase.from("products").select("*").order("created_at", { ascending: true });
+        if (data) setProducts(data.map(mapProduct));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, async () => {
+        const { data } = await supabase.from("sales").select("*").order("created_at", { ascending: true });
+        if (data) setSales(data.map(mapSale));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_entries" }, async () => {
+        const { data } = await supabase.from("stock_entries").select("*").order("created_at", { ascending: true });
+        if (data) setStockEntries(data.map(mapStockEntry));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_assignments" }, async () => {
+        const { data } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
+        if (data) setProductAssignments((data as any[]).map(mapProductAssignment));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "sellers" }, async () => {
+        const { data } = await supabase.from("sellers" as any).select("*").order("created_at", { ascending: true });
+        if (data) setSellers((data as any[]).map(mapSeller));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const mapProduct = (r: any): Product => ({
