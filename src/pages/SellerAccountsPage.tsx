@@ -159,6 +159,7 @@ export default function SellerAccountsPage() {
             const balance = getSellerBalance(seller.id);
             const sellerRetiradas = sales.filter(s => s.sellerId === seller.id && s.type === "retirada_funcionario");
             const sellerPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id);
+            const sellerDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
             const isExpanded = expandedId === seller.id;
 
             return (
