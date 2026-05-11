@@ -362,13 +362,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         await supabase.from("products").update({ stock: product.stock + sale.quantity }).eq("id", sale.productId);
         setProducts(prev => prev.map(p => p.id === sale.productId ? { ...p, stock: p.stock + sale.quantity } : p));
       }
-      // Restore seller's product assignment quantity
+      // Restaura atribuição do vendedor (recria se foi removida ao zerar)
       if (sale.sellerId) {
         const assignment = productAssignments.find(a => a.sellerId === sale.sellerId && a.productId === sale.productId);
         if (assignment) {
           const restoredQty = assignment.quantity + sale.quantity;
           await supabase.from("product_assignments").update({ quantity: restoredQty }).eq("id", assignment.id);
           setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: restoredQty } : a));
+        } else {
+          const { data: created } = await supabase.from("product_assignments").insert({
+            seller_id: sale.sellerId, product_id: sale.productId, quantity: sale.quantity,
+          }).select().single();
+          if (created) setProductAssignments(prev => [...prev, mapProductAssignment(created)]);
         }
       }
     }
