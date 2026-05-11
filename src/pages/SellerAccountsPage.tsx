@@ -16,13 +16,16 @@ function formatCurrency(v: number) {
 
 export default function SellerAccountsPage() {
   const {
-    sellers, sales, sellerDebtPayments,
+    sellers, sales, sellerDebtPayments, sellerManualDebts,
     addSellerDebtPayment, deleteSellerDebtPayment,
+    addSellerManualDebt, deleteSellerManualDebt,
     getSellerDebt, getSellerPaid, getSellerBalance, getProductName,
   } = useStore();
 
   const [open, setOpen] = useState(false);
+  const [debtOpen, setDebtOpen] = useState(false);
   const [form, setForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+  const [debtForm, setDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const totals = useMemo(() => {
