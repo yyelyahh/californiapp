@@ -188,7 +188,7 @@ export default function SellerAccountsPage() {
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Saldo</p>
-                      <p className={`text-sm font-bold mono ${balance > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatCurrency(balance)}</p>
+                      <p className={`text-sm font-bold mono ${balance < 0 ? "text-destructive" : balance > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>{formatBalance(balance)}</p>
                     </div>
                   </div>
 
