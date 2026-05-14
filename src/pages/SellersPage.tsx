@@ -251,8 +251,8 @@ export default function SellersPage() {
                         <Badge variant="outline" className="border-primary/40 text-primary text-xs mono" title="A receber das vendas">
                           {formatCurrency(receivable)}
                         </Badge>
-                        <Badge variant="outline" className={`text-xs mono ${debt > 0 ? "border-amber-500/40 text-amber-400" : "border-border text-muted-foreground"}`} title="Saldo devedor">
-                          {formatCurrency(debt)}
+                        <Badge variant="outline" className={`text-xs mono ${debt < 0 ? "border-destructive/40 text-destructive" : debt > 0 ? "border-emerald-500/40 text-emerald-400" : "border-border text-muted-foreground"}`} title="Saldo">
+                          {debt >= 0 ? "+ " : "- "}{formatCurrency(Math.abs(debt))}
                         </Badge>
                       </div>
                     </div>
