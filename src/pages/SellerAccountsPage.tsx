@@ -31,8 +31,14 @@ export default function SellerAccountsPage() {
   const totals = useMemo(() => {
     const debt = sellers.reduce((sum, s) => sum + getSellerDebt(s.id), 0);
     const paid = sellers.reduce((sum, s) => sum + getSellerPaid(s.id), 0);
-    return { debt, paid, balance: Math.max(0, debt - paid) };
-  }, [sellers, getSellerDebt, getSellerPaid]);
+    const balanceSum = sellers.reduce((sum, s) => sum + getSellerBalance(s.id), 0);
+    return { debt, paid, balance: balanceSum };
+  }, [sellers, getSellerDebt, getSellerPaid, getSellerBalance]);
+
+  const formatBalance = (v: number) => {
+    const sign = v >= 0 ? "+" : "-";
+    return `${sign} ${formatCurrency(Math.abs(v))}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +90,7 @@ export default function SellerAccountsPage() {
                     <SelectContent>
                       {sellers.map(s => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                          {s.name} — saldo {formatBalance(getSellerBalance(s.id))}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -111,7 +117,7 @@ export default function SellerAccountsPage() {
                     <SelectContent>
                       {sellers.map(s => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                          {s.name} — saldo {formatBalance(getSellerBalance(s.id))}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -141,10 +147,10 @@ export default function SellerAccountsPage() {
             <p className="text-lg font-bold text-primary mono">{formatCurrency(totals.paid)}</p>
           </CardContent>
         </Card>
-        <Card className="border-destructive/30">
+        <Card className={totals.balance < 0 ? "border-destructive/30" : "border-emerald-500/30"}>
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={14} /> Saldo Pendente</div>
-            <p className="text-lg font-bold text-destructive mono">{formatCurrency(totals.balance)}</p>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={14} /> Saldo Geral</div>
+            <p className={`text-lg font-bold mono ${totals.balance < 0 ? "text-destructive" : "text-emerald-400"}`}>{formatBalance(totals.balance)}</p>
           </CardContent>
         </Card>
       </div>
@@ -163,7 +169,7 @@ export default function SellerAccountsPage() {
             const isExpanded = expandedId === seller.id;
 
             return (
-              <Card key={seller.id} className={balance > 0 ? "border-amber-500/30" : ""}>
+              <Card key={seller.id} className={balance < 0 ? "border-destructive/30" : balance > 0 ? "border-emerald-500/30" : ""}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{seller.name}</CardTitle>
@@ -182,7 +188,7 @@ export default function SellerAccountsPage() {
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Saldo</p>
-                      <p className={`text-sm font-bold mono ${balance > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatCurrency(balance)}</p>
+                      <p className={`text-sm font-bold mono ${balance < 0 ? "text-destructive" : balance > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>{formatBalance(balance)}</p>
                     </div>
                   </div>
 
