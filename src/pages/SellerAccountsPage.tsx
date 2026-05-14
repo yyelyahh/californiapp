@@ -117,7 +117,7 @@ export default function SellerAccountsPage() {
                     <SelectContent>
                       {sellers.map(s => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.name} — saldo {formatCurrency(getSellerBalance(s.id))}
+                          {s.name} — saldo {formatBalance(getSellerBalance(s.id))}
                         </SelectItem>
                       ))}
                     </SelectContent>
