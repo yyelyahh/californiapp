@@ -169,7 +169,7 @@ export default function SellerAccountsPage() {
             const isExpanded = expandedId === seller.id;
 
             return (
-              <Card key={seller.id} className={balance > 0 ? "border-amber-500/30" : ""}>
+              <Card key={seller.id} className={balance < 0 ? "border-destructive/30" : balance > 0 ? "border-emerald-500/30" : ""}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{seller.name}</CardTitle>
