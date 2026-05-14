@@ -31,8 +31,14 @@ export default function SellerAccountsPage() {
   const totals = useMemo(() => {
     const debt = sellers.reduce((sum, s) => sum + getSellerDebt(s.id), 0);
     const paid = sellers.reduce((sum, s) => sum + getSellerPaid(s.id), 0);
-    return { debt, paid, balance: Math.max(0, debt - paid) };
-  }, [sellers, getSellerDebt, getSellerPaid]);
+    const balanceSum = sellers.reduce((sum, s) => sum + getSellerBalance(s.id), 0);
+    return { debt, paid, balance: balanceSum };
+  }, [sellers, getSellerDebt, getSellerPaid, getSellerBalance]);
+
+  const formatBalance = (v: number) => {
+    const sign = v >= 0 ? "+" : "-";
+    return `${sign} ${formatCurrency(Math.abs(v))}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
