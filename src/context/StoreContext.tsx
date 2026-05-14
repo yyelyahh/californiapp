@@ -284,22 +284,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const saleType = s.type || "venda";
 
     // ---- Integrity validations (single source of truth) ----
-    const product = products.find(p => p.id === s.productId);
-    if (!product) { toast.error("Produto não encontrado"); throw new Error("product_not_found"); }
+    const { data: productRow, error: productError } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", s.productId)
+      .single();
+    const product = productRow ? mapProduct(productRow) : products.find(p => p.id === s.productId);
+    if (productError || !product) { toast.error("Produto não encontrado"); throw new Error("product_not_found"); }
     if (s.quantity <= 0) { toast.error("Quantidade inválida"); throw new Error("invalid_qty"); }
+    if (product.stock < s.quantity) {
+      toast.error(`Estoque insuficiente (disponível: ${product.stock})`);
+      throw new Error("insufficient_stock");
+    }
 
+    let sellerAssignmentRows: any[] = [];
     if (s.sellerId) {
       // Vendedor só pode vender o que tem atribuído
-      const assignment = productAssignments.find(a => a.sellerId === s.sellerId && a.productId === s.productId);
-      const available = assignment?.quantity ?? 0;
+      const { data: assignmentRows, error: assignmentError } = await supabase
+        .from("product_assignments")
+        .select("*")
+        .eq("seller_id", s.sellerId)
+        .eq("product_id", s.productId)
+        .order("created_at", { ascending: true });
+      if (assignmentError) { toast.error("Erro ao verificar estoque do vendedor"); throw assignmentError; }
+      sellerAssignmentRows = assignmentRows ?? [];
+      const available = sellerAssignmentRows.reduce((sum, assignment) => sum + Number(assignment.quantity || 0), 0);
       if (available < s.quantity) {
         toast.error(`Vendedor possui apenas ${available} unidade(s) deste produto`);
         throw new Error("seller_insufficient_stock");
-      }
-    } else {
-      if (product.stock < s.quantity) {
-        toast.error(`Estoque insuficiente (disponível: ${product.stock})`);
-        throw new Error("insufficient_stock");
       }
     }
 
@@ -323,32 +335,37 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // Atualiza/remove atribuição do vendedor
     if (s.sellerId) {
-      const assignment = productAssignments.find(a => a.sellerId === s.sellerId && a.productId === s.productId);
-      if (assignment) {
-        const newQty = Math.max(0, assignment.quantity - s.quantity);
-        if (newQty === 0) {
-          // Remove vínculo automaticamente quando zera
-          await supabase.from("product_assignments").delete().eq("id", assignment.id);
-          setProductAssignments(prev => prev.filter(a => a.id !== assignment.id));
+      let remainingToDeduct = s.quantity;
+      for (const assignment of sellerAssignmentRows) {
+        if (remainingToDeduct <= 0) break;
+        const currentQty = Number(assignment.quantity || 0);
+        if (currentQty <= remainingToDeduct) {
+          const { error: deleteAssignmentError } = await supabase.from("product_assignments").delete().eq("id", assignment.id);
+          if (deleteAssignmentError) toast.error("Venda registrada, mas houve erro ao baixar atribuição do vendedor");
+          remainingToDeduct -= currentQty;
         } else {
-          await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
-          setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: newQty } : a));
+          const newQty = currentQty - remainingToDeduct;
+          const { error: updateAssignmentError } = await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
+          if (updateAssignmentError) toast.error("Venda registrada, mas houve erro ao baixar atribuição do vendedor");
+          remainingToDeduct = 0;
         }
       }
+      const { data: refreshedAssignments } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
+      if (refreshedAssignments) setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
+
       // Auto-debit X% from seller's debt on a regular sale (not retirada)
       if (saleType === "venda") {
         const seller = sellers.find(sl => sl.id === s.sellerId);
         const pct = seller?.debtPercentage ?? 0;
-        const debt = sellerDebtPayments
-          .filter(p => p.sellerId === s.sellerId && !p.saleId)
-          .reduce((sum, p) => sum + p.amount, 0);
-        const retiradas = (sales.concat([newSale]))
-          .filter(sl => sl.sellerId === s.sellerId && sl.type === "retirada_funcionario")
-          .reduce((sum, sl) => sum + sl.totalPrice, 0);
-        const auto = sellerDebtPayments
-          .filter(p => p.sellerId === s.sellerId && p.saleId)
-          .reduce((sum, p) => sum + p.amount, 0);
-        const balance = Math.max(0, retiradas - debt - auto);
+        const [retiradasRes, manualDebtsRes, paymentsRes] = await Promise.all([
+          supabase.from("sales").select("total_price").eq("seller_id", s.sellerId).eq("type", "retirada_funcionario"),
+          supabase.from("seller_manual_debts" as any).select("amount").eq("seller_id", s.sellerId),
+          supabase.from("seller_debt_payments" as any).select("amount").eq("seller_id", s.sellerId),
+        ]);
+        const retiradas = (retiradasRes.data ?? []).reduce((sum: number, sl: any) => sum + Number(sl.total_price || 0), 0);
+        const manualDebts = ((manualDebtsRes.data as any[]) ?? []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+        const paid = ((paymentsRes.data as any[]) ?? []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const balance = Math.max(0, retiradas + manualDebts - paid);
         const abatement = Math.min(balance, totalPrice * (pct / 100));
         if (pct > 0 && abatement > 0) {
           const { data: pData, error: pErr } = await supabase.from("seller_debt_payments" as any).insert({
