@@ -147,10 +147,10 @@ export default function SellerAccountsPage() {
             <p className="text-lg font-bold text-primary mono">{formatCurrency(totals.paid)}</p>
           </CardContent>
         </Card>
-        <Card className="border-destructive/30">
+        <Card className={totals.balance < 0 ? "border-destructive/30" : "border-emerald-500/30"}>
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={14} /> Saldo Pendente</div>
-            <p className="text-lg font-bold text-destructive mono">{formatCurrency(totals.balance)}</p>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={14} /> Saldo Geral</div>
+            <p className={`text-lg font-bold mono ${totals.balance < 0 ? "text-destructive" : "text-emerald-400"}`}>{formatBalance(totals.balance)}</p>
           </CardContent>
         </Card>
       </div>
