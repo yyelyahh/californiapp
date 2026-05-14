@@ -216,10 +216,12 @@ export default function SellersPage() {
             <p className="text-base font-bold text-primary mono">{formatCurrency(totals.receivable)}</p>
           </CardContent>
         </Card>
-        <Card className={totals.debt > 0 ? "border-amber-500/30" : ""}>
+        <Card className={totals.debt < 0 ? "border-destructive/30" : totals.debt > 0 ? "border-emerald-500/30" : ""}>
           <CardContent className="p-3">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={12} /> Saldo devedor</div>
-            <p className="text-base font-bold text-amber-400 mono">{formatCurrency(totals.debt)}</p>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={12} /> Saldo</div>
+            <p className={`text-base font-bold mono ${totals.debt < 0 ? "text-destructive" : totals.debt > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>
+              {totals.debt >= 0 ? "+ " : "- "}{formatCurrency(Math.abs(totals.debt))}
+            </p>
           </CardContent>
         </Card>
       </div>
