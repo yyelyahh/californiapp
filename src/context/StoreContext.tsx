@@ -724,18 +724,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .reduce((sum, s) => sum + s.totalPrice * (pct / 100), 0);
   }, [sales, sellers]);
 
-  // Saldo positivo = empresa deve ao funcionário (comissão acumulada).
-  // Saldo negativo = funcionário deve à empresa (retiradas/dívidas excedem comissão).
-  // Pagamentos automáticos (com saleId) são apenas registro contábil do uso da comissão
-  // e são excluídos para não dupliciar com a comissão calculada acima.
+  // Saldo = Pago - Retirado.
+  // Negativo (vermelho) = funcionário ainda deve. Positivo (verde) = pagou a mais.
   const getSellerBalance = useCallback((id: string) => {
-    const commissions = getSellerCommission(id);
-    const debt = getSellerDebt(id);
-    const manualPayments = sellerDebtPayments
-      .filter(p => p.sellerId === id && !p.saleId)
-      .reduce((sum, p) => sum + p.amount, 0);
-    return commissions - debt - manualPayments;
-  }, [getSellerCommission, getSellerDebt, sellerDebtPayments]);
+    return getSellerPaid(id) - getSellerDebt(id);
+  }, [getSellerPaid, getSellerDebt]);
 
   return (
     <StoreContext.Provider value={{
