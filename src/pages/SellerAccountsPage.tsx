@@ -36,7 +36,7 @@ export default function SellerAccountsPage() {
   }, [sellers, getSellerDebt, getSellerPaid, getSellerBalance]);
 
   const formatBalance = (v: number) => {
-    const sign = v >= 0 ? "+" : "-";
+    const sign = v > 0 ? "-" : "+";
     return `${sign} ${formatCurrency(Math.abs(v))}`;
   };
 
@@ -147,10 +147,10 @@ export default function SellerAccountsPage() {
             <p className="text-lg font-bold text-primary mono">{formatCurrency(totals.paid)}</p>
           </CardContent>
         </Card>
-        <Card className={totals.balance < 0 ? "border-destructive/30" : "border-emerald-500/30"}>
+        <Card className={totals.balance > 0 ? "border-destructive/30" : "border-emerald-500/30"}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={14} /> Saldo Geral</div>
-            <p className={`text-lg font-bold mono ${totals.balance < 0 ? "text-destructive" : "text-emerald-400"}`}>{formatBalance(totals.balance)}</p>
+            <p className={`text-lg font-bold mono ${totals.balance > 0 ? "text-destructive" : "text-emerald-400"}`}>{formatBalance(totals.balance)}</p>
           </CardContent>
         </Card>
       </div>
@@ -169,7 +169,7 @@ export default function SellerAccountsPage() {
             const isExpanded = expandedId === seller.id;
 
             return (
-              <Card key={seller.id} className={balance < 0 ? "border-destructive/30" : balance > 0 ? "border-emerald-500/30" : ""}>
+              <Card key={seller.id} className={balance > 0 ? "border-destructive/30" : balance < 0 ? "border-emerald-500/30" : ""}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{seller.name}</CardTitle>
@@ -188,7 +188,7 @@ export default function SellerAccountsPage() {
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Saldo</p>
-                      <p className={`text-sm font-bold mono ${balance < 0 ? "text-destructive" : balance > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>{formatBalance(balance)}</p>
+                      <p className={`text-sm font-bold mono ${balance > 0 ? "text-destructive" : balance < 0 ? "text-emerald-400" : "text-muted-foreground"}`}>{formatBalance(balance)}</p>
                     </div>
                   </div>
 
