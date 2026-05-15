@@ -715,19 +715,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return sellerDebtPayments.filter(p => p.sellerId === id).reduce((sum, p) => sum + p.amount, 0);
   }, [sellerDebtPayments]);
 
-  const getSellerCommission = useCallback((id: string) => {
-    const seller = sellers.find(s => s.id === id);
-    const pct = seller?.debtPercentage ?? 0;
-    if (pct <= 0) return 0;
-    return sales
-      .filter(s => s.sellerId === id && s.type === "venda")
-      .reduce((sum, s) => sum + s.totalPrice * (pct / 100), 0);
-  }, [sales, sellers]);
-
-  // Saldo = Pago - Retirado.
-  // Negativo (vermelho) = funcionário ainda deve. Positivo (verde) = pagou a mais.
+  // Saldo = Retirado - Pago.
+  // Positivo = funcionário ainda deve. Negativo = crédito/saldo positivo para o funcionário.
   const getSellerBalance = useCallback((id: string) => {
-    return getSellerPaid(id) - getSellerDebt(id);
+    return getSellerDebt(id) - getSellerPaid(id);
   }, [getSellerPaid, getSellerDebt]);
 
   return (
