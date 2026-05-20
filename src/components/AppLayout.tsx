@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, DollarSign, UserCheck, Wallet, BarChart3, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, DollarSign, UserCheck, Wallet, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
