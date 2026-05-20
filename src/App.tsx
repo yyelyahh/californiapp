@@ -15,7 +15,7 @@ import InvestorsPage from "@/pages/InvestorsPage";
 import MonthlyRevenuePage from "@/pages/MonthlyRevenuePage";
 import SellersPage from "@/pages/SellersPage";
 import SellerAccountsPage from "@/pages/SellerAccountsPage";
-import ReportsPage from "@/pages/ReportsPage";
+
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "./pages/NotFound";
 
