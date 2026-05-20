@@ -155,8 +155,8 @@ export default function Dashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `R$${v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
+              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="hsl(var(--foreground))" fontSize={13} tickLine={false} axisLine={false} width={68} tickCount={8} tick={{ fill: "hsl(var(--foreground))", fontWeight: 600 }} tickFormatter={v => v >= 1000 ? `R$${(v/1000).toFixed(1).replace('.0','')}k` : `R$${v}`} />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "12px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
                 formatter={(value: number) => formatCurrency(value)}
