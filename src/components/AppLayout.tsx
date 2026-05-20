@@ -14,7 +14,7 @@ const allNavItems = [
   { to: "/revenue", icon: DollarSign, label: "Receita", adminOnly: true },
   { to: "/sellers", icon: UserCheck, label: "Vendedores", adminOnly: true },
   { to: "/seller-accounts", icon: Wallet, label: "Contas Func.", adminOnly: true },
-  { to: "/reports", icon: BarChart3, label: "Relatórios", adminOnly: true },
+  
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
