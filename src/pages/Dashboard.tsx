@@ -143,7 +143,7 @@ export default function Dashboard() {
         </div>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 8, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(var(--income))" stopOpacity={0.25} />
@@ -155,8 +155,8 @@ export default function Dashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `R$${v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
+              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="hsl(var(--foreground))" fontSize={13} tickLine={false} axisLine={false} width={68} tickCount={8} tick={{ fill: "hsl(var(--foreground))", fontWeight: 600 }} tickFormatter={v => v >= 1000 ? `R$${(v/1000).toFixed(1).replace('.0','')}k` : `R$${v}`} />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "12px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
                 formatter={(value: number) => formatCurrency(value)}
