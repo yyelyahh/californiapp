@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
-import { Plus, Pencil, Trash2, AlertCircle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
