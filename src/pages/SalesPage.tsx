@@ -40,6 +40,38 @@ export default function SalesPage() {
   const [form, setForm] = useState(emptyForm);
 
   const selectedProduct = products.find(p => p.id === form.productId);
+
+  // === Filtros (somente aba Vendas, admin) ===
+  type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
+  type PaymentStatus = "all" | "paid" | "partial" | "open";
+  type SortKey = "date" | "total" | "remaining";
+  const [fSeller, setFSeller] = useState<string>("all"); // all | none | <id>
+  const [fStatus, setFStatus] = useState<PaymentStatus>("all");
+  const [fProduct, setFProduct] = useState("");
+  const [fPreset, setFPreset] = useState<DateRangePreset>("all");
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
+  const [fSortKey, setFSortKey] = useState<SortKey>("date");
+  const [fSortDir, setFSortDir] = useState<"asc" | "desc">("desc");
+
+  const applyPreset = (p: DateRangePreset) => {
+    setFPreset(p);
+    const now = new Date();
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (p === "all") { setFFrom(""); setFTo(""); return; }
+    if (p === "today") { const t = fmt(now); setFFrom(t); setFTo(t); return; }
+    if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setFFrom(fmt(past)); setFTo(fmt(now)); return; }
+    if (p === "month") { setFFrom(fmt(new Date(now.getFullYear(), now.getMonth(), 1))); setFTo(fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0))); return; }
+    if (p === "lastMonth") { setFFrom(fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setFTo(fmt(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
+  };
+
+  const clearFilters = () => {
+    setFSeller("all"); setFStatus("all"); setFProduct(""); setFPreset("all");
+    setFFrom(""); setFTo(""); setFSortKey("date"); setFSortDir("desc");
+  };
+
+  const hasActiveFilters = fSeller !== "all" || fStatus !== "all" || fProduct !== "" || fFrom !== "" || fTo !== "" || fSortKey !== "date" || fSortDir !== "desc";
+
   const getProductDisplayName = (productId: string) => {
     const product = products.find(p => p.id === productId);
     return product ? `${product.model} * ${product.flavor}` : getProductName(productId);
