@@ -1,12 +1,19 @@
 import { useStore } from "@/context/StoreContext";
 import { useState } from "react";
-import { Plus, Trash2, DollarSign } from "lucide-react";
+import { Plus, Trash2, DollarSign, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { todayDateString } from "@/lib/date-utils";
+
+function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+}
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -112,6 +119,9 @@ export default function InvestorsPage() {
             const remaining = store.getRemainingForInvestor(inv.id);
             const progress = inv.totalReturn > 0 ? (paid / inv.totalReturn) * 100 : 0;
             const isComplete = remaining <= 0;
+            const investorDividends = [...store.dividends]
+              .filter(d => d.investorId === inv.id)
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
             return (
               <div key={inv.id} className={`stat-card ${isComplete ? 'stat-card-primary' : 'stat-card-accent'}`}>
@@ -136,37 +146,41 @@ export default function InvestorsPage() {
                     <p className="mono font-semibold text-white">{formatCurrency(inv.totalReturn)}</p>
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 mb-3">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Pago: {formatCurrency(paid)}</span>
                     <span>Resta: {formatCurrency(remaining)}</span>
                   </div>
                   <Progress value={progress} className="h-2" />
                 </div>
+
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-xs text-muted-foreground hover:text-foreground transition-colors group">
+                    <span>Histórico ({investorDividends.length})</span>
+                    <ChevronDown size={14} className="transition-transform group-data-[state=open]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-1">
+                    {investorDividends.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-1">Sem pagamentos.</p>
+                    ) : (
+                      investorDividends.map(d => (
+                        <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+                          <div className="min-w-0">
+                            <p className="text-xs mono">{formatShortDate(d.date)}</p>
+                            {d.notes && <p className="text-[10px] text-muted-foreground truncate">{d.notes}</p>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-semibold mono">{formatCurrency(d.amount)}</span>
+                            <Button size="sm" variant="ghost" onClick={() => store.deleteDividend(d.id)} className="text-muted-foreground hover:text-destructive h-6 w-6 p-0"><Trash2 size={12} /></Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Payment history */}
-      {store.dividends.length > 0 && (
-        <div className="glass-card p-5">
-          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">Histórico de Pagamentos</h2>
-          <div className="space-y-2">
-            {[...store.dividends].reverse().map(d => (
-              <div key={d.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                <div>
-                  <p className="text-sm font-medium">{store.getInvestorName(d.investorId)}</p>
-                  <p className="text-xs text-muted-foreground">{d.date}{d.notes ? ` — ${d.notes}` : ''}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold mono">{formatCurrency(d.amount)}</span>
-                  <Button size="sm" variant="ghost" onClick={() => store.deleteDividend(d.id)} className="text-muted-foreground hover:text-destructive h-6 w-6 p-0"><Trash2 size={12} /></Button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>
