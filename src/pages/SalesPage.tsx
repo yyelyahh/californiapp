@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
-import { Plus, Pencil, Trash2, AlertCircle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,6 +40,38 @@ export default function SalesPage() {
   const [form, setForm] = useState(emptyForm);
 
   const selectedProduct = products.find(p => p.id === form.productId);
+
+  // === Filtros (somente aba Vendas, admin) ===
+  type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
+  type PaymentStatus = "all" | "paid" | "partial" | "open";
+  type SortKey = "date" | "total" | "remaining";
+  const [fSeller, setFSeller] = useState<string>("all"); // all | none | <id>
+  const [fStatus, setFStatus] = useState<PaymentStatus>("all");
+  const [fProduct, setFProduct] = useState("");
+  const [fPreset, setFPreset] = useState<DateRangePreset>("all");
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
+  const [fSortKey, setFSortKey] = useState<SortKey>("date");
+  const [fSortDir, setFSortDir] = useState<"asc" | "desc">("desc");
+
+  const applyPreset = (p: DateRangePreset) => {
+    setFPreset(p);
+    const now = new Date();
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (p === "all") { setFFrom(""); setFTo(""); return; }
+    if (p === "today") { const t = fmt(now); setFFrom(t); setFTo(t); return; }
+    if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setFFrom(fmt(past)); setFTo(fmt(now)); return; }
+    if (p === "month") { setFFrom(fmt(new Date(now.getFullYear(), now.getMonth(), 1))); setFTo(fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0))); return; }
+    if (p === "lastMonth") { setFFrom(fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setFTo(fmt(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
+  };
+
+  const clearFilters = () => {
+    setFSeller("all"); setFStatus("all"); setFProduct(""); setFPreset("all");
+    setFFrom(""); setFTo(""); setFSortKey("date"); setFSortDir("desc");
+  };
+
+  const hasActiveFilters = fSeller !== "all" || fStatus !== "all" || fProduct !== "" || fFrom !== "" || fTo !== "" || fSortKey !== "date" || fSortDir !== "desc";
+
   const getProductDisplayName = (productId: string) => {
     const product = products.find(p => p.id === productId);
     return product ? `${product.model} * ${product.flavor}` : getProductName(productId);
@@ -251,12 +283,45 @@ export default function SalesPage() {
       </div>
 
       {(() => {
-        const sortedSales = [...sales]
-          .filter(s => (s.type || "venda") !== "retirada_funcionario")
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const baseSales = sales.filter(s => (s.type || "venda") !== "retirada_funcionario");
         const sortedRetiradas = [...sales]
           .filter(s => s.type === "retirada_funcionario")
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Aplica filtros
+        const fromTs = fFrom ? new Date(fFrom + "T00:00:00").getTime() : null;
+        const toTs = fTo ? new Date(fTo + "T23:59:59").getTime() : null;
+        const productQ = fProduct.trim().toLowerCase();
+
+        const filteredSales = baseSales.filter(s => {
+          if (fSeller === "none" && s.sellerId) return false;
+          if (fSeller !== "all" && fSeller !== "none" && s.sellerId !== fSeller) return false;
+          const ts = new Date(s.date).getTime();
+          if (fromTs !== null && ts < fromTs) return false;
+          if (toTs !== null && ts > toTs) return false;
+          const remaining = Math.max(0, s.totalPrice - s.paidAmount);
+          if (fStatus === "paid" && remaining > 0) return false;
+          if (fStatus === "open" && s.paidAmount > 0) return false;
+          if (fStatus === "partial" && (s.paidAmount === 0 || remaining === 0)) return false;
+          if (productQ) {
+            const name = getProductDisplayName(s.productId).toLowerCase();
+            if (!name.includes(productQ)) return false;
+          }
+          return true;
+        });
+
+        const dirMul = fSortDir === "asc" ? 1 : -1;
+        const sortedSales = [...filteredSales].sort((a, b) => {
+          if (fSortKey === "date") return (new Date(a.date).getTime() - new Date(b.date).getTime()) * dirMul;
+          if (fSortKey === "total") return (a.totalPrice - b.totalPrice) * dirMul;
+          const ra = Math.max(0, a.totalPrice - a.paidAmount);
+          const rb = Math.max(0, b.totalPrice - b.paidAmount);
+          return (ra - rb) * dirMul;
+        });
+
+        const sumTotal = sortedSales.reduce((acc, s) => acc + s.totalPrice, 0);
+        const sumPaid = sortedSales.reduce((acc, s) => acc + s.paidAmount, 0);
+        const sumOpen = sortedSales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
 
         const renderRow = (s: typeof sales[number]) => {
           const remaining = Math.max(0, s.totalPrice - s.paidAmount);
@@ -285,16 +350,109 @@ export default function SalesPage() {
           );
         };
 
+        const presetBtn = (key: DateRangePreset, label: string) => (
+          <button
+            type="button"
+            onClick={() => applyPreset(key)}
+            className={cn(
+              "px-2.5 py-1 rounded-md text-xs font-medium border transition",
+              fPreset === key ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+            )}
+          >{label}</button>
+        );
+
         return (
           <Tabs defaultValue="vendas" className="w-full">
             <TabsList>
-              <TabsTrigger value="vendas">Vendas ({sortedSales.length})</TabsTrigger>
+              <TabsTrigger value="vendas">Vendas ({baseSales.length})</TabsTrigger>
               <TabsTrigger value="retiradas">Retiradas ({sortedRetiradas.length})</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="vendas" className="mt-4">
+            <TabsContent value="vendas" className="mt-4 space-y-4">
+              {/* Painel de filtros */}
+              <div className="glass-card p-4 space-y-3">
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <Label className="text-xs mb-1 block">Funcionário</Label>
+                    <Select value={fSeller} onValueChange={setFSeller}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="none">Sem funcionário</SelectItem>
+                        {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">Status de pagamento</Label>
+                    <Select value={fStatus} onValueChange={(v) => setFStatus(v as PaymentStatus)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="paid">Pagas</SelectItem>
+                        <SelectItem value="partial">Parcial</SelectItem>
+                        <SelectItem value="open">Em aberto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">Buscar produto</Label>
+                    <Input placeholder="Modelo ou sabor..." value={fProduct} onChange={e => setFProduct(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">Ordenar por</Label>
+                    <div className="flex gap-1">
+                      <Select value={fSortKey} onValueChange={(v) => setFSortKey(v as SortKey)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="date">Data</SelectItem>
+                          <SelectItem value="total">Valor total</SelectItem>
+                          <SelectItem value="remaining">Falta receber</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="outline" size="icon" onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")} title={fSortDir === "asc" ? "Crescente" : "Decrescente"}>
+                        <ArrowUpDown size={14} className={cn(fSortDir === "asc" && "rotate-180 transition-transform")} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {presetBtn("all", "Tudo")}
+                    {presetBtn("today", "Hoje")}
+                    {presetBtn("7d", "7 dias")}
+                    {presetBtn("month", "Este mês")}
+                    {presetBtn("lastMonth", "Mês passado")}
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div>
+                      <Label className="text-xs mb-1 block">De</Label>
+                      <Input type="date" value={fFrom} onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }} className="w-[150px]" />
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1 block">Até</Label>
+                      <Input type="date" value={fTo} onChange={e => { setFTo(e.target.value); setFPreset("custom"); }} className="w-[150px]" />
+                    </div>
+                  </div>
+                  {hasActiveFilters && (
+                    <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="ml-auto">
+                      <X size={14} className="mr-1" />Limpar filtros
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Resumo dos resultados filtrados */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Registros</p><p className="text-lg font-bold mono">{sortedSales.length}</p></div>
+                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Total vendido</p><p className="text-lg font-bold mono text-primary">{formatCurrency(sumTotal)}</p></div>
+                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Total recebido</p><p className="text-lg font-bold mono text-primary">{formatCurrency(sumPaid)}</p></div>
+                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Em aberto</p><p className={cn("text-lg font-bold mono", sumOpen > 0 ? "text-destructive" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p></div>
+              </div>
+
               {sortedSales.length === 0 ? (
-                <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma venda registrada.</p></div>
+                <div className="glass-card p-12 text-center"><p className="text-muted-foreground">{baseSales.length === 0 ? "Nenhuma venda registrada." : "Nenhuma venda encontrada com os filtros aplicados."}</p></div>
               ) : (
                 <div className="glass-card overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
@@ -308,6 +466,7 @@ export default function SalesPage() {
                 </div>
               )}
             </TabsContent>
+
 
             <TabsContent value="retiradas" className="mt-4">
               {sortedRetiradas.length === 0 ? (
