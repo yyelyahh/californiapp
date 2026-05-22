@@ -64,11 +64,19 @@ export default function AddProductDialog() {
 
   const handleBrandChange = (value: string) => {
     setBrand(value);
+    setModelSelect("");
+    setModel("");
     const preset = BRAND_PRESETS[value];
     if (preset) {
       setPurchasePrice(preset.purchasePrice ? String(preset.purchasePrice) : "");
       setSalePrice(preset.salePrice ? String(preset.salePrice) : "");
     }
+  };
+
+  const handleModelSelectChange = (value: string) => {
+    setModelSelect(value);
+    if (value !== "__new__") setModel(value);
+    else setModel("");
   };
 
   const handleSubmit = async () => {
