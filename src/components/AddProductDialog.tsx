@@ -111,6 +111,7 @@ export default function AddProductDialog() {
 
     // Reset
     setBrand("");
+    setModelSelect("");
     setModel("");
     setFlavorsText("");
     setPurchasePrice("");
@@ -120,6 +121,7 @@ export default function AddProductDialog() {
 
   const handleReset = () => {
     setBrand("");
+    setModelSelect("");
     setModel("");
     setFlavorsText("");
     setPurchasePrice("");
