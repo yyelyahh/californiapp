@@ -178,13 +178,6 @@ export default function AddProductDialog() {
             )}
           </div>
 
-          {/* Hidden placeholder to preserve structure */}
-          <div className="hidden">
-            <Input
-              value={model}
-              onChange={e => setModel(e.target.value)}
-            />
-          </div>
 
           {/* Preços */}
           <div className="grid grid-cols-2 gap-3">
