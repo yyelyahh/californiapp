@@ -70,12 +70,28 @@ export default function StockEntryPage() {
   const validEntries = entries.filter(e => e.product);
   const missingEntries = entries.filter(e => !e.product);
 
+  const existingModels = useMemo(() => {
+    if (!brand) return [];
+    const set = new Set<string>();
+    products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
+    return Array.from(set).sort();
+  }, [products, brand]);
+
   const handleBrandChange = (value: string) => {
     setBrand(value);
+    setModelSelect("");
+    setModel("");
     const preset = BRAND_PRESETS[value];
     if (preset) setUnitCost(String(preset));
     else setUnitCost("");
   };
+
+  const handleModelSelectChange = (value: string) => {
+    setModelSelect(value);
+    if (value !== "__new__") setModel(value);
+    else setModel("");
+  };
+
 
   const handleSubmit = async () => {
     if (validEntries.length === 0) {
