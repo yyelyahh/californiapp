@@ -42,6 +42,13 @@ export default function AddProductDialog() {
     return new Set(products.map(p => `${p.brand}|${p.model}|${p.flavor}`.toLowerCase()));
   }, [products]);
 
+  const existingModels = useMemo(() => {
+    if (!brand) return [];
+    const set = new Set<string>();
+    products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
+    return Array.from(set).sort();
+  }, [products, brand]);
+
   const previewProducts = useMemo(() => {
     if (!brand || !model.trim()) return [];
     return flavors.map(flavor => {
