@@ -157,10 +157,32 @@ export default function AddProductDialog() {
           {/* Modelo/Puffs */}
           <div className="space-y-1.5">
             <Label>Modelo / Puffs</Label>
+            <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
+              <SelectTrigger>
+                <SelectValue placeholder={brand ? "Selecione um modelo" : "Selecione a marca primeiro"} />
+              </SelectTrigger>
+              <SelectContent>
+                {existingModels.map(m => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+                <SelectItem value="__new__">+ Novo modelo</SelectItem>
+              </SelectContent>
+            </Select>
+            {modelSelect === "__new__" && (
+              <Input
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder="Ex: V155, 30K, TE 30K"
+                autoFocus
+              />
+            )}
+          </div>
+
+          {/* Hidden placeholder to preserve structure */}
+          <div className="hidden">
             <Input
               value={model}
               onChange={e => setModel(e.target.value)}
-              placeholder="Ex: V155, 30K, TE 30K"
             />
           </div>
 
