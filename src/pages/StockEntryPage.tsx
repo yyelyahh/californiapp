@@ -119,6 +119,7 @@ export default function StockEntryPage() {
       toast.success(`${created} entrada${created > 1 ? "s" : ""} registrada${created > 1 ? "s" : ""}!`);
     }
     setBrand("");
+    setModelSelect("");
     setModel("");
     setUnitCost("");
     setDate(todayDateString());
