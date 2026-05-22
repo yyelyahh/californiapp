@@ -25,6 +25,7 @@ export default function AddProductDialog() {
   const { products, addProduct } = useStore();
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
+  const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
   const [flavorsText, setFlavorsText] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
@@ -41,6 +42,13 @@ export default function AddProductDialog() {
     return new Set(products.map(p => `${p.brand}|${p.model}|${p.flavor}`.toLowerCase()));
   }, [products]);
 
+  const existingModels = useMemo(() => {
+    if (!brand) return [];
+    const set = new Set<string>();
+    products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
+    return Array.from(set).sort();
+  }, [products, brand]);
+
   const previewProducts = useMemo(() => {
     if (!brand || !model.trim()) return [];
     return flavors.map(flavor => {
@@ -56,11 +64,19 @@ export default function AddProductDialog() {
 
   const handleBrandChange = (value: string) => {
     setBrand(value);
+    setModelSelect("");
+    setModel("");
     const preset = BRAND_PRESETS[value];
     if (preset) {
       setPurchasePrice(preset.purchasePrice ? String(preset.purchasePrice) : "");
       setSalePrice(preset.salePrice ? String(preset.salePrice) : "");
     }
+  };
+
+  const handleModelSelectChange = (value: string) => {
+    setModelSelect(value);
+    if (value !== "__new__") setModel(value);
+    else setModel("");
   };
 
   const handleSubmit = async () => {
@@ -95,6 +111,7 @@ export default function AddProductDialog() {
 
     // Reset
     setBrand("");
+    setModelSelect("");
     setModel("");
     setFlavorsText("");
     setPurchasePrice("");
@@ -104,6 +121,7 @@ export default function AddProductDialog() {
 
   const handleReset = () => {
     setBrand("");
+    setModelSelect("");
     setModel("");
     setFlavorsText("");
     setPurchasePrice("");
@@ -139,12 +157,27 @@ export default function AddProductDialog() {
           {/* Modelo/Puffs */}
           <div className="space-y-1.5">
             <Label>Modelo / Puffs</Label>
-            <Input
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              placeholder="Ex: V155, 30K, TE 30K"
-            />
+            <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
+              <SelectTrigger>
+                <SelectValue placeholder={brand ? "Selecione um modelo" : "Selecione a marca primeiro"} />
+              </SelectTrigger>
+              <SelectContent>
+                {existingModels.map(m => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+                <SelectItem value="__new__">+ Novo modelo</SelectItem>
+              </SelectContent>
+            </Select>
+            {modelSelect === "__new__" && (
+              <Input
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder="Ex: V155, 30K, TE 30K"
+                autoFocus
+              />
+            )}
           </div>
+
 
           {/* Preços */}
           <div className="grid grid-cols-2 gap-3">
