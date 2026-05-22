@@ -25,6 +25,7 @@ export default function AddProductDialog() {
   const { products, addProduct } = useStore();
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
+  const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
   const [flavorsText, setFlavorsText] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
