@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="p-4 flex items-center gap-2 border-b border-sidebar-border">
           {!collapsed && (
-            <h1 className="text-lg font-bold tracking-tight text-[#c880ff]">California</h1>
+            <h1 className="text-lg font-bold tracking-tight text-rgb-cascade">California</h1>
           )}
           <button onClick={() => setCollapsed(!collapsed)} className="ml-auto text-sidebar-foreground hover:text-foreground transition-colors p-1">
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -83,7 +83,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Mobile top header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-sidebar sticky top-0 z-40">
-          <h1 className="text-base font-bold tracking-tight" style={{ background: 'linear-gradient(135deg, hsl(270 60% 55%), hsl(285 55% 45%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>California</h1>
+          <h1 className="text-base font-bold tracking-tight text-rgb-cascade">California</h1>
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-sidebar-foreground hover:text-foreground p-1">
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
