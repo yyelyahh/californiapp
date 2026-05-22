@@ -44,6 +44,7 @@ export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
+  const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [date, setDate] = useState(todayDateString());
@@ -69,12 +70,28 @@ export default function StockEntryPage() {
   const validEntries = entries.filter(e => e.product);
   const missingEntries = entries.filter(e => !e.product);
 
+  const existingModels = useMemo(() => {
+    if (!brand) return [];
+    const set = new Set<string>();
+    products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
+    return Array.from(set).sort();
+  }, [products, brand]);
+
   const handleBrandChange = (value: string) => {
     setBrand(value);
+    setModelSelect("");
+    setModel("");
     const preset = BRAND_PRESETS[value];
     if (preset) setUnitCost(String(preset));
     else setUnitCost("");
   };
+
+  const handleModelSelectChange = (value: string) => {
+    setModelSelect(value);
+    if (value !== "__new__") setModel(value);
+    else setModel("");
+  };
+
 
   const handleSubmit = async () => {
     if (validEntries.length === 0) {
@@ -102,6 +119,7 @@ export default function StockEntryPage() {
       toast.success(`${created} entrada${created > 1 ? "s" : ""} registrada${created > 1 ? "s" : ""}!`);
     }
     setBrand("");
+    setModelSelect("");
     setModel("");
     setUnitCost("");
     setDate(todayDateString());
@@ -113,6 +131,7 @@ export default function StockEntryPage() {
 
   const handleReset = () => {
     setBrand("");
+    setModelSelect("");
     setModel("");
     setUnitCost("");
     setDate(todayDateString());
@@ -190,7 +209,25 @@ export default function StockEntryPage() {
               {/* Modelo */}
               <div className="space-y-1.5">
                 <Label>Modelo / Puffs</Label>
-                <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, TE 30K" />
+                <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={brand ? "Selecione um modelo" : "Selecione a marca primeiro"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {existingModels.map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                    <SelectItem value="__new__">+ Novo modelo</SelectItem>
+                  </SelectContent>
+                </Select>
+                {modelSelect === "__new__" && (
+                  <Input
+                    value={model}
+                    onChange={e => setModel(e.target.value)}
+                    placeholder="Ex: V155, TE 30K"
+                    autoFocus
+                  />
+                )}
               </div>
 
               {/* Custo + Data */}
