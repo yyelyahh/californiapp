@@ -154,7 +154,7 @@ export default function Dashboard() {
                   <stop offset="100%" stopColor="hsl(var(--expense))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" vertical={false} />
+              <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--foreground))" strokeOpacity={0.35} vertical={false} />
               <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="hsl(var(--foreground))" fontSize={13} tickLine={false} axisLine={false} width={68} ticks={[500, 1000, 1500, 2000, 3000, 4000]} domain={[0, (dataMax: number) => Math.max(4000, Math.ceil(dataMax / 1000) * 1000)]} tick={{ fill: "hsl(var(--foreground))", fontWeight: 600 }} tickFormatter={v => v >= 1000 ? `R$${(v/1000).toFixed(1).replace('.0','')}k` : `R$${v}`} />
               <Tooltip
