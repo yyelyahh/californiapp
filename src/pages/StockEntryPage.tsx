@@ -131,6 +131,7 @@ export default function StockEntryPage() {
 
   const handleReset = () => {
     setBrand("");
+    setModelSelect("");
     setModel("");
     setUnitCost("");
     setDate(todayDateString());
