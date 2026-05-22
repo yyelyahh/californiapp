@@ -44,6 +44,7 @@ export default function StockEntryPage() {
   const { products, stockEntries, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
+  const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [date, setDate] = useState(todayDateString());
