@@ -196,7 +196,7 @@
   .bg-fixed { background-color: hsl(var(--fixed)); }
 
   .text-rgb-cascade {
-    background-image: linear-gradient(90deg, #ff3b8b, #c880ff, #4fc3ff, #5ef0a8, #ffd24c, #ff3b8b, #c880ff);
+    background-image: linear-gradient(90deg, #4a148c, #7b1fa2, #9c27b0, #ba68c8, #c880ff, #e1bee7, #c880ff, #9c27b0, #4a148c);
     background-size: 200% 100%;
     -webkit-background-clip: text;
     background-clip: text;
