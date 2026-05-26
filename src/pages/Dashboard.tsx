@@ -127,7 +127,7 @@ export default function Dashboard() {
           <div key={s.label} className={`stat-card ${s.accent ? "stat-card-accent" : ""}`}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</span>
-              <s.icon size={16} className={s.accent ? "text-accent" : "text-primary"} />
+              <s.icon size={16} className={s.accent ? "text-income" : "text-primary"} />
             </div>
             <p className="text-xl font-bold mono">{s.value}</p>
           </div>
