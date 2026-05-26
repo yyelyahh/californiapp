@@ -196,17 +196,17 @@
   .bg-fixed { background-color: hsl(var(--fixed)); }
 
   .text-rgb-cascade {
-    background-image: linear-gradient(90deg, #4a148c, #7b1fa2, #9c27b0, #ba68c8, #c880ff, #e1bee7, #c880ff, #9c27b0, #4a148c);
-    background-size: 200% 100%;
+    background-image: linear-gradient(135deg, #6a1b9a, #8e24aa, #ab47bc, #c880ff, #e1bee7, #c880ff, #ab47bc, #8e24aa, #6a1b9a);
+    background-size: 300% 300%;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
-    animation: rgb-cascade 3s linear infinite;
+    animation: rgb-cascade 4s linear infinite;
   }
 
   @keyframes rgb-cascade {
-    from { background-position: 0% 50%; }
-    to { background-position: -200% 50%; }
+    from { background-position: 0% 0%; }
+    to { background-position: -300% 300%; }
   }
 }
