@@ -23,21 +23,25 @@ export default function SalesPage() {
   const { role, sellerId } = useAuth();
   const isSeller = role === "seller";
 
-  const availableProducts = isSeller && sellerId
-    ? products.filter(p => {
-        const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === sellerId);
-        return assignment && assignment.quantity > 0;
-      })
-    : products.filter(p => p.stock > 0);
-
-  const getAssignedQuantity = (productId: string) => {
-    if (!isSeller || !sellerId) return null;
-    const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === sellerId);
-    return assignment?.quantity ?? 0;
-  };
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+
+  // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
+  const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
+
+  const availableProducts = effectiveSellerId
+    ? products.filter(p => {
+        const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === effectiveSellerId);
+        return assignment && assignment.quantity > 0;
+      })
+    : (isSeller ? [] : products.filter(p => p.stock > 0));
+
+  const getAssignedQuantity = (productId: string) => {
+    if (!effectiveSellerId) return null;
+    const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === effectiveSellerId);
+    return assignment?.quantity ?? 0;
+  };
 
   const selectedProduct = products.find(p => p.id === form.productId);
 
@@ -190,14 +194,34 @@ export default function SalesPage() {
         </div>
       )}
 
+      {!isSeller && (
+        <div>
+          <Label>Funcionário {isRetirada && <span className="text-destructive">*</span>}</Label>
+          <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v, productId: "" }))} disabled={!!editingSale}>
+            <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Selecione o vendedor"} /></SelectTrigger>
+            <SelectContent>
+              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {!form.sellerId && !editingSale && (
+            <p className="text-xs text-muted-foreground mt-1">Selecione um vendedor para ver os produtos atribuídos a ele.</p>
+          )}
+        </div>
+      )}
+
       <div>
         <Label>Produto</Label>
         <Select value={form.productId} onValueChange={v => {
           const prod = products.find(p => p.id === v);
           setForm(f => ({ ...f, productId: v, unitPrice: prod?.salePrice?.toString() || f.unitPrice }));
-        }} disabled={!!editingSale}>
-          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+        }} disabled={!!editingSale || (!isSeller && !form.sellerId)}>
+          <SelectTrigger><SelectValue placeholder={!isSeller && !form.sellerId ? "Selecione o vendedor primeiro" : "Selecione"} /></SelectTrigger>
           <SelectContent>
+            {availableProducts.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                {effectiveSellerId ? "Nenhum produto atribuído a este vendedor." : "Nenhum produto disponível."}
+              </div>
+            )}
             {availableProducts.map(p => {
               const assignedQty = getAssignedQuantity(p.id);
               const displayStock = assignedQty !== null ? assignedQty : p.stock;
@@ -207,7 +231,7 @@ export default function SalesPage() {
         </Select>
       </div>
       {selectedProduct && !editingSale && (
-        <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{isSeller ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
+        <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{effectiveSellerId ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
       )}
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
@@ -234,17 +258,6 @@ export default function SalesPage() {
         </div>
       )}
       <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-      {!isSeller && (
-        <div>
-          <Label>Funcionário {isRetirada && <span className="text-destructive">*</span>}</Label>
-          <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
-            <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Sem vendedor"} /></SelectTrigger>
-            <SelectContent>
-              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
       <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
       <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda")}</Button>
     </form>
