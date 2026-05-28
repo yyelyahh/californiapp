@@ -194,14 +194,34 @@ export default function SalesPage() {
         </div>
       )}
 
+      {!isSeller && (
+        <div>
+          <Label>Funcionário {isRetirada && <span className="text-destructive">*</span>}</Label>
+          <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v, productId: "" }))} disabled={!!editingSale}>
+            <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Selecione o vendedor"} /></SelectTrigger>
+            <SelectContent>
+              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {!form.sellerId && !editingSale && (
+            <p className="text-xs text-muted-foreground mt-1">Selecione um vendedor para ver os produtos atribuídos a ele.</p>
+          )}
+        </div>
+      )}
+
       <div>
         <Label>Produto</Label>
         <Select value={form.productId} onValueChange={v => {
           const prod = products.find(p => p.id === v);
           setForm(f => ({ ...f, productId: v, unitPrice: prod?.salePrice?.toString() || f.unitPrice }));
-        }} disabled={!!editingSale}>
-          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+        }} disabled={!!editingSale || (!isSeller && !form.sellerId)}>
+          <SelectTrigger><SelectValue placeholder={!isSeller && !form.sellerId ? "Selecione o vendedor primeiro" : "Selecione"} /></SelectTrigger>
           <SelectContent>
+            {availableProducts.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                {effectiveSellerId ? "Nenhum produto atribuído a este vendedor." : "Nenhum produto disponível."}
+              </div>
+            )}
             {availableProducts.map(p => {
               const assignedQty = getAssignedQuantity(p.id);
               const displayStock = assignedQty !== null ? assignedQty : p.stock;
@@ -211,7 +231,7 @@ export default function SalesPage() {
         </Select>
       </div>
       {selectedProduct && !editingSale && (
-        <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{isSeller ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
+        <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{effectiveSellerId ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
       )}
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></div>
