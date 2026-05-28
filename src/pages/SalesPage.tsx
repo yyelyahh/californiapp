@@ -258,17 +258,6 @@ export default function SalesPage() {
         </div>
       )}
       <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-      {!isSeller && (
-        <div>
-          <Label>Funcionário {isRetirada && <span className="text-destructive">*</span>}</Label>
-          <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v }))}>
-            <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Sem vendedor"} /></SelectTrigger>
-            <SelectContent>
-              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
       <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
       <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda")}</Button>
     </form>
