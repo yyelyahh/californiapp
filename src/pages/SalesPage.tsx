@@ -42,9 +42,6 @@ export default function SalesPage() {
     const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === effectiveSellerId);
     return assignment?.quantity ?? 0;
   };
-  const [open, setOpen] = useState(false);
-  const [editingSale, setEditingSale] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
 
   const selectedProduct = products.find(p => p.id === form.productId);
 
