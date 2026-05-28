@@ -23,16 +23,23 @@ export default function SalesPage() {
   const { role, sellerId } = useAuth();
   const isSeller = role === "seller";
 
-  const availableProducts = isSeller && sellerId
+  const [open, setOpen] = useState(false);
+  const [editingSale, setEditingSale] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+
+  // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
+  const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
+
+  const availableProducts = effectiveSellerId
     ? products.filter(p => {
-        const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === sellerId);
+        const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === effectiveSellerId);
         return assignment && assignment.quantity > 0;
       })
-    : products.filter(p => p.stock > 0);
+    : (isSeller ? [] : products.filter(p => p.stock > 0));
 
   const getAssignedQuantity = (productId: string) => {
-    if (!isSeller || !sellerId) return null;
-    const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === sellerId);
+    if (!effectiveSellerId) return null;
+    const assignment = productAssignments.find(a => a.productId === productId && a.sellerId === effectiveSellerId);
     return assignment?.quantity ?? 0;
   };
   const [open, setOpen] = useState(false);
