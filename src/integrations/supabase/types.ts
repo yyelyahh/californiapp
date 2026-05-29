@@ -414,6 +414,47 @@ export type Database = {
           },
         ]
       }
+      stock_losses: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          product_id: string
+          quantity: number
+          reason: string | null
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          product_id: string
+          quantity: number
+          reason?: string | null
+          total_cost?: number
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          reason?: string | null
+          total_cost?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_losses_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
