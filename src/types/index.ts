@@ -22,6 +22,16 @@ export interface StockEntry {
 
 export type SaleType = "venda" | "retirada_funcionario";
 
+export interface StockLoss {
+  id: string;
+  productId: string;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  reason?: string;
+  date: string;
+}
+
 export interface Sale {
   id: string;
   productId: string;
