@@ -295,6 +295,46 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [stockEntries, products]);
 
+  // ---- Stock Losses ----
+  const addStockLoss = useCallback(async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => {
+    const product = products.find(p => p.id === l.productId);
+    if (!product) { toast.error("Produto não encontrado"); return; }
+    if (product.stock < l.quantity) { toast.error("Quantidade maior que o estoque disponível"); return; }
+    const unitCost = l.unitCost ?? product.purchasePrice;
+    const totalCost = unitCost * l.quantity;
+    const { data, error } = await supabase.from("stock_losses" as any).insert({
+      product_id: l.productId, quantity: l.quantity,
+      unit_cost: unitCost, total_cost: totalCost,
+      reason: l.reason, date: l.date,
+    }).select().single();
+    if (error) { toast.error("Erro ao registrar perda"); return; }
+    setStockLosses(prev => [...prev, mapStockLoss(data)]);
+    const newStock = Math.max(0, product.stock - l.quantity);
+    await supabase.from("products").update({ stock: newStock }).eq("id", l.productId);
+    setProducts(prev => prev.map(p => p.id === l.productId ? { ...p, stock: newStock } : p));
+    toast.success("Perda registrada");
+  }, [products]);
+
+  const deleteStockLoss = useCallback(async (id: string) => {
+    const loss = stockLosses.find(l => l.id === id);
+    const { error } = await supabase.from("stock_losses" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir perda"); return; }
+    setStockLosses(prev => prev.filter(l => l.id !== id));
+    if (loss) {
+      const product = products.find(p => p.id === loss.productId);
+      if (product) {
+        const newStock = product.stock + loss.quantity;
+        await supabase.from("products").update({ stock: newStock }).eq("id", loss.productId);
+        setProducts(prev => prev.map(p => p.id === loss.productId ? { ...p, stock: newStock } : p));
+      }
+    }
+  }, [stockLosses, products]);
+
+  const getTotalLossValue = useCallback(() => {
+    return stockLosses.reduce((sum, l) => sum + l.totalCost, 0);
+  }, [stockLosses]);
+
+
   // ---- Sales ----
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
     const totalPrice = s.quantity * s.unitPrice;
