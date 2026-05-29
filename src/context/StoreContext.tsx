@@ -150,6 +150,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const { data } = await supabase.from("sellers" as any).select("*").order("created_at", { ascending: true });
         if (data) setSellers((data as any[]).map(mapSeller));
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, async () => {
+        const { data } = await supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true });
+        if (data) setStockLosses((data as any[]).map(mapStockLoss));
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
