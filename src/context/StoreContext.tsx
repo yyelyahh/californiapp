@@ -117,6 +117,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
         if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
         if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
+        if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
