@@ -106,6 +106,7 @@ export default function SalesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!form.productId || !form.quantity) return;
 
     // Retirada exige vendedor
@@ -114,6 +115,7 @@ export default function SalesPage() {
       return;
     }
 
+    setSubmitting(true);
     try {
       if (editingSale) {
         const totalPrice = Number(form.quantity) * Number(form.unitPrice);
@@ -147,6 +149,8 @@ export default function SalesPage() {
       setOpen(false);
     } catch {
       // erro já reportado via toast pelo store; mantém modal aberto para correção
+    } finally {
+      setSubmitting(false);
     }
   };
 
