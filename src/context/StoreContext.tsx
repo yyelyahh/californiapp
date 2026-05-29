@@ -82,6 +82,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sellerDebtPayments, setSellerDebtPayments] = useState<SellerDebtPayment[]>([]);
   const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
+  const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
