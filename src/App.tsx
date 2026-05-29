@@ -52,6 +52,7 @@ function ProtectedRoutes() {
           {!isSeller && <Route path="/revenue" element={<MonthlyRevenuePage />} />}
           {!isSeller && <Route path="/sellers" element={<SellersPage />} />}
           {!isSeller && <Route path="/seller-accounts" element={<SellerAccountsPage />} />}
+          {!isSeller && <Route path="/losses" element={<LossesPage />} />}
           
           <Route path="*" element={isSeller ? <Navigate to="/sales" replace /> : <NotFound />} />
         </Routes>
