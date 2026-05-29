@@ -8,6 +8,7 @@ const allNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: true },
   { to: "/products", icon: Package, label: "Produtos", adminOnly: true },
   { to: "/stock", icon: ArrowDownToLine, label: "Entrada", adminOnly: true },
+  { to: "/losses", icon: AlertTriangle, label: "Perdas", adminOnly: true },
   { to: "/sales", icon: ShoppingCart, label: "Vendas", adminOnly: false },
   { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
   { to: "/investors", icon: Users, label: "Investidores", adminOnly: true },
