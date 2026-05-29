@@ -26,6 +26,7 @@ export default function SalesPage() {
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
 
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
@@ -105,6 +106,7 @@ export default function SalesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!form.productId || !form.quantity) return;
 
     // Retirada exige vendedor
@@ -113,6 +115,7 @@ export default function SalesPage() {
       return;
     }
 
+    setSubmitting(true);
     try {
       if (editingSale) {
         const totalPrice = Number(form.quantity) * Number(form.unitPrice);
@@ -146,6 +149,8 @@ export default function SalesPage() {
       setOpen(false);
     } catch {
       // erro já reportado via toast pelo store; mantém modal aberto para correção
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -259,7 +264,7 @@ export default function SalesPage() {
       )}
       <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
       <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-      <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda")}</Button>
+      <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Salvando..." : (editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda"))}</Button>
     </form>
   );
 
