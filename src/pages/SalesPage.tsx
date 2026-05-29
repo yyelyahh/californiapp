@@ -26,6 +26,7 @@ export default function SalesPage() {
   const [open, setOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
 
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
