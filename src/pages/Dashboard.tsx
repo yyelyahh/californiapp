@@ -1,5 +1,5 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, DollarSign, Package, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Package, Clock, AlertTriangle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
@@ -54,10 +54,13 @@ export default function Dashboard() {
     const expenses = store.expenses
       .filter(e => filterFn(e.date))
       .reduce((sum, e) => sum + e.amount, 0);
-    const profit = revenue - costs - expenses;
+    const losses = store.stockLosses
+      .filter(l => filterFn(l.date))
+      .reduce((sum, l) => sum + l.totalCost, 0);
+    const profit = revenue - costs - expenses - losses;
 
-    return { revenue, costs, expenses, profit, receivable };
-  }, [filter, store.sales, store.stockEntries, store.expenses]);
+    return { revenue, costs, expenses, profit, receivable, losses };
+  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses]);
 
   const monthlyData = useMemo(() => {
     const months = [];
@@ -93,6 +96,7 @@ export default function Dashboard() {
     { label: `Receita${isGeral ? " Total" : ""}`, value: formatCurrency(periodStats.revenue), icon: TrendingUp, accent: false },
     { label: "Custos (Compra)", value: formatCurrency(periodStats.costs), icon: DollarSign, accent: true },
     { label: "A Receber", value: formatCurrency(periodStats.receivable), icon: Clock, accent: true },
+    { label: "Perdas", value: formatCurrency(periodStats.losses), icon: AlertTriangle, accent: true },
     { label: "Lucro Líquido", value: formatCurrency(periodStats.profit), icon: periodStats.profit >= 0 ? TrendingUp : TrendingDown, accent: false },
     // Estoque e capital investido são sempre "snapshot atual" - não dependem do mês
     { label: "Estoque Atual", value: `${totalStock} un.`, icon: Package, accent: false },

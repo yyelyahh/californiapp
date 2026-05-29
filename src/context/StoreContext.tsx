@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -21,6 +21,10 @@ interface StoreContextType {
   deleteProduct: (id: string) => Promise<void>;
   addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
   deleteStockEntry: (id: string) => Promise<void>;
+  stockLosses: StockLoss[];
+  addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => Promise<void>;
+  deleteStockLoss: (id: string) => Promise<void>;
+  getTotalLossValue: () => number;
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
   updateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
@@ -78,13 +82,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sellerDebtPayments, setSellerDebtPayments] = useState<SellerDebtPayment[]>([]);
   const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
+  const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes] = await Promise.all([
+        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
           supabase.from("products").select("*").order("created_at", { ascending: true }),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -97,6 +102,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("seller_manual_debts" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
         if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
@@ -111,6 +117,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
         if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
         if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
+        if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -142,6 +149,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "sellers" }, async () => {
         const { data } = await supabase.from("sellers" as any).select("*").order("created_at", { ascending: true });
         if (data) setSellers((data as any[]).map(mapSeller));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, async () => {
+        const { data } = await supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true });
+        if (data) setStockLosses((data as any[]).map(mapStockLoss));
       })
       .subscribe();
 
@@ -187,6 +198,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const mapSellerManualDebt = (r: any): SellerManualDebt => ({
     id: r.id, sellerId: r.seller_id,
     amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
+  const mapStockLoss = (r: any): StockLoss => ({
+    id: r.id, productId: r.product_id, quantity: r.quantity,
+    unitCost: Number(r.unit_cost), totalCost: Number(r.total_cost),
+    reason: r.reason || undefined, date: r.date,
   });
 
   const mapExpense = (r: any): Expense => ({
@@ -277,6 +294,46 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [stockEntries, products]);
+
+  // ---- Stock Losses ----
+  const addStockLoss = useCallback(async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => {
+    const product = products.find(p => p.id === l.productId);
+    if (!product) { toast.error("Produto não encontrado"); return; }
+    if (product.stock < l.quantity) { toast.error("Quantidade maior que o estoque disponível"); return; }
+    const unitCost = l.unitCost ?? product.purchasePrice;
+    const totalCost = unitCost * l.quantity;
+    const { data, error } = await supabase.from("stock_losses" as any).insert({
+      product_id: l.productId, quantity: l.quantity,
+      unit_cost: unitCost, total_cost: totalCost,
+      reason: l.reason, date: l.date,
+    }).select().single();
+    if (error) { toast.error("Erro ao registrar perda"); return; }
+    setStockLosses(prev => [...prev, mapStockLoss(data)]);
+    const newStock = Math.max(0, product.stock - l.quantity);
+    await supabase.from("products").update({ stock: newStock }).eq("id", l.productId);
+    setProducts(prev => prev.map(p => p.id === l.productId ? { ...p, stock: newStock } : p));
+    toast.success("Perda registrada");
+  }, [products]);
+
+  const deleteStockLoss = useCallback(async (id: string) => {
+    const loss = stockLosses.find(l => l.id === id);
+    const { error } = await supabase.from("stock_losses" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir perda"); return; }
+    setStockLosses(prev => prev.filter(l => l.id !== id));
+    if (loss) {
+      const product = products.find(p => p.id === loss.productId);
+      if (product) {
+        const newStock = product.stock + loss.quantity;
+        await supabase.from("products").update({ stock: newStock }).eq("id", loss.productId);
+        setProducts(prev => prev.map(p => p.id === loss.productId ? { ...p, stock: newStock } : p));
+      }
+    }
+  }, [stockLosses, products]);
+
+  const getTotalLossValue = useCallback(() => {
+    return stockLosses.reduce((sum, l) => sum + l.totalCost, 0);
+  }, [stockLosses]);
+
 
   // ---- Sales ----
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
@@ -691,7 +748,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const getTotalCosts = useCallback(() => stockEntries.reduce((sum, e) => sum + e.totalCost, 0), [stockEntries]);
   const getTotalExpenses = useCallback(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
   const getTotalInvested = useCallback(() => investors.reduce((sum, i) => sum + i.investedAmount, 0), [investors]);
-  const getNetProfit = useCallback(() => getTotalRevenue() - getTotalCosts() - getTotalExpenses(), [getTotalRevenue, getTotalCosts, getTotalExpenses]);
+  const getNetProfit = useCallback(() => getTotalRevenue() - getTotalCosts() - getTotalExpenses() - getTotalLossValue(), [getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalLossValue]);
   const getProductName = useCallback((id: string) => products.find(p => p.id === id)?.name ?? "Produto desconhecido", [products]);
   const getInvestorName = useCallback((id: string) => investors.find(i => i.id === id)?.name ?? "Investidor desconhecido", [investors]);
 
@@ -723,9 +780,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, loading,
       addProduct, updateProduct, deleteProduct,
-      addStockEntry, deleteStockEntry, addSale, updateSale, deleteSale,
+      addStockEntry, deleteStockEntry, addStockLoss, deleteStockLoss, getTotalLossValue, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
