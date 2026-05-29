@@ -96,6 +96,7 @@ export default function Dashboard() {
     { label: `Receita${isGeral ? " Total" : ""}`, value: formatCurrency(periodStats.revenue), icon: TrendingUp, accent: false },
     { label: "Custos (Compra)", value: formatCurrency(periodStats.costs), icon: DollarSign, accent: true },
     { label: "A Receber", value: formatCurrency(periodStats.receivable), icon: Clock, accent: true },
+    { label: "Perdas", value: formatCurrency(periodStats.losses), icon: AlertTriangle, accent: true },
     { label: "Lucro Líquido", value: formatCurrency(periodStats.profit), icon: periodStats.profit >= 0 ? TrendingUp : TrendingDown, accent: false },
     // Estoque e capital investido são sempre "snapshot atual" - não dependem do mês
     { label: "Estoque Atual", value: `${totalStock} un.`, icon: Package, accent: false },
