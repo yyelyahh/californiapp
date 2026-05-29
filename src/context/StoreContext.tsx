@@ -21,6 +21,10 @@ interface StoreContextType {
   deleteProduct: (id: string) => Promise<void>;
   addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
   deleteStockEntry: (id: string) => Promise<void>;
+  stockLosses: StockLoss[];
+  addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => Promise<void>;
+  deleteStockLoss: (id: string) => Promise<void>;
+  getTotalLossValue: () => number;
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
   updateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
