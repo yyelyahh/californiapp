@@ -264,7 +264,7 @@ export default function SalesPage() {
       )}
       <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
       <div><Label>Observações</Label><Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-      <Button type="submit" className="w-full">{editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda")}</Button>
+      <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Salvando..." : (editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda"))}</Button>
     </form>
   );
 
