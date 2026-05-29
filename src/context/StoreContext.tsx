@@ -200,6 +200,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
+  const mapStockLoss = (r: any): StockLoss => ({
+    id: r.id, productId: r.product_id, quantity: r.quantity,
+    unitCost: Number(r.unit_cost), totalCost: Number(r.total_cost),
+    reason: r.reason || undefined, date: r.date,
+  });
+
   const mapExpense = (r: any): Expense => ({
     id: r.id, description: r.description, category: r.category,
     amount: Number(r.amount), date: r.date,
