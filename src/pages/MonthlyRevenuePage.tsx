@@ -199,7 +199,7 @@ export default function MonthlyRevenuePage() {
                 </tr></thead>
                 <tbody>
                   {partners.map(p => {
-                    const profitBase = Math.max(0, monthlyData.profit);
+                    const profitBase = Math.max(0, monthlyData.grossProfit);
                     const share = profitBase * (p.percentage / 100);
                     const paid = getPartnerPaidForMonth(p.id, selectedMonth);
                     const remaining = Math.max(0, share - paid);
