@@ -124,7 +124,7 @@ export default function MonthlyRevenuePage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingUp size={14} /> Receita</div>
@@ -149,9 +149,15 @@ export default function MonthlyRevenuePage() {
             <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.dividendTotal)}</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Users size={14} /> Pago a Sócios</div>
+            <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.partnerPaidTotal)}</p>
+          </CardContent>
+        </Card>
         <Card className={monthlyData.profit >= 0 ? "border-primary/30" : "border-destructive/30"}>
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign size={14} /> Lucro</div>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign size={14} /> Saldo</div>
             <p className={`text-lg font-bold ${monthlyData.profit >= 0 ? "text-primary" : "text-destructive"}`}>
               {formatCurrency(monthlyData.profit)}
             </p>
