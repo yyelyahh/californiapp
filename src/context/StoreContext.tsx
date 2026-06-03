@@ -58,6 +58,7 @@ interface StoreContextType {
   getTotalExpenses: () => number;
   getTotalInvested: () => number;
   getNetProfit: () => number;
+  getTotalPartnerPayments: () => number;
   getProductName: (id: string) => string;
   getInvestorName: (id: string) => string;
   getPaidToInvestor: (id: string) => number;
