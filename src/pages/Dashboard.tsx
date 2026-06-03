@@ -57,10 +57,13 @@ export default function Dashboard() {
     const losses = store.stockLosses
       .filter(l => filterFn(l.date))
       .reduce((sum, l) => sum + l.totalCost, 0);
-    const profit = revenue - costs - expenses - losses;
+    const partnerPaid = store.partnerPayments
+      .filter(p => filterFn(p.date))
+      .reduce((sum, p) => sum + p.amount, 0);
+    const profit = revenue - costs - expenses - losses - partnerPaid;
 
-    return { revenue, costs, expenses, profit, receivable, losses };
-  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses]);
+    return { revenue, costs, expenses, profit, receivable, losses, partnerPaid };
+  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses, store.partnerPayments]);
 
   const monthlyData = useMemo(() => {
     const months = [];
