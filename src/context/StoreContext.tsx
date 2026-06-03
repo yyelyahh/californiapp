@@ -753,7 +753,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const getTotalCosts = useCallback(() => stockEntries.reduce((sum, e) => sum + e.totalCost, 0), [stockEntries]);
   const getTotalExpenses = useCallback(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
   const getTotalInvested = useCallback(() => investors.reduce((sum, i) => sum + i.investedAmount, 0), [investors]);
-  const getNetProfit = useCallback(() => getTotalRevenue() - getTotalCosts() - getTotalExpenses() - getTotalLossValue(), [getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalLossValue]);
+  const getNetProfit = useCallback(() => getTotalRevenue() - getTotalCosts() - getTotalExpenses() - getTotalLossValue() - getTotalPartnerPayments(), [getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalLossValue, getTotalPartnerPayments]);
   const getProductName = useCallback((id: string) => {
     const p = products.find(p => p.id === id);
     if (!p) return "Produto desconhecido";
