@@ -590,6 +590,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .reduce((sum, p) => sum + p.amount, 0);
   }, [partnerPayments]);
 
+  const getTotalPartnerPayments = useCallback(() => {
+    return partnerPayments.reduce((sum, p) => sum + p.amount, 0);
+  }, [partnerPayments]);
+
   // ---- Sellers ----
   const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("sellers" as any).insert({
