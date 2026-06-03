@@ -55,15 +55,18 @@ export default function MonthlyRevenuePage() {
     const monthStockEntries = stockEntries.filter(e => isInMonth(e.date, selectedMonth));
     const monthExpenses = expenses.filter(e => isInMonth(e.date, selectedMonth));
     const monthDividends = dividends.filter(d => isInMonth(d.date, selectedMonth));
+    const monthPartnerPayments = partnerPayments.filter(p => p.month === selectedMonth);
 
     const revenue = monthSales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const costs = monthStockEntries.reduce((sum, e) => sum + e.totalCost, 0);
     const expenseTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
     const dividendTotal = monthDividends.reduce((sum, d) => sum + d.amount, 0);
-    const profit = revenue - costs - expenseTotal - dividendTotal;
+    const partnerPaidTotal = monthPartnerPayments.reduce((sum, p) => sum + p.amount, 0);
+    const grossProfit = revenue - costs - expenseTotal - dividendTotal;
+    const profit = grossProfit - partnerPaidTotal;
 
-    return { revenue, costs, expenseTotal, dividendTotal, profit, monthSales, monthStockEntries, monthExpenses, monthDividends };
-  }, [sales, stockEntries, expenses, dividends, selectedMonth]);
+    return { revenue, costs, expenseTotal, dividendTotal, partnerPaidTotal, grossProfit, profit, monthSales, monthStockEntries, monthExpenses, monthDividends };
+  }, [sales, stockEntries, expenses, dividends, partnerPayments, selectedMonth]);
 
   const totalPercentage = partners.reduce((sum, p) => sum + p.percentage, 0);
 
@@ -121,7 +124,7 @@ export default function MonthlyRevenuePage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingUp size={14} /> Receita</div>
@@ -146,9 +149,15 @@ export default function MonthlyRevenuePage() {
             <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.dividendTotal)}</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Users size={14} /> Pago a Sócios</div>
+            <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.partnerPaidTotal)}</p>
+          </CardContent>
+        </Card>
         <Card className={monthlyData.profit >= 0 ? "border-primary/30" : "border-destructive/30"}>
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign size={14} /> Lucro</div>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign size={14} /> Saldo</div>
             <p className={`text-lg font-bold ${monthlyData.profit >= 0 ? "text-primary" : "text-destructive"}`}>
               {formatCurrency(monthlyData.profit)}
             </p>
@@ -196,7 +205,7 @@ export default function MonthlyRevenuePage() {
                 </tr></thead>
                 <tbody>
                   {partners.map(p => {
-                    const profitBase = Math.max(0, monthlyData.profit);
+                    const profitBase = Math.max(0, monthlyData.grossProfit);
                     const share = profitBase * (p.percentage / 100);
                     const paid = getPartnerPaidForMonth(p.id, selectedMonth);
                     const remaining = Math.max(0, share - paid);

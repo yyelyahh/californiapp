@@ -58,6 +58,7 @@ interface StoreContextType {
   getTotalExpenses: () => number;
   getTotalInvested: () => number;
   getNetProfit: () => number;
+  getTotalPartnerPayments: () => number;
   getProductName: (id: string) => string;
   getInvestorName: (id: string) => string;
   getPaidToInvestor: (id: string) => number;
@@ -590,6 +591,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .reduce((sum, p) => sum + p.amount, 0);
   }, [partnerPayments]);
 
+  const getTotalPartnerPayments = useCallback(() => {
+    return partnerPayments.reduce((sum, p) => sum + p.amount, 0);
+  }, [partnerPayments]);
+
   // ---- Sellers ----
   const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("sellers" as any).insert({
@@ -748,7 +753,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const getTotalCosts = useCallback(() => stockEntries.reduce((sum, e) => sum + e.totalCost, 0), [stockEntries]);
   const getTotalExpenses = useCallback(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
   const getTotalInvested = useCallback(() => investors.reduce((sum, i) => sum + i.investedAmount, 0), [investors]);
-  const getNetProfit = useCallback(() => getTotalRevenue() - getTotalCosts() - getTotalExpenses() - getTotalLossValue(), [getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalLossValue]);
+  const getNetProfit = useCallback(() => getTotalRevenue() - getTotalCosts() - getTotalExpenses() - getTotalLossValue() - getTotalPartnerPayments(), [getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalLossValue, getTotalPartnerPayments]);
   const getProductName = useCallback((id: string) => {
     const p = products.find(p => p.id === id);
     if (!p) return "Produto desconhecido";
@@ -794,7 +799,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addInvestor, updateInvestor, deleteInvestor,
       addDividend, deleteDividend,
       addPartner, updatePartner, deletePartner,
-      addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
+      addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth, getTotalPartnerPayments,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment,
       addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt, getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,

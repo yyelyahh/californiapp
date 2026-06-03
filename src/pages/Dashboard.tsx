@@ -1,5 +1,5 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, DollarSign, Package, Clock, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Package, Clock, AlertTriangle, Users } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
@@ -57,10 +57,13 @@ export default function Dashboard() {
     const losses = store.stockLosses
       .filter(l => filterFn(l.date))
       .reduce((sum, l) => sum + l.totalCost, 0);
-    const profit = revenue - costs - expenses - losses;
+    const partnerPaid = store.partnerPayments
+      .filter(p => filterFn(p.date))
+      .reduce((sum, p) => sum + p.amount, 0);
+    const profit = revenue - costs - expenses - losses - partnerPaid;
 
-    return { revenue, costs, expenses, profit, receivable, losses };
-  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses]);
+    return { revenue, costs, expenses, profit, receivable, losses, partnerPaid };
+  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses, store.partnerPayments]);
 
   const monthlyData = useMemo(() => {
     const months = [];
@@ -97,6 +100,7 @@ export default function Dashboard() {
     { label: "Custos (Compra)", value: formatCurrency(periodStats.costs), icon: DollarSign, accent: true },
     { label: "A Receber", value: formatCurrency(periodStats.receivable), icon: Clock, accent: true },
     { label: "Perdas", value: formatCurrency(periodStats.losses), icon: AlertTriangle, accent: true },
+    { label: "Pago a Sócios", value: formatCurrency(periodStats.partnerPaid), icon: Users, accent: true },
     { label: "Lucro Líquido", value: formatCurrency(periodStats.profit), icon: periodStats.profit >= 0 ? TrendingUp : TrendingDown, accent: false },
     // Estoque e capital investido são sempre "snapshot atual" - não dependem do mês
     { label: "Estoque Atual", value: `${totalStock} un.`, icon: Package, accent: false },
