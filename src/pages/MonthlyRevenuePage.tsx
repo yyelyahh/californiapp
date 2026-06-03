@@ -55,15 +55,18 @@ export default function MonthlyRevenuePage() {
     const monthStockEntries = stockEntries.filter(e => isInMonth(e.date, selectedMonth));
     const monthExpenses = expenses.filter(e => isInMonth(e.date, selectedMonth));
     const monthDividends = dividends.filter(d => isInMonth(d.date, selectedMonth));
+    const monthPartnerPayments = partnerPayments.filter(p => p.month === selectedMonth);
 
     const revenue = monthSales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const costs = monthStockEntries.reduce((sum, e) => sum + e.totalCost, 0);
     const expenseTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
     const dividendTotal = monthDividends.reduce((sum, d) => sum + d.amount, 0);
-    const profit = revenue - costs - expenseTotal - dividendTotal;
+    const partnerPaidTotal = monthPartnerPayments.reduce((sum, p) => sum + p.amount, 0);
+    const grossProfit = revenue - costs - expenseTotal - dividendTotal;
+    const profit = grossProfit - partnerPaidTotal;
 
-    return { revenue, costs, expenseTotal, dividendTotal, profit, monthSales, monthStockEntries, monthExpenses, monthDividends };
-  }, [sales, stockEntries, expenses, dividends, selectedMonth]);
+    return { revenue, costs, expenseTotal, dividendTotal, partnerPaidTotal, grossProfit, profit, monthSales, monthStockEntries, monthExpenses, monthDividends };
+  }, [sales, stockEntries, expenses, dividends, partnerPayments, selectedMonth]);
 
   const totalPercentage = partners.reduce((sum, p) => sum + p.percentage, 0);
 
