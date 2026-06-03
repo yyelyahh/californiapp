@@ -181,7 +181,7 @@ export default function Dashboard() {
                 <div>
                   {(() => {
                     const product = store.products.find(product => product.id === s.productId);
-                    const productLabel = product ? `${product.model} * ${product.flavor}` : store.getProductName(s.productId);
+                    const productLabel = product ? `${product.flavor} · ${product.model}` : store.getProductName(s.productId);
 
                     return (
                       <>

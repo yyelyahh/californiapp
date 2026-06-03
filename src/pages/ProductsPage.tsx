@@ -368,8 +368,8 @@ export default function ProductsPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <h3 className="font-medium text-sm truncate">{p.name}</h3>
-                              {p.flavor && <span className="text-xs text-muted-foreground shrink-0">· {p.flavor}</span>}
+                              <h3 className="font-medium text-sm truncate">{p.flavor || p.name}</h3>
+                              {p.flavor && p.name && <span className="text-xs text-muted-foreground shrink-0">· {p.name}</span>}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0 ml-2">

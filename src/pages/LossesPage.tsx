@@ -25,7 +25,7 @@ export default function LossesPage() {
   const totalLoss = getTotalLossValue();
 
   const sortedProducts = useMemo(
-    () => [...products].sort((a, b) => `${a.brand} ${a.model} ${a.flavor}`.localeCompare(`${b.brand} ${b.model} ${b.flavor}`)),
+    () => [...products].sort((a, b) => `${a.flavor} ${a.brand} ${a.model}`.localeCompare(`${b.flavor} ${b.brand} ${b.model}`)),
     [products]
   );
 
@@ -70,7 +70,7 @@ export default function LossesPage() {
                   <SelectContent>
                     {sortedProducts.map(p => (
                       <SelectItem key={p.id} value={p.id} disabled={p.stock <= 0}>
-                        {p.brand} {p.model} * {p.flavor} ({p.stock} un.)
+                        {p.flavor} · {p.brand} {p.model} ({p.stock} un.)
                       </SelectItem>
                     ))}
                   </SelectContent>

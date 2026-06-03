@@ -79,7 +79,7 @@ export default function SalesPage() {
 
   const getProductDisplayName = (productId: string) => {
     const product = products.find(p => p.id === productId);
-    return product ? `${product.model} * ${product.flavor}` : getProductName(productId);
+    return product ? `${product.flavor} · ${product.model}` : getProductName(productId);
   };
 
   const openNew = () => {

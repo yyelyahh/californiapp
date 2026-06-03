@@ -163,7 +163,7 @@ export default function SellersPage() {
                             <div className="flex items-center gap-2">
                               <Checkbox id={`prod-${p.id}`} checked={isChecked} onCheckedChange={(c) => toggleProduct(p.id, !!c)} />
                               <label htmlFor={`prod-${p.id}`} className="text-sm cursor-pointer flex-1">
-                                {`${p.model} * ${p.flavor}`} <span className="text-muted-foreground">({p.availableToAssign} disp.)</span>
+                                {`${p.flavor} · ${p.model}`} <span className="text-muted-foreground">({p.availableToAssign} disp.)</span>
                               </label>
                             </div>
                             {isChecked && (
@@ -285,7 +285,7 @@ export default function SellersPage() {
                           {assignments.map(a => (
                             <div key={a.id} className="flex items-center justify-between rounded-md bg-secondary/50 px-3 py-2 text-sm">
                               <div className="min-w-0 flex-1">
-                                <span className="font-medium">{(() => { const p = products.find(p => p.id === a.productId); return p ? `${p.model} * ${p.flavor}` : getProductName(a.productId); })()}</span>
+                                <span className="font-medium">{(() => { const p = products.find(p => p.id === a.productId); return p ? `${p.flavor} · ${p.model}` : getProductName(a.productId); })()}</span>
                                 <span className="ml-2 text-muted-foreground">×{a.quantity}</span>
                                 {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
                               </div>
@@ -333,7 +333,7 @@ export default function SellersPage() {
                 className="space-y-4"
               >
                 <div className="text-sm text-muted-foreground">
-                  <p><span className="font-medium text-foreground">Produto:</span> {product ? `${product.model} * ${product.flavor}` : getProductName(a.productId)}</p>
+                  <p><span className="font-medium text-foreground">Produto:</span> {product ? `${product.flavor} · ${product.model}` : getProductName(a.productId)}</p>
                   <p><span className="font-medium text-foreground">De:</span> {fromSeller?.name} ({max} disponível{max !== 1 ? 'eis' : ''})</p>
                 </div>
                 <div>
