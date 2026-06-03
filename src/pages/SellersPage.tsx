@@ -163,7 +163,7 @@ export default function SellersPage() {
                             <div className="flex items-center gap-2">
                               <Checkbox id={`prod-${p.id}`} checked={isChecked} onCheckedChange={(c) => toggleProduct(p.id, !!c)} />
                               <label htmlFor={`prod-${p.id}`} className="text-sm cursor-pointer flex-1">
-                                {`${p.model} * ${p.flavor}`} <span className="text-muted-foreground">({p.availableToAssign} disp.)</span>
+                                {`${p.flavor} · ${p.model}`} <span className="text-muted-foreground">({p.availableToAssign} disp.)</span>
                               </label>
                             </div>
                             {isChecked && (
