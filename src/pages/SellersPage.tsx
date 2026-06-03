@@ -333,7 +333,7 @@ export default function SellersPage() {
                 className="space-y-4"
               >
                 <div className="text-sm text-muted-foreground">
-                  <p><span className="font-medium text-foreground">Produto:</span> {product ? `${product.model} * ${product.flavor}` : getProductName(a.productId)}</p>
+                  <p><span className="font-medium text-foreground">Produto:</span> {product ? `${product.flavor} · ${product.model}` : getProductName(a.productId)}</p>
                   <p><span className="font-medium text-foreground">De:</span> {fromSeller?.name} ({max} disponível{max !== 1 ? 'eis' : ''})</p>
                 </div>
                 <div>
