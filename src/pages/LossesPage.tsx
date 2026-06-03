@@ -25,7 +25,7 @@ export default function LossesPage() {
   const totalLoss = getTotalLossValue();
 
   const sortedProducts = useMemo(
-    () => [...products].sort((a, b) => `${a.brand} ${a.model} ${a.flavor}`.localeCompare(`${b.brand} ${b.model} ${b.flavor}`)),
+    () => [...products].sort((a, b) => `${a.flavor} ${a.brand} ${a.model}`.localeCompare(`${b.flavor} ${b.brand} ${b.model}`)),
     [products]
   );
 
