@@ -257,10 +257,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteProduct = useCallback(async (id: string) => {
+    const product = products.find(p => p.id === id);
+    if (product) {
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from("deleted_products").insert({
+        original_id: product.id,
+        name: product.name,
+        brand: product.brand,
+        model: product.model,
+        flavor: product.flavor,
+        purchase_price: product.purchasePrice,
+        sale_price: product.salePrice,
+        stock: product.stock,
+        original_created_at: product.createdAt,
+        deleted_by: userData.user?.id ?? null,
+      });
+    }
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir produto"); return; }
     setProducts(prev => prev.filter(p => p.id !== id));
-  }, []);
+    toast.success("Produto excluído");
+  }, [products]);
 
   // ---- Stock Entries ----
   const addStockEntry = useCallback(async (e: Omit<StockEntry, "id" | "totalCost">) => {

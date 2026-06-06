@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      deleted_products: {
+        Row: {
+          brand: string
+          deleted_at: string
+          deleted_by: string | null
+          flavor: string
+          id: string
+          model: string
+          name: string
+          original_created_at: string | null
+          original_id: string
+          purchase_price: number
+          sale_price: number
+          stock: number
+        }
+        Insert: {
+          brand?: string
+          deleted_at?: string
+          deleted_by?: string | null
+          flavor?: string
+          id?: string
+          model?: string
+          name?: string
+          original_created_at?: string | null
+          original_id: string
+          purchase_price?: number
+          sale_price?: number
+          stock?: number
+        }
+        Update: {
+          brand?: string
+          deleted_at?: string
+          deleted_by?: string | null
+          flavor?: string
+          id?: string
+          model?: string
+          name?: string
+          original_created_at?: string | null
+          original_id?: string
+          purchase_price?: number
+          sale_price?: number
+          stock?: number
+        }
+        Relationships: []
+      }
       dividends: {
         Row: {
           amount: number
