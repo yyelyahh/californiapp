@@ -378,7 +378,7 @@ export default function ProductsPage() {
                             <Button variant="ghost" size="icon" onClick={() => startEdit(p)} className="text-muted-foreground hover:text-primary h-7 w-7">
                               <Pencil size={14} />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(p)} className="text-muted-foreground hover:text-destructive h-7 w-7">
                               <Trash2 size={14} />
                             </Button>
                           </div>
