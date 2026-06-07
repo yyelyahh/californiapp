@@ -111,8 +111,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
-          supabase.from("products").select("*").order("created_at", { ascending: true }),
+        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
+          fetchProductsList(),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
           supabase.from("expenses").select("*").order("created_at", { ascending: true }),
@@ -127,7 +127,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
-        if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
+        setProducts(prodList);
         if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
         if (salesRes.data) setSales(salesRes.data.map(mapSale));
         if (expRes.data) setExpenses(expRes.data.map(mapExpense));
