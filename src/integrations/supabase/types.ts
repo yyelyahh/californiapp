@@ -233,6 +233,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "product_assignments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "product_assignments_seller_id_fkey"
             columns: ["seller_id"]
             isOneToOne: false
@@ -326,6 +333,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
             referencedColumns: ["id"]
           },
           {
@@ -457,6 +471,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "stock_entries_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       stock_losses: {
@@ -498,6 +519,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "stock_losses_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -520,9 +548,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      products_public: {
+        Row: {
+          brand: string | null
+          created_at: string | null
+          flavor: string | null
+          id: string | null
+          model: string | null
+          name: string | null
+          sale_price: number | null
+          stock: number | null
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string | null
+          flavor?: string | null
+          id?: string | null
+          model?: string | null
+          name?: string | null
+          sale_price?: number | null
+          stock?: number | null
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string | null
+          flavor?: string | null
+          id?: string | null
+          model?: string | null
+          name?: string | null
+          sale_price?: number | null
+          stock?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      get_my_seller_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
