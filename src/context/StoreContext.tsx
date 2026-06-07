@@ -381,7 +381,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // ---- Integrity validations (single source of truth) ----
     const { data: productRow, error: productError } = await supabase
       .from("products")
-      .select("*")
+      .select(PRODUCT_COLS)
       .eq("id", s.productId)
       .single();
     const product = productRow ? mapProduct(productRow) : products.find(p => p.id === s.productId);
