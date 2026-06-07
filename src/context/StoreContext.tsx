@@ -153,8 +153,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const channel = supabase
       .channel("store-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async () => {
-        const { data } = await supabase.from("products").select("*").order("created_at", { ascending: true });
-        if (data) setProducts(data.map(mapProduct));
+        setProducts(await fetchProductsList());
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, async () => {
         const { data } = await supabase.from("sales").select("*").order("created_at", { ascending: true });
