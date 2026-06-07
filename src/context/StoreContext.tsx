@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+
+// Columns readable by every authenticated user (purchase_price is admin-only via RPC)
+const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,created_at";
 
 interface StoreContextType {
   products: Product[];
@@ -85,13 +89,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [loading, setLoading] = useState(true);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
+
+  const fetchProductsList = useCallback(async (): Promise<Product[]> => {
+    const { data } = await supabase.from("products").select(PRODUCT_COLS).order("created_at", { ascending: true });
+    if (!data) return [];
+    let costs: Record<string, number> = {};
+    if (isAdmin) {
+      const { data: c } = await supabase.rpc("get_product_costs");
+      if (c) costs = Object.fromEntries((c as any[]).map(r => [r.product_id, Number(r.purchase_price)]));
+    }
+    return data.map((r: any) => ({
+      id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
+      purchasePrice: costs[r.id] ?? 0, salePrice: Number(r.sale_price),
+      stock: r.stock, createdAt: r.created_at,
+    }));
+  }, [isAdmin]);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodRes, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
-          supabase.from("products").select("*").order("created_at", { ascending: true }),
+        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
+          fetchProductsList(),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
           supabase.from("expenses").select("*").order("created_at", { ascending: true }),
@@ -106,7 +127,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
         ]);
 
-        if (prodRes.data) setProducts(prodRes.data.map(mapProduct));
+        setProducts(prodList);
         if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
         if (salesRes.data) setSales(salesRes.data.map(mapSale));
         if (expRes.data) setExpenses(expRes.data.map(mapExpense));
@@ -132,8 +153,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const channel = supabase
       .channel("store-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async () => {
-        const { data } = await supabase.from("products").select("*").order("created_at", { ascending: true });
-        if (data) setProducts(data.map(mapProduct));
+        setProducts(await fetchProductsList());
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, async () => {
         const { data } = await supabase.from("sales").select("*").order("created_at", { ascending: true });
@@ -158,11 +178,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [fetchProductsList]);
 
   const mapProduct = (r: any): Product => ({
     id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
-    purchasePrice: Number(r.purchase_price), salePrice: Number(r.sale_price),
+    purchasePrice: Number(r.purchase_price ?? 0), salePrice: Number(r.sale_price),
     stock: r.stock, createdAt: r.created_at,
   });
 
@@ -237,9 +257,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.from("products").insert({
       name: p.name, brand: p.brand, model: p.model, flavor: p.flavor,
       purchase_price: p.purchasePrice, sale_price: p.salePrice, stock: 0,
-    }).select().single();
+    }).select(PRODUCT_COLS).single();
     if (error) { toast.error("Erro ao adicionar produto"); return; }
-    setProducts(prev => [...prev, mapProduct(data)]);
+    setProducts(prev => [...prev, mapProduct({ ...data, purchase_price: p.purchasePrice })]);
   }, []);
 
   const updateProduct = useCallback(async (id: string, updates: Partial<Product>) => {
@@ -361,7 +381,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // ---- Integrity validations (single source of truth) ----
     const { data: productRow, error: productError } = await supabase
       .from("products")
-      .select("*")
+      .select(PRODUCT_COLS)
       .eq("id", s.productId)
       .single();
     const product = productRow ? mapProduct(productRow) : products.find(p => p.id === s.productId);

@@ -523,6 +523,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_seller_id: { Args: never; Returns: string }
+      get_product_costs: {
+        Args: never
+        Returns: {
+          product_id: string
+          purchase_price: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
