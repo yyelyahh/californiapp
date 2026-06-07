@@ -89,6 +89,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [loading, setLoading] = useState(true);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
+
+  const fetchProductsList = useCallback(async (): Promise<Product[]> => {
+    const { data } = await supabase.from("products").select(PRODUCT_COLS).order("created_at", { ascending: true });
+    if (!data) return [];
+    let costs: Record<string, number> = {};
+    if (isAdmin) {
+      const { data: c } = await supabase.rpc("get_product_costs");
+      if (c) costs = Object.fromEntries((c as any[]).map(r => [r.product_id, Number(r.purchase_price)]));
+    }
+    return data.map((r: any) => ({
+      id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
+      purchasePrice: costs[r.id] ?? 0, salePrice: Number(r.sale_price),
+      stock: r.stock, createdAt: r.created_at,
+    }));
+  }, [isAdmin]);
 
   useEffect(() => {
     const fetchAll = async () => {
