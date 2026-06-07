@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+
+// Columns readable by every authenticated user (purchase_price is admin-only via RPC)
+const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,created_at";
 
 interface StoreContextType {
   products: Product[];
