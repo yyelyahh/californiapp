@@ -178,11 +178,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [fetchProductsList]);
 
   const mapProduct = (r: any): Product => ({
     id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
-    purchasePrice: Number(r.purchase_price), salePrice: Number(r.sale_price),
+    purchasePrice: Number(r.purchase_price ?? 0), salePrice: Number(r.sale_price),
     stock: r.stock, createdAt: r.created_at,
   });
 
