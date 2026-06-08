@@ -253,7 +253,7 @@ export default function SellersPage() {
                         <Badge variant="secondary" className="gap-1 text-xs">
                           <Package size={10} />{totalItems}
                         </Badge>
-                        <Badge variant="outline" className="border-primary/40 text-primary text-xs mono" title="A receber das vendas">
+                        <Badge variant="outline" className="border-income/40 text-income text-xs mono" title="A receber das vendas">
                           {formatCurrency(receivable)}
                         </Badge>
                         <Badge variant="outline" className={`text-xs mono ${debt > 0 ? "border-destructive/40 text-destructive" : debt < 0 ? "border-income/40 text-income" : "border-border text-muted-foreground"}`} title="Saldo">
