@@ -128,7 +128,7 @@ export default function MonthlyRevenuePage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingUp size={14} /> Receita</div>
-            <p className="text-lg font-bold text-primary">{formatCurrency(monthlyData.revenue)}</p>
+            <p className="text-lg font-bold text-income">{formatCurrency(monthlyData.revenue)}</p>
           </CardContent>
         </Card>
         <Card>
