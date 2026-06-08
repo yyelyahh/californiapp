@@ -221,10 +221,10 @@ export default function SellersPage() {
             <p className="text-base font-bold text-primary mono">{formatCurrency(totals.receivable)}</p>
           </CardContent>
         </Card>
-        <Card className={totals.debt > 0 ? "border-destructive/30" : totals.debt < 0 ? "border-emerald-500/30" : ""}>
+        <Card className={totals.debt > 0 ? "border-destructive/30" : totals.debt < 0 ? "border-income/30" : ""}>
           <CardContent className="p-3">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={12} /> Saldo</div>
-            <p className={`text-base font-bold mono ${totals.debt > 0 ? "text-destructive" : totals.debt < 0 ? "text-emerald-400" : "text-muted-foreground"}`}>
+            <p className={`text-base font-bold mono ${totals.debt > 0 ? "text-destructive" : totals.debt < 0 ? "text-income" : "text-muted-foreground"}`}>
               {formatBalance(totals.debt)}
             </p>
           </CardContent>
@@ -256,7 +256,7 @@ export default function SellersPage() {
                         <Badge variant="outline" className="border-primary/40 text-primary text-xs mono" title="A receber das vendas">
                           {formatCurrency(receivable)}
                         </Badge>
-                        <Badge variant="outline" className={`text-xs mono ${debt > 0 ? "border-destructive/40 text-destructive" : debt < 0 ? "border-emerald-500/40 text-emerald-400" : "border-border text-muted-foreground"}`} title="Saldo">
+                        <Badge variant="outline" className={`text-xs mono ${debt > 0 ? "border-destructive/40 text-destructive" : debt < 0 ? "border-income/40 text-income" : "border-border text-muted-foreground"}`} title="Saldo">
                           {formatBalance(debt)}
                         </Badge>
                       </div>
@@ -265,7 +265,7 @@ export default function SellersPage() {
                   <CollapsibleContent>
                     <div className="border-t border-border px-4 py-3 space-y-3">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-xs">Abate {seller.debtPercentage ?? 10}%</Badge>
+                        <Badge variant="outline" className="border-warning/40 text-warning text-xs">Abate {seller.debtPercentage ?? 10}%</Badge>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="sm" className="h-7" onClick={(e) => { e.stopPropagation(); openEditSeller(seller); }}>
                             <Pencil size={12} className="mr-1" />Editar

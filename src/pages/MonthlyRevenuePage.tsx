@@ -225,7 +225,7 @@ export default function MonthlyRevenuePage() {
                           {isPaid ? (
                             <Badge className="bg-primary/15 text-primary hover:bg-primary/20 border-0">Pago</Badge>
                           ) : remaining > 0 && share > 0 ? (
-                            <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-accent border-accent/40 bg-[#634b4b]/0 text-green-600">
+                            <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-accent border-accent/40 bg-[#634b4b]/0 text-income">
                               Falta {formatCurrency(remaining)}
                             </div>
                           ) : (
