@@ -249,7 +249,7 @@ export default function SellerAccountsPage() {
                                   {p.notes && <p className="text-muted-foreground">{p.notes}</p>}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <span className="font-semibold text-primary mono">{formatCurrency(p.amount)}</span>
+                                  <span className="font-semibold text-income mono">{formatCurrency(p.amount)}</span>
                                   <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => { if (confirm("Excluir pagamento?")) deleteSellerDebtPayment(p.id); }}>
                                     <Trash2 size={10} />
                                   </Button>
