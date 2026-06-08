@@ -283,30 +283,13 @@ export default function SalesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Vendas</h1>
-          <p className="text-muted-foreground text-sm">Registrar saídas e vendas</p>
-        </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew}><Plus size={16} className="mr-2" />Nova Venda</Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editingSale ? "Editar Venda" : "Registrar Venda"}</DialogTitle></DialogHeader>
-            {saleForm}
-          </DialogContent>
-        </Dialog>
-      </div>
-
+    <Tabs defaultValue="vendas" className="w-full space-y-5">
       {(() => {
         const baseSales = sales.filter(s => (s.type || "venda") !== "retirada_funcionario");
         const sortedRetiradas = [...sales]
           .filter(s => s.type === "retirada_funcionario")
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        // Aplica filtros
         const fromTs = fFrom ? new Date(fFrom + "T00:00:00").getTime() : null;
         const toTs = fTo ? new Date(fTo + "T23:59:59").getTime() : null;
         const productQ = fProduct.trim().toLowerCase();
@@ -340,28 +323,45 @@ export default function SalesPage() {
         const sumTotal = sortedSales.reduce((acc, s) => acc + s.totalPrice, 0);
         const sumPaid = sortedSales.reduce((acc, s) => acc + s.paidAmount, 0);
         const sumOpen = sortedSales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
+        const paidPct = sumTotal > 0 ? Math.round((sumPaid / sumTotal) * 100) : 0;
 
         const renderRow = (s: typeof sales[number]) => {
           const remaining = Math.max(0, s.totalPrice - s.paidAmount);
           const isRet = s.type === "retirada_funcionario";
+          const sellerName = s.sellerId ? getSellerName(s.sellerId) : "Sem funcionário";
+          const statusBadge = !isRet && (
+            remaining === 0 ? (
+              <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-income/10 text-income">Pago</span>
+            ) : s.paidAmount > 0 ? (
+              <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-warning/10 text-warning">Parcial</span>
+            ) : (
+              <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-destructive/10 text-destructive">Aberto</span>
+            )
+          );
           return (
-            <tr key={s.id} className={cn("border-b border-border last:border-0 hover:bg-secondary/30 transition-colors", isRet && "bg-amber-500/5")}>
-              <td className="p-3 mono text-xs">{formatDateBR(s.date)}</td>
-              <td className="p-3">{getProductDisplayName(s.productId)}</td>
-              <td className="p-3 text-right mono">{s.quantity}</td>
-              <td className={cn("p-3 text-right mono font-semibold", isRet ? "text-amber-400" : "text-primary")}>{formatCurrency(s.totalPrice)}</td>
-              {!isRet && <td className="p-3 text-right mono text-primary">{formatCurrency(s.paidAmount)}</td>}
+            <tr key={s.id} className={cn("border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group", isRet && "bg-amber-500/[0.04]")}>
+              <td className="py-2.5 px-3">
+                <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                  <span>{sellerName}</span>
+                  <span className="opacity-40">·</span>
+                  <span className="mono">{formatDateBR(s.date)}</span>
+                  {s.notes && (<><span className="opacity-40">·</span><span className="truncate max-w-[140px]" title={s.notes}>{s.notes}</span></>)}
+                </div>
+              </td>
+              <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
+              <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-amber-400" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
+              {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
               {!isRet && (
-                <td className="p-3 text-right mono">
-                  {remaining > 0 ? <span className="text-destructive font-semibold">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground">—</span>}
+                <td className="py-2.5 px-3 text-right mono text-sm">
+                  {remaining > 0 ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground/50">—</span>}
                 </td>
               )}
-              <td className="p-3 text-sm">{s.sellerId ? getSellerName(s.sellerId) : <span className="text-muted-foreground">—</span>}</td>
-              <td className="p-3 text-xs text-muted-foreground max-w-[120px] truncate">{s.notes || '—'}</td>
-              <td className="p-3">
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil size={14} /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(s.id)}><Trash2 size={14} /></Button>
+              {!isRet && <td className="py-2.5 px-3">{statusBadge}</td>}
+              <td className="py-2.5 px-3">
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil size={13} /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 size={13} /></Button>
                 </div>
               </td>
             </tr>
@@ -373,138 +373,175 @@ export default function SalesPage() {
             type="button"
             onClick={() => applyPreset(key)}
             className={cn(
-              "px-2.5 py-1 rounded-md text-xs font-medium border transition",
-              fPreset === key ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+              "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+              fPreset === key
+                ? "bg-primary/15 text-primary border-primary/40"
+                : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-border/80"
             )}
           >{label}</button>
         );
 
         return (
-          <Tabs defaultValue="vendas" className="w-full">
-            <TabsList>
-              <TabsTrigger value="vendas">Vendas ({baseSales.length})</TabsTrigger>
-              <TabsTrigger value="retiradas">Retiradas ({sortedRetiradas.length})</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="vendas" className="mt-4 space-y-4">
-              {/* Painel de filtros */}
-              <div className="glass-card p-4 space-y-3">
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <Label className="text-xs mb-1 block">Funcionário</Label>
-                    <Select value={fSeller} onValueChange={setFSeller}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="none">Sem funcionário</SelectItem>
-                        {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1 block">Status de pagamento</Label>
-                    <Select value={fStatus} onValueChange={(v) => setFStatus(v as PaymentStatus)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        <SelectItem value="paid">Pagas</SelectItem>
-                        <SelectItem value="partial">Parcial</SelectItem>
-                        <SelectItem value="open">Em aberto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1 block">Buscar produto</Label>
-                    <Input placeholder="Modelo ou sabor..." value={fProduct} onChange={e => setFProduct(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1 block">Ordenar por</Label>
-                    <div className="flex gap-1">
-                      <Select value={fSortKey} onValueChange={(v) => setFSortKey(v as SortKey)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="date">Data</SelectItem>
-                          <SelectItem value="total">Valor total</SelectItem>
-                          <SelectItem value="remaining">Falta receber</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button type="button" variant="outline" size="icon" onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")} title={fSortDir === "asc" ? "Crescente" : "Decrescente"}>
-                        <ArrowUpDown size={14} className={cn(fSortDir === "asc" && "rotate-180 transition-transform")} />
-                      </Button>
-                    </div>
-                  </div>
+          <>
+            {/* Cabeçalho com tabs integradas */}
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
+                  <p className="text-xs text-muted-foreground">Registrar saídas, vendas e retiradas</p>
                 </div>
+                <TabsList className="bg-transparent p-0 h-auto gap-4 border-0">
+                  <TabsTrigger
+                    value="vendas"
+                    className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+                  >Vendas <span className="ml-1.5 text-[11px] text-muted-foreground">{baseSales.length}</span></TabsTrigger>
+                  <TabsTrigger
+                    value="retiradas"
+                    className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+                  >Retiradas <span className="ml-1.5 text-[11px] text-muted-foreground">{sortedRetiradas.length}</span></TabsTrigger>
+                </TabsList>
+              </div>
+              <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
+                <DialogTrigger asChild>
+                  <Button onClick={openNew} size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Venda</Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
+                  <DialogHeader><DialogTitle>{editingSale ? "Editar Venda" : "Registrar Venda"}</DialogTitle></DialogHeader>
+                  {saleForm}
+                </DialogContent>
+              </Dialog>
+            </div>
 
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {presetBtn("all", "Tudo")}
-                    {presetBtn("today", "Hoje")}
-                    {presetBtn("7d", "7 dias")}
-                    {presetBtn("month", "Este mês")}
-                    {presetBtn("lastMonth", "Mês passado")}
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <div>
-                      <Label className="text-xs mb-1 block">De</Label>
-                      <Input type="date" value={fFrom} onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }} className="w-[150px]" />
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">Até</Label>
-                      <Input type="date" value={fTo} onChange={e => { setFTo(e.target.value); setFPreset("custom"); }} className="w-[150px]" />
-                    </div>
+            <TabsContent value="vendas" className="mt-0 space-y-4">
+              {/* Métricas compactas */}
+              <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
+                  <p className="mt-0.5 text-lg font-semibold mono">{sortedSales.length}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Receita</p>
+                  <p className="mt-0.5 text-lg font-semibold mono text-foreground">{formatCurrency(sumTotal)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recebido</p>
+                  <p className="mt-0.5 text-lg font-semibold mono text-income">{formatCurrency(sumPaid)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{paidPct}% da receita</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
+                  <p className={cn("mt-0.5 text-lg font-semibold mono", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
+                </div>
+              </div>
+
+              {/* Toolbar de filtros */}
+              <div className="rounded-xl border border-border bg-card/40 px-3 py-2.5 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    placeholder="Buscar produto..."
+                    value={fProduct}
+                    onChange={e => setFProduct(e.target.value)}
+                    className="h-8 w-full sm:w-56 text-xs"
+                  />
+                  <Select value={fSeller} onValueChange={setFSeller}>
+                    <SelectTrigger className="h-8 w-auto min-w-[130px] text-xs"><SelectValue placeholder="Funcionário" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos funcionários</SelectItem>
+                      <SelectItem value="none">Sem funcionário</SelectItem>
+                      {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={fStatus} onValueChange={(v) => setFStatus(v as PaymentStatus)}>
+                    <SelectTrigger className="h-8 w-auto min-w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos status</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="partial">Parcial</SelectItem>
+                      <SelectItem value="open">Em aberto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-1">
+                    <Select value={fSortKey} onValueChange={(v) => setFSortKey(v as SortKey)}>
+                      <SelectTrigger className="h-8 w-auto min-w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Data</SelectItem>
+                        <SelectItem value="total">Valor</SelectItem>
+                        <SelectItem value="remaining">Falta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")}>
+                      <ArrowUpDown size={13} className={cn(fSortDir === "asc" && "rotate-180 transition-transform")} />
+                    </Button>
                   </div>
                   {hasActiveFilters && (
-                    <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="ml-auto">
-                      <X size={14} className="mr-1" />Limpar filtros
+                    <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs ml-auto text-muted-foreground hover:text-foreground">
+                      <X size={13} className="mr-1" />Limpar
                     </Button>
                   )}
                 </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {presetBtn("all", "Tudo")}
+                  {presetBtn("today", "Hoje")}
+                  {presetBtn("7d", "7 dias")}
+                  {presetBtn("month", "Este mês")}
+                  {presetBtn("lastMonth", "Mês passado")}
+                  <div className="flex items-center gap-1 ml-1">
+                    <Input type="date" value={fFrom} onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }} className="h-7 w-[130px] text-xs" />
+                    <span className="text-xs text-muted-foreground">→</span>
+                    <Input type="date" value={fTo} onChange={e => { setFTo(e.target.value); setFPreset("custom"); }} className="h-7 w-[130px] text-xs" />
+                  </div>
+                </div>
               </div>
 
-              {/* Resumo dos resultados filtrados */}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Registros</p><p className="text-lg font-bold mono">{sortedSales.length}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Total vendido</p><p className="text-lg font-bold mono text-primary">{formatCurrency(sumTotal)}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Total recebido</p><p className="text-lg font-bold mono text-primary">{formatCurrency(sumPaid)}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-muted-foreground">Em aberto</p><p className={cn("text-lg font-bold mono", sumOpen > 0 ? "text-destructive" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p></div>
-              </div>
-
+              {/* Tabela */}
               {sortedSales.length === 0 ? (
-                <div className="glass-card p-12 text-center"><p className="text-muted-foreground">{baseSales.length === 0 ? "Nenhuma venda registrada." : "Nenhuma venda encontrada com os filtros aplicados."}</p></div>
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <p className="text-sm text-muted-foreground">{baseSales.length === 0 ? "Nenhuma venda registrada." : "Nenhuma venda encontrada com os filtros aplicados."}</p>
+                </div>
               ) : (
-                <div className="glass-card overflow-hidden overflow-x-auto">
+                <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
-                      <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
-                      <th className="text-right p-3">Total</th><th className="text-right p-3">Recebido</th>
-                      <th className="text-right p-3">Falta</th><th className="text-left p-3">Funcionário</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
-                    </tr></thead>
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        <th className="text-left py-2 px-3">Produto</th>
+                        <th className="text-right py-2 px-3 w-[60px]">Qtd</th>
+                        <th className="text-right py-2 px-3 w-[120px]">Total</th>
+                        <th className="text-right py-2 px-3 w-[120px]">Recebido</th>
+                        <th className="text-right py-2 px-3 w-[120px]">Falta</th>
+                        <th className="text-left py-2 px-3 w-[80px]">Status</th>
+                        <th className="py-2 px-3 w-[80px]"></th>
+                      </tr>
+                    </thead>
                     <tbody>{sortedSales.map(renderRow)}</tbody>
                   </table>
                 </div>
               )}
             </TabsContent>
 
-
-            <TabsContent value="retiradas" className="mt-4">
+            <TabsContent value="retiradas" className="mt-0">
               {sortedRetiradas.length === 0 ? (
-                <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma retirada registrada.</p></div>
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <p className="text-sm text-muted-foreground">Nenhuma retirada registrada.</p>
+                </div>
               ) : (
-                <div className="glass-card overflow-hidden overflow-x-auto">
+                <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
-                      <th className="text-left p-3">Data</th><th className="text-left p-3">Produto</th><th className="text-right p-3">Qtd</th>
-                      <th className="text-right p-3">Valor</th>
-                      <th className="text-left p-3">Funcionário</th><th className="text-left p-3">Obs.</th><th className="p-3"></th>
-                    </tr></thead>
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        <th className="text-left py-2 px-3">Produto</th>
+                        <th className="text-right py-2 px-3 w-[60px]">Qtd</th>
+                        <th className="text-right py-2 px-3 w-[140px]">Valor</th>
+                        <th className="py-2 px-3 w-[80px]"></th>
+                      </tr>
+                    </thead>
                     <tbody>{sortedRetiradas.map(renderRow)}</tbody>
                   </table>
                 </div>
               )}
             </TabsContent>
-          </Tabs>
+          </>
         );
       })()}
-    </div>
+    </Tabs>
   );
 }

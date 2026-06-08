@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside className={cn(
         "hidden md:flex bg-sidebar border-r border-sidebar-border flex-col transition-all duration-300 h-screen sticky top-0 overflow-y-auto",
-        collapsed ? "w-16" : "w-56"
+        collapsed ? "w-14" : "w-48"
       )}>
         <div className="p-4 flex items-center gap-2 border-b border-sidebar-border">
           {!collapsed && (
