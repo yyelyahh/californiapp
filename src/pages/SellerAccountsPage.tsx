@@ -184,7 +184,7 @@ export default function SellerAccountsPage() {
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Pago</p>
-                      <p className="text-sm font-bold text-primary mono">{formatCurrency(paid)}</p>
+                      <p className="text-sm font-bold text-income mono">{formatCurrency(paid)}</p>
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Saldo</p>
