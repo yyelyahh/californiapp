@@ -144,7 +144,7 @@ export default function SellerAccountsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><CheckCircle2 size={14} /> Total Pago</div>
-            <p className="text-lg font-bold text-primary mono">{formatCurrency(totals.paid)}</p>
+            <p className="text-lg font-bold text-income mono">{formatCurrency(totals.paid)}</p>
           </CardContent>
         </Card>
         <Card className={totals.balance > 0 ? "border-destructive/30" : "border-income/30"}>
