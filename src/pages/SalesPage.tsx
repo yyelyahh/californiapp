@@ -185,13 +185,13 @@ export default function SalesPage() {
               className={cn(
                 "px-3 py-2 rounded-md text-sm font-medium border transition",
                 form.type === "retirada_funcionario"
-                  ? "bg-amber-500/20 text-amber-400 border-amber-500/50"
+                  ? "bg-warning/20 text-warning border-warning/50"
                   : "bg-secondary text-muted-foreground border-border hover:text-foreground"
               )}
             >Retirada Funcionário</button>
           </div>
           {isRetirada && (
-            <div className="mt-2 flex items-start gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-400">
+            <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning">
               <AlertCircle size={14} className="mt-0.5 shrink-0" />
               <span>Não entra no faturamento. Vai para o saldo devedor do funcionário.</span>
             </div>
@@ -249,7 +249,7 @@ export default function SalesPage() {
         </div>
       )}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
-        <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-amber-500/10" : "bg-secondary/50")}>
+        <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-warning/10" : "bg-secondary/50")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
           {!isRetirada && Number(form.installments) > 1 && (
             <div className="flex justify-between"><span className="text-muted-foreground">Valor por parcela:</span><span>{formatCurrency((Number(form.quantity) * Number(form.unitPrice)) / Number(form.installments))}</span></div>
@@ -258,7 +258,7 @@ export default function SalesPage() {
             <div className="flex justify-between"><span className="text-muted-foreground">Falta receber:</span><span className="font-semibold text-destructive">{formatCurrency(Math.max(0, (Number(form.quantity) * Number(form.unitPrice)) - Number(form.paidAmount)))}</span></div>
           )}
           {isRetirada && (
-            <div className="flex justify-between"><span className="text-amber-400">Vai p/ saldo devedor do funcionário:</span><span className="font-semibold text-amber-400">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
+            <div className="flex justify-between"><span className="text-warning">Vai p/ saldo devedor do funcionário:</span><span className="font-semibold text-warning">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
           )}
         </div>
       )}
@@ -339,7 +339,7 @@ export default function SalesPage() {
             )
           );
           return (
-            <tr key={s.id} className={cn("border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group", isRet && "bg-amber-500/[0.04]")}>
+            <tr key={s.id} className={cn("border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group", isRet && "bg-warning/[0.04]")}>
               <td className="py-2.5 px-3">
                 <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
                 <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
@@ -350,7 +350,7 @@ export default function SalesPage() {
                 </div>
               </td>
               <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
-              <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-amber-400" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
+              <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-warning" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
               {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
               {!isRet && (
                 <td className="py-2.5 px-3 text-right mono text-sm">

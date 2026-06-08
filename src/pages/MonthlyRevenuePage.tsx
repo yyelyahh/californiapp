@@ -128,7 +128,7 @@ export default function MonthlyRevenuePage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingUp size={14} /> Receita</div>
-            <p className="text-lg font-bold text-primary">{formatCurrency(monthlyData.revenue)}</p>
+            <p className="text-lg font-bold text-income">{formatCurrency(monthlyData.revenue)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -155,10 +155,10 @@ export default function MonthlyRevenuePage() {
             <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.partnerPaidTotal)}</p>
           </CardContent>
         </Card>
-        <Card className={monthlyData.profit >= 0 ? "border-primary/30" : "border-destructive/30"}>
+        <Card className={monthlyData.profit >= 0 ? "border-income/30" : "border-destructive/30"}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign size={14} /> Saldo</div>
-            <p className={`text-lg font-bold ${monthlyData.profit >= 0 ? "text-primary" : "text-destructive"}`}>
+            <p className={`text-lg font-bold ${monthlyData.profit >= 0 ? "text-income" : "text-destructive"}`}>
               {formatCurrency(monthlyData.profit)}
             </p>
           </CardContent>
@@ -215,19 +215,17 @@ export default function MonthlyRevenuePage() {
                       <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="p-3 font-medium">{p.name}</td>
                         <td className="p-3 text-right text-muted-foreground">{p.percentage}%</td>
-                        <td className="p-3 text-right font-semibold text-primary">
+                        <td className="p-3 text-right font-semibold text-foreground">
                           {formatCurrency(share)}
                         </td>
-                        <td className="p-3 text-right text-muted-foreground">
+                        <td className="p-3 text-right text-income">
                           {formatCurrency(paid)}
                         </td>
                         <td className="p-3 text-center">
                           {isPaid ? (
-                            <Badge className="bg-primary/15 text-primary hover:bg-primary/20 border-0">Pago</Badge>
+                            <Badge className="bg-income/15 text-income hover:bg-income/20 border-0">Pago</Badge>
                           ) : remaining > 0 && share > 0 ? (
-                            <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-accent border-accent/40 bg-[#634b4b]/0 text-green-600">
-                              Falta {formatCurrency(remaining)}
-                            </div>
+                            <Badge className="bg-warning/15 text-warning hover:bg-warning/20 border-0">Falta {formatCurrency(remaining)}</Badge>
                           ) : (
                             <Badge variant="outline" className="text-muted-foreground">—</Badge>
                           )}

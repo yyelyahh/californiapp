@@ -76,7 +76,7 @@ export default function SellerAccountsPage() {
         <div className="flex gap-2">
           <Dialog open={debtOpen} onOpenChange={setDebtOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="border-amber-500/40 text-amber-400 hover:text-amber-300">
+              <Button variant="outline" className="border-warning/40 text-warning hover:text-warning">
                 <HandCoins size={16} className="mr-2" />Adicionar Saldo Devedor
               </Button>
             </DialogTrigger>
@@ -99,7 +99,7 @@ export default function SellerAccountsPage() {
                 <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={debtForm.amount} onChange={e => setDebtForm(f => ({ ...f, amount: e.target.value }))} /></div>
                 <div><Label>Data</Label><Input type="date" value={debtForm.date} onChange={e => setDebtForm(f => ({ ...f, date: e.target.value }))} /></div>
                 <div><Label>Observações</Label><Input value={debtForm.notes} onChange={e => setDebtForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: dinheiro emprestado, adiantamento" /></div>
-                <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-white">Adicionar Dívida</Button>
+                <Button type="submit" className="w-full bg-warning hover:bg-warning/90 text-white">Adicionar Dívida</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -138,19 +138,19 @@ export default function SellerAccountsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingDown size={14} /> Total Retirado</div>
-            <p className="text-lg font-bold text-amber-400 mono">{formatCurrency(totals.debt)}</p>
+            <p className="text-lg font-bold text-warning mono">{formatCurrency(totals.debt)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><CheckCircle2 size={14} /> Total Pago</div>
-            <p className="text-lg font-bold text-primary mono">{formatCurrency(totals.paid)}</p>
+            <p className="text-lg font-bold text-income mono">{formatCurrency(totals.paid)}</p>
           </CardContent>
         </Card>
-        <Card className={totals.balance > 0 ? "border-destructive/30" : "border-emerald-500/30"}>
+        <Card className={totals.balance > 0 ? "border-destructive/30" : "border-income/30"}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={14} /> Saldo Geral</div>
-            <p className={`text-lg font-bold mono ${totals.balance > 0 ? "text-destructive" : "text-emerald-400"}`}>{formatBalance(totals.balance)}</p>
+            <p className={`text-lg font-bold mono ${totals.balance > 0 ? "text-destructive" : "text-income"}`}>{formatBalance(totals.balance)}</p>
           </CardContent>
         </Card>
       </div>
@@ -169,26 +169,26 @@ export default function SellerAccountsPage() {
             const isExpanded = expandedId === seller.id;
 
             return (
-              <Card key={seller.id} className={balance > 0 ? "border-destructive/30" : balance < 0 ? "border-emerald-500/30" : ""}>
+              <Card key={seller.id} className={balance > 0 ? "border-destructive/30" : balance < 0 ? "border-income/30" : ""}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{seller.name}</CardTitle>
-                    <Badge variant="outline" className="border-amber-500/40 text-amber-400">Abate {seller.debtPercentage ?? 10}%</Badge>
+                    <Badge variant="outline" className="border-warning/40 text-warning">Abate {seller.debtPercentage ?? 10}%</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Retirado</p>
-                      <p className="text-sm font-bold text-amber-400 mono">{formatCurrency(debt)}</p>
+                      <p className="text-sm font-bold text-warning mono">{formatCurrency(debt)}</p>
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Pago</p>
-                      <p className="text-sm font-bold text-primary mono">{formatCurrency(paid)}</p>
+                      <p className="text-sm font-bold text-income mono">{formatCurrency(paid)}</p>
                     </div>
                     <div className="rounded-md bg-secondary/50 p-2">
                       <p className="text-[10px] uppercase text-muted-foreground">Saldo</p>
-                      <p className={`text-sm font-bold mono ${balance > 0 ? "text-destructive" : balance < 0 ? "text-emerald-400" : "text-muted-foreground"}`}>{formatBalance(balance)}</p>
+                      <p className={`text-sm font-bold mono ${balance > 0 ? "text-destructive" : balance < 0 ? "text-income" : "text-muted-foreground"}`}>{formatBalance(balance)}</p>
                     </div>
                   </div>
 
@@ -205,9 +205,9 @@ export default function SellerAccountsPage() {
                         ) : (
                           <div className="space-y-1">
                             {sellerRetiradas.slice().reverse().map(s => (
-                              <div key={s.id} className="flex justify-between text-xs px-2 py-1 rounded bg-amber-500/5">
+                              <div key={s.id} className="flex justify-between text-xs px-2 py-1 rounded bg-warning/5">
                                 <span>{formatDateBR(s.date)} · {s.quantity}x {getProductName(s.productId)}</span>
-                                <span className="font-semibold text-amber-400 mono">{formatCurrency(s.totalPrice)}</span>
+                                <span className="font-semibold text-warning mono">{formatCurrency(s.totalPrice)}</span>
                               </div>
                             ))}
                           </div>
@@ -220,13 +220,13 @@ export default function SellerAccountsPage() {
                         ) : (
                           <div className="space-y-1">
                             {sellerDebts.slice().reverse().map(d => (
-                              <div key={d.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-amber-500/10">
+                              <div key={d.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-warning/10">
                                 <div className="flex-1">
                                   <p>{formatDateBR(d.date)}</p>
                                   {d.notes && <p className="text-muted-foreground">{d.notes}</p>}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <span className="font-semibold text-amber-400 mono">{formatCurrency(d.amount)}</span>
+                                  <span className="font-semibold text-warning mono">{formatCurrency(d.amount)}</span>
                                   <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => { if (confirm("Excluir esta dívida?")) deleteSellerManualDebt(d.id); }}>
                                     <Trash2 size={10} />
                                   </Button>
@@ -249,7 +249,7 @@ export default function SellerAccountsPage() {
                                   {p.notes && <p className="text-muted-foreground">{p.notes}</p>}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <span className="font-semibold text-primary mono">{formatCurrency(p.amount)}</span>
+                                  <span className="font-semibold text-income mono">{formatCurrency(p.amount)}</span>
                                   <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => { if (confirm("Excluir pagamento?")) deleteSellerDebtPayment(p.id); }}>
                                     <Trash2 size={10} />
                                   </Button>

@@ -195,7 +195,7 @@ export default function Dashboard() {
                     );
                   })()}
                 </div>
-                <span className="text-sm font-semibold mono text-primary">{formatCurrency(s.totalPrice)}</span>
+                <span className="text-sm font-semibold mono text-income">{formatCurrency(s.totalPrice)}</span>
               </div>
             ))}
           </div>
