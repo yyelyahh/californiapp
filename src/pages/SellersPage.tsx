@@ -218,7 +218,7 @@ export default function SellersPage() {
         <Card>
           <CardContent className="p-3">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Wallet size={12} /> A receber</div>
-            <p className="text-base font-bold text-primary mono">{formatCurrency(totals.receivable)}</p>
+            <p className="text-base font-bold text-income mono">{formatCurrency(totals.receivable)}</p>
           </CardContent>
         </Card>
         <Card className={totals.debt > 0 ? "border-destructive/30" : totals.debt < 0 ? "border-income/30" : ""}>
