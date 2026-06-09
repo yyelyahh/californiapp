@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { useStore } from "@/context/StoreContext";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }> = {
   Ignite: { purchasePrice: 68.5, salePrice: 149 },
@@ -30,17 +30,13 @@ export default function AddProductDialog() {
   const [flavorsText, setFlavorsText] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const flavors = useMemo(() => {
-    return flavorsText
-      .split("\n")
-      .map(f => f.trim())
-      .filter(Boolean);
-  }, [flavorsText]);
+  const flavors = useMemo(() => flavorsText.split("\n").map(f => f.trim()).filter(Boolean), [flavorsText]);
 
-  const existingKeys = useMemo(() => {
-    return new Set(products.map(p => `${p.brand}|${p.model}|${p.flavor}`.toLowerCase()));
-  }, [products]);
+  const existingKeys = useMemo(() => new Set(
+    products.map(p => `${p.brand}|${p.model}|${p.flavor}`.toLowerCase())
+  ), [products]);
 
   const existingModels = useMemo(() => {
     if (!brand) return [];
@@ -52,15 +48,20 @@ export default function AddProductDialog() {
   const previewProducts = useMemo(() => {
     if (!brand || !model.trim()) return [];
     return flavors.map(flavor => {
-      const name = model.trim();
       const key = `${brand}|${model.trim()}|${flavor}`.toLowerCase();
-      const isDuplicate = existingKeys.has(key);
-      return { name, flavor, isDuplicate };
+      return { flavor, isDuplicate: existingKeys.has(key) };
     });
   }, [brand, model, flavors, existingKeys]);
 
   const newProducts = previewProducts.filter(p => !p.isDuplicate);
   const duplicates = previewProducts.filter(p => p.isDuplicate);
+
+  const pPrice = Number(purchasePrice) || 0;
+  const sPrice = Number(salePrice) || 0;
+  const unitMargin = sPrice - pPrice;
+  const investment = pPrice * newProducts.length;
+  const potential = sPrice * newProducts.length;
+  const potentialProfit = unitMargin * newProducts.length;
 
   const handleBrandChange = (value: string) => {
     setBrand(value);
@@ -75,187 +76,168 @@ export default function AddProductDialog() {
 
   const handleModelSelectChange = (value: string) => {
     setModelSelect(value);
-    if (value !== "__new__") setModel(value);
-    else setModel("");
+    if (value !== "__new__") setModel(value); else setModel("");
+  };
+
+  const handleReset = () => {
+    setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
+    setPurchasePrice(""); setSalePrice("");
   };
 
   const handleSubmit = async () => {
     if (!brand || !model.trim() || newProducts.length === 0) {
-      toast.error("Preencha marca, modelo e pelo menos um sabor novo.");
-      return;
+      toast.error("Preencha marca, modelo e ao menos um sabor novo."); return;
     }
-
-    const pPrice = Number(purchasePrice) || 0;
-    const sPrice = Number(salePrice) || 0;
-
+    setSubmitting(true);
     let created = 0;
     for (const p of newProducts) {
       try {
         await addProduct({
-          name: p.name,
-          brand,
-          model: model.trim(),
-          flavor: p.flavor,
-          purchasePrice: pPrice,
-          salePrice: sPrice,
+          name: model.trim(), brand, model: model.trim(), flavor: p.flavor,
+          purchasePrice: pPrice, salePrice: sPrice,
         });
         created++;
-      } catch {
-        toast.error(`Erro ao criar: ${p.name}`);
-      }
+      } catch { toast.error(`Erro ao criar: ${p.flavor}`); }
     }
-
-    if (created > 0) {
-      toast.success(`${created} produto${created > 1 ? "s" : ""} criado${created > 1 ? "s" : ""}!`);
-    }
-
-    // Reset
-    setBrand("");
-    setModelSelect("");
-    setModel("");
-    setFlavorsText("");
-    setPurchasePrice("");
-    setSalePrice("");
+    if (created > 0) toast.success(`${created} produto${created > 1 ? "s" : ""} criado${created > 1 ? "s" : ""}!`);
+    handleReset();
     setOpen(false);
-  };
-
-  const handleReset = () => {
-    setBrand("");
-    setModelSelect("");
-    setModel("");
-    setFlavorsText("");
-    setPurchasePrice("");
-    setSalePrice("");
+    setSubmitting(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
-      <DialogTrigger asChild>
-        <Button><Plus size={16} className="mr-2" />Novo Produto</Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Cadastro Rápido de Produtos</DialogTitle>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
+      <SheetTrigger asChild>
+        <Button size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Novo Produto</Button>
+      </SheetTrigger>
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <SheetHeader className="px-5 py-4 border-b border-border space-y-1">
+          <SheetTitle className="text-lg tracking-tight">Cadastro Rápido</SheetTitle>
+          <SheetDescription className="text-xs">Crie vários sabores de um mesmo modelo de uma só vez.</SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-4">
-          {/* Marca */}
-          <div className="space-y-1.5">
-            <Label>Marca</Label>
-            <Select value={brand} onValueChange={handleBrandChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a marca" />
-              </SelectTrigger>
-              <SelectContent>
-                {BRANDS.map(b => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Modelo/Puffs */}
-          <div className="space-y-1.5">
-            <Label>Modelo / Puffs</Label>
-            <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
-              <SelectTrigger>
-                <SelectValue placeholder={brand ? "Selecione um modelo" : "Selecione a marca primeiro"} />
-              </SelectTrigger>
-              <SelectContent>
-                {existingModels.map(m => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-                <SelectItem value="__new__">+ Novo modelo</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          {/* Identificação */}
+          <section className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Identificação</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Marca</Label>
+                <Select value={brand} onValueChange={handleBrandChange}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{BRANDS.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Modelo / Puffs</Label>
+                <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
+                  <SelectTrigger><SelectValue placeholder={brand ? "Selecione" : "Marca primeiro"} /></SelectTrigger>
+                  <SelectContent>
+                    {existingModels.map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                    <SelectItem value="__new__">+ Novo modelo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             {modelSelect === "__new__" && (
-              <Input
-                value={model}
-                onChange={e => setModel(e.target.value)}
-                placeholder="Ex: V155, 30K, TE 30K"
-                autoFocus
-              />
+              <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, 30K, TE 30K" autoFocus />
             )}
-          </div>
-
+          </section>
 
           {/* Preços */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Preço Compra (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={purchasePrice}
-                onChange={e => setPurchasePrice(e.target.value)}
-                placeholder="0,00"
-              />
+          <section className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Preços por unidade</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Compra (R$)</Label>
+                <Input type="number" step="0.01" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} placeholder="0,00" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Venda (R$)</Label>
+                <Input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)} placeholder="0,00" />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Preço Venda (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={salePrice}
-                onChange={e => setSalePrice(e.target.value)}
-                placeholder="0,00"
-              />
-            </div>
-          </div>
+            {pPrice > 0 && sPrice > 0 && (
+              <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 px-3 py-2">
+                <span className="text-[11px] text-muted-foreground">Margem por unidade</span>
+                <span className={cn("text-sm font-semibold mono", unitMargin >= 0 ? "text-income" : "text-destructive")}>
+                  {formatCurrency(unitMargin)}
+                </span>
+              </div>
+            )}
+          </section>
 
-          {brand && purchasePrice && salePrice && (
-            <p className="text-xs text-muted-foreground">
-              Margem: {formatCurrency(Number(salePrice) - Number(purchasePrice))} por unidade
-            </p>
-          )}
-
-          {/* Sabores em lote */}
-          <div className="space-y-1.5">
-            <Label>Sabores (um por linha)</Label>
+          {/* Sabores */}
+          <section className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Sabores (um por linha)</p>
             <textarea
               value={flavorsText}
               onChange={e => setFlavorsText(e.target.value)}
               placeholder={"Grape Ice\nStrawberry Ice\nWatermelon Ice\nGreen Apple"}
-              rows={5}
+              rows={6}
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
-          </div>
-
-          {/* Preview */}
-          {previewProducts.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">
-                Pré-visualização ({newProducts.length} novo{newProducts.length !== 1 ? "s" : ""}
-                {duplicates.length > 0 && `, ${duplicates.length} duplicado${duplicates.length !== 1 ? "s" : ""}`})
-              </Label>
-              <div className="space-y-1 max-h-40 overflow-y-auto rounded-md border border-border p-2">
-                {previewProducts.map((p, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-center justify-between text-sm px-2 py-1 rounded ${
-                      p.isDuplicate ? "opacity-40 line-through" : ""
-                    }`}
-                  >
-                    <span>{p.name}</span>
-                    {p.isDuplicate && (
-                      <Badge variant="secondary" className="text-[10px] ml-2">já existe</Badge>
+            {previewProducts.length > 0 && (
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="px-3 py-2 bg-secondary/30 flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">
+                    <span className="text-income font-medium">{newProducts.length} novo{newProducts.length !== 1 ? "s" : ""}</span>
+                    {duplicates.length > 0 && (
+                      <> · <span className="text-warning">{duplicates.length} duplicado{duplicates.length !== 1 ? "s" : ""}</span></>
                     )}
-                  </div>
-                ))}
+                  </span>
+                </div>
+                <ul className="max-h-44 overflow-auto divide-y divide-border/40">
+                  {previewProducts.map((p, i) => (
+                    <li key={i} className={cn("flex items-center justify-between px-3 py-1.5 text-xs", p.isDuplicate && "opacity-50")}>
+                      <span className={p.isDuplicate ? "line-through text-muted-foreground" : "text-foreground"}>{p.flavor}</span>
+                      {p.isDuplicate && (
+                        <span className="text-[10px] text-warning flex items-center gap-1"><AlertCircle size={10} /> já existe</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
-          )}
+            )}
+          </section>
 
-          {/* Ações */}
-          <Button
-            onClick={handleSubmit}
-            disabled={newProducts.length === 0}
-            className="w-full"
-          >
-            Criar {newProducts.length} produto{newProducts.length !== 1 ? "s" : ""}
-          </Button>
+          {/* Resumo financeiro */}
+          {newProducts.length > 0 && pPrice > 0 && sPrice > 0 && (
+            <section className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                <Sparkles size={11} className="text-primary" /> Impacto estimado
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-border bg-card px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Investimento</p>
+                  <p className="mt-0.5 text-sm font-semibold mono text-foreground">{formatCurrency(investment)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Receita pot.</p>
+                  <p className="mt-0.5 text-sm font-semibold mono text-foreground">{formatCurrency(potential)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Lucro pot.</p>
+                  <p className={cn("mt-0.5 text-sm font-semibold mono", potentialProfit >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(potentialProfit)}</p>
+                </div>
+              </div>
+            </section>
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <SheetFooter className="px-5 py-3 border-t border-border bg-card/40">
+          <div className="flex w-full items-center justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground">
+              {newProducts.length > 0
+                ? <>Serão criados <span className="text-foreground font-medium mono">{newProducts.length}</span> produto{newProducts.length !== 1 ? "s" : ""}</>
+                : "Preencha os campos para visualizar"}
+            </p>
+            <Button onClick={handleSubmit} disabled={newProducts.length === 0 || submitting} size="sm" className="h-9">
+              {submitting ? "Criando..." : `Criar ${newProducts.length || ""}`}
+            </Button>
+          </div>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
