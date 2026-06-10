@@ -1,12 +1,11 @@
 import { useStore } from "@/context/StoreContext";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Pencil, Users, TrendingUp, TrendingDown, DollarSign, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Users, TrendingUp, TrendingDown, DollarSign, Check, X, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -49,7 +48,6 @@ export default function MonthlyRevenuePage() {
   const [payAmount, setPayAmount] = useState("");
   const [payNotes, setPayNotes] = useState("");
 
-  // Monthly calculations — receita conta apenas o que foi recebido
   const monthlyData = useMemo(() => {
     const monthSales = sales.filter(s => s.type === "venda" && isInMonth(s.date, selectedMonth));
     const monthStockEntries = stockEntries.filter(e => isInMonth(e.date, selectedMonth));
@@ -65,7 +63,7 @@ export default function MonthlyRevenuePage() {
     const grossProfit = revenue - costs - expenseTotal - dividendTotal;
     const profit = grossProfit - partnerPaidTotal;
 
-    return { revenue, costs, expenseTotal, dividendTotal, partnerPaidTotal, grossProfit, profit, monthSales, monthStockEntries, monthExpenses, monthDividends };
+    return { revenue, costs, expenseTotal, dividendTotal, partnerPaidTotal, grossProfit, profit };
   }, [sales, stockEntries, expenses, dividends, partnerPayments, selectedMonth]);
 
   const totalPercentage = partners.reduce((sum, p) => sum + p.percentage, 0);
@@ -75,11 +73,8 @@ export default function MonthlyRevenuePage() {
 
   const handleSubmit = async () => {
     if (!form.name || !form.percentage) return;
-    if (editingId) {
-      await updatePartner(editingId, { name: form.name, percentage: Number(form.percentage) });
-    } else {
-      await addPartner({ name: form.name, percentage: Number(form.percentage) });
-    }
+    if (editingId) await updatePartner(editingId, { name: form.name, percentage: Number(form.percentage) });
+    else await addPartner({ name: form.name, percentage: Number(form.percentage) });
     setOpen(false);
   };
 
@@ -106,103 +101,92 @@ export default function MonthlyRevenuePage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
-          <h1 className="text-2xl font-bold">Receita Mensal</h1>
-          <p className="text-muted-foreground text-sm">Lucro e divisão entre sócios</p>
+          <h1 className="text-xl font-semibold tracking-tight">Receita Mensal</h1>
+          <p className="text-xs text-muted-foreground">Lucro líquido e distribuição entre sócios</p>
         </div>
         <select
           value={selectedMonth}
           onChange={e => setSelectedMonth(e.target.value)}
-          className="bg-secondary text-secondary-foreground border border-border rounded-lg px-3 py-2 text-sm"
+          className="bg-card text-foreground border border-border rounded-md px-3 h-9 text-sm"
         >
-          {monthOptions.map(m => (
-            <option key={m.value} value={m.value}>{m.label}</option>
-          ))}
+          {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingUp size={14} /> Receita</div>
-            <p className="text-lg font-bold text-income">{formatCurrency(monthlyData.revenue)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingDown size={14} /> Compras</div>
-            <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.costs)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><TrendingDown size={14} /> Despesas</div>
-            <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.expenseTotal)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Users size={14} /> Investidores</div>
-            <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.dividendTotal)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Users size={14} /> Pago a Sócios</div>
-            <p className="text-lg font-bold text-destructive">{formatCurrency(monthlyData.partnerPaidTotal)}</p>
-          </CardContent>
-        </Card>
-        <Card className={monthlyData.profit >= 0 ? "border-income/30" : "border-destructive/30"}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign size={14} /> Saldo</div>
-            <p className={`text-lg font-bold ${monthlyData.profit >= 0 ? "text-income" : "text-destructive"}`}>
-              {formatCurrency(monthlyData.profit)}
-            </p>
-          </CardContent>
-        </Card>
+      {/* KPI strip */}
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-6">
+        <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><TrendingUp size={11} /> Receita</div>
+          <p className="mt-0.5 text-base font-semibold mono text-income">{formatCurrency(monthlyData.revenue)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><TrendingDown size={11} /> Compras</div>
+          <p className="mt-0.5 text-base font-semibold mono text-expense">{formatCurrency(monthlyData.costs)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><TrendingDown size={11} /> Despesas</div>
+          <p className="mt-0.5 text-base font-semibold mono text-expense">{formatCurrency(monthlyData.expenseTotal)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><Users size={11} /> Investidores</div>
+          <p className="mt-0.5 text-base font-semibold mono text-expense">{formatCurrency(monthlyData.dividendTotal)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><Wallet size={11} /> Pago a sócios</div>
+          <p className="mt-0.5 text-base font-semibold mono text-expense">{formatCurrency(monthlyData.partnerPaidTotal)}</p>
+        </div>
+        <div className={cn("rounded-xl border bg-card px-3.5 py-2.5", monthlyData.profit >= 0 ? "border-income/40" : "border-destructive/40")}>
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><DollarSign size={11} /> Saldo</div>
+          <p className={cn("mt-0.5 text-base font-semibold mono", monthlyData.profit >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(monthlyData.profit)}</p>
+        </div>
       </div>
 
-      {/* Partners Section */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base">Sócios</CardTitle>
+      {/* Sócios */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div>
+            <h2 className="text-sm font-semibold">Sócios</h2>
+            <p className="text-[11px] text-muted-foreground">Divisão sobre lucro bruto do mês</p>
+          </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={openNew}><Plus size={16} className="mr-1" /> Adicionar</Button>
+              <Button size="sm" onClick={openNew} className="h-8"><Plus size={14} className="mr-1" /> Adicionar</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>{editingId ? "Editar Sócio" : "Novo Sócio"}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-base font-semibold">{editingId ? "Editar Sócio" : "Novo Sócio"}</DialogTitle></DialogHeader>
               <div className="space-y-3">
-                <div><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-                <div><Label>Porcentagem (%)</Label><Input type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} /></div>
-                <Button onClick={handleSubmit} className="w-full">{editingId ? "Salvar" : "Adicionar"}</Button>
+                <div className="space-y-1.5"><Label className="text-xs">Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-9" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">Porcentagem (%)</Label><Input type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} className="h-9 mono" /></div>
+                <Button onClick={handleSubmit} className="w-full h-10">{editingId ? "Salvar" : "Adicionar"}</Button>
               </div>
             </DialogContent>
           </Dialog>
-        </CardHeader>
-        <CardContent>
-          {partners.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-6">Nenhum sócio cadastrado</p>
-          ) : (
-            <>
-              {totalPercentage !== 100 && (
-                <div className="bg-accent/10 text-accent text-xs px-3 py-2 rounded-lg mb-3">
-                  ⚠️ A soma das porcentagens é {totalPercentage}% (deveria ser 100%)
-                </div>
-              )}
-              <div className="overflow-x-auto">
+        </div>
+
+        {partners.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-10">Nenhum sócio cadastrado.</p>
+        ) : (
+          <>
+            {totalPercentage !== 100 && (
+              <div className="bg-warning/10 text-warning text-[11px] px-4 py-2 border-b border-warning/20">
+                A soma das porcentagens é {totalPercentage}% (deveria ser 100%)
+              </div>
+            )}
+            <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
-                <thead><tr className="border-b border-border text-muted-foreground text-xs uppercase">
-                  <th className="text-left p-3">Sócio</th>
-                  <th className="text-right p-3">%</th>
-                  <th className="text-right p-3">Devido</th>
-                  <th className="text-right p-3">Pago</th>
-                  <th className="text-center p-3">Status</th>
-                  <th className="p-3"></th>
-                </tr></thead>
+                <thead>
+                  <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="text-left py-2 px-4 font-medium">Sócio</th>
+                    <th className="text-right py-2 px-3 font-medium">%</th>
+                    <th className="text-right py-2 px-3 font-medium">Devido</th>
+                    <th className="text-right py-2 px-3 font-medium">Pago</th>
+                    <th className="text-left py-2 px-3 font-medium">Status</th>
+                    <th className="w-32"></th>
+                  </tr>
+                </thead>
                 <tbody>
                   {partners.map(p => {
                     const profitBase = Math.max(0, monthlyData.grossProfit);
@@ -212,48 +196,34 @@ export default function MonthlyRevenuePage() {
                     const isPaid = share > 0 && remaining <= 0.005;
                     const monthPayments = partnerPayments.filter(pp => pp.partnerId === p.id && pp.month === selectedMonth);
                     return (
-                      <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="p-3 font-medium">{p.name}</td>
-                        <td className="p-3 text-right text-muted-foreground">{p.percentage}%</td>
-                        <td className="p-3 text-right font-semibold text-foreground">
-                          {formatCurrency(share)}
-                        </td>
-                        <td className="p-3 text-right text-income">
-                          {formatCurrency(paid)}
-                        </td>
-                        <td className="p-3 text-center">
+                      <tr key={p.id} className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group">
+                        <td className="py-2.5 px-4 font-medium">{p.name}</td>
+                        <td className="py-2.5 px-3 text-right mono text-muted-foreground">{p.percentage}%</td>
+                        <td className="py-2.5 px-3 text-right mono font-semibold">{formatCurrency(share)}</td>
+                        <td className="py-2.5 px-3 text-right mono text-income">{formatCurrency(paid)}</td>
+                        <td className="py-2.5 px-3">
                           {isPaid ? (
-                            <Badge className="bg-income/15 text-income hover:bg-income/20 border-0">Pago</Badge>
+                            <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-income/10 text-income">Pago</span>
                           ) : remaining > 0 && share > 0 ? (
-                            <Badge className="bg-warning/15 text-warning hover:bg-warning/20 border-0">Falta {formatCurrency(remaining)}</Badge>
+                            <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-warning/10 text-warning mono">Falta {formatCurrency(remaining)}</span>
                           ) : (
-                            <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                            <span className="text-muted-foreground/50 text-xs">—</span>
                           )}
                         </td>
-                        <td className="p-3 text-right">
-                          <div className="flex gap-1 justify-end items-center">
+                        <td className="py-2.5 px-3">
+                          <div className="flex gap-0.5 justify-end items-center opacity-60 group-hover:opacity-100 transition-opacity">
                             {!isPaid && (
-                              <Button size="sm" variant="outline" onClick={() => openPay(p.id, remaining)} className="h-7 px-2 text-xs">
-                                <Check size={14} className="mr-1" /> Pagar
+                              <Button size="sm" variant="outline" onClick={() => openPay(p.id, remaining)} className="h-7 px-2 text-[11px]">
+                                <Check size={12} className="mr-1" /> Pagar
                               </Button>
                             )}
                             {monthPayments.length > 0 && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Desfazer pagamentos do mês"
-                                onClick={() => monthPayments.forEach(mp => deletePartnerPayment(mp.id))}
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              >
-                                <X size={14} />
+                              <Button variant="ghost" size="icon" title="Desfazer pagamentos" onClick={() => monthPayments.forEach(mp => deletePartnerPayment(mp.id))} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                                <X size={13} />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(p)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                              <Pencil size={14} />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => deletePartner(p.id)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                              <Trash2 size={14} />
-                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(p)} className="h-7 w-7 text-muted-foreground hover:text-foreground"><Pencil size={13} /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => deletePartner(p.id)} className="h-7 w-7 text-muted-foreground hover:text-destructive"><Trash2 size={13} /></Button>
                           </div>
                         </td>
                       </tr>
@@ -261,28 +231,27 @@ export default function MonthlyRevenuePage() {
                   })}
                 </tbody>
               </table>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </div>
+          </>
+        )}
+      </div>
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Registrar pagamento ao sócio</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base font-semibold">Registrar pagamento ao sócio</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Valor</Label>
-              <Input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label className="text-xs">Valor</Label>
+              <Input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="h-9 mono" />
               {payTarget && payTarget.suggested > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">Sugerido: {formatCurrency(payTarget.suggested)}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Sugerido: <span className="mono">{formatCurrency(payTarget.suggested)}</span></p>
               )}
             </div>
-            <div>
-              <Label>Observações (opcional)</Label>
-              <Input value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="Ex.: PIX, dinheiro..." />
+            <div className="space-y-1.5">
+              <Label className="text-xs">Observações (opcional)</Label>
+              <Input value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="Ex.: PIX, dinheiro..." className="h-9" />
             </div>
-            <Button onClick={handlePay} className="w-full">Confirmar pagamento</Button>
+            <Button onClick={handlePay} className="w-full h-10">Confirmar pagamento</Button>
           </div>
         </DialogContent>
       </Dialog>
