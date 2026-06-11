@@ -241,3 +241,16 @@ function SecondaryStat({ icon: Icon, label, value, tone, hint }: { icon: any; la
     </div>
   );
 }
+
+function PrimaryKPI({ icon: Icon, label, value, hint, iconTone, valueTone }: { icon: any; label: string; value: string; hint?: string; iconTone?: string; valueTone?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
+        <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
+      </div>
+      <p className={cn("mt-1 text-2xl font-semibold mono", valueTone ?? "text-foreground")}>{value}</p>
+      {hint && <p className="text-[10px] text-muted-foreground mt-1">{hint}</p>}
+    </div>
+  );
+}
