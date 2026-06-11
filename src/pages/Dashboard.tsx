@@ -45,17 +45,29 @@ export default function Dashboard() {
     }
 
     const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
-    const revenue = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+    const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
+    const received = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
-    const costs = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
-    const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
-    const losses = store.stockLosses.filter(l => filterFn(l.date)).reduce((sum, l) => sum + l.totalCost, 0);
-    const partnerPaid = store.partnerPayments.filter(p => filterFn(p.date)).reduce((sum, p) => sum + p.amount, 0);
-    const profit = revenue - costs - expenses - losses - partnerPaid;
-    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
 
-    return { revenue, costs, expenses, profit, receivable, losses, partnerPaid, margin };
-  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses, store.partnerPayments]);
+    // CPV: custo dos produtos efetivamente vendidos
+    const cogs = salesInPeriod.reduce((sum, s) => {
+      const product = store.products.find(p => p.id === s.productId);
+      const cost = product?.purchasePrice ?? 0;
+      return sum + cost * s.quantity;
+    }, 0);
+
+    const grossProfit = revenue - cogs;
+    const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
+    const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
+    const netProfit = grossProfit - expenses;
+    const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+    // Reposição de estoque (investimento — exibido separadamente, NÃO reduz lucro)
+    const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
+
+    return { revenue, received, receivable, cogs, grossProfit, grossMargin, expenses, netProfit, netMargin, restock };
+  }, [filter, store.sales, store.stockEntries, store.expenses, store.products]);
 
   const monthlyData = useMemo(() => {
     const months = [];
