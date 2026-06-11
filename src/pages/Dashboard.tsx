@@ -234,10 +234,10 @@ function SecondaryStat({ icon: Icon, label, value, tone, hint }: { icon: any; la
     <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <Icon size={11} />
-        <p className="text-[10px] uppercase tracking-wider font-medium">{label}</p>
+        <p className="text-[11px] uppercase tracking-wider font-medium">{label}</p>
       </div>
       <p className={cn("mt-0.5 text-base font-semibold mono", toneClass)}>{value}</p>
-      {hint && <p className="text-[10px] text-muted-foreground mono mt-0.5">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground mono mt-0.5">{hint}</p>}
     </div>
   );
 }
@@ -250,7 +250,7 @@ function PrimaryKPI({ icon: Icon, label, value, hint, iconTone, valueTone }: { i
         <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
       </div>
       <p className={cn("mt-1 text-2xl font-semibold mono", valueTone ?? "text-foreground")}>{value}</p>
-      {hint && <p className="text-[10px] text-muted-foreground mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
 }
