@@ -1,11 +1,14 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, Package, Clock, Wallet, Percent, Boxes, Receipt } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, Clock, Wallet, Percent, Boxes, Receipt, Download } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import * as XLSX from "xlsx";
+import { toast } from "sonner";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -97,6 +100,105 @@ export default function Dashboard() {
   const netPositive = periodStats.netProfit >= 0;
   const grossPositive = periodStats.grossProfit >= 0;
 
+  function handleExport() {
+    try {
+      let filterFn: (dateISO: string) => boolean;
+      if (isGeral) filterFn = () => true;
+      else {
+        const [y, m] = filter.split("-").map(Number);
+        const start = startOfMonth(new Date(y, m - 1, 15));
+        const end = endOfMonth(new Date(y, m - 1, 15));
+        filterFn = (d: string) => isWithinInterval(parseISO(d), { start, end });
+      }
+
+      const fmt = (n: number) => Number(n.toFixed(2));
+      const wb = XLSX.utils.book_new();
+
+      // Resumo
+      const resumo = [
+        ["California Contabilidade — Dashboard"],
+        ["Período", isGeral ? "Geral (todo período)" : filterLabel],
+        ["Gerado em", format(new Date(), "dd/MM/yyyy HH:mm")],
+        [],
+        ["Indicador", "Valor (R$)"],
+        ["Receita", fmt(periodStats.revenue)],
+        ["Recebido", fmt(periodStats.received)],
+        ["A receber", fmt(periodStats.receivable)],
+        ["CPV (Custo dos Produtos Vendidos)", fmt(periodStats.cogs)],
+        ["Lucro bruto", fmt(periodStats.grossProfit)],
+        ["Margem bruta (%)", fmt(periodStats.grossMargin)],
+        ["Despesas", fmt(periodStats.expenses)],
+        ["Lucro líquido", fmt(periodStats.netProfit)],
+        ["Margem líquida (%)", fmt(periodStats.netMargin)],
+        ["Reposição de estoque (investimento)", fmt(periodStats.restock)],
+        ["Estoque atual (unidades)", totalStock],
+        ["Capital investido em estoque", fmt(investedCapital)],
+      ];
+      const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
+      wsResumo["!cols"] = [{ wch: 40 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+
+      // Evolução 6 meses
+      const wsEvol = XLSX.utils.json_to_sheet(monthlyData.map(m => ({
+        Mês: m.month, "Receita (R$)": fmt(m.receita), "Custos (R$)": fmt(m.custos),
+      })));
+      wsEvol["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, wsEvol, "Evolução 6 meses");
+
+      // Vendas do período
+      const vendas = store.sales.filter(s => s.type === "venda" && filterFn(s.date)).map(s => {
+        const p = store.products.find(p => p.id === s.productId);
+        const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
+        const cost = (p?.purchasePrice ?? 0) * s.quantity;
+        return {
+          Data: format(parseISO(s.date), "dd/MM/yyyy"),
+          Produto: label,
+          Quantidade: s.quantity,
+          "Valor (R$)": fmt(s.totalPrice),
+          "Pago (R$)": fmt(s.paidAmount || 0),
+          "A receber (R$)": fmt(Math.max(0, s.totalPrice - (s.paidAmount || 0))),
+          "CPV (R$)": fmt(cost),
+          "Lucro bruto (R$)": fmt(s.totalPrice - cost),
+        };
+      });
+      const wsVendas = XLSX.utils.json_to_sheet(vendas.length ? vendas : [{ Data: "—" }]);
+      wsVendas["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, wsVendas, "Vendas");
+
+      // Despesas
+      const despesas = store.expenses.filter(e => filterFn(e.date)).map(e => ({
+        Data: format(parseISO(e.date), "dd/MM/yyyy"),
+        Descrição: (e as any).description ?? (e as any).name ?? "",
+        "Valor (R$)": fmt(e.amount),
+      }));
+      const wsDesp = XLSX.utils.json_to_sheet(despesas.length ? despesas : [{ Data: "—" }]);
+      wsDesp["!cols"] = [{ wch: 12 }, { wch: 40 }, { wch: 14 }];
+      XLSX.utils.book_append_sheet(wb, wsDesp, "Despesas");
+
+      // Reposição de estoque
+      const entradas = store.stockEntries.filter(e => filterFn(e.date)).map(e => {
+        const p = store.products.find(p => p.id === e.productId);
+        const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(e.productId);
+        return {
+          Data: format(parseISO(e.date), "dd/MM/yyyy"),
+          Produto: label,
+          Quantidade: e.quantity,
+          "Custo total (R$)": fmt(e.totalCost),
+        };
+      });
+      const wsEnt = XLSX.utils.json_to_sheet(entradas.length ? entradas : [{ Data: "—" }]);
+      wsEnt["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, wsEnt, "Reposição estoque");
+
+      const suffix = isGeral ? "geral" : filter;
+      XLSX.writeFile(wb, `dashboard-${suffix}.xlsx`);
+      toast.success("Exportação concluída");
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao exportar");
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -107,13 +209,18 @@ export default function Dashboard() {
             {isGeral ? "Visão geral consolidada" : `Visão de ${filterLabel}`}
           </p>
         </div>
-        <div className="w-full sm:w-56">
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {monthOptions.map(o => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={handleExport} className="h-9 gap-1.5 text-xs">
+            <Download size={13} /> Exportar Excel
+          </Button>
+          <div className="flex-1 sm:w-56">
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(o => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
