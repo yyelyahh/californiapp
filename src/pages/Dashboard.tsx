@@ -94,7 +94,8 @@ export default function Dashboard() {
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const isGeral = filter === GERAL;
-  const profitPositive = periodStats.profit >= 0;
+  const netPositive = periodStats.netProfit >= 0;
+  const grossPositive = periodStats.grossProfit >= 0;
 
   return (
     <div className="space-y-5">
@@ -116,46 +117,49 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPIs principais — 3 destaques */}
-      <div className="grid gap-2 grid-cols-1 md:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Receita recebida</p>
-            <TrendingUp size={14} className="text-income" />
-          </div>
-          <p className="mt-1 text-2xl font-semibold mono text-foreground">{formatCurrency(periodStats.revenue)}</p>
-          <p className="text-[10px] text-muted-foreground mt-1">{isGeral ? "todo período" : filterLabel}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Lucro líquido</p>
-            {profitPositive ? <TrendingUp size={14} className="text-income" /> : <TrendingDown size={14} className="text-destructive" />}
-          </div>
-          <p className={cn("mt-1 text-2xl font-semibold mono", profitPositive ? "text-income" : "text-destructive")}>
-            {formatCurrency(periodStats.profit)}
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1">margem {periodStats.margin.toFixed(1)}%</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">A receber</p>
-            <Clock size={14} className={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"} />
-          </div>
-          <p className={cn("mt-1 text-2xl font-semibold mono", periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground")}>
-            {formatCurrency(periodStats.receivable)}
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1">vendas em aberto</p>
-        </div>
+      {/* KPIs principais — linha 1 */}
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+        <PrimaryKPI
+          label="Receita"
+          value={formatCurrency(periodStats.revenue)}
+          hint={`recebido ${formatCurrency(periodStats.received)}`}
+          icon={TrendingUp}
+          iconTone="text-income"
+        />
+        <PrimaryKPI
+          label="Lucro bruto"
+          value={formatCurrency(periodStats.grossProfit)}
+          hint={`CPV ${formatCurrency(periodStats.cogs)}`}
+          icon={grossPositive ? TrendingUp : TrendingDown}
+          iconTone={grossPositive ? "text-income" : "text-destructive"}
+          valueTone={grossPositive ? "text-income" : "text-destructive"}
+        />
+        <PrimaryKPI
+          label="Lucro líquido"
+          value={formatCurrency(periodStats.netProfit)}
+          hint={`margem ${periodStats.netMargin.toFixed(1)}%`}
+          icon={netPositive ? TrendingUp : TrendingDown}
+          iconTone={netPositive ? "text-income" : "text-destructive"}
+          valueTone={netPositive ? "text-income" : "text-destructive"}
+        />
+        <PrimaryKPI
+          label="A receber"
+          value={formatCurrency(periodStats.receivable)}
+          hint="vendas em aberto"
+          icon={Clock}
+          iconTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
+          valueTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
+        />
       </div>
 
-      {/* Indicadores secundários */}
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
-        <SecondaryStat icon={DollarSign} label="Custos" value={formatCurrency(periodStats.costs)} />
-        <SecondaryStat icon={Wallet} label="Despesas" value={formatCurrency(periodStats.expenses)} />
-        <SecondaryStat icon={AlertTriangle} label="Perdas" value={formatCurrency(periodStats.losses)} tone={periodStats.losses > 0 ? "destructive" : undefined} />
-        <SecondaryStat icon={Users} label="Pago a sócios" value={formatCurrency(periodStats.partnerPaid)} />
+      {/* KPIs secundários — linha 2 */}
+      <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+        <SecondaryStat icon={Percent} label="Margem bruta" value={`${periodStats.grossMargin.toFixed(1)}%`} />
+        <SecondaryStat icon={Receipt} label="Despesas" value={formatCurrency(periodStats.expenses)} />
+        <SecondaryStat icon={Boxes} label="Reposição de estoque" value={formatCurrency(periodStats.restock)} hint="investimento em ativos" />
         <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(investedCapital)} />
       </div>
+
 
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
