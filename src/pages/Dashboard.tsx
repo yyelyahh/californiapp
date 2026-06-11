@@ -1,5 +1,5 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, Package, Clock, AlertTriangle, Users, DollarSign, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, Clock, Wallet, Percent, Boxes, Receipt } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
@@ -45,17 +45,29 @@ export default function Dashboard() {
     }
 
     const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
-    const revenue = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+    const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
+    const received = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
-    const costs = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
-    const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
-    const losses = store.stockLosses.filter(l => filterFn(l.date)).reduce((sum, l) => sum + l.totalCost, 0);
-    const partnerPaid = store.partnerPayments.filter(p => filterFn(p.date)).reduce((sum, p) => sum + p.amount, 0);
-    const profit = revenue - costs - expenses - losses - partnerPaid;
-    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
 
-    return { revenue, costs, expenses, profit, receivable, losses, partnerPaid, margin };
-  }, [filter, store.sales, store.stockEntries, store.expenses, store.stockLosses, store.partnerPayments]);
+    // CPV: custo dos produtos efetivamente vendidos
+    const cogs = salesInPeriod.reduce((sum, s) => {
+      const product = store.products.find(p => p.id === s.productId);
+      const cost = product?.purchasePrice ?? 0;
+      return sum + cost * s.quantity;
+    }, 0);
+
+    const grossProfit = revenue - cogs;
+    const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
+    const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
+    const netProfit = grossProfit - expenses;
+    const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+    // Reposição de estoque (investimento — exibido separadamente, NÃO reduz lucro)
+    const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
+
+    return { revenue, received, receivable, cogs, grossProfit, grossMargin, expenses, netProfit, netMargin, restock };
+  }, [filter, store.sales, store.stockEntries, store.expenses, store.products]);
 
   const monthlyData = useMemo(() => {
     const months = [];
@@ -82,7 +94,8 @@ export default function Dashboard() {
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const isGeral = filter === GERAL;
-  const profitPositive = periodStats.profit >= 0;
+  const netPositive = periodStats.netProfit >= 0;
+  const grossPositive = periodStats.grossProfit >= 0;
 
   return (
     <div className="space-y-5">
@@ -104,46 +117,49 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPIs principais — 3 destaques */}
-      <div className="grid gap-2 grid-cols-1 md:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Receita recebida</p>
-            <TrendingUp size={14} className="text-income" />
-          </div>
-          <p className="mt-1 text-2xl font-semibold mono text-foreground">{formatCurrency(periodStats.revenue)}</p>
-          <p className="text-[10px] text-muted-foreground mt-1">{isGeral ? "todo período" : filterLabel}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Lucro líquido</p>
-            {profitPositive ? <TrendingUp size={14} className="text-income" /> : <TrendingDown size={14} className="text-destructive" />}
-          </div>
-          <p className={cn("mt-1 text-2xl font-semibold mono", profitPositive ? "text-income" : "text-destructive")}>
-            {formatCurrency(periodStats.profit)}
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1">margem {periodStats.margin.toFixed(1)}%</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">A receber</p>
-            <Clock size={14} className={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"} />
-          </div>
-          <p className={cn("mt-1 text-2xl font-semibold mono", periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground")}>
-            {formatCurrency(periodStats.receivable)}
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1">vendas em aberto</p>
-        </div>
+      {/* KPIs principais — linha 1 */}
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+        <PrimaryKPI
+          label="Receita"
+          value={formatCurrency(periodStats.revenue)}
+          hint={`recebido ${formatCurrency(periodStats.received)}`}
+          icon={TrendingUp}
+          iconTone="text-income"
+        />
+        <PrimaryKPI
+          label="Lucro bruto"
+          value={formatCurrency(periodStats.grossProfit)}
+          hint={`CPV ${formatCurrency(periodStats.cogs)}`}
+          icon={grossPositive ? TrendingUp : TrendingDown}
+          iconTone={grossPositive ? "text-income" : "text-destructive"}
+          valueTone={grossPositive ? "text-income" : "text-destructive"}
+        />
+        <PrimaryKPI
+          label="Lucro líquido"
+          value={formatCurrency(periodStats.netProfit)}
+          hint={`margem ${periodStats.netMargin.toFixed(1)}%`}
+          icon={netPositive ? TrendingUp : TrendingDown}
+          iconTone={netPositive ? "text-income" : "text-destructive"}
+          valueTone={netPositive ? "text-income" : "text-destructive"}
+        />
+        <PrimaryKPI
+          label="A receber"
+          value={formatCurrency(periodStats.receivable)}
+          hint="vendas em aberto"
+          icon={Clock}
+          iconTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
+          valueTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
+        />
       </div>
 
-      {/* Indicadores secundários */}
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
-        <SecondaryStat icon={DollarSign} label="Custos" value={formatCurrency(periodStats.costs)} />
-        <SecondaryStat icon={Wallet} label="Despesas" value={formatCurrency(periodStats.expenses)} />
-        <SecondaryStat icon={AlertTriangle} label="Perdas" value={formatCurrency(periodStats.losses)} tone={periodStats.losses > 0 ? "destructive" : undefined} />
-        <SecondaryStat icon={Users} label="Pago a sócios" value={formatCurrency(periodStats.partnerPaid)} />
+      {/* KPIs secundários — linha 2 */}
+      <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+        <SecondaryStat icon={Percent} label="Margem bruta" value={`${periodStats.grossMargin.toFixed(1)}%`} />
+        <SecondaryStat icon={Receipt} label="Despesas" value={formatCurrency(periodStats.expenses)} />
+        <SecondaryStat icon={Boxes} label="Reposição de estoque" value={formatCurrency(periodStats.restock)} hint="investimento em ativos" />
         <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(investedCapital)} />
       </div>
+
 
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -222,6 +238,19 @@ function SecondaryStat({ icon: Icon, label, value, tone, hint }: { icon: any; la
       </div>
       <p className={cn("mt-0.5 text-base font-semibold mono", toneClass)}>{value}</p>
       {hint && <p className="text-[10px] text-muted-foreground mono mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+function PrimaryKPI({ icon: Icon, label, value, hint, iconTone, valueTone }: { icon: any; label: string; value: string; hint?: string; iconTone?: string; valueTone?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
+        <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
+      </div>
+      <p className={cn("mt-1 text-2xl font-semibold mono", valueTone ?? "text-foreground")}>{value}</p>
+      {hint && <p className="text-[10px] text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
 }
