@@ -269,15 +269,83 @@ export default function SalesPage() {
   );
 
   if (isSeller) {
+    const mySales = [...sales]
+      .filter(s => s.sellerId === sellerId && (s.type || "venda") !== "retirada_funcionario")
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const sumTotal = mySales.reduce((acc, s) => acc + s.totalPrice, 0);
+    const sumPaid = mySales.reduce((acc, s) => acc + s.paidAmount, 0);
+    const sumOpen = mySales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
+
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Registrar Venda</h1>
-          <p className="text-muted-foreground text-sm">Preencha os dados da venda</p>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
+            <p className="text-xs text-muted-foreground">Registre suas vendas e acompanhe o histórico</p>
+          </div>
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew} size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Venda</Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>{editingSale ? "Editar Venda" : "Registrar Venda"}</DialogTitle></DialogHeader>
+              {saleForm}
+            </DialogContent>
+          </Dialog>
         </div>
-        <div className="glass-card p-6">
-          {saleForm}
+
+        <div className="grid gap-2 grid-cols-3">
+          <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
+            <p className="mt-0.5 text-base font-semibold mono">{mySales.length}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recebido</p>
+            <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(sumPaid)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
+            <p className={cn("mt-0.5 text-base font-semibold mono truncate", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
+          </div>
         </div>
+
+        {mySales.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-12 text-center">
+            <p className="text-sm text-muted-foreground">Nenhuma venda registrada ainda.</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <th className="text-left py-2 px-3">Produto</th>
+                  <th className="text-right py-2 px-3 w-[60px]">Qtd</th>
+                  <th className="text-right py-2 px-3 w-[110px]">Total</th>
+                  <th className="text-right py-2 px-3 w-[110px]">Falta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mySales.map(s => {
+                  const remaining = Math.max(0, s.totalPrice - s.paidAmount);
+                  return (
+                    <tr key={s.id} className="border-b border-border/40 last:border-0">
+                      <td className="py-2.5 px-3">
+                        <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(s.date)}</div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
+                      <td className="py-2.5 px-3 text-right mono text-sm font-semibold">{formatCurrency(s.totalPrice)}</td>
+                      <td className="py-2.5 px-3 text-right mono text-sm">
+                        {remaining > 0 ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span> : <span className="text-income">Pago</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     );
   }
