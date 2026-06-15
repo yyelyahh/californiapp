@@ -119,7 +119,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
+        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes] = await Promise.all([
           fetchProductsList(),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -133,7 +133,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("seller_manual_debts" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
-        ]);
+          supabase.from("commission_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("pro_labore_payments" as any).select("*").order("created_at", { ascending: true }),
+        ]) as any;
 
         setProducts(prodList);
         if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
@@ -148,6 +150,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
         if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
         if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
+        if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
+        if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
