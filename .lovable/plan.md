@@ -1,55 +1,113 @@
+## Nova área: Financeiro › Comissões e Pró-labore
 
-## Objetivo
+Nova página dedicada à gestão de comissões progressivas dos vendedores, pró-labore dos sócios e distribuição de resultados, no mesmo padrão visual das demais páginas redesenhadas.
 
-Rodar uma auditoria completa do estoque para detectar divergências entre o que **deveria existir** (com base nas entradas e vendas) e o que **realmente existe** (estoque no sistema + unidades alocadas a vendedores).
+---
 
-## Como o estoque funciona hoje (entendimento confirmado pelo código)
+### 1. Banco de dados (migrations)
 
-- `stock_entries` → cada compra/entrada soma na quantidade total do produto.
-- `sales` → toda venda (incluindo `retirada_funcionario`) abate de `products.stock`.
-- `product_assignments` → quando um produto é "passado" para um vendedor, **NÃO** é descontado de `products.stock`. Ou seja, `products.stock` continua representando **o total físico** (loja + vendedores). A alocação só marca qual fatia está com cada vendedor.
-- Quando o vendedor vende, a venda abate tanto da `assignment.quantity` quanto de `products.stock`.
+Duas novas tabelas + ajustes mínimos:
 
-Portanto, as duas equações que devem fechar são:
+**`commission_payments`** — pagamentos de comissão a vendedores
+- `id uuid pk`, `seller_id uuid → sellers`, `amount numeric`, `date date`, `notes text`, `created_at timestamptz`
+- RLS: admin full access; seller pode ler os próprios (`seller_id = get_my_seller_id()`)
+- GRANTs para `authenticated` e `service_role`
 
-```text
-(1) Estoque esperado  =  SUM(entradas)  −  SUM(vendas)
-    deve ser igual a  products.stock
+**`pro_labore_payments`** — pagamentos de pró-labore a sócios
+- `id uuid pk`, `partner_id uuid → partners`, `amount numeric`, `date date`, `notes text`, `created_at timestamptz`
+- RLS: admin only
 
-(2) SUM(product_assignments.quantity por produto)  ≤  products.stock
-    (a parcela com vendedores não pode ultrapassar o estoque total)
+**`partners`** já existe. Adicionar coluna `monthly_pro_labore numeric default 0` para o "Valor Mensal" exibido na tabela.
+
+---
+
+### 2. Lógica de comissão progressiva (frontend, em `src/lib/commissions.ts`)
+
+Para o período selecionado (mês atual por padrão):
+
+```
+unidades = soma de quantity das sales do vendedor (type='venda') no período
+faturamento = soma de total_price
+faixa:
+  unidades <= 10 → 10%
+  11–15        → 12,5%
+  >= 16        → 15%
+comissao_acumulada = faturamento * faixa
+comissao_paga      = soma de commission_payments do vendedor no período
+comissao_pendente  = max(0, acumulada - paga)
 ```
 
-## O que vou entregar
+Próxima faixa e "faltam X unidades" derivados da mesma estrutura.
 
-Um relatório em CSV salvo em `/mnt/documents/auditoria_estoque.csv` com uma linha por produto e, além disso, um resumo no chat com:
+---
 
-1. **Produtos com divergência de estoque total** (equação 1 quebrada) — provavelmente sinal de venda lançada sem entrada, entrada apagada, ou ajuste manual do `stock`.
-2. **Produtos onde a soma com vendedores excede o estoque** (equação 2 quebrada) — sinal de atribuição duplicada ou venda não registrada.
-3. **Produtos com estoque negativo** ou inconsistências de sinal.
-4. **Visão por vendedor**: quanto cada vendedor tem alocado e checagem se algum item alocado já não existe mais em estoque.
+### 3. Página `src/pages/CommissionsPage.tsx` (rota `/commissions`)
 
-### Colunas do CSV
+Estrutura, top → bottom, no mesmo design system (glass-card, gradientes, tipografia, espaçamentos das páginas Vendas/Dashboard):
 
-| Coluna | Significado |
-|---|---|
-| produto | Marca Modelo * Sabor |
-| entradas | SUM(stock_entries.quantity) |
-| vendas | SUM(sales.quantity) |
-| esperado | entradas − vendas |
-| estoque_atual | products.stock |
-| diferenca_estoque | estoque_atual − esperado (0 = ok) |
-| com_vendedores | SUM(product_assignments.quantity) |
-| na_loja | estoque_atual − com_vendedores |
-| alerta | texto descrevendo o tipo de divergência |
+1. **Header** — título "Comissões e Pró-labore" + subtítulo + seletor de período (mês/trimestre/ano).
+2. **KPIs (4 cards, `grid-cols-2 lg:grid-cols-4`)**
+   - Lucro Líquido (período)
+   - Comissões Pendentes
+   - Pró-labore Pendente
+   - **Saldo Disponível** = Lucro − Comissões Pendentes − Pró-labore Pendente (card destacado com gradiente)
+3. **Distribuição de Resultados** — card visual com a cascata Lucro → Comissões → Pró-labore → Saldo (barra empilhada + valores).
+4. **Tabela de Comissões dos Vendedores**
+   - Colunas: Funcionário · Unidades · Faturamento · Faixa Atual · Comissão Acumulada · Pago · Pendente · Ações
+   - Barra de progresso até a próxima faixa + texto "Faltam X un. para 15%"
+   - Botão "Registrar Pagamento" abre Drawer (Sheet)
+5. **Tabela de Pró-labore dos Sócios**
+   - Colunas: Sócio · Valor Mensal · Pago no Período · Status (Pago / Parcial / Pendente) · Ações
+   - Botão "Registrar Pró-labore" abre Drawer
+6. **Gráfico de Evolução** (Recharts, mesmo estilo do Dashboard)
+   - Linhas: Lucro Líquido, Comissões, Pró-labore, Saldo Disponível
+   - Granularidade segue filtro de período
+7. **Timeline de Histórico Financeiro**
+   - Agrupado por dia (Hoje / Ontem / data)
+   - Itens unificados: commission_payments + pro_labore_payments, ordenados desc
 
-## Passos da execução
+---
 
-1. Consultar `stock_entries`, `sales`, `products`, `product_assignments`, `sellers` via `supabase--read_query`.
-2. Cruzar os dados em um script Python (no exec) e gerar o CSV.
-3. Imprimir o resumo das divergências no chat, agrupado por gravidade.
-4. Sugerir ações corretivas para cada divergência encontrada (ex.: lançar entrada que faltou, ajustar atribuição, corrigir venda).
+### 4. Drawers (padrão Sheet lateral)
 
-## O que NÃO faz parte deste passo
+**Drawer Comissão**: Funcionário (select) · Valor · Data · Observação · Resumo (Acumulada / Paga / Pendente).
+**Drawer Pró-labore**: Sócio (select) · Valor · Data · Observação · Resumo (Mensal / Pago / Restante).
 
-- Não vou alterar nenhum dado no banco automaticamente. Após você revisar o relatório, decidimos juntos quais correções aplicar (e aí sim eu rodo as migrações/atualizações).
+Após submit: insert no Supabase, invalidar dados via `StoreContext` (adicionar `commissionPayments`, `proLaborePayments`, `addCommissionPayment`, `addProLaborePayment`).
+
+---
+
+### 5. Integração com o sistema
+
+- **`StoreContext`**: novos arrays + loaders + mutations.
+- **`AppLayout`** (sidebar): novo item "Comissões" (ícone `Wallet`) abaixo de "Despesas", visível só para admin.
+- **`App.tsx`**: rota `/commissions` protegida (não-seller).
+- **Lucro Líquido**: reusar a mesma fórmula já adotada no Dashboard reformulado (Receita − Despesas − CMV das vendas, sem subtrair compras de estoque).
+
+---
+
+### 6. Design tokens / consistência
+
+- Reusar `glass-card`, `text-rgb-cascade`, badges, `Sheet` (drawer), `Progress` do shadcn.
+- Mobile first: `grid-cols-2 sm:grid-cols-4`, tabelas com `overflow-x-auto` + `min-w-[640px]`, sem scroll horizontal no viewport.
+- Sem cores hardcoded — apenas tokens semânticos.
+
+---
+
+### Resumo de arquivos
+
+**Migrations**
+- criar `commission_payments`, `pro_labore_payments`
+- `alter table partners add column monthly_pro_labore numeric default 0`
+
+**Novos**
+- `src/pages/CommissionsPage.tsx`
+- `src/lib/commissions.ts`
+- `src/components/CommissionPaymentDrawer.tsx`
+- `src/components/ProLaborePaymentDrawer.tsx`
+
+**Editados**
+- `src/App.tsx` (rota)
+- `src/components/AppLayout.tsx` (item de menu)
+- `src/context/StoreContext.tsx` (novos dados/mutations)
+- `src/types/index.ts` (novos tipos + `monthlyProLabore` em Partner)
