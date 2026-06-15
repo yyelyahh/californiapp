@@ -46,18 +46,24 @@ export default function CommissionsPage() {
 
   const [period, setPeriod] = useState<Period>("month");
 
+  // Cutoff: ignora qualquer movimentação anterior ao mês atual (início do projeto)
+  const PROJECT_START = useMemo(() => startOfMonth(new Date()), []);
+
   const { start, end, label } = useMemo(() => {
     const now = new Date();
-    if (period === "month") return { start: startOfMonth(now), end: endOfMonth(now), label: format(now, "MMMM/yyyy", { locale: ptBR }) };
-    if (period === "quarter") return { start: startOfQuarter(now), end: endOfQuarter(now), label: `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}` };
-    return { start: startOfYear(now), end: endOfYear(now), label: format(now, "yyyy") };
-  }, [period]);
+    let s: Date, e: Date, l: string;
+    if (period === "month") { s = startOfMonth(now); e = endOfMonth(now); l = format(now, "MMMM/yyyy", { locale: ptBR }); }
+    else if (period === "quarter") { s = startOfQuarter(now); e = endOfQuarter(now); l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`; }
+    else { s = startOfYear(now); e = endOfYear(now); l = format(now, "yyyy"); }
+    if (s < PROJECT_START) s = PROJECT_START;
+    return { start: s, end: e, label: l };
+  }, [period, PROJECT_START]);
 
   const inPeriod = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start, end }); } catch { return false; }
   };
   const inYear = (iso: string) => {
-    try { return isWithinInterval(parseISO(iso), { start: startOfYear(new Date()), end: endOfYear(new Date()) }); } catch { return false; }
+    try { return isWithinInterval(parseISO(iso), { start: PROJECT_START, end: endOfYear(new Date()) }); } catch { return false; }
   };
 
   const periodMetrics = useMemo(() => {
@@ -211,7 +217,7 @@ export default function CommissionsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Conta Corrente & Distribuição</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Comissão</h1>
           <p className="text-xs text-muted-foreground">Saldos dos vendedores e retiradas dos sócios · {label}</p>
         </div>
         <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
