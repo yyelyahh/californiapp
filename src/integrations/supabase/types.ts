@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      commission_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          seller_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          seller_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          seller_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_payments_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deleted_products: {
         Row: {
           brand: string
@@ -182,22 +217,60 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          monthly_pro_labore: number
           name: string
           percentage: number
         }
         Insert: {
           created_at?: string
           id?: string
+          monthly_pro_labore?: number
           name: string
           percentage?: number
         }
         Update: {
           created_at?: string
           id?: string
+          monthly_pro_labore?: number
           name?: string
           percentage?: number
         }
         Relationships: []
+      }
+      pro_labore_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          partner_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          partner_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          partner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pro_labore_payments_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_assignments: {
         Row: {
