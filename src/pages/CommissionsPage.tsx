@@ -4,16 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Wallet, Briefcase, Sparkles, TrendingUp, Trash2, Plus, Clock } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval, parseISO, eachMonthOfInterval, subMonths, isToday, isYesterday } from "date-fns";
+import { Wallet, Briefcase, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox, ArrowRight } from "lucide-react";
+import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval, parseISO, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
-import { COMMISSION_TIERS, getTierForUnits, getNextTier, unitsUntilNextTier, progressToNextTier, computeSellerCommission } from "@/lib/commissions";
+import { getNextTier, unitsUntilNextTier, progressToNextTier, computeSellerCommission } from "@/lib/commissions";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -40,7 +39,6 @@ export default function CommissionsPage() {
     try { return isWithinInterval(parseISO(iso), { start, end }); } catch { return false; }
   };
 
-  // ---- Métricas globais do período ----
   const periodMetrics = useMemo(() => {
     const salesInPeriod = sales.filter(s => s.type === "venda" && inPeriod(s.date));
     const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
@@ -52,18 +50,16 @@ export default function CommissionsPage() {
     const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((s, e) => s + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // por vendedor
     const perSeller = sellers.map(seller => {
       const ss = salesInPeriod.filter(s => s.sellerId === seller.id);
       const c = computeSellerCommission(ss);
       const paid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((s, p) => s + p.amount, 0);
       return { seller, ...c, paid, pending: Math.max(0, c.accrued - paid) };
-    });
+    }).sort((a, b) => b.revenue - a.revenue);
     const commissionsAccrued = perSeller.reduce((s, x) => s + x.accrued, 0);
     const commissionsPaid = perSeller.reduce((s, x) => s + x.paid, 0);
     const commissionsPending = perSeller.reduce((s, x) => s + x.pending, 0);
 
-    // por sócio (pró-labore)
     const perPartner = partners.map(partner => {
       const paid = proLaborePayments.filter(p => p.partnerId === partner.id && inPeriod(p.date)).reduce((s, p) => s + p.amount, 0);
       const monthly = partner.monthlyProLabore || 0;
@@ -77,39 +73,16 @@ export default function CommissionsPage() {
     const proLaborePending = perPartner.reduce((s, x) => s + x.pending, 0);
 
     const available = netProfit - commissionsPending - proLaborePending;
+    const leader = perSeller.find(r => r.revenue > 0) || null;
 
     return {
       revenue, cogs, grossProfit, netProfit, periodExpenses,
       perSeller, commissionsAccrued, commissionsPaid, commissionsPending,
       perPartner, proLaboreTarget, proLaborePaid, proLaborePending,
-      available,
+      available, leader,
     };
   }, [sales, expenses, products, sellers, partners, commissionPayments, proLaborePayments, period, start, end]);
 
-  // ---- Série mensal para o gráfico (últimos 6 meses) ----
-  const chartData = useMemo(() => {
-    const months = eachMonthOfInterval({ start: subMonths(startOfMonth(new Date()), 5), end: endOfMonth(new Date()) });
-    return months.map(m => {
-      const s = startOfMonth(m), e = endOfMonth(m);
-      const within = (iso: string) => { try { return isWithinInterval(parseISO(iso), { start: s, end: e }); } catch { return false; } };
-      const ss = sales.filter(x => x.type === "venda" && within(x.date));
-      const rev = ss.reduce((acc, x) => acc + x.totalPrice, 0);
-      const cogs = ss.reduce((acc, x) => acc + (products.find(p => p.id === x.productId)?.purchasePrice ?? 0) * x.quantity, 0);
-      const exp = expenses.filter(x => within(x.date)).reduce((a, x) => a + x.amount, 0);
-      const net = rev - cogs - exp;
-      const com = sellers.reduce((acc, sl) => acc + computeSellerCommission(ss.filter(x => x.sellerId === sl.id)).accrued, 0);
-      const prol = proLaborePayments.filter(x => within(x.date)).reduce((a, x) => a + x.amount, 0);
-      return {
-        month: format(m, "MMM", { locale: ptBR }),
-        lucro: Math.round(net),
-        comissoes: Math.round(com),
-        proLabore: Math.round(prol),
-        saldo: Math.round(net - com - prol),
-      };
-    });
-  }, [sales, expenses, products, sellers, proLaborePayments]);
-
-  // ---- Timeline ----
   const timeline = useMemo(() => {
     const items = [
       ...commissionPayments.map(p => ({ kind: "commission" as const, id: p.id, when: p.date, amount: p.amount, who: getSellerName(p.sellerId), notes: p.notes })),
@@ -124,7 +97,6 @@ export default function CommissionsPage() {
     return groups;
   }, [commissionPayments, proLaborePayments, partners, getSellerName]);
 
-  // ---- Drawers ----
   const [commDrawer, setCommDrawer] = useState<{ sellerId: string } | null>(null);
   const [commForm, setCommForm] = useState({ amount: "", date: todayDateString(), notes: "" });
   const [proDrawer, setProDrawer] = useState<{ partnerId: string } | null>(null);
@@ -163,20 +135,17 @@ export default function CommissionsPage() {
   const sellerRow = commDrawer ? periodMetrics.perSeller.find(r => r.seller.id === commDrawer.sellerId) : null;
   const partnerRow = proDrawer ? periodMetrics.perPartner.find(r => r.partner.id === proDrawer.partnerId) : null;
 
-  // distribuição visual (cascata)
-  const distSegments = (() => {
-    const base = Math.max(0, periodMetrics.netProfit);
-    const com = Math.min(periodMetrics.commissionsPending, base);
-    const after1 = base - com;
-    const pro = Math.min(periodMetrics.proLaborePending, after1);
-    const avail = Math.max(0, after1 - pro);
-    const total = base || 1;
-    return {
-      com: (com / total) * 100,
-      pro: (pro / total) * 100,
-      avail: (avail / total) * 100,
-    };
-  })();
+  const pendingItems = [
+    ...periodMetrics.perSeller
+      .filter(r => r.pending > 0.01)
+      .map(r => ({ kind: "commission" as const, id: r.seller.id, label: `Comissão ${r.seller.name}`, amount: r.pending, onPay: () => openCommDrawer(r.seller.id, r.pending) })),
+    ...periodMetrics.perPartner
+      .filter(r => r.pending > 0.01)
+      .map(r => ({ kind: "prolabore" as const, id: r.partner.id, label: `Pró-labore ${r.partner.name}`, amount: r.pending, onPay: () => openProDrawer(r.partner.id, r.pending) })),
+  ].sort((a, b) => b.amount - a.amount);
+  const totalPending = pendingItems.reduce((s, i) => s + i.amount, 0);
+
+  const maxRevenue = Math.max(1, ...periodMetrics.perSeller.map(r => r.revenue));
 
   return (
     <div className="space-y-5">
@@ -184,7 +153,7 @@ export default function CommissionsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Comissões e Pró-labore</h1>
-          <p className="text-xs text-muted-foreground">Distribuição de resultados · {label}</p>
+          <p className="text-xs text-muted-foreground">Centro de distribuição financeira · {label}</p>
         </div>
         <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
           <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
@@ -214,116 +183,175 @@ export default function CommissionsPage() {
         </div>
       </div>
 
-      {/* Distribuição de Resultados */}
-      <div className="glass-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 className="text-sm font-semibold tracking-tight">Distribuição de Resultados</h2>
-          <span className="text-[11px] text-muted-foreground mono">{label}</span>
-        </div>
-        <div className="h-3 rounded-full overflow-hidden bg-secondary flex">
-          <div className="h-full bg-warning/80" style={{ width: `${distSegments.com}%` }} />
-          <div className="h-full bg-fixed/80" style={{ width: `${distSegments.pro}%` }} />
-          <div className="h-full bg-income/80" style={{ width: `${distSegments.avail}%` }} />
-        </div>
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <DistItem dot="bg-primary" label="Lucro Líquido" value={periodMetrics.netProfit} />
-          <DistItem dot="bg-warning" label="Comissões" value={periodMetrics.commissionsPending} />
-          <DistItem dot="bg-fixed" label="Pró-labore" value={periodMetrics.proLaborePending} />
-          <DistItem dot="bg-income" label="Saldo" value={periodMetrics.available} highlight />
+      {/* Mini Demonstrativo Financeiro */}
+      <div className="rounded-2xl p-[1px] bg-gradient-to-br from-primary/40 via-border to-transparent">
+        <div className="rounded-2xl bg-card px-4 py-4 sm:px-6 sm:py-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold tracking-tight">Demonstrativo do Período</h2>
+            <span className="text-[11px] text-muted-foreground mono">{label}</span>
+          </div>
+          <div className="space-y-2 text-sm">
+            <DemoRow label="Lucro Líquido" value={periodMetrics.netProfit} tone="income" />
+            <DemoRow label="(−) Comissões Pendentes" value={-periodMetrics.commissionsPending} tone="warning" />
+            <DemoRow label="(−) Pró-labore Pendente" value={-periodMetrics.proLaborePending} tone="warning" />
+            <div className="border-t border-dashed border-border my-2" />
+            <div className="flex items-baseline justify-between gap-3 pt-1">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Saldo Disponível</p>
+                <p className="text-[11px] text-muted-foreground">Pronto para retirada ou reinvestimento</p>
+              </div>
+              <p className={cn("text-2xl sm:text-3xl font-bold mono", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>
+                {formatCurrency(periodMetrics.available)}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Tabela Vendedores */}
+      {/* Pendências do Período */}
+      <div className="glass-card p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">Pendências do Período</h2>
+            <p className="text-[11px] text-muted-foreground">Tudo que ainda precisa ser pago</p>
+          </div>
+          <Badge variant="secondary" className="text-[11px]">{pendingItems.length}</Badge>
+        </div>
+        {pendingItems.length === 0 ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+            <Inbox size={14} /> Nenhuma pendência. Tudo em dia neste período.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {pendingItems.map(it => (
+                <button
+                  key={`${it.kind}-${it.id}`}
+                  onClick={it.onPay}
+                  className="group text-left rounded-xl border border-border bg-secondary/30 hover:bg-secondary/60 transition-colors p-3 flex items-center gap-3"
+                >
+                  <span className={cn("w-2 h-2 rounded-full shrink-0", it.kind === "commission" ? "bg-warning" : "bg-fixed")} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{it.kind === "commission" ? "Comissão" : "Pró-labore"}</p>
+                    <p className="text-sm font-medium truncate">{it.label.replace(/^(Comissão|Pró-labore)\s/, "")}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm mono font-semibold text-warning">{formatCurrency(it.amount)}</p>
+                    <span className="text-[10px] text-muted-foreground inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Pagar <ArrowRight size={10} />
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Pendente</span>
+              <span className="text-base mono font-bold text-warning">{formatCurrency(totalPending)}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Ranking de Comissões */}
       <div className="glass-card overflow-hidden">
         <div className="px-4 sm:px-5 pt-4 pb-3 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Comissões dos Vendedores</h2>
-            <p className="text-[11px] text-muted-foreground">Faixas progressivas: 10% até 10un · 12,5% até 15un · 15% a partir de 16un</p>
+            <p className="text-[11px] text-muted-foreground">Ranking por faturamento · faixas 10% / 12,5% / 15%</p>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[720px]">
-            <thead>
-              <tr className="border-y border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                <th className="text-left py-2 px-3">Funcionário</th>
-                <th className="text-right py-2 px-3">Un.</th>
-                <th className="text-right py-2 px-3">Faturamento</th>
-                <th className="text-left py-2 px-3">Faixa / Progresso</th>
-                <th className="text-right py-2 px-3">Acumulada</th>
-                <th className="text-right py-2 px-3">Pago</th>
-                <th className="text-right py-2 px-3">Pendente</th>
-                <th className="text-right py-2 px-3 w-[120px]">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {periodMetrics.perSeller.length === 0 ? (
-                <tr><td colSpan={8} className="py-8 text-center text-xs text-muted-foreground">Nenhum vendedor cadastrado.</td></tr>
-              ) : periodMetrics.perSeller.map(r => {
-                const next = getNextTier(r.tier);
-                const remaining = unitsUntilNextTier(r.units);
-                const pct = progressToNextTier(r.units);
-                return (
-                  <tr key={r.seller.id} className="border-b border-border/40 last:border-0 align-middle">
-                    <td className="py-3 px-3 font-medium">{r.seller.name}</td>
-                    <td className="py-3 px-3 text-right mono">{r.units}</td>
-                    <td className="py-3 px-3 text-right mono">{formatCurrency(r.revenue)}</td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="font-mono">{r.tier.label}</Badge>
-                        {next ? (
-                          <span className="text-[11px] text-muted-foreground">faltam <span className="text-foreground font-medium">{remaining}</span> p/ {next.label}</span>
-                        ) : (
-                          <span className="text-[11px] text-income font-medium">faixa máxima</span>
-                        )}
+        {periodMetrics.perSeller.length === 0 ? (
+          <p className="px-5 pb-5 text-xs text-muted-foreground">Nenhum vendedor cadastrado.</p>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {periodMetrics.perSeller.map((r, idx) => {
+              const next = getNextTier(r.tier);
+              const remaining = unitsUntilNextTier(r.units);
+              const pct = progressToNextTier(r.units);
+              const isLeader = periodMetrics.leader?.seller.id === r.seller.id;
+              const barPct = (r.revenue / maxRevenue) * 100;
+              return (
+                <div key={r.seller.id} className="px-4 sm:px-5 py-4">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold mono shrink-0",
+                        isLeader ? "bg-gradient-to-br from-warning to-warning/60 text-warning-foreground" : "bg-secondary text-muted-foreground"
+                      )}>{idx + 1}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold truncate">{r.seller.name}</p>
+                          {isLeader && <Crown size={12} className="text-warning shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          <span className="mono">{r.units}</span> un. · <span className="mono">{formatCurrency(r.revenue)}</span>
+                        </p>
                       </div>
-                      {next && <Progress value={pct} className="h-1 mt-1.5" />}
-                    </td>
-                    <td className="py-3 px-3 text-right mono font-semibold">{formatCurrency(r.accrued)}</td>
-                    <td className="py-3 px-3 text-right mono text-income">{formatCurrency(r.paid)}</td>
-                    <td className="py-3 px-3 text-right mono">
-                      {r.pending > 0.01 ? <span className="text-warning font-semibold">{formatCurrency(r.pending)}</span> : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <Button size="sm" variant="secondary" className="h-8" onClick={() => openCommDrawer(r.seller.id, r.pending)}>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Faixa</p>
+                      <Badge variant="secondary" className="font-mono">{r.tier.label}</Badge>
+                    </div>
+                  </div>
+
+                  {/* Revenue bar */}
+                  <div className="h-1 rounded-full bg-secondary overflow-hidden mb-3">
+                    <div className={cn("h-full", isLeader ? "bg-gradient-to-r from-warning to-primary" : "bg-primary/60")} style={{ width: `${barPct}%` }} />
+                  </div>
+
+                  {/* Progress to next tier */}
+                  {next ? (
+                    <div className="rounded-lg bg-secondary/40 px-3 py-2 mb-3">
+                      <div className="flex items-center justify-between text-[11px] mb-1.5">
+                        <span className="text-muted-foreground">Para atingir <span className="text-foreground font-semibold">{next.label}</span></span>
+                        <span className="mono"><span className="text-foreground font-semibold">{remaining}</span> un. restantes</span>
+                      </div>
+                      <Progress value={pct} className="h-1.5" />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg bg-income/10 border border-income/20 px-3 py-2 mb-3 text-[11px] text-income font-medium">
+                      Faixa máxima atingida
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-4 gap-2 items-end">
+                    <Mini label="Acumulada" value={formatCurrency(r.accrued)} strong />
+                    <Mini label="Pago" value={formatCurrency(r.paid)} tone="income" />
+                    <Mini label="Pendente" value={r.pending > 0.01 ? formatCurrency(r.pending) : "—"} tone={r.pending > 0.01 ? "warning" : undefined} />
+                    <div className="flex justify-end">
+                      <Button size="sm" variant={r.pending > 0.01 ? "default" : "secondary"} className="h-8" onClick={() => openCommDrawer(r.seller.id, r.pending)}>
                         <Plus size={13} className="mr-1" />Pagar
                       </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Tabela Sócios */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 sm:px-5 pt-4 pb-3">
-          <h2 className="text-sm font-semibold tracking-tight">Pró-labore dos Sócios</h2>
-          <p className="text-[11px] text-muted-foreground">Valor mensal de retirada de cada sócio</p>
+      {/* Pró-labore — cards */}
+      <div className="space-y-3">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">Pró-labore dos Sócios</h2>
+            <p className="text-[11px] text-muted-foreground">Retirada mensal de cada sócio</p>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
-            <thead>
-              <tr className="border-y border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                <th className="text-left py-2 px-3">Sócio</th>
-                <th className="text-right py-2 px-3">Valor Mensal</th>
-                <th className="text-right py-2 px-3">Meta Período</th>
-                <th className="text-right py-2 px-3">Pago</th>
-                <th className="text-left py-2 px-3">Status</th>
-                <th className="text-right py-2 px-3 w-[120px]">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {periodMetrics.perPartner.length === 0 ? (
-                <tr><td colSpan={6} className="py-8 text-center text-xs text-muted-foreground">Nenhum sócio cadastrado.</td></tr>
-              ) : periodMetrics.perPartner.map(r => (
-                <tr key={r.partner.id} className="border-b border-border/40 last:border-0">
-                  <td className="py-3 px-3 font-medium">{r.partner.name}</td>
-                  <td className="py-3 px-3 text-right mono">{formatCurrency(r.partner.monthlyProLabore)}</td>
-                  <td className="py-3 px-3 text-right mono text-muted-foreground">{formatCurrency(r.target)}</td>
-                  <td className="py-3 px-3 text-right mono text-income">{formatCurrency(r.paid)}</td>
-                  <td className="py-3 px-3">
+        {periodMetrics.perPartner.length === 0 ? (
+          <div className="glass-card p-5 text-xs text-muted-foreground">Nenhum sócio cadastrado.</div>
+        ) : (
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {periodMetrics.perPartner.map(r => {
+              const pct = r.target > 0 ? Math.min(100, (r.paid / r.target) * 100) : 0;
+              return (
+                <div key={r.partner.id} className="glass-card p-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{r.partner.name}</p>
+                      <p className="text-[11px] text-muted-foreground">Sócio</p>
+                    </div>
                     <Badge
                       variant="secondary"
                       className={cn(
@@ -332,50 +360,40 @@ export default function CommissionsPage() {
                         r.status === "Pendente" && "bg-secondary text-muted-foreground border-border",
                       )}
                     >{r.status}</Badge>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <Button size="sm" variant="secondary" className="h-8" onClick={() => openProDrawer(r.partner.id, r.pending)}>
-                      <Plus size={13} className="mr-1" />Pagar
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <Mini label="Mensal" value={formatCurrency(r.partner.monthlyProLabore)} />
+                    <Mini label="Pago" value={formatCurrency(r.paid)} tone="income" />
+                    <Mini label="Pendente" value={formatCurrency(r.pending)} tone={r.pending > 0.01 ? "warning" : undefined} strong />
+                  </div>
+
+                  {r.target > 0 && <Progress value={pct} className="h-1.5" />}
+
+                  <Button size="sm" variant={r.pending > 0.01 ? "default" : "secondary"} className="h-8 w-full" onClick={() => openProDrawer(r.partner.id, r.pending)}>
+                    <Plus size={13} className="mr-1" />Registrar pagamento
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Gráfico evolução */}
-      <div className="glass-card p-4 sm:p-5">
-        <h2 className="text-sm font-semibold tracking-tight mb-3">Evolução (últimos 6 meses)</h2>
-        <div className="h-[260px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                formatter={(v: number) => formatCurrency(v)}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="lucro" name="Lucro" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="comissoes" name="Comissões" stroke="hsl(var(--warning))" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="proLabore" name="Pró-labore" stroke="hsl(var(--fixed))" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="saldo" name="Saldo" stroke="hsl(var(--income))" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Timeline */}
+      {/* Histórico */}
       <div className="glass-card p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <Clock size={14} className="text-muted-foreground" />
           <h2 className="text-sm font-semibold tracking-tight">Histórico Financeiro</h2>
         </div>
         {Object.keys(timeline).length === 0 ? (
-          <p className="text-xs text-muted-foreground py-6 text-center">Nenhum pagamento registrado ainda.</p>
+          <div className="flex items-start gap-2.5 py-1">
+            <Inbox size={14} className="text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-foreground">Nenhum pagamento registrado ainda.</p>
+              <p className="text-[11px] text-muted-foreground">Os pagamentos de comissão e pró-labore aparecerão aqui.</p>
+            </div>
+          </div>
         ) : (
           <div className="space-y-4">
             {Object.entries(timeline).map(([day, items]) => (
@@ -386,14 +404,14 @@ export default function CommissionsPage() {
                     <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-secondary/40 transition-colors">
                       <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", it.kind === "commission" ? "bg-warning" : "bg-fixed")} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm">
-                          <span className="text-muted-foreground">{it.kind === "commission" ? "Comissão paga para" : "Pró-labore para"}</span>{" "}
+                        <p className="text-sm truncate">
+                          <span className="text-muted-foreground">{it.kind === "commission" ? "Comissão para" : "Pró-labore para"}</span>{" "}
                           <span className="font-medium">{it.who}</span>
                         </p>
                         {it.notes && <p className="text-[11px] text-muted-foreground truncate">{it.notes}</p>}
                       </div>
                       <span className="mono text-sm font-semibold">{formatCurrency(it.amount)}</span>
-                      <span className="text-[11px] text-muted-foreground mono shrink-0">{formatDateBR(it.when)}</span>
+                      <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
                       <button
                         onClick={() => it.kind === "commission" ? deleteCommissionPayment(it.id) : deleteProLaborePayment(it.id)}
                         className="text-muted-foreground hover:text-destructive transition-colors p-1"
@@ -480,14 +498,30 @@ function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: 
   );
 }
 
-function DistItem({ dot, label, value, highlight }: { dot: string; label: string; value: number; highlight?: boolean }) {
+function DemoRow({ label, value, tone }: { label: string; value: number; tone?: "income" | "warning" | "expense" }) {
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <span className={cn("w-2 h-2 rounded-full shrink-0", dot)} />
-      <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={cn("text-sm mono font-semibold truncate", highlight && "text-income")}>{formatCurrency(value)}</p>
-      </div>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn(
+        "mono font-semibold",
+        tone === "income" && value >= 0 && "text-income",
+        tone === "warning" && "text-warning",
+        tone === "expense" && "text-expense",
+      )}>{formatCurrency(value)}</span>
+    </div>
+  );
+}
+
+function Mini({ label, value, tone, strong }: { label: string; value: string; tone?: "income" | "warning"; strong?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn(
+        "text-sm mono truncate",
+        strong && "font-semibold",
+        tone === "income" && "text-income",
+        tone === "warning" && "text-warning font-semibold",
+      )}>{value}</p>
     </div>
   );
 }
