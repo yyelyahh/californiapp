@@ -244,7 +244,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   });
 
   const mapPartner = (r: any): Partner => ({
-    id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
+    id: r.id, name: r.name, percentage: Number(r.percentage),
+    monthlyProLabore: Number(r.monthly_pro_labore ?? 0),
+    createdAt: r.created_at,
   });
 
   const mapPartnerPayment = (r: any): PartnerPayment => ({

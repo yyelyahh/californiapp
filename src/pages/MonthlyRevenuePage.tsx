@@ -74,7 +74,7 @@ export default function MonthlyRevenuePage() {
   const handleSubmit = async () => {
     if (!form.name || !form.percentage) return;
     if (editingId) await updatePartner(editingId, { name: form.name, percentage: Number(form.percentage) });
-    else await addPartner({ name: form.name, percentage: Number(form.percentage) });
+    else await addPartner({ name: form.name, percentage: Number(form.percentage), monthlyProLabore: 0 });
     setOpen(false);
   };
 
