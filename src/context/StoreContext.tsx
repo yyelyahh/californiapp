@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss, CommissionPayment, ProLaborePayment } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -56,6 +56,12 @@ interface StoreContextType {
   sellerManualDebts: SellerManualDebt[];
   addSellerManualDebt: (d: Omit<SellerManualDebt, "id">) => Promise<void>;
   deleteSellerManualDebt: (id: string) => Promise<void>;
+  commissionPayments: CommissionPayment[];
+  addCommissionPayment: (p: Omit<CommissionPayment, "id">) => Promise<void>;
+  deleteCommissionPayment: (id: string) => Promise<void>;
+  proLaborePayments: ProLaborePayment[];
+  addProLaborePayment: (p: Omit<ProLaborePayment, "id">) => Promise<void>;
+  deleteProLaborePayment: (id: string) => Promise<void>;
   getSellerName: (id: string) => string;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
@@ -88,6 +94,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
+  const [commissionPayments, setCommissionPayments] = useState<CommissionPayment[]>([]);
+  const [proLaborePayments, setProLaborePayments] = useState<ProLaborePayment[]>([]);
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -111,7 +119,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes] = await Promise.all([
+        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes] = await Promise.all([
           fetchProductsList(),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -125,7 +133,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("seller_manual_debts" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
-        ]);
+          supabase.from("commission_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("pro_labore_payments" as any).select("*").order("created_at", { ascending: true }),
+        ]) as any;
 
         setProducts(prodList);
         if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
@@ -140,6 +150,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
         if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
         if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
+        if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
+        if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -244,11 +256,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   });
 
   const mapPartner = (r: any): Partner => ({
-    id: r.id, name: r.name, percentage: Number(r.percentage), createdAt: r.created_at,
+    id: r.id, name: r.name, percentage: Number(r.percentage),
+    monthlyProLabore: Number(r.monthly_pro_labore ?? 0),
+    createdAt: r.created_at,
   });
 
   const mapPartnerPayment = (r: any): PartnerPayment => ({
     id: r.id, partnerId: r.partner_id, month: r.month,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
+  const mapCommissionPayment = (r: any): CommissionPayment => ({
+    id: r.id, sellerId: r.seller_id,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
+  const mapProLaborePayment = (r: any): ProLaborePayment => ({
+    id: r.id, partnerId: r.partner_id,
     amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
@@ -585,7 +609,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const addPartner = useCallback(async (p: Omit<Partner, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("partners").insert({
       name: p.name, percentage: p.percentage,
-    }).select().single();
+      monthly_pro_labore: p.monthlyProLabore ?? 0,
+    } as any).select().single();
     if (error) { toast.error("Erro ao adicionar sócio"); return; }
     setPartners(prev => [...prev, mapPartner(data)]);
   }, []);
@@ -594,6 +619,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.percentage !== undefined) dbUpdates.percentage = updates.percentage;
+    if (updates.monthlyProLabore !== undefined) dbUpdates.monthly_pro_labore = updates.monthlyProLabore;
     const { error } = await supabase.from("partners").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar sócio"); return; }
     setPartners(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -784,6 +810,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSellerManualDebts(prev => prev.filter(d => d.id !== id));
   }, []);
 
+  // ---- Commission Payments ----
+  const addCommissionPayment = useCallback(async (p: Omit<CommissionPayment, "id">) => {
+    const { data, error } = await supabase.from("commission_payments" as any).insert({
+      seller_id: p.sellerId, amount: p.amount, date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar comissão"); return; }
+    setCommissionPayments(prev => [...prev, mapCommissionPayment(data)]);
+    toast.success("Comissão registrada");
+  }, []);
+
+  const deleteCommissionPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("commission_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    setCommissionPayments(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  // ---- Pro-labore Payments ----
+  const addProLaborePayment = useCallback(async (p: Omit<ProLaborePayment, "id">) => {
+    const { data, error } = await supabase.from("pro_labore_payments" as any).insert({
+      partner_id: p.partnerId, amount: p.amount, date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pró-labore"); return; }
+    setProLaborePayments(prev => [...prev, mapProLaborePayment(data)]);
+    toast.success("Pró-labore registrado");
+  }, []);
+
+  const deleteProLaborePayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("pro_labore_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    setProLaborePayments(prev => prev.filter(p => p.id !== id));
+  }, []);
+
   // ---- Computed ----
   const getSellerName = useCallback((id: string) => sellers.find(s => s.id === id)?.name ?? "Vendedor desconhecido", [sellers]);
   const getTotalRevenue = useCallback(() => sales.filter(s => s.type === "venda").reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
@@ -829,7 +887,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addStockLoss, deleteStockLoss, getTotalLossValue, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
@@ -838,7 +896,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addPartner, updatePartner, deletePartner,
       addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth, getTotalPartnerPayments,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment,
-      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt, getSellerName,
+      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt,
+      addCommissionPayment, deleteCommissionPayment, addProLaborePayment, deleteProLaborePayment,
+      getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
       getSellerDebt, getSellerPaid, getSellerBalance,

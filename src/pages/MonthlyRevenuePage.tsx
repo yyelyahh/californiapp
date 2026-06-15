@@ -41,7 +41,7 @@ export default function MonthlyRevenuePage() {
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", percentage: "" });
+  const [form, setForm] = useState({ name: "", percentage: "", monthlyProLabore: "" });
 
   const [payOpen, setPayOpen] = useState(false);
   const [payTarget, setPayTarget] = useState<{ partnerId: string; suggested: number } | null>(null);
@@ -68,13 +68,14 @@ export default function MonthlyRevenuePage() {
 
   const totalPercentage = partners.reduce((sum, p) => sum + p.percentage, 0);
 
-  const openNew = () => { setEditingId(null); setForm({ name: "", percentage: "" }); setOpen(true); };
-  const openEdit = (p: typeof partners[0]) => { setEditingId(p.id); setForm({ name: p.name, percentage: String(p.percentage) }); setOpen(true); };
+  const openNew = () => { setEditingId(null); setForm({ name: "", percentage: "", monthlyProLabore: "" }); setOpen(true); };
+  const openEdit = (p: typeof partners[0]) => { setEditingId(p.id); setForm({ name: p.name, percentage: String(p.percentage), monthlyProLabore: String(p.monthlyProLabore ?? 0) }); setOpen(true); };
 
   const handleSubmit = async () => {
     if (!form.name || !form.percentage) return;
-    if (editingId) await updatePartner(editingId, { name: form.name, percentage: Number(form.percentage) });
-    else await addPartner({ name: form.name, percentage: Number(form.percentage) });
+    const monthly = Number(form.monthlyProLabore) || 0;
+    if (editingId) await updatePartner(editingId, { name: form.name, percentage: Number(form.percentage), monthlyProLabore: monthly });
+    else await addPartner({ name: form.name, percentage: Number(form.percentage), monthlyProLabore: monthly });
     setOpen(false);
   };
 
@@ -160,6 +161,7 @@ export default function MonthlyRevenuePage() {
               <div className="space-y-3">
                 <div className="space-y-1.5"><Label className="text-xs">Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-9" /></div>
                 <div className="space-y-1.5"><Label className="text-xs">Porcentagem (%)</Label><Input type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} className="h-9 mono" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">Pró-labore Mensal (R$)</Label><Input type="number" step="0.01" value={form.monthlyProLabore} onChange={e => setForm({ ...form, monthlyProLabore: e.target.value })} className="h-9 mono" placeholder="0,00" /></div>
                 <Button onClick={handleSubmit} className="w-full h-10">{editingId ? "Salvar" : "Adicionar"}</Button>
               </div>
             </DialogContent>
