@@ -609,7 +609,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const addPartner = useCallback(async (p: Omit<Partner, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("partners").insert({
       name: p.name, percentage: p.percentage,
-    }).select().single();
+      monthly_pro_labore: p.monthlyProLabore ?? 0,
+    } as any).select().single();
     if (error) { toast.error("Erro ao adicionar sócio"); return; }
     setPartners(prev => [...prev, mapPartner(data)]);
   }, []);
@@ -618,6 +619,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.percentage !== undefined) dbUpdates.percentage = updates.percentage;
+    if (updates.monthlyProLabore !== undefined) dbUpdates.monthly_pro_labore = updates.monthlyProLabore;
     const { error } = await supabase.from("partners").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar sócio"); return; }
     setPartners(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -806,6 +808,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from("seller_manual_debts" as any).delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir"); return; }
     setSellerManualDebts(prev => prev.filter(d => d.id !== id));
+  }, []);
+
+  // ---- Commission Payments ----
+  const addCommissionPayment = useCallback(async (p: Omit<CommissionPayment, "id">) => {
+    const { data, error } = await supabase.from("commission_payments" as any).insert({
+      seller_id: p.sellerId, amount: p.amount, date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar comissão"); return; }
+    setCommissionPayments(prev => [...prev, mapCommissionPayment(data)]);
+    toast.success("Comissão registrada");
+  }, []);
+
+  const deleteCommissionPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("commission_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    setCommissionPayments(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  // ---- Pro-labore Payments ----
+  const addProLaborePayment = useCallback(async (p: Omit<ProLaborePayment, "id">) => {
+    const { data, error } = await supabase.from("pro_labore_payments" as any).insert({
+      partner_id: p.partnerId, amount: p.amount, date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pró-labore"); return; }
+    setProLaborePayments(prev => [...prev, mapProLaborePayment(data)]);
+    toast.success("Pró-labore registrado");
+  }, []);
+
+  const deleteProLaborePayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("pro_labore_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    setProLaborePayments(prev => prev.filter(p => p.id !== id));
   }, []);
 
   // ---- Computed ----
