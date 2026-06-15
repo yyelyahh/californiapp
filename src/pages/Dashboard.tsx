@@ -271,8 +271,8 @@ export default function Dashboard() {
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+            <div className="min-w-0">
               <h2 className="text-sm font-semibold tracking-tight">Evolução financeira</h2>
               <p className="text-[11px] text-muted-foreground">Últimos 6 meses · receita vs custos</p>
             </div>
@@ -356,8 +356,8 @@ function PrimaryKPI({ icon: Icon, label, value, hint, iconTone, valueTone }: { i
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
         <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
       </div>
-      <p className={cn("mt-1 text-2xl font-semibold mono", valueTone ?? "text-foreground")}>{value}</p>
-      {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
+      <p className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")}>{value}</p>
+      {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
     </div>
   );
 }

@@ -316,12 +316,12 @@ export default function ProductsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                          <th className="text-left py-2 px-3">Sabor · Modelo</th>
-                          <th className="text-right py-2 px-3 w-[90px]">Estoque</th>
-                          <th className="text-right py-2 px-3 w-[110px]">Compra</th>
-                          <th className="text-right py-2 px-3 w-[110px]">Venda</th>
-                          <th className="text-right py-2 px-3 w-[110px]">Lucro/un</th>
-                          <th className="py-2 px-3 w-[70px]"></th>
+                          <th className="text-left py-2 px-2 sm:px-3">Sabor · Modelo</th>
+                          <th className="text-right py-2 px-2 sm:px-3 w-[60px] sm:w-[90px]">Est.</th>
+                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px] hidden sm:table-cell">Compra</th>
+                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Venda</th>
+                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Lucro</th>
+                          <th className="py-2 px-2 sm:px-3 w-[40px] sm:w-[70px]"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -330,20 +330,20 @@ export default function ProductsPage() {
                           const lowStock = p.stock > 0 && p.stock <= 3;
                           return (
                             <tr key={p.id} className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group">
-                              <td className="py-2 px-3">
+                              <td className="py-2 px-2 sm:px-3">
                                 <div className="font-medium text-foreground leading-tight">{p.flavor || p.name}</div>
                                 {p.flavor && p.model && (
                                   <div className="text-[11px] text-muted-foreground mt-0.5">{p.model}</div>
                                 )}
                               </td>
-                              <td className="py-2 px-3 text-right mono text-sm">
+                              <td className="py-2 px-2 sm:px-3 text-right mono text-sm">
                                 <span className={cn("font-semibold", p.stock === 0 ? "text-muted-foreground/50" : lowStock ? "text-warning" : "text-foreground")}>{p.stock}</span>
                               </td>
-                              <td className="py-2 px-3 text-right mono text-xs text-muted-foreground">{formatCurrency(p.purchasePrice)}</td>
-                              <td className="py-2 px-3 text-right mono text-xs text-foreground">{formatCurrency(p.salePrice)}</td>
-                              <td className={cn("py-2 px-3 text-right mono text-xs font-medium", profit >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(profit)}</td>
-                              <td className="py-2 px-3">
-                                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <td className="py-2 px-2 sm:px-3 text-right mono text-xs text-muted-foreground hidden sm:table-cell">{formatCurrency(p.purchasePrice)}</td>
+                              <td className="py-2 px-2 sm:px-3 text-right mono text-xs text-foreground">{formatCurrency(p.salePrice)}</td>
+                              <td className={cn("py-2 px-2 sm:px-3 text-right mono text-xs font-medium", profit >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(profit)}</td>
+                              <td className="py-2 px-2 sm:px-3">
+                                <div className="flex gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(p)}><Pencil size={13} /></Button>
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)}><Trash2 size={13} /></Button>
                                 </div>

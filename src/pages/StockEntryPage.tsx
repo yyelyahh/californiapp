@@ -334,7 +334,7 @@ export default function StockEntryPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-2 grid-cols-3">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
             <Package size={11} /> Entradas

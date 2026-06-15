@@ -295,7 +295,7 @@ export default function SalesPage() {
           </Dialog>
         </div>
 
-        <div className="grid gap-2 grid-cols-3">
+        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
           <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
             <p className="mt-0.5 text-base font-semibold mono">{mySales.length}</p>
@@ -316,13 +316,13 @@ export default function SalesPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[420px]">
               <thead>
                 <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  <th className="text-left py-2 px-3">Produto</th>
-                  <th className="text-right py-2 px-3 w-[60px]">Qtd</th>
-                  <th className="text-right py-2 px-3 w-[110px]">Total</th>
-                  <th className="text-right py-2 px-3 w-[110px]">Falta</th>
+                  <th className="text-left py-2 px-2 sm:px-3">Produto</th>
+                  <th className="text-right py-2 px-2 sm:px-3 w-[50px]">Qtd</th>
+                  <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Total</th>
+                  <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Falta</th>
                 </tr>
               </thead>
               <tbody>
@@ -568,16 +568,16 @@ export default function SalesPage() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm min-w-[640px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                         <th className="text-left py-2 px-3">Produto</th>
-                        <th className="text-right py-2 px-3 w-[60px]">Qtd</th>
-                        <th className="text-right py-2 px-3 w-[120px]">Total</th>
-                        <th className="text-right py-2 px-3 w-[120px]">Recebido</th>
-                        <th className="text-right py-2 px-3 w-[120px]">Falta</th>
-                        <th className="text-left py-2 px-3 w-[80px]">Status</th>
-                        <th className="py-2 px-3 w-[80px]"></th>
+                        <th className="text-right py-2 px-3 w-[50px]">Qtd</th>
+                        <th className="text-right py-2 px-3 w-[100px]">Total</th>
+                        <th className="text-right py-2 px-3 w-[100px]">Recebido</th>
+                        <th className="text-right py-2 px-3 w-[100px]">Falta</th>
+                        <th className="text-left py-2 px-3 w-[70px]">Status</th>
+                        <th className="py-2 px-3 w-[70px]"></th>
                       </tr>
                     </thead>
                     <tbody>{sortedSales.map(renderRow)}</tbody>
@@ -593,7 +593,7 @@ export default function SalesPage() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm min-w-[420px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                         <th className="text-left py-2 px-3">Produto</th>
