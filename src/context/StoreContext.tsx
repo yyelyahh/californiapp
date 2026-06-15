@@ -266,6 +266,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
+  const mapCommissionPayment = (r: any): CommissionPayment => ({
+    id: r.id, sellerId: r.seller_id,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
+  const mapProLaborePayment = (r: any): ProLaborePayment => ({
+    id: r.id, partnerId: r.partner_id,
+    amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
   // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
     const { data, error } = await supabase.from("products").insert({
