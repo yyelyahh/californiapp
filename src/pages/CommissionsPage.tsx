@@ -217,7 +217,7 @@ export default function CommissionsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Conta Corrente & Distribuição</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Comissão</h1>
           <p className="text-xs text-muted-foreground">Saldos dos vendedores e retiradas dos sócios · {label}</p>
         </div>
         <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
