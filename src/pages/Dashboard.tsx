@@ -271,12 +271,12 @@ export default function Dashboard() {
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
             <div className="min-w-0">
               <h2 className="text-sm font-semibold tracking-tight">Evolução financeira</h2>
               <p className="text-[11px] text-muted-foreground">Últimos 6 meses · receita vs custos</p>
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] shrink-0">
+            <div className="flex items-center gap-3 text-[11px]">
               <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-income" /> Receita</span>
               <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-destructive" /> Custos</span>
             </div>
