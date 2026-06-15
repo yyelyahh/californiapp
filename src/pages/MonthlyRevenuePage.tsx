@@ -161,7 +161,7 @@ export default function MonthlyRevenuePage() {
               <div className="space-y-3">
                 <div className="space-y-1.5"><Label className="text-xs">Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-9" /></div>
                 <div className="space-y-1.5"><Label className="text-xs">Porcentagem (%)</Label><Input type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} className="h-9 mono" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">Pró-labore Mensal (R$)</Label><Input type="number" step="0.01" value={form.monthlyProLabore} onChange={e => setForm({ ...form, monthlyProLabore: e.target.value })} className="h-9 mono" placeholder="0,00" /></div>
+                
                 <Button onClick={handleSubmit} className="w-full h-10">{editingId ? "Salvar" : "Adicionar"}</Button>
               </div>
             </DialogContent>
