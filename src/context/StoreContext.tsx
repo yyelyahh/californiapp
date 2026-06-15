@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss, CommissionPayment, ProLaborePayment } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -56,6 +56,12 @@ interface StoreContextType {
   sellerManualDebts: SellerManualDebt[];
   addSellerManualDebt: (d: Omit<SellerManualDebt, "id">) => Promise<void>;
   deleteSellerManualDebt: (id: string) => Promise<void>;
+  commissionPayments: CommissionPayment[];
+  addCommissionPayment: (p: Omit<CommissionPayment, "id">) => Promise<void>;
+  deleteCommissionPayment: (id: string) => Promise<void>;
+  proLaborePayments: ProLaborePayment[];
+  addProLaborePayment: (p: Omit<ProLaborePayment, "id">) => Promise<void>;
+  deleteProLaborePayment: (id: string) => Promise<void>;
   getSellerName: (id: string) => string;
   getTotalRevenue: () => number;
   getTotalCosts: () => number;
