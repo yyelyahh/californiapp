@@ -92,7 +92,24 @@ export interface Partner {
   id: string;
   name: string;
   percentage: number;
+  monthlyProLabore: number;
   createdAt: string;
+}
+
+export interface CommissionPayment {
+  id: string;
+  sellerId: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
+export interface ProLaborePayment {
+  id: string;
+  partnerId: string;
+  amount: number;
+  date: string;
+  notes?: string;
 }
 
 export interface PartnerPayment {
