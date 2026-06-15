@@ -887,7 +887,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, loading,
+      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
       addProduct, updateProduct, deleteProduct,
       addStockEntry, deleteStockEntry, addStockLoss, deleteStockLoss, getTotalLossValue, addSale, updateSale, deleteSale,
       addExpense, deleteExpense,
@@ -896,7 +896,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addPartner, updatePartner, deletePartner,
       addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth, getTotalPartnerPayments,
       addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment,
-      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt, getSellerName,
+      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt,
+      addCommissionPayment, deleteCommissionPayment, addProLaborePayment, deleteProLaborePayment,
+      getSellerName,
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
       getSellerDebt, getSellerPaid, getSellerBalance,
