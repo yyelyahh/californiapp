@@ -267,16 +267,16 @@ export default function SellersPage() {
                     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/40 transition-colors">
                       <ChevronDown size={14} className={cn("shrink-0 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
                       <div className="font-medium text-sm flex-1 min-w-0 truncate">{seller.name}</div>
-                      <div className="flex items-center gap-4 text-xs">
-                        <div className="text-right">
+                      <div className="flex items-center gap-3 sm:gap-4 text-xs shrink-0">
+                        <div className="text-right min-w-[48px] sm:min-w-[56px]">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Itens</p>
                           <p className="mono font-medium">{totalItems}</p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right min-w-[80px] sm:min-w-[96px]">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">A receber</p>
                           <p className="mono font-semibold text-income">{formatCurrency(receivable)}</p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right min-w-[80px] sm:min-w-[96px]">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saldo</p>
                           <p className={cn("mono font-semibold", debt > 0 ? "text-destructive" : debt < 0 ? "text-income" : "text-muted-foreground")}>{formatBalance(debt)}</p>
                         </div>
