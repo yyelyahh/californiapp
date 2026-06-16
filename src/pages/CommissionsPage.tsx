@@ -116,27 +116,28 @@ export default function CommissionsPage() {
     const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // Conta Corrente do vendedor (no período)
+    // Conta Corrente do vendedor — APENAS comissão (não inclui valor bruto das vendas)
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
-      const retiradasProd = sellerSales.filter(s => s.type === "retirada_funcionario").reduce((a, s) => a + s.totalPrice, 0);
-      const ajustesNeg = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
-      const pagamentos = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = computeSellerCommission(vendas);
-      const bonus = c.accrued;
+      const accrued = c.accrued; // comissão total = receita × taxa da faixa atual
       const units = c.units;
 
-      const credits = vendasTotal + bonus;
-      const debits = retiradasProd + ajustesNeg + pagamentos + commPaid;
-      const balance = credits - debits;
+      // Quebra cronológica em accruals + ajustes de faixa (para o extrato)
+      const accrualItems = computeAccrualHistory(vendas);
+      const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
+      const baseAccrued = accrued - adjustmentsTotal;
+
+      const balance = accrued - commPaid;
 
       return {
-        seller, units, vendasTotal, retiradasProd, ajustesNeg, pagamentos, commPaid,
-        bonus, tier: c.tier, credits, debits, balance,
+        seller, units, vendasTotal, commPaid,
+        accrued, baseAccrued, adjustmentsTotal,
+        tier: c.tier, balance, accrualItems,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
