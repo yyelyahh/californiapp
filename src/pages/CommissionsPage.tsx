@@ -491,10 +491,10 @@ export default function CommissionsPage() {
             <div className="mt-4 space-y-4">
               <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{sellerRow.seller.name}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Vendas</span><span className="mono text-income">{formatCurrency(sellerRow.vendasTotal)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Bônus ({sellerRow.tier.label})</span><span className="mono text-income">{formatCurrency(sellerRow.bonus)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Retiradas/Pagamentos</span><span className="mono">{formatCurrency(sellerRow.debits)}</span></div>
-                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo</span><span className={cn("mono font-semibold", sellerRow.balance > 0 ? "text-warning" : "text-income")}>{formatCurrency(sellerRow.balance)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Faturamento</span><span className="mono">{formatCurrency(sellerRow.vendasTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Comissão acumulada ({sellerRow.tier.label})</span><span className="mono text-income">{formatCurrency(sellerRow.accrued)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Já pago</span><span className="mono">{formatCurrency(sellerRow.commPaid)}</span></div>
+                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo a pagar</span><span className={cn("mono font-semibold", sellerRow.balance > 0 ? "text-warning" : "text-income")}>{formatCurrency(sellerRow.balance)}</span></div>
               </div>
               <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
               <div><Label>Data</Label><Input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
