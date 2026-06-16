@@ -22,16 +22,23 @@ export default function Dashboard() {
   const investedCapital = store.getTotalInvested();
 
   const monthOptions = useMemo(() => {
+    const set = new Set<string>();
+    set.add(format(new Date(), "yyyy-MM"));
+    store.sales.forEach(s => { try { set.add(format(parseISO(s.date), "yyyy-MM")); } catch {} });
+    store.expenses.forEach(e => { try { set.add(format(parseISO(e.date), "yyyy-MM")); } catch {} });
+    store.stockEntries.forEach(e => { try { set.add(format(parseISO(e.date), "yyyy-MM")); } catch {} });
+    const sorted = Array.from(set).sort((a, b) => b.localeCompare(a));
     const opts: { value: string; label: string }[] = [{ value: GERAL, label: "Geral (todo período)" }];
-    for (let i = 0; i < 12; i++) {
-      const d = subMonths(new Date(), i);
+    sorted.forEach(ym => {
+      const [y, m] = ym.split("-").map(Number);
+      const d = new Date(y, m - 1, 15);
       opts.push({
-        value: format(d, "yyyy-MM"),
+        value: ym,
         label: format(d, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
       });
-    }
+    });
     return opts;
-  }, []);
+  }, [store.sales, store.expenses, store.stockEntries]);
 
   const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
 
