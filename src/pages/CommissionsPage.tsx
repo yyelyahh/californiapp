@@ -628,11 +628,9 @@ function Mini({ label, value, tone, strong }: { label: string; value: string; to
   );
 }
 
-function ExtractIcon({ kind }: { kind: "venda" | "retirada" | "bonus" | "pagamento" | "ajuste" }) {
+function ExtractIcon({ kind }: { kind: "accrual" | "adjustment" | "pagamento" }) {
   const cls = "w-7 h-7 rounded-full flex items-center justify-center shrink-0";
-  if (kind === "venda") return <div className={cn(cls, "bg-income/15 text-income")}><Banknote size={14} /></div>;
-  if (kind === "retirada") return <div className={cn(cls, "bg-warning/15 text-warning")}><Package size={14} /></div>;
-  if (kind === "bonus") return <div className={cn(cls, "bg-primary/15 text-primary")}><Award size={14} /></div>;
-  if (kind === "pagamento") return <div className={cn(cls, "bg-fixed/15 text-fixed")}><Wallet size={14} /></div>;
-  return <div className={cn(cls, "bg-secondary text-muted-foreground")}><ArrowDownCircle size={14} /></div>;
+  if (kind === "accrual") return <div className={cn(cls, "bg-income/15 text-income")}><Award size={14} /></div>;
+  if (kind === "adjustment") return <div className={cn(cls, "bg-primary/15 text-primary")}><RefreshCw size={14} /></div>;
+  return <div className={cn(cls, "bg-fixed/15 text-fixed")}><Wallet size={14} /></div>;
 }
