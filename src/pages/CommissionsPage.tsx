@@ -323,7 +323,7 @@ export default function CommissionsPage() {
               const barPct = (r.vendasTotal / maxVendas) * 100;
               const positive = r.balance > 0.01;
               return (
-                <div key={r.seller.id} className="px-4 sm:px-5 py-4">
+                <div key={r.seller.id} className="px-4 sm:px-5 py-4 group/seller">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <button onClick={() => setExtractFor(r.seller.id)} className="flex items-center gap-2 min-w-0 text-left hover:opacity-80 transition-opacity">
                       <span className={cn(
@@ -336,15 +336,22 @@ export default function CommissionsPage() {
                           {isLeader && <Crown size={12} className="text-warning shrink-0" />}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          <span className="mono">{r.units}</span> un. vendidas · faixa <span className="font-mono">{r.tier.label}</span>
+                          <span className="mono">{r.units}</span> un. · faturamento <span className="mono">{formatCurrency(r.vendasTotal)}</span> · faixa <span className="font-mono">{r.tier.label}</span>
                         </p>
                       </div>
                     </button>
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo</p>
-                      <p className={cn("text-base sm:text-lg mono font-bold", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
-                        {formatCurrency(r.balance)}
-                      </p>
+                    <div className="flex items-start gap-2 shrink-0">
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo de Comissão</p>
+                        <p className={cn("text-base sm:text-lg mono font-bold", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
+                          {formatCurrency(r.balance)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { if (confirm(`Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.`)) deleteSeller(r.seller.id); }}
+                        className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100"
+                        aria-label="Remover vendedor"
+                      ><X size={14} /></button>
                     </div>
                   </div>
 
@@ -363,9 +370,9 @@ export default function CommissionsPage() {
                   )}
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <Mini label="Retiradas" value={formatCurrency(r.retiradasProd)} tone="warning" />
-                    <Mini label="Vendas" value={formatCurrency(r.vendasTotal)} tone="income" />
-                    <Mini label="Bônus" value={formatCurrency(r.bonus)} tone="income" />
+                    <Mini label="Comissão base" value={formatCurrency(r.baseAccrued)} tone="income" />
+                    <Mini label="Ajustes faixa" value={formatCurrency(r.adjustmentsTotal)} tone={r.adjustmentsTotal > 0 ? "income" : undefined} />
+                    <Mini label="Pago" value={formatCurrency(r.commPaid)} tone="warning" />
                     <div className="flex sm:justify-end gap-2 items-end">
                       <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
                         Extrato <ArrowRight size={11} className="ml-1" />
