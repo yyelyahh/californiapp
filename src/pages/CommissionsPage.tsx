@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, ArrowDownCircle, ArrowUpCircle, Package, Banknote, Award, Users,
+  ArrowRight, ArrowDownCircle, ArrowUpCircle, Award, Users, X, RefreshCw,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -20,8 +20,49 @@ import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils"
 import { cn } from "@/lib/utils";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
-  progressToNextTier, computeSellerCommission,
+  progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
 } from "@/lib/commissions";
+import type { Sale } from "@/types";
+
+function computeAccrualHistory(sales: Sale[]) {
+  const sorted = [...sales].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const items: {
+    id: string; when: string; label: string; amount: number;
+    kind: "accrual" | "adjustment"; meta?: string;
+  }[] = [];
+  let cumUnits = 0;
+  let cumRevenue = 0;
+  let currentRate = COMMISSION_TIERS[0].rate;
+  for (const s of sorted) {
+    const priorRevenue = cumRevenue;
+    cumUnits += s.quantity;
+    cumRevenue += s.totalPrice;
+    const tierAfter = getTierForUnits(cumUnits);
+    if (tierAfter.rate > currentRate) {
+      const adjustment = priorRevenue * (tierAfter.rate - currentRate);
+      if (adjustment > 0.001) {
+        items.push({
+          id: `adj-${s.id}`,
+          when: s.date,
+          label: `Ajuste de Faixa → ${tierAfter.label}`,
+          amount: adjustment,
+          kind: "adjustment",
+          meta: "Recálculo retroativo à nova taxa",
+        });
+      }
+      currentRate = tierAfter.rate;
+    }
+    items.push({
+      id: `acc-${s.id}`,
+      when: s.date,
+      label: `Comissão da venda (${s.quantity} un.)`,
+      amount: s.totalPrice * currentRate,
+      kind: "accrual",
+      meta: `Taxa: ${(currentRate * 100).toFixed(currentRate === 0.125 ? 1 : 0)}%`,
+    });
+  }
+  return items;
+}
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
