@@ -159,7 +159,7 @@ export default function Dashboard() {
 
       // Evolução 6 meses
       const wsEvol = XLSX.utils.json_to_sheet(monthlyData.map(m => ({
-        Mês: m.month, "Receita (R$)": fmt(m.receita), "Custos (R$)": fmt(m.custos),
+        Mês: m.monthLong, "Receita (R$)": fmt(m.receita), "Lucro Líquido (R$)": fmt(m.lucro), "Margem (%)": fmt(m.margem),
       })));
       wsEvol["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }];
       XLSX.utils.book_append_sheet(wb, wsEvol, "Evolução 6 meses");
