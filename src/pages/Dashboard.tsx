@@ -22,16 +22,23 @@ export default function Dashboard() {
   const investedCapital = store.getTotalInvested();
 
   const monthOptions = useMemo(() => {
+    const set = new Set<string>();
+    set.add(format(new Date(), "yyyy-MM"));
+    store.sales.forEach(s => { try { set.add(format(parseISO(s.date), "yyyy-MM")); } catch {} });
+    store.expenses.forEach(e => { try { set.add(format(parseISO(e.date), "yyyy-MM")); } catch {} });
+    store.stockEntries.forEach(e => { try { set.add(format(parseISO(e.date), "yyyy-MM")); } catch {} });
+    const sorted = Array.from(set).sort((a, b) => b.localeCompare(a));
     const opts: { value: string; label: string }[] = [{ value: GERAL, label: "Geral (todo período)" }];
-    for (let i = 0; i < 12; i++) {
-      const d = subMonths(new Date(), i);
+    sorted.forEach(ym => {
+      const [y, m] = ym.split("-").map(Number);
+      const d = new Date(y, m - 1, 15);
       opts.push({
-        value: format(d, "yyyy-MM"),
+        value: ym,
         label: format(d, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
       });
-    }
+    });
     return opts;
-  }, []);
+  }, [store.sales, store.expenses, store.stockEntries]);
 
   const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
 
@@ -80,20 +87,32 @@ export default function Dashboard() {
       const end = endOfMonth(date);
       const interval = { start, end };
 
-      const monthRevenue = store.sales
-        .filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval))
-        .reduce((sum, s) => sum + (s.paidAmount || 0), 0);
-      const monthCost = store.stockEntries.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.totalCost, 0);
-      const monthExpenses = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
+      const salesInMonth = store.sales.filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval));
+      const receita = salesInMonth.reduce((sum, s) => sum + s.totalPrice, 0);
+      const cogs = salesInMonth.reduce((sum, s) => {
+        const p = store.products.find(p => p.id === s.productId);
+        return sum + (p?.purchasePrice ?? 0) * s.quantity;
+      }, 0);
+      const desp = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
+      const lucro = receita - cogs - desp;
+      const margem = receita > 0 ? (lucro / receita) * 100 : 0;
 
       months.push({
         month: format(date, "MMM", { locale: ptBR }),
-        receita: monthRevenue,
-        custos: monthCost + monthExpenses,
+        monthLong: format(date, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
+        receita,
+        lucro,
+        margem,
       });
     }
     return months;
-  }, [store.sales, store.stockEntries, store.expenses]);
+  }, [store.sales, store.expenses, store.products]);
+
+  const avgMargin = useMemo(() => {
+    const withRevenue = monthlyData.filter(m => m.receita > 0);
+    if (!withRevenue.length) return 0;
+    return withRevenue.reduce((s, m) => s + m.margem, 0) / withRevenue.length;
+  }, [monthlyData]);
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const isGeral = filter === GERAL;
@@ -140,7 +159,7 @@ export default function Dashboard() {
 
       // Evolução 6 meses
       const wsEvol = XLSX.utils.json_to_sheet(monthlyData.map(m => ({
-        Mês: m.month, "Receita (R$)": fmt(m.receita), "Custos (R$)": fmt(m.custos),
+        Mês: m.monthLong, "Receita (R$)": fmt(m.receita), "Lucro Líquido (R$)": fmt(m.lucro), "Margem (%)": fmt(m.margem),
       })));
       wsEvol["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }];
       XLSX.utils.book_append_sheet(wb, wsEvol, "Evolução 6 meses");
@@ -273,12 +292,15 @@ export default function Dashboard() {
         <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold tracking-tight">Evolução financeira</h2>
-              <p className="text-[11px] text-muted-foreground">Últimos 6 meses · receita vs custos</p>
+              <h2 className="text-sm font-semibold tracking-tight">Desempenho Financeiro</h2>
+              <p className="text-[11px] text-muted-foreground">Receita vs Lucro Líquido · últimos 6 meses</p>
             </div>
-            <div className="flex items-center gap-3 text-[11px]">
+            <div className="flex items-center gap-4 text-[11px]">
               <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-income" /> Receita</span>
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-destructive" /> Custos</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-primary" /> Lucro Líquido</span>
+              <span className="hidden sm:flex items-center gap-1.5 text-muted-foreground border-l border-border pl-3">
+                Margem média <span className="mono font-semibold text-foreground">{avgMargin.toFixed(1)}%</span>
+              </span>
             </div>
           </div>
           <div className="h-60">
@@ -289,19 +311,39 @@ export default function Dashboard() {
                     <stop offset="0%" stopColor="hsl(var(--income))" stopOpacity={0.3} />
                     <stop offset="100%" stopColor="hsl(var(--income))" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="gradCustos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
+                  <linearGradient id="gradLucro" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} width={56} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1).replace('.0','')}k` : `${v}`} />
-                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: 12 }} formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip
+                  contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: 12, padding: "8px 10px" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d: any = payload[0].payload;
+                    return (
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
+                        <p className="font-semibold mb-1.5">{d.monthLong}</p>
+                        <div className="space-y-0.5">
+                          <p className="flex items-center justify-between gap-4"><span className="text-muted-foreground">Receita</span><span className="mono text-income font-semibold">{formatCurrency(d.receita)}</span></p>
+                          <p className="flex items-center justify-between gap-4"><span className="text-muted-foreground">Lucro Líquido</span><span className={cn("mono font-semibold", d.lucro >= 0 ? "text-primary" : "text-destructive")}>{formatCurrency(d.lucro)}</span></p>
+                          <p className="flex items-center justify-between gap-4 border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Margem</span><span className="mono font-semibold">{d.margem.toFixed(1)}%</span></p>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
                 <Area type="monotone" dataKey="receita" stroke="hsl(var(--income))" strokeWidth={2} fill="url(#gradReceita)" name="Receita" />
-                <Area type="monotone" dataKey="custos" stroke="hsl(var(--destructive))" strokeWidth={2} fill="url(#gradCustos)" name="Custos" />
+                <Area type="monotone" dataKey="lucro" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#gradLucro)" name="Lucro Líquido" />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+          <div className="sm:hidden mt-3 pt-3 border-t border-border flex items-center justify-between text-[11px]">
+            <span className="text-muted-foreground">Margem média</span>
+            <span className="mono font-semibold">{avgMargin.toFixed(1)}%</span>
           </div>
         </div>
 

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, ArrowDownCircle, ArrowUpCircle, Package, Banknote, Award, Users,
+  ArrowRight, ArrowDownCircle, ArrowUpCircle, Award, Users, X, RefreshCw,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -20,8 +20,49 @@ import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils"
 import { cn } from "@/lib/utils";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
-  progressToNextTier, computeSellerCommission,
+  progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
 } from "@/lib/commissions";
+import type { Sale } from "@/types";
+
+function computeAccrualHistory(sales: Sale[]) {
+  const sorted = [...sales].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const items: {
+    id: string; when: string; label: string; amount: number;
+    kind: "accrual" | "adjustment"; meta?: string;
+  }[] = [];
+  let cumUnits = 0;
+  let cumRevenue = 0;
+  let currentRate = COMMISSION_TIERS[0].rate;
+  for (const s of sorted) {
+    const priorRevenue = cumRevenue;
+    cumUnits += s.quantity;
+    cumRevenue += s.totalPrice;
+    const tierAfter = getTierForUnits(cumUnits);
+    if (tierAfter.rate > currentRate) {
+      const adjustment = priorRevenue * (tierAfter.rate - currentRate);
+      if (adjustment > 0.001) {
+        items.push({
+          id: `adj-${s.id}`,
+          when: s.date,
+          label: `Ajuste de Faixa → ${tierAfter.label}`,
+          amount: adjustment,
+          kind: "adjustment",
+          meta: "Recálculo retroativo à nova taxa",
+        });
+      }
+      currentRate = tierAfter.rate;
+    }
+    items.push({
+      id: `acc-${s.id}`,
+      when: s.date,
+      label: `Comissão da venda (${s.quantity} un.)`,
+      amount: s.totalPrice * currentRate,
+      kind: "accrual",
+      meta: `Taxa: ${(currentRate * 100).toFixed(currentRate === 0.125 ? 1 : 0)}%`,
+    });
+  }
+  return items;
+}
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -36,7 +77,7 @@ export default function CommissionsPage() {
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
-    getSellerName,
+    getSellerName, deleteSeller,
   } = store;
 
   // Retiradas dos sócios = proLaborePayments (apenas relabel semântico)
@@ -75,27 +116,28 @@ export default function CommissionsPage() {
     const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // Conta Corrente do vendedor (no período)
+    // Conta Corrente do vendedor — APENAS comissão (não inclui valor bruto das vendas)
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
-      const retiradasProd = sellerSales.filter(s => s.type === "retirada_funcionario").reduce((a, s) => a + s.totalPrice, 0);
-      const ajustesNeg = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
-      const pagamentos = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = computeSellerCommission(vendas);
-      const bonus = c.accrued;
+      const accrued = c.accrued; // comissão total = receita × taxa da faixa atual
       const units = c.units;
 
-      const credits = vendasTotal + bonus;
-      const debits = retiradasProd + ajustesNeg + pagamentos + commPaid;
-      const balance = credits - debits;
+      // Quebra cronológica em accruals + ajustes de faixa (para o extrato)
+      const accrualItems = computeAccrualHistory(vendas);
+      const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
+      const baseAccrued = accrued - adjustmentsTotal;
+
+      const balance = accrued - commPaid;
 
       return {
-        seller, units, vendasTotal, retiradasProd, ajustesNeg, pagamentos, commPaid,
-        bonus, tier: c.tier, credits, debits, balance,
+        seller, units, vendasTotal, commPaid,
+        accrued, baseAccrued, adjustmentsTotal,
+        tier: c.tier, balance, accrualItems,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
@@ -177,38 +219,25 @@ export default function CommissionsPage() {
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
   const extractRow = extractFor ? periodMetrics.perSeller.find(r => r.seller.id === extractFor) : null;
 
-  // Extrato do vendedor selecionado (no período)
+  // Extrato do vendedor — apenas comissão (sem vendas brutas, sem retiradas de produto, sem débitos manuais)
   const extractItems = useMemo(() => {
     if (!extractRow) return [];
     const sid = extractRow.seller.id;
-    const items: { id: string; when: string; label: string; amount: number; kind: "credit" | "debit"; icon: "venda" | "retirada" | "bonus" | "pagamento" | "ajuste" }[] = [];
+    const items: { id: string; when: string; label: string; amount: number; kind: "credit" | "debit"; icon: "accrual" | "adjustment" | "pagamento"; meta?: string }[] = [];
 
-    sales.filter(s => s.sellerId === sid && inPeriod(s.date)).forEach(s => {
-      if (s.type === "venda") {
-        items.push({ id: `s-${s.id}`, when: s.date, label: "Venda Registrada", amount: s.totalPrice, kind: "credit", icon: "venda" });
-      } else {
-        items.push({ id: `s-${s.id}`, when: s.date, label: "Retirada de Produtos", amount: s.totalPrice, kind: "debit", icon: "retirada" });
-      }
-    });
-    sellerManualDebts.filter(d => d.sellerId === sid && inPeriod(d.date)).forEach(d => {
-      items.push({ id: `m-${d.id}`, when: d.date, label: d.notes || "Ajuste de débito", amount: d.amount, kind: "debit", icon: "ajuste" });
-    });
-    sellerDebtPayments.filter(p => p.sellerId === sid && inPeriod(p.date)).forEach(p => {
-      items.push({ id: `p-${p.id}`, when: p.date, label: "Pagamento ao Funcionário", amount: p.amount, kind: "debit", icon: "pagamento" });
+    extractRow.accrualItems.forEach(it => {
+      items.push({
+        id: it.id, when: it.when, label: it.label, amount: it.amount,
+        kind: "credit",
+        icon: it.kind === "adjustment" ? "adjustment" : "accrual",
+        meta: it.meta,
+      });
     });
     commissionPayments.filter(p => p.sellerId === sid && inPeriod(p.date)).forEach(p => {
-      items.push({ id: `c-${p.id}`, when: p.date, label: "Pagamento de Comissão", amount: p.amount, kind: "debit", icon: "pagamento" });
+      items.push({ id: `c-${p.id}`, when: p.date, label: "Pagamento de Comissão", amount: p.amount, kind: "debit", icon: "pagamento", meta: p.notes });
     });
-    // Bônus de comissão acumulada (entrada virtual única)
-    if (extractRow.bonus > 0.01) {
-      items.push({
-        id: `bonus-${sid}`, when: end.toISOString(),
-        label: `Bônus Faixa ${extractRow.tier.label} (${extractRow.units} un.)`,
-        amount: extractRow.bonus, kind: "credit", icon: "bonus",
-      });
-    }
     return items.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
-  }, [extractRow, sales, sellerManualDebts, sellerDebtPayments, commissionPayments, start, end]);
+  }, [extractRow, commissionPayments, start, end]);
 
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
 
@@ -294,7 +323,7 @@ export default function CommissionsPage() {
               const barPct = (r.vendasTotal / maxVendas) * 100;
               const positive = r.balance > 0.01;
               return (
-                <div key={r.seller.id} className="px-4 sm:px-5 py-4">
+                <div key={r.seller.id} className="px-4 sm:px-5 py-4 group/seller">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <button onClick={() => setExtractFor(r.seller.id)} className="flex items-center gap-2 min-w-0 text-left hover:opacity-80 transition-opacity">
                       <span className={cn(
@@ -307,15 +336,22 @@ export default function CommissionsPage() {
                           {isLeader && <Crown size={12} className="text-warning shrink-0" />}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          <span className="mono">{r.units}</span> un. vendidas · faixa <span className="font-mono">{r.tier.label}</span>
+                          <span className="mono">{r.units}</span> un. · faturamento <span className="mono">{formatCurrency(r.vendasTotal)}</span> · faixa <span className="font-mono">{r.tier.label}</span>
                         </p>
                       </div>
                     </button>
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo</p>
-                      <p className={cn("text-base sm:text-lg mono font-bold", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
-                        {formatCurrency(r.balance)}
-                      </p>
+                    <div className="flex items-start gap-2 shrink-0">
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo de Comissão</p>
+                        <p className={cn("text-base sm:text-lg mono font-bold", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
+                          {formatCurrency(r.balance)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { if (confirm(`Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.`)) deleteSeller(r.seller.id); }}
+                        className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100"
+                        aria-label="Remover vendedor"
+                      ><X size={14} /></button>
                     </div>
                   </div>
 
@@ -334,9 +370,9 @@ export default function CommissionsPage() {
                   )}
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <Mini label="Retiradas" value={formatCurrency(r.retiradasProd)} tone="warning" />
-                    <Mini label="Vendas" value={formatCurrency(r.vendasTotal)} tone="income" />
-                    <Mini label="Bônus" value={formatCurrency(r.bonus)} tone="income" />
+                    <Mini label="Comissão base" value={formatCurrency(r.baseAccrued)} tone="income" />
+                    <Mini label="Ajustes faixa" value={formatCurrency(r.adjustmentsTotal)} tone={r.adjustmentsTotal > 0 ? "income" : undefined} />
+                    <Mini label="Pago" value={formatCurrency(r.commPaid)} tone="warning" />
                     <div className="flex sm:justify-end gap-2 items-end">
                       <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
                         Extrato <ArrowRight size={11} className="ml-1" />
@@ -455,10 +491,10 @@ export default function CommissionsPage() {
             <div className="mt-4 space-y-4">
               <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{sellerRow.seller.name}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Vendas</span><span className="mono text-income">{formatCurrency(sellerRow.vendasTotal)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Bônus ({sellerRow.tier.label})</span><span className="mono text-income">{formatCurrency(sellerRow.bonus)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Retiradas/Pagamentos</span><span className="mono">{formatCurrency(sellerRow.debits)}</span></div>
-                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo</span><span className={cn("mono font-semibold", sellerRow.balance > 0 ? "text-warning" : "text-income")}>{formatCurrency(sellerRow.balance)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Faturamento</span><span className="mono">{formatCurrency(sellerRow.vendasTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Comissão acumulada ({sellerRow.tier.label})</span><span className="mono text-income">{formatCurrency(sellerRow.accrued)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Já pago</span><span className="mono">{formatCurrency(sellerRow.commPaid)}</span></div>
+                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo a pagar</span><span className={cn("mono font-semibold", sellerRow.balance > 0 ? "text-warning" : "text-income")}>{formatCurrency(sellerRow.balance)}</span></div>
               </div>
               <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
               <div><Label>Data</Label><Input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
@@ -499,8 +535,8 @@ export default function CommissionsPage() {
                 <p className="text-sm font-semibold">{extractRow.seller.name}</p>
                 <p className="text-[11px] text-muted-foreground">{label} · faixa {extractRow.tier.label}</p>
                 <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Mini label="Créditos" value={formatCurrency(extractRow.credits)} tone="income" />
-                  <Mini label="Débitos" value={formatCurrency(extractRow.debits)} tone="warning" />
+                  <Mini label="Acumulada" value={formatCurrency(extractRow.accrued)} tone="income" />
+                  <Mini label="Paga" value={formatCurrency(extractRow.commPaid)} tone="warning" />
                   <Mini label="Saldo" value={formatCurrency(extractRow.balance)} strong tone={extractRow.balance > 0 ? "warning" : "income"} />
                 </div>
               </div>
@@ -592,11 +628,9 @@ function Mini({ label, value, tone, strong }: { label: string; value: string; to
   );
 }
 
-function ExtractIcon({ kind }: { kind: "venda" | "retirada" | "bonus" | "pagamento" | "ajuste" }) {
+function ExtractIcon({ kind }: { kind: "accrual" | "adjustment" | "pagamento" }) {
   const cls = "w-7 h-7 rounded-full flex items-center justify-center shrink-0";
-  if (kind === "venda") return <div className={cn(cls, "bg-income/15 text-income")}><Banknote size={14} /></div>;
-  if (kind === "retirada") return <div className={cn(cls, "bg-warning/15 text-warning")}><Package size={14} /></div>;
-  if (kind === "bonus") return <div className={cn(cls, "bg-primary/15 text-primary")}><Award size={14} /></div>;
-  if (kind === "pagamento") return <div className={cn(cls, "bg-fixed/15 text-fixed")}><Wallet size={14} /></div>;
-  return <div className={cn(cls, "bg-secondary text-muted-foreground")}><ArrowDownCircle size={14} /></div>;
+  if (kind === "accrual") return <div className={cn(cls, "bg-income/15 text-income")}><Award size={14} /></div>;
+  if (kind === "adjustment") return <div className={cn(cls, "bg-primary/15 text-primary")}><RefreshCw size={14} /></div>;
+  return <div className={cn(cls, "bg-fixed/15 text-fixed")}><Wallet size={14} /></div>;
 }
