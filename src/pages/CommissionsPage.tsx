@@ -535,8 +535,8 @@ export default function CommissionsPage() {
                 <p className="text-sm font-semibold">{extractRow.seller.name}</p>
                 <p className="text-[11px] text-muted-foreground">{label} · faixa {extractRow.tier.label}</p>
                 <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Mini label="Créditos" value={formatCurrency(extractRow.credits)} tone="income" />
-                  <Mini label="Débitos" value={formatCurrency(extractRow.debits)} tone="warning" />
+                  <Mini label="Acumulada" value={formatCurrency(extractRow.accrued)} tone="income" />
+                  <Mini label="Paga" value={formatCurrency(extractRow.commPaid)} tone="warning" />
                   <Mini label="Saldo" value={formatCurrency(extractRow.balance)} strong tone={extractRow.balance > 0 ? "warning" : "income"} />
                 </div>
               </div>
