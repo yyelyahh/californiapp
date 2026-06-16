@@ -87,20 +87,32 @@ export default function Dashboard() {
       const end = endOfMonth(date);
       const interval = { start, end };
 
-      const monthRevenue = store.sales
-        .filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval))
-        .reduce((sum, s) => sum + (s.paidAmount || 0), 0);
-      const monthCost = store.stockEntries.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.totalCost, 0);
-      const monthExpenses = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
+      const salesInMonth = store.sales.filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval));
+      const receita = salesInMonth.reduce((sum, s) => sum + s.totalPrice, 0);
+      const cogs = salesInMonth.reduce((sum, s) => {
+        const p = store.products.find(p => p.id === s.productId);
+        return sum + (p?.purchasePrice ?? 0) * s.quantity;
+      }, 0);
+      const desp = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
+      const lucro = receita - cogs - desp;
+      const margem = receita > 0 ? (lucro / receita) * 100 : 0;
 
       months.push({
         month: format(date, "MMM", { locale: ptBR }),
-        receita: monthRevenue,
-        custos: monthCost + monthExpenses,
+        monthLong: format(date, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
+        receita,
+        lucro,
+        margem,
       });
     }
     return months;
-  }, [store.sales, store.stockEntries, store.expenses]);
+  }, [store.sales, store.expenses, store.products]);
+
+  const avgMargin = useMemo(() => {
+    const withRevenue = monthlyData.filter(m => m.receita > 0);
+    if (!withRevenue.length) return 0;
+    return withRevenue.reduce((s, m) => s + m.margem, 0) / withRevenue.length;
+  }, [monthlyData]);
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const isGeral = filter === GERAL;
