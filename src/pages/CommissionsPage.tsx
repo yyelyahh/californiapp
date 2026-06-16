@@ -219,38 +219,25 @@ export default function CommissionsPage() {
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
   const extractRow = extractFor ? periodMetrics.perSeller.find(r => r.seller.id === extractFor) : null;
 
-  // Extrato do vendedor selecionado (no período)
+  // Extrato do vendedor — apenas comissão (sem vendas brutas, sem retiradas de produto, sem débitos manuais)
   const extractItems = useMemo(() => {
     if (!extractRow) return [];
     const sid = extractRow.seller.id;
-    const items: { id: string; when: string; label: string; amount: number; kind: "credit" | "debit"; icon: "venda" | "retirada" | "bonus" | "pagamento" | "ajuste" }[] = [];
+    const items: { id: string; when: string; label: string; amount: number; kind: "credit" | "debit"; icon: "accrual" | "adjustment" | "pagamento"; meta?: string }[] = [];
 
-    sales.filter(s => s.sellerId === sid && inPeriod(s.date)).forEach(s => {
-      if (s.type === "venda") {
-        items.push({ id: `s-${s.id}`, when: s.date, label: "Venda Registrada", amount: s.totalPrice, kind: "credit", icon: "venda" });
-      } else {
-        items.push({ id: `s-${s.id}`, when: s.date, label: "Retirada de Produtos", amount: s.totalPrice, kind: "debit", icon: "retirada" });
-      }
-    });
-    sellerManualDebts.filter(d => d.sellerId === sid && inPeriod(d.date)).forEach(d => {
-      items.push({ id: `m-${d.id}`, when: d.date, label: d.notes || "Ajuste de débito", amount: d.amount, kind: "debit", icon: "ajuste" });
-    });
-    sellerDebtPayments.filter(p => p.sellerId === sid && inPeriod(p.date)).forEach(p => {
-      items.push({ id: `p-${p.id}`, when: p.date, label: "Pagamento ao Funcionário", amount: p.amount, kind: "debit", icon: "pagamento" });
+    extractRow.accrualItems.forEach(it => {
+      items.push({
+        id: it.id, when: it.when, label: it.label, amount: it.amount,
+        kind: "credit",
+        icon: it.kind === "adjustment" ? "adjustment" : "accrual",
+        meta: it.meta,
+      });
     });
     commissionPayments.filter(p => p.sellerId === sid && inPeriod(p.date)).forEach(p => {
-      items.push({ id: `c-${p.id}`, when: p.date, label: "Pagamento de Comissão", amount: p.amount, kind: "debit", icon: "pagamento" });
+      items.push({ id: `c-${p.id}`, when: p.date, label: "Pagamento de Comissão", amount: p.amount, kind: "debit", icon: "pagamento", meta: p.notes });
     });
-    // Bônus de comissão acumulada (entrada virtual única)
-    if (extractRow.bonus > 0.01) {
-      items.push({
-        id: `bonus-${sid}`, when: end.toISOString(),
-        label: `Bônus Faixa ${extractRow.tier.label} (${extractRow.units} un.)`,
-        amount: extractRow.bonus, kind: "credit", icon: "bonus",
-      });
-    }
     return items.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
-  }, [extractRow, sales, sellerManualDebts, sellerDebtPayments, commissionPayments, start, end]);
+  }, [extractRow, commissionPayments, start, end]);
 
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
 
