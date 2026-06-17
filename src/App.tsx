@@ -19,6 +19,7 @@ import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
 
 import LoginPage from "@/pages/LoginPage";
+import LandingPage from "@/pages/LandingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,7 +45,7 @@ function ProtectedRoutes() {
     <StoreProvider>
       <AppLayout>
         <Routes>
-          {!isSeller && <Route path="/" element={<Dashboard />} />}
+          {!isSeller && <Route path="/dashboard" element={<Dashboard />} />}
           {!isSeller && <Route path="/products" element={<ProductsPage />} />}
           {!isSeller && <Route path="/stock" element={<StockEntryPage />} />}
           <Route path="/sales" element={<SalesPage />} />
@@ -55,8 +56,8 @@ function ProtectedRoutes() {
           {!isSeller && <Route path="/seller-accounts" element={<SellerAccountsPage />} />}
           {!isSeller && <Route path="/losses" element={<LossesPage />} />}
           {!isSeller && <Route path="/commissions" element={<CommissionsPage />} />}
-          
-          <Route path="*" element={isSeller ? <Navigate to="/sales" replace /> : <NotFound />} />
+
+          <Route path="*" element={<Navigate to={isSeller ? "/sales" : "/dashboard"} replace />} />
         </Routes>
       </AppLayout>
     </StoreProvider>
@@ -76,7 +77,8 @@ function AuthGate() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/*" element={<ProtectedRoutes />} />
     </Routes>
   );
