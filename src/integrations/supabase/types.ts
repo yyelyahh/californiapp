@@ -604,6 +604,17 @@ export type Database = {
           purchase_price: number
         }[]
       }
+      get_public_catalog: {
+        Args: never
+        Returns: {
+          brand: string
+          flavor: string
+          id: string
+          model: string
+          name: string
+          stock: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
