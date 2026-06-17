@@ -119,9 +119,31 @@ export default function LandingPage() {
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
             Pods disponíveis em estoque
           </h1>
-          <p className="text-muted-foreground text-base md:text-lg max-w-xl mx-auto mb-10">
+          <p className="text-muted-foreground text-base md:text-lg max-w-xl mx-auto mb-8">
             Catálogo atualizado automaticamente conforme o estoque da California.
           </p>
+
+          <div className="flex items-center justify-center gap-3 mb-10">
+            <Button
+              asChild
+              variant="outline"
+              className="gap-2 h-11 px-6"
+            >
+              <a href="#catalogo">
+                <ChevronDown size={16} />
+                Ver Catálogo
+              </a>
+            </Button>
+            <Button
+              asChild
+              className="gap-2 h-11 px-6 bg-green-600 hover:bg-green-700 text-white border-0"
+            >
+              <a href="https://wa.me/5551997141255" target="_blank" rel="noopener noreferrer">
+                <MessageCircle size={16} />
+                Falar no WhatsApp
+              </a>
+            </Button>
+          </div>
 
           <div className="grid grid-cols-3 gap-3 md:gap-6 max-w-2xl mx-auto">
             {[
