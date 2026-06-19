@@ -320,7 +320,7 @@ export default function SellersPage() {
                                     <ArrowRightLeft size={11} />
                                   </Button>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                    onClick={() => { if (confirm("Remover atribuição?")) deleteProductAssignment(a.id); }}>
+                                    onClick={async () => { if (await confirm({ title: "Remover atribuição", description: "Remover este produto atribuído ao vendedor?" })) deleteProductAssignment(a.id); }}>
                                     <Trash2 size={11} />
                                   </Button>
                                 </div>
