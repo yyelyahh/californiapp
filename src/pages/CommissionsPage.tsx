@@ -18,6 +18,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
   progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
@@ -72,6 +73,7 @@ type Period = "month" | "quarter" | "year";
 
 export default function CommissionsPage() {
   const store = useStore();
+  const confirm = useConfirm();
   const {
     sellers, partners, sales, expenses, products,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
@@ -348,7 +350,7 @@ export default function CommissionsPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => { if (confirm(`Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.`)) deleteSeller(r.seller.id); }}
+                        onClick={async () => { if (await confirm({ title: "Remover vendedor", description: `Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.` })) deleteSeller(r.seller.id); }}
                         className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100"
                         aria-label="Remover vendedor"
                       ><X size={14} /></button>
@@ -470,8 +472,9 @@ export default function CommissionsPage() {
                       <span className="mono text-sm font-semibold">{formatCurrency(it.amount)}</span>
                       <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
                       <button
-                        onClick={() => {
-                          if (!confirm(it.kind === "commission" ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?")) return;
+                        onClick={async () => {
+                          const ok = await confirm({ title: "Excluir registro", description: it.kind === "commission" ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?" });
+                          if (!ok) return;
                           it.kind === "commission" ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id);
                         }}
                         className="text-muted-foreground hover:text-destructive transition-colors p-1"

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -14,6 +15,7 @@ function formatCurrency(v: number) {
 
 export default function LossesPage() {
   const { products, stockLosses, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue } = useStore();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -143,7 +145,7 @@ export default function LossesPage() {
                   <p className="text-[10px] text-muted-foreground">Valor</p>
                   <p className="mono text-xs font-semibold text-[#ff4242]">{formatCurrency(l.totalCost)}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir este registro de perda?")) deleteStockLoss(l.id); }} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                <Button variant="ghost" size="icon" onClick={async () => { if (await confirm({ title: "Excluir perda", description: "Excluir este registro de perda? O estoque será restaurado." })) deleteStockLoss(l.id); }} className="text-muted-foreground hover:text-destructive h-7 w-7">
                   <Trash2 size={14} />
                 </Button>
               </div>

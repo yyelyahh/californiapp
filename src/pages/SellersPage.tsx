@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -22,6 +23,7 @@ export default function SellersPage() {
     addProductAssignment, deleteProductAssignment, transferProductAssignment,
     getProductName, getSellerBalance,
   } = useStore();
+  const confirm = useConfirm();
   const [sellerOpen, setSellerOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [sellerName, setSellerName] = useState("");
@@ -291,9 +293,9 @@ export default function SellersPage() {
                           <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={(e) => { e.stopPropagation(); openEditSeller(seller); }}>
                             <Pencil size={11} className="mr-1" />Editar
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-destructive hover:text-destructive" onClick={(e) => {
+                          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-destructive hover:text-destructive" onClick={async (e) => {
                             e.stopPropagation();
-                            if (confirm("Excluir vendedor?")) deleteSeller(seller.id);
+                            if (await confirm({ title: "Excluir vendedor", description: `Excluir ${seller.name}? Esta ação não pode ser desfeita.` })) deleteSeller(seller.id);
                           }}>
                             <Trash2 size={11} className="mr-1" />Excluir
                           </Button>
@@ -318,7 +320,7 @@ export default function SellersPage() {
                                     <ArrowRightLeft size={11} />
                                   </Button>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                    onClick={() => { if (confirm("Remover atribuição?")) deleteProductAssignment(a.id); }}>
+                                    onClick={async () => { if (await confirm({ title: "Remover atribuição", description: "Remover este produto atribuído ao vendedor?" })) deleteProductAssignment(a.id); }}>
                                     <Trash2 size={11} />
                                   </Button>
                                 </div>

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -20,6 +21,8 @@ export default function SellerAccountsPage() {
     addSellerManualDebt, deleteSellerManualDebt,
     getSellerDebt, getSellerPaid, getSellerBalance, getProductName,
   } = useStore();
+  const confirm = useConfirm();
+
 
   const [open, setOpen] = useState(false);
   const [debtOpen, setDebtOpen] = useState(false);
@@ -228,7 +231,7 @@ export default function SellerAccountsPage() {
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="font-semibold text-warning mono">{formatCurrency(d.amount)}</span>
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={() => { if (confirm("Excluir esta dívida?")) deleteSellerManualDebt(d.id); }}>
+                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={async () => { if (await confirm({ title: "Excluir dívida", description: "Excluir esta dívida do vendedor?" })) deleteSellerManualDebt(d.id); }}>
                                   <Trash2 size={11} />
                                 </Button>
                               </div>
@@ -252,7 +255,7 @@ export default function SellerAccountsPage() {
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="font-semibold text-income mono">{formatCurrency(p.amount)}</span>
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={() => { if (confirm("Excluir pagamento?")) deleteSellerDebtPayment(p.id); }}>
+                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={async () => { if (await confirm({ title: "Excluir pagamento", description: "Excluir este pagamento?" })) deleteSellerDebtPayment(p.id); }}>
                                   <Trash2 size={11} />
                                 </Button>
                               </div>

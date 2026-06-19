@@ -11,6 +11,7 @@ import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils"
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -21,6 +22,7 @@ const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateS
 export default function SalesPage() {
   const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
   const { role, sellerId } = useAuth();
+  const confirm = useConfirm();
   const isSeller = role === "seller";
 
   const [open, setOpen] = useState(false);
@@ -155,7 +157,7 @@ export default function SalesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta venda?")) {
+    if (await confirm({ title: "Excluir venda", description: "Tem certeza que deseja excluir esta venda? O estoque será restaurado." })) {
       deleteSale(id);
     }
   };

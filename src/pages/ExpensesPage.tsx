@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 const categories = ["Frete", "Embalagem", "Marketing", "Aluguel", "Outros"];
 
@@ -19,6 +20,7 @@ type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom"
 
 export default function ExpensesPage() {
   const { expenses, addExpense, deleteExpense } = useStore();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ description: "", category: "", amount: "", date: todayDateString() });
 
@@ -203,7 +205,7 @@ export default function ExpensesPage() {
                   <td className="py-2.5 px-3 text-right mono text-sm font-semibold text-expense">{formatCurrency(e.amount)}</td>
                   <td className="py-2.5 px-2">
                     <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir esta despesa?")) deleteExpense(e.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                      <Button variant="ghost" size="icon" onClick={async () => { if (await confirm({ title: "Excluir despesa", description: `Excluir "${e.description}"?` })) deleteExpense(e.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
                         <Trash2 size={13} />
                       </Button>
                     </div>

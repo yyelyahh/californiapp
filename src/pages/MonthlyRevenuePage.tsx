@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -33,6 +34,8 @@ export default function MonthlyRevenuePage() {
     partnerPayments, addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth,
     addPartner, updatePartner, deletePartner,
   } = useStore();
+  const confirm = useConfirm();
+
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -220,12 +223,12 @@ export default function MonthlyRevenuePage() {
                               </Button>
                             )}
                             {monthPayments.length > 0 && (
-                              <Button variant="ghost" size="icon" title="Desfazer pagamentos" onClick={() => { if (confirm("Desfazer todos os pagamentos deste sócio no mês?")) monthPayments.forEach(mp => deletePartnerPayment(mp.id)); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                              <Button variant="ghost" size="icon" title="Desfazer pagamentos" onClick={async () => { if (await confirm({ title: "Desfazer pagamentos", description: "Desfazer todos os pagamentos deste sócio no mês?" })) monthPayments.forEach(mp => deletePartnerPayment(mp.id)); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
                                 <X size={13} />
                               </Button>
                             )}
                             <Button variant="ghost" size="icon" onClick={() => openEdit(p)} className="h-7 w-7 text-muted-foreground hover:text-foreground"><Pencil size={13} /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir este sócio? Todos os pagamentos relacionados também serão removidos.")) deletePartner(p.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive"><Trash2 size={13} /></Button>
+                            <Button variant="ghost" size="icon" onClick={async () => { if (await confirm({ title: "Excluir sócio", description: "Excluir este sócio? Todos os pagamentos relacionados também serão removidos." })) deletePartner(p.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive"><Trash2 size={13} /></Button>
                           </div>
                         </td>
                       </tr>

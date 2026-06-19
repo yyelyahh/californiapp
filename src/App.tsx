@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { StoreProvider } from "@/context/StoreContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
+import { ConfirmProvider } from "@/components/ConfirmProvider";
 import Dashboard from "@/pages/Dashboard";
 import ProductsPage from "@/pages/ProductsPage";
 import StockEntryPage from "@/pages/StockEntryPage";
@@ -90,9 +91,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter>
-          <AuthGate />
-        </BrowserRouter>
+        <ConfirmProvider>
+          <BrowserRouter>
+            <AuthGate />
+          </BrowserRouter>
+        </ConfirmProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
