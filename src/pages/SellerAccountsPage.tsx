@@ -21,6 +21,8 @@ export default function SellerAccountsPage() {
     addSellerManualDebt, deleteSellerManualDebt,
     getSellerDebt, getSellerPaid, getSellerBalance, getProductName,
   } = useStore();
+  const confirm = useConfirm();
+
 
   const [open, setOpen] = useState(false);
   const [debtOpen, setDebtOpen] = useState(false);
