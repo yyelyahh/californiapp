@@ -15,6 +15,7 @@ function formatCurrency(v: number) {
 
 export default function LossesPage() {
   const { products, stockLosses, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue } = useStore();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
