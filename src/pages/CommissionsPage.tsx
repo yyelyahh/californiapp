@@ -350,7 +350,7 @@ export default function CommissionsPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => { if (confirm(`Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.`)) deleteSeller(r.seller.id); }}
+                        onClick={async () => { if (await confirm({ title: "Remover vendedor", description: `Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.` })) deleteSeller(r.seller.id); }}
                         className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100"
                         aria-label="Remover vendedor"
                       ><X size={14} /></button>
