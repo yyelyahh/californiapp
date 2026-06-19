@@ -143,7 +143,7 @@ export default function LossesPage() {
                   <p className="text-[10px] text-muted-foreground">Valor</p>
                   <p className="mono text-xs font-semibold text-[#ff4242]">{formatCurrency(l.totalCost)}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => deleteStockLoss(l.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">
+                <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir este registro de perda?")) deleteStockLoss(l.id); }} className="text-muted-foreground hover:text-destructive h-7 w-7">
                   <Trash2 size={14} />
                 </Button>
               </div>

@@ -470,7 +470,10 @@ export default function CommissionsPage() {
                       <span className="mono text-sm font-semibold">{formatCurrency(it.amount)}</span>
                       <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
                       <button
-                        onClick={() => it.kind === "commission" ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id)}
+                        onClick={() => {
+                          if (!confirm(it.kind === "commission" ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?")) return;
+                          it.kind === "commission" ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id);
+                        }}
                         className="text-muted-foreground hover:text-destructive transition-colors p-1"
                         aria-label="Excluir"
                       ><Trash2 size={13} /></button>

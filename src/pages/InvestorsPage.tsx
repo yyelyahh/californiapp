@@ -165,7 +165,7 @@ export default function InvestorsPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {isComplete && <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-income/10 text-income">Quitado</span>}
-                    <Button variant="ghost" size="icon" onClick={() => store.deleteInvestor(inv.id)} className="text-muted-foreground hover:text-destructive h-7 w-7"><Trash2 size={13} /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir este investidor? Todos os dividendos relacionados também serão removidos.")) store.deleteInvestor(inv.id); }} className="text-muted-foreground hover:text-destructive h-7 w-7"><Trash2 size={13} /></Button>
                   </div>
                 </div>
 
@@ -210,7 +210,7 @@ export default function InvestorsPage() {
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs font-semibold mono text-income">{formatCurrency(d.amount)}</span>
-                              <Button size="sm" variant="ghost" onClick={() => store.deleteDividend(d.id)} className="text-muted-foreground hover:text-destructive h-6 w-6 p-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                              <Button size="sm" variant="ghost" onClick={() => { if (confirm("Excluir este dividendo?")) store.deleteDividend(d.id); }} className="text-muted-foreground hover:text-destructive h-6 w-6 p-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
                                 <Trash2 size={11} />
                               </Button>
                             </div>
