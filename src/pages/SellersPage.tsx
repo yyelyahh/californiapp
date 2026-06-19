@@ -293,9 +293,9 @@ export default function SellersPage() {
                           <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={(e) => { e.stopPropagation(); openEditSeller(seller); }}>
                             <Pencil size={11} className="mr-1" />Editar
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-destructive hover:text-destructive" onClick={(e) => {
+                          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-destructive hover:text-destructive" onClick={async (e) => {
                             e.stopPropagation();
-                            if (confirm("Excluir vendedor?")) deleteSeller(seller.id);
+                            if (await confirm({ title: "Excluir vendedor", description: `Excluir ${seller.name}? Esta ação não pode ser desfeita.` })) deleteSeller(seller.id);
                           }}>
                             <Trash2 size={11} className="mr-1" />Excluir
                           </Button>
