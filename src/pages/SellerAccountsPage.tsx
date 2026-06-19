@@ -231,7 +231,7 @@ export default function SellerAccountsPage() {
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="font-semibold text-warning mono">{formatCurrency(d.amount)}</span>
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={() => { if (confirm("Excluir esta dívida?")) deleteSellerManualDebt(d.id); }}>
+                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={async () => { if (await confirm({ title: "Excluir dívida", description: "Excluir esta dívida do vendedor?" })) deleteSellerManualDebt(d.id); }}>
                                   <Trash2 size={11} />
                                 </Button>
                               </div>
