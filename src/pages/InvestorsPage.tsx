@@ -212,7 +212,7 @@ export default function InvestorsPage() {
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs font-semibold mono text-income">{formatCurrency(d.amount)}</span>
-                              <Button size="sm" variant="ghost" onClick={() => { if (confirm("Excluir este dividendo?")) store.deleteDividend(d.id); }} className="text-muted-foreground hover:text-destructive h-6 w-6 p-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                              <Button size="sm" variant="ghost" onClick={async () => { if (await confirm({ title: "Excluir dividendo", description: "Excluir este dividendo?" })) store.deleteDividend(d.id); }} className="text-muted-foreground hover:text-destructive h-6 w-6 p-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
                                 <Trash2 size={11} />
                               </Button>
                             </div>
