@@ -20,6 +20,7 @@ type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom"
 
 export default function ExpensesPage() {
   const { expenses, addExpense, deleteExpense } = useStore();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ description: "", category: "", amount: "", date: todayDateString() });
 
