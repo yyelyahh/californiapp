@@ -73,6 +73,7 @@ type Period = "month" | "quarter" | "year";
 
 export default function CommissionsPage() {
   const store = useStore();
+  const confirm = useConfirm();
   const {
     sellers, partners, sales, expenses, products,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
