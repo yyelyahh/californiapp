@@ -18,6 +18,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
   progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
