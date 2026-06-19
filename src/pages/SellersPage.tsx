@@ -23,6 +23,7 @@ export default function SellersPage() {
     addProductAssignment, deleteProductAssignment, transferProductAssignment,
     getProductName, getSellerBalance,
   } = useStore();
+  const confirm = useConfirm();
   const [sellerOpen, setSellerOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [sellerName, setSellerName] = useState("");
