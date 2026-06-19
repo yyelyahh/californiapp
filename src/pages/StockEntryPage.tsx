@@ -436,7 +436,7 @@ export default function StockEntryPage() {
                               <td className="py-2 px-3 text-right mono text-sm font-semibold text-expense w-32">{formatCurrency(e.totalCost)}</td>
                               <td className="py-2 px-2 w-10">
                                 <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Button variant="ghost" size="icon" onClick={(ev) => { ev.stopPropagation(); deleteStockEntry(e.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                                  <Button variant="ghost" size="icon" onClick={(ev) => { ev.stopPropagation(); if (confirm("Excluir esta entrada de estoque?")) deleteStockEntry(e.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
                                     <Trash2 size={13} />
                                   </Button>
                                 </div>
