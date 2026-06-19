@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { todayDateString } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatShortDate(dateStr: string): string {
   const d = new Date(dateStr);
