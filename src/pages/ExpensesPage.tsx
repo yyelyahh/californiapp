@@ -205,7 +205,7 @@ export default function ExpensesPage() {
                   <td className="py-2.5 px-3 text-right mono text-sm font-semibold text-expense">{formatCurrency(e.amount)}</td>
                   <td className="py-2.5 px-2">
                     <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir esta despesa?")) deleteExpense(e.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                      <Button variant="ghost" size="icon" onClick={async () => { if (await confirm({ title: "Excluir despesa", description: `Excluir "${e.description}"?` })) deleteExpense(e.id); }} className="h-7 w-7 text-muted-foreground hover:text-destructive">
                         <Trash2 size={13} />
                       </Button>
                     </div>
