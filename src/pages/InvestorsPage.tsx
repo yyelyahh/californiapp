@@ -23,6 +23,7 @@ function formatCurrency(v: number) {
 
 export default function InvestorsPage() {
   const store = useStore();
+  const confirm = useConfirm();
   const [openInvestor, setOpenInvestor] = useState(false);
   const [openPayment, setOpenPayment] = useState(false);
   const [investorForm, setInvestorForm] = useState({ name: "", investedAmount: "", returnPercentage: "" });
