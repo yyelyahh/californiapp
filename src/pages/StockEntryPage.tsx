@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 const BRAND_PRESETS: Record<string, number> = {
   Ignite: 68.5,
