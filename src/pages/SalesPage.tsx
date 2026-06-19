@@ -157,7 +157,7 @@ export default function SalesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta venda?")) {
+    if (await confirm({ title: "Excluir venda", description: "Tem certeza que deseja excluir esta venda? O estoque será restaurado." })) {
       deleteSale(id);
     }
   };
