@@ -532,56 +532,12 @@ export default function CommissionsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Drawer Extrato Vendedor */}
-      <Sheet open={!!extractFor} onOpenChange={(v) => !v && setExtractFor(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader><SheetTitle>Extrato do Vendedor</SheetTitle></SheetHeader>
-          {extractRow && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg bg-secondary/50 p-3">
-                <p className="text-sm font-semibold">{extractRow.seller.name}</p>
-                <p className="text-[11px] text-muted-foreground">{label} · faixa {extractRow.tier.label}</p>
-                <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Mini label="Acumulada" value={formatCurrency(extractRow.accrued)} tone="income" />
-                  <Mini label="Paga" value={formatCurrency(extractRow.commPaid)} tone="warning" />
-                  <Mini label="Saldo" value={formatCurrency(extractRow.balance)} strong tone={extractRow.balance > 0 ? "warning" : "income"} />
-                </div>
-              </div>
-
-              {extractItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">Sem movimentações no período.</p>
-              ) : (
-                <div className="space-y-1">
-                  {extractItems.map(it => (
-                    <div key={it.id} className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
-                      <ExtractIcon kind={it.icon} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{it.label}</p>
-                        <p className="text-[11px] text-muted-foreground mono">{formatDateBR(it.when)}</p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {it.kind === "credit"
-                          ? <ArrowUpCircle size={14} className="text-income" />
-                          : <ArrowDownCircle size={14} className="text-warning" />}
-                        <span className={cn("mono text-sm font-semibold", it.kind === "credit" ? "text-income" : "text-warning")}>
-                          {it.kind === "credit" ? "+" : "−"}{formatCurrency(it.amount)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between rounded-lg bg-secondary p-3 sticky bottom-0">
-                <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Saldo Atual</span>
-                <span className={cn("mono text-lg font-bold", extractRow.balance > 0 ? "text-warning" : "text-income")}>
-                  {formatCurrency(extractRow.balance)}
-                </span>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Relatório do Vendedor */}
+      <SellerReportDrawer
+        sellerId={extractFor}
+        open={!!extractFor}
+        onClose={() => setExtractFor(null)}
+      />
     </div>
   );
 }
