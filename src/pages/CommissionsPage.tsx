@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, ArrowDownCircle, ArrowUpCircle, Award, Users, X, RefreshCw,
+  ArrowRight, Users, X,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
