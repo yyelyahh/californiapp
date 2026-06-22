@@ -220,27 +220,6 @@ export default function CommissionsPage() {
 
   const sellerRow = payDrawer ? periodMetrics.perSeller.find(r => r.seller.id === payDrawer.sellerId) : null;
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
-  const extractRow = extractFor ? periodMetrics.perSeller.find(r => r.seller.id === extractFor) : null;
-
-  // Extrato do vendedor — apenas comissão (sem vendas brutas, sem retiradas de produto, sem débitos manuais)
-  const extractItems = useMemo(() => {
-    if (!extractRow) return [];
-    const sid = extractRow.seller.id;
-    const items: { id: string; when: string; label: string; amount: number; kind: "credit" | "debit"; icon: "accrual" | "adjustment" | "pagamento"; meta?: string }[] = [];
-
-    extractRow.accrualItems.forEach(it => {
-      items.push({
-        id: it.id, when: it.when, label: it.label, amount: it.amount,
-        kind: "credit",
-        icon: it.kind === "adjustment" ? "adjustment" : "accrual",
-        meta: it.meta,
-      });
-    });
-    commissionPayments.filter(p => p.sellerId === sid && inPeriod(p.date)).forEach(p => {
-      items.push({ id: `c-${p.id}`, when: p.date, label: "Pagamento de Comissão", amount: p.amount, kind: "debit", icon: "pagamento", meta: p.notes });
-    });
-    return items.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
-  }, [extractRow, commissionPayments, start, end]);
 
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
 
