@@ -201,64 +201,71 @@ export default function SellerReportDrawer({
     XLSX.writeFile(wb, `relatorio_${seller.name.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd")}.xlsx`);
   };
 
-  /* ---------- Export: PDF (dark, California identity) ---------- */
+  /* ---------- Export: PDF (light, legível, identidade California) ---------- */
   const exportPdf = () => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const w = doc.internal.pageSize.getWidth();
-    const h = doc.internal.pageSize.getHeight();
 
-    // Dark background
-    doc.setFillColor(15, 15, 18); doc.rect(0, 0, w, h, "F");
+    const PURPLE: [number, number, number] = [124, 58, 237];
+    const INK: [number, number, number] = [24, 24, 27];
+    const MUTED: [number, number, number] = [113, 113, 122];
+    const BORDER: [number, number, number] = [228, 228, 231];
+    const SOFT: [number, number, number] = [248, 248, 250];
+    const GREEN: [number, number, number] = [22, 163, 74];
+    const AMBER: [number, number, number] = [202, 138, 4];
+    const RED: [number, number, number] = [220, 38, 38];
 
-    // Header bar
-    doc.setFillColor(124, 58, 237); doc.rect(0, 0, w, 6, "F");
+    // Top accent bar
+    doc.setFillColor(...PURPLE); doc.rect(0, 0, w, 6, "F");
 
-    doc.setTextColor(255, 255, 255);
+    // Header
+    doc.setTextColor(...INK);
     doc.setFont("helvetica", "bold"); doc.setFontSize(20);
     doc.text("CALIFORNIA", 40, 50);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(170, 170, 180);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...MUTED);
     doc.text("Relatório do Funcionário", 40, 66);
-
-    doc.setFontSize(9); doc.setTextColor(160, 160, 170);
+    doc.setFontSize(9);
     doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy HH:mm")}`, w - 40, 50, { align: "right" });
 
     // Identity card
-    doc.setFillColor(24, 24, 30); doc.roundedRect(40, 90, w - 80, 60, 8, 8, "F");
-    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+    doc.setFillColor(...SOFT);
+    doc.setDrawColor(...BORDER);
+    doc.roundedRect(40, 90, w - 80, 60, 8, 8, "FD");
+    doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
     doc.text(seller.name, 56, 115);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(180, 180, 190);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...MUTED);
     doc.text(`Período: ${label}`, 56, 134);
 
     // Summary grid
     const startY = 170;
     const items: [string, string, [number, number, number]?][] = [
-      ["Unidades vendidas", String(report.units)],
-      ["Faturamento", fmt(report.revenue), [82, 196, 132]],
-      ["Recebido", fmt(report.received), [82, 196, 132]],
-      ["Em aberto", fmt(report.open), [245, 158, 11]],
-      ["Consumo / Retiradas", fmt(report.consumo), [245, 158, 11]],
-      ["Faixa atual", report.tier.label, [124, 58, 237]],
-      ["Comissão acumulada", fmt(report.accrued), [82, 196, 132]],
-      ["Comissão paga", fmt(report.commPaidPeriod), [245, 158, 11]],
-      ["Saldo disponível", fmt(report.commBalance),
-        report.commBalance >= 0 ? [82, 196, 132] : [239, 68, 68]],
+      ["Unidades vendidas", String(report.units), INK],
+      ["Faturamento", fmt(report.revenue), GREEN],
+      ["Recebido", fmt(report.received), GREEN],
+      ["Em aberto", fmt(report.open), AMBER],
+      ["Consumo / Retiradas", fmt(report.consumo), AMBER],
+      ["Faixa atual", report.tier.label, PURPLE],
+      ["Comissão acumulada", fmt(report.accrued), GREEN],
+      ["Comissão paga", fmt(report.commPaidPeriod), AMBER],
+      ["Saldo disponível", fmt(report.commBalance), report.commBalance >= 0 ? GREEN : RED],
     ];
     const cardW = (w - 80 - 16) / 3; const cardH = 56;
     items.forEach((it, i) => {
       const col = i % 3; const row = Math.floor(i / 3);
       const x = 40 + col * (cardW + 8);
       const y = startY + row * (cardH + 8);
-      doc.setFillColor(24, 24, 30); doc.roundedRect(x, y, cardW, cardH, 6, 6, "F");
-      doc.setTextColor(150, 150, 160); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+      doc.setFillColor(...SOFT); doc.setDrawColor(...BORDER);
+      doc.roundedRect(x, y, cardW, cardH, 6, 6, "FD");
+      doc.setTextColor(...MUTED); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
       doc.text(it[0].toUpperCase(), x + 12, y + 18);
-      const color = it[2] || [255, 255, 255];
-      doc.setTextColor(color[0], color[1], color[2]);
+      const color = it[2] || INK;
+      doc.setTextColor(...color);
       doc.setFont("helvetica", "bold"); doc.setFontSize(13);
       doc.text(it[1], x + 12, y + 40);
     });
 
     const tableY = startY + 3 * (cardH + 8) + 12;
-    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+    doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
     doc.text("Movimentações do período", 40, tableY);
 
     autoTable(doc, {
@@ -271,24 +278,20 @@ export default function SellerReportDrawer({
           : m.kind === "pagamento" ? "Pagam. comissão"
           : "Ajuste comissão",
         m.label,
-        (m.kind === "pagamento" ? "− " : m.kind === "venda" || m.kind === "ajuste" ? "+ " : "− ") + fmt(m.amount),
+        (m.kind === "pagamento" || m.kind === "retirada" ? "− " : "+ ") + fmt(m.amount),
       ]),
-      theme: "plain",
-      styles: { fontSize: 9, textColor: [220, 220, 230], cellPadding: 6 },
-      headStyles: { fillColor: [124, 58, 237], textColor: [255, 255, 255], fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [24, 24, 30] },
-      bodyStyles: { fillColor: [18, 18, 22] },
-      columnStyles: { 3: { halign: "right", font: "courier" } },
-      margin: { left: 40, right: 40 },
+      theme: "grid",
+      styles: { fontSize: 9, textColor: INK, cellPadding: 6, lineColor: BORDER, lineWidth: 0.5 },
+      headStyles: { fillColor: PURPLE, textColor: [255, 255, 255], fontStyle: "bold" },
+      alternateRowStyles: { fillColor: SOFT },
+      bodyStyles: { fillColor: [255, 255, 255] },
+      columnStyles: { 3: { halign: "right", font: "courier", fontStyle: "bold" } },
+      margin: { left: 40, right: 40, top: 40 },
       didDrawPage: () => {
-        const ph = doc.internal.pageSize.getHeight();
         const pw = doc.internal.pageSize.getWidth();
-        doc.setFillColor(15, 15, 18);
-        doc.rect(0, 0, pw, ph, "F");
-        // re-add bar
-        doc.setFillColor(124, 58, 237); doc.rect(0, 0, pw, 6, "F");
-        // footer
-        doc.setTextColor(120, 120, 130); doc.setFontSize(8);
+        const ph = doc.internal.pageSize.getHeight();
+        doc.setFillColor(...PURPLE); doc.rect(0, 0, pw, 6, "F");
+        doc.setTextColor(...MUTED); doc.setFontSize(8); doc.setFont("helvetica", "normal");
         doc.text("California · Relatório gerado pelo sistema", 40, ph - 20);
       },
     });
