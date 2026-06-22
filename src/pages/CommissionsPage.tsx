@@ -357,7 +357,7 @@ export default function CommissionsPage() {
                     <Mini label="Pago" value={formatCurrency(r.commPaid)} tone="warning" />
                     <div className="flex sm:justify-end gap-2 items-end">
                       <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
-                        Extrato <ArrowRight size={11} className="ml-1" />
+                        Relatório <ArrowRight size={11} className="ml-1" />
                       </Button>
                       <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
                         <Plus size={13} className="mr-1" />Pagar
