@@ -569,10 +569,3 @@ function Mini({ label, value, tone, strong }: { label: string; value: string; to
     </div>
   );
 }
-
-function ExtractIcon({ kind }: { kind: "accrual" | "adjustment" | "pagamento" }) {
-  const cls = "w-7 h-7 rounded-full flex items-center justify-center shrink-0";
-  if (kind === "accrual") return <div className={cn(cls, "bg-income/15 text-income")}><Award size={14} /></div>;
-  if (kind === "adjustment") return <div className={cn(cls, "bg-primary/15 text-primary")}><RefreshCw size={14} /></div>;
-  return <div className={cn(cls, "bg-fixed/15 text-fixed")}><Wallet size={14} /></div>;
-}
