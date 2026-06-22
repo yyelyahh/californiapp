@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, ArrowDownCircle, ArrowUpCircle, Award, Users, X, RefreshCw,
+  ArrowRight, Users, X,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -19,6 +19,7 @@ import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmProvider";
+import SellerReportDrawer from "@/components/SellerReportDrawer";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
   progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
@@ -219,27 +220,6 @@ export default function CommissionsPage() {
 
   const sellerRow = payDrawer ? periodMetrics.perSeller.find(r => r.seller.id === payDrawer.sellerId) : null;
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
-  const extractRow = extractFor ? periodMetrics.perSeller.find(r => r.seller.id === extractFor) : null;
-
-  // Extrato do vendedor — apenas comissão (sem vendas brutas, sem retiradas de produto, sem débitos manuais)
-  const extractItems = useMemo(() => {
-    if (!extractRow) return [];
-    const sid = extractRow.seller.id;
-    const items: { id: string; when: string; label: string; amount: number; kind: "credit" | "debit"; icon: "accrual" | "adjustment" | "pagamento"; meta?: string }[] = [];
-
-    extractRow.accrualItems.forEach(it => {
-      items.push({
-        id: it.id, when: it.when, label: it.label, amount: it.amount,
-        kind: "credit",
-        icon: it.kind === "adjustment" ? "adjustment" : "accrual",
-        meta: it.meta,
-      });
-    });
-    commissionPayments.filter(p => p.sellerId === sid && inPeriod(p.date)).forEach(p => {
-      items.push({ id: `c-${p.id}`, when: p.date, label: "Pagamento de Comissão", amount: p.amount, kind: "debit", icon: "pagamento", meta: p.notes });
-    });
-    return items.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
-  }, [extractRow, commissionPayments, start, end]);
 
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
 
@@ -377,7 +357,7 @@ export default function CommissionsPage() {
                     <Mini label="Pago" value={formatCurrency(r.commPaid)} tone="warning" />
                     <div className="flex sm:justify-end gap-2 items-end">
                       <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
-                        Extrato <ArrowRight size={11} className="ml-1" />
+                        Relatório <ArrowRight size={11} className="ml-1" />
                       </Button>
                       <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
                         <Plus size={13} className="mr-1" />Pagar
@@ -531,56 +511,12 @@ export default function CommissionsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Drawer Extrato Vendedor */}
-      <Sheet open={!!extractFor} onOpenChange={(v) => !v && setExtractFor(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader><SheetTitle>Extrato do Vendedor</SheetTitle></SheetHeader>
-          {extractRow && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg bg-secondary/50 p-3">
-                <p className="text-sm font-semibold">{extractRow.seller.name}</p>
-                <p className="text-[11px] text-muted-foreground">{label} · faixa {extractRow.tier.label}</p>
-                <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Mini label="Acumulada" value={formatCurrency(extractRow.accrued)} tone="income" />
-                  <Mini label="Paga" value={formatCurrency(extractRow.commPaid)} tone="warning" />
-                  <Mini label="Saldo" value={formatCurrency(extractRow.balance)} strong tone={extractRow.balance > 0 ? "warning" : "income"} />
-                </div>
-              </div>
-
-              {extractItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">Sem movimentações no período.</p>
-              ) : (
-                <div className="space-y-1">
-                  {extractItems.map(it => (
-                    <div key={it.id} className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
-                      <ExtractIcon kind={it.icon} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{it.label}</p>
-                        <p className="text-[11px] text-muted-foreground mono">{formatDateBR(it.when)}</p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {it.kind === "credit"
-                          ? <ArrowUpCircle size={14} className="text-income" />
-                          : <ArrowDownCircle size={14} className="text-warning" />}
-                        <span className={cn("mono text-sm font-semibold", it.kind === "credit" ? "text-income" : "text-warning")}>
-                          {it.kind === "credit" ? "+" : "−"}{formatCurrency(it.amount)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between rounded-lg bg-secondary p-3 sticky bottom-0">
-                <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Saldo Atual</span>
-                <span className={cn("mono text-lg font-bold", extractRow.balance > 0 ? "text-warning" : "text-income")}>
-                  {formatCurrency(extractRow.balance)}
-                </span>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Relatório do Vendedor */}
+      <SellerReportDrawer
+        sellerId={extractFor}
+        open={!!extractFor}
+        onClose={() => setExtractFor(null)}
+      />
     </div>
   );
 }
@@ -632,11 +568,4 @@ function Mini({ label, value, tone, strong }: { label: string; value: string; to
       )}>{value}</p>
     </div>
   );
-}
-
-function ExtractIcon({ kind }: { kind: "accrual" | "adjustment" | "pagamento" }) {
-  const cls = "w-7 h-7 rounded-full flex items-center justify-center shrink-0";
-  if (kind === "accrual") return <div className={cn(cls, "bg-income/15 text-income")}><Award size={14} /></div>;
-  if (kind === "adjustment") return <div className={cn(cls, "bg-primary/15 text-primary")}><RefreshCw size={14} /></div>;
-  return <div className={cn(cls, "bg-fixed/15 text-fixed")}><Wallet size={14} /></div>;
 }
