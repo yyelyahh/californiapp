@@ -80,6 +80,8 @@ export default function CommissionsPage() {
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
+    addSellerDebtPayment, deleteSellerDebtPayment,
+    addSellerManualDebt, deleteSellerManualDebt,
     getSellerName, deleteSeller,
   } = store;
 
@@ -90,8 +92,12 @@ export default function CommissionsPage() {
 
   const [period, setPeriod] = useState<Period>("month");
 
-  // Cutoff: ignora qualquer movimentação anterior ao mês atual (início do projeto)
-  const PROJECT_START = useMemo(() => startOfMonth(new Date()), []);
+  // Cutoff legado: tudo antes de 01/06/2026 é tratado como legado (10% de comissão, só abate consumo)
+  const LEGACY_CUTOFF = useMemo(() => new Date(2026, 5, 1), []);
+  const isLegacy = (iso: string) => {
+    try { return parseISO(iso) < LEGACY_CUTOFF; } catch { return false; }
+  };
+  const PROJECT_START = LEGACY_CUTOFF;
 
   const { start, end, label } = useMemo(() => {
     const now = new Date();
