@@ -458,7 +458,7 @@ export default function SellerReportDrawer({
                           variant="ghost"
                           className="h-7 w-7 shrink-0 text-muted-foreground hover:text-expense"
                           onClick={async () => {
-                            const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmLabel: "Apagar", variant: "destructive" });
+                            const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmText: "Apagar", destructive: true });
                             if (!ok) return;
                             const src = m.source!;
                             if (src.type === "manual_debt") await deleteSellerManualDebt(src.id);
