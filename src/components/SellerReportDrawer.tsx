@@ -432,14 +432,14 @@ export default function SellerReportDrawer({
             ) : (
               <div className="space-y-1">
                 {report.movs.map((m, i) => {
-                  const credit = m.kind === "venda" || m.kind === "ajuste";
+                  const credit = m.kind === "venda" || m.kind === "ajuste" || m.kind === "pagamento";
                   return (
                     <div key={i} className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
                       <div className={cn(
                         "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
                         m.kind === "venda" && "bg-income/15 text-income",
                         m.kind === "retirada" && "bg-warning/15 text-warning",
-                        m.kind === "pagamento" && "bg-fixed/15 text-fixed",
+                        m.kind === "pagamento" && "bg-income/15 text-income",
                         m.kind === "ajuste" && "bg-primary/15 text-primary",
                       )}>
                         {m.kind === "retirada" ? <Package size={13} /> :
