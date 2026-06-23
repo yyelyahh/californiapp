@@ -219,7 +219,12 @@ export default function SellerReportDrawer({
     lines.push(`💰 COMISSÃO`);
     lines.push(`• Faixa atual: ${report.tier.label}`);
     lines.push(`• Comissão gerada no período: ${fmt(report.accrued)}`);
-    lines.push(`• Consumo descontado: ${fmt(report.consumo)}`);
+    if (report.legacyCredit > 0) {
+      lines.push(`• Crédito legado (10% s/ vendas anteriores): ${fmt(report.legacyCredit)} — abate apenas consumo`);
+    }
+    lines.push(`• Consumo total (inclui legado e dívidas): ${fmt(report.consumoTotal)}`);
+    lines.push(`• Pagamentos de dívida: ${fmt(report.debtPaymentsTotal)}`);
+    lines.push(`• Saldo de consumo a abater: ${fmt(report.saldoConsumo)}`);
     lines.push(`• Comissão paga: ${fmt(report.commPaidPeriod)}`);
     lines.push(`• Saldo disponível: ${fmt(report.commBalance)}`);
     lines.push(``);
