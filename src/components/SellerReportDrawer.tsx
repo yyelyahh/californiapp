@@ -13,7 +13,8 @@ import {
   isWithinInterval, parseISO, format,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
+import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes, Trash2 } from "lucide-react";
+import { useConfirm } from "@/components/ConfirmProvider";
 import type { Sale } from "@/types";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
@@ -42,7 +43,8 @@ function computeAccrualAdjustments(sales: Sale[]) {
 export default function SellerReportDrawer({
   sellerId, open, onClose,
 }: { sellerId: string | null; open: boolean; onClose: () => void }) {
-  const { sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, getProductName } = useStore();
+  const { sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, getProductName, deleteSellerManualDebt, deleteSellerDebtPayment, deleteCommissionPayment } = useStore();
+  const confirm = useConfirm();
   const LEGACY_CUTOFF = new Date(2026, 5, 1);
   const isLegacy = (iso: string) => { try { return parseISO(iso) < LEGACY_CUTOFF; } catch { return false; } };
   const [periodKey, setPeriodKey] = useState<PeriodKey>("month");
@@ -170,10 +172,11 @@ export default function SellerReportDrawer({
     // Saldo de comissão = acumulada no período − saldo de consumo (total) − comissão paga no período
     const commBalance = c.accrued - saldoConsumo - commPaidPeriod;
 
+    type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
       | { kind: "venda"; when: string; label: string; amount: number; sub: string }
-      | { kind: "retirada"; when: string; label: string; amount: number; sub: string }
-      | { kind: "pagamento"; when: string; label: string; amount: number; sub?: string }
+      | { kind: "retirada"; when: string; label: string; amount: number; sub: string; source?: { type: DeletableKind; id: string } }
+      | { kind: "pagamento"; when: string; label: string; amount: number; sub?: string; source?: { type: DeletableKind; id: string } }
       | { kind: "ajuste"; when: string; label: string; amount: number; sub?: string };
 
     const movs: Mov[] = [];
@@ -196,13 +199,13 @@ export default function SellerReportDrawer({
       });
     });
     allManualDebts.filter(d => inPeriod(d.date)).forEach(d => {
-      movs.push({ kind: "retirada", when: d.date, label: "Dívida manual", amount: d.amount, sub: d.notes || "" });
+      movs.push({ kind: "retirada", when: d.date, label: "Dívida manual", amount: d.amount, sub: d.notes || "", source: { type: "manual_debt", id: d.id } });
     });
     allDebtPayments.filter(p => inPeriod(p.date)).forEach(p => {
-      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes });
+      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes, source: { type: "debt_payment", id: p.id } });
     });
     commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).forEach(p => {
-      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes });
+      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes, source: { type: "commission_payment", id: p.id } });
     });
     adjustments.forEach(a => movs.push({ kind: "ajuste", when: a.when, label: a.label, amount: a.amount }));
     movs.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
@@ -449,6 +452,24 @@ export default function SellerReportDrawer({
                         credit ? "text-income" : "text-warning")}>
                         {credit ? "+" : "−"}{fmt(m.amount)}
                       </span>
+                      {"source" in m && m.source && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-expense"
+                          onClick={async () => {
+                            const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmText: "Apagar", destructive: true });
+                            if (!ok) return;
+                            const src = m.source!;
+                            if (src.type === "manual_debt") await deleteSellerManualDebt(src.id);
+                            else if (src.type === "debt_payment") await deleteSellerDebtPayment(src.id);
+                            else if (src.type === "commission_payment") await deleteCommissionPayment(src.id);
+                          }}
+                          aria-label="Apagar"
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      )}
                     </div>
                   );
                 })}
