@@ -281,18 +281,11 @@ export default function SellerReportDrawer({
             <span className={cn(report.commBalance >= 0 ? "text-income" : "text-expense", "font-semibold")}>{fmt(report.commBalance)}</span>
           </p>
 
-          {/* Export buttons */}
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" className="h-9" onClick={exportPdf}>
-              <FileText size={14} className="mr-1.5" /> PDF
-            </Button>
-            <Button variant="outline" size="sm" className="h-9" onClick={exportXlsx}>
-              <FileSpreadsheet size={14} className="mr-1.5" /> Excel
-            </Button>
-            <Button size="sm" className="h-9 bg-green-600 hover:bg-green-700 text-white" onClick={shareWhats}>
-              <MessageCircle size={14} className="mr-1.5" /> WhatsApp
-            </Button>
-          </div>
+          {/* Export */}
+          <Button size="sm" className="h-10 w-full bg-green-600 hover:bg-green-700 text-white" onClick={shareWhats}>
+            <MessageCircle size={16} className="mr-2" /> Compartilhar no WhatsApp
+          </Button>
+
 
           {/* Consumption breakdown */}
           {report.consumoBreakdown.length > 0 && (
