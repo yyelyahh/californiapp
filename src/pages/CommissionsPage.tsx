@@ -149,13 +149,13 @@ export default function CommissionsPage() {
       const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
-      // Saldo de consumo abate direto da comissão. Pagamentos de dívida (debtPaymentsTotal)
-      // não entram aqui pois geralmente quitam dívidas legadas (pré-jun/26) que estão fora do escopo.
+      // Saldo de consumo abate direto da comissão.
+      // Pagamentos de dívida no período somam de volta ao saldo do vendedor (crédito).
       const saldoConsumo = consumoTotal;
       const retiradasCount = retiradas.length + manualDebts.length;
 
-      // Saldo de comissão = acumulada no período − saldo de consumo − comissão paga no período
-      const balance = accrued - saldoConsumo - commPaid;
+      // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
+      const balance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
 
       return {
         seller, units, vendasTotal, commPaid,
