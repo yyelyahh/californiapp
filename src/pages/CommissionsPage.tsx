@@ -341,9 +341,14 @@ export default function CommissionsPage() {
         <div className="px-4 sm:px-5 pt-4 pb-3 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Conta Corrente dos Vendedores</h2>
-            <p className="text-[11px] text-muted-foreground">Saldo unificado · vendas + bônus − retiradas − pagamentos</p>
+            <p className="text-[11px] text-muted-foreground">Comissão do período + consumo + dívidas − pagamentos</p>
           </div>
-          <Badge variant="secondary" className="text-[11px]">{periodMetrics.perSeller.length}</Badge>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
+              <HandCoins size={12} className="mr-1" />Dívida Manual
+            </Button>
+            <Badge variant="secondary" className="text-[11px]">{periodMetrics.perSeller.length}</Badge>
+          </div>
         </div>
         {periodMetrics.perSeller.length === 0 ? (
           <p className="px-5 pb-5 text-xs text-muted-foreground">Nenhum vendedor cadastrado.</p>
