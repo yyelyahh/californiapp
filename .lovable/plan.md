@@ -1,101 +1,92 @@
-## Objetivo
 
-Eliminar a página separada "Contas de Funcionários" e trazer toda a operação (consumos, dívidas manuais, pagamentos de dívida) para dentro da página **Comissão**, com regras claras para o legado anterior ao mês 6 (junho/2026 — início do projeto).
+## Problema
 
----
+Hoje a fórmula é `saldoConsumo = max(0, consumoDoPeríodo − pagamentosDeDívidaDoPeríodo)`.
 
-## Regras de negócio
+Como decidimos ignorar tudo antes de 01/06/2026, as **retiradas antigas** ficaram de fora — mas os **pagamentos** dessas dívidas antigas (feitos em junho) continuaram entrando, zerando o consumo do mês.
 
-**Legado (tudo com data anterior a 01/06/2026):**
-- Vendas legadas → geram **comissão de 10% fixos** (sem progressão de faixa).
-- Consumos legados (retiradas) → entram normalmente no consumo do vendedor.
-- Dívidas manuais legadas → entram normalmente no saldo devedor.
-- Pagamentos de dívida (`seller_debt_payments`) legados → continuam abatendo consumo/dívida.
+Caso Rafa (jun/2026):
+- Retiradas jun: R$ 155,60
+- Pagamentos jun (quitando dívida antiga de R$ 538,50): R$ 163,00
+- Resultado errado: saldo de consumo = R$ 0 → nada abate da comissão (R$ 247,63).
 
-**Crédito legado de comissão (10% sobre vendas pré-junho):**
-- Usado **apenas para abater consumo/dívida manual** do vendedor.
-- **Nunca** aparece como "Comissão paga ao funcionário" nem como saldo a pagar de comissão no período atual.
-- Se sobrar saldo positivo após abater consumo/dívida, é simplesmente descartado (não vira crédito futuro de comissão).
+## Decisão de cálculo
 
-**Período atual (junho/2026 em diante):**
-- Comissão progressiva normal (10% / 12,5% / 15%) já existente.
-- Consumo do período abate o saldo de comissão do período (regra atual já implementada).
-- Dívidas manuais e retiradas continuam sendo abatidas primeiro pelo crédito legado e depois pelo saldo de comissão do período.
+Manter "só do período", **mas remover os pagamentos de dívida da fórmula do saldo de consumo**. Como dívidas/retiradas pré-junho foram ignoradas por escopo, os pagamentos pré-existentes também devem ser ignorados — não há dívida no período para eles abaterem.
 
-**Fórmula final do saldo do vendedor (mostrado em "Conta Corrente"):**
+Nova fórmula em `CommissionsPage` e `SellerReportDrawer`:
+
 ```
-consumo_total       = retiradas + dívidas manuais (todas as datas)
-pagamentos_dívida   = seller_debt_payments (todas as datas)
-crédito_legado      = vendas_pré_junho × 10%
-saldo_consumo       = max(0, consumo_total − pagamentos_dívida − crédito_legado)
-comissão_período    = vendas_no_período × taxa_da_faixa
-comissão_paga       = commission_payments no período
-saldo_comissão      = comissão_período − saldo_consumo − comissão_paga
+consumoTotal       = retiradas (período) + dívidas manuais (período)
+saldoConsumo       = consumoTotal       ← abate direto da comissão
+comissão_período   = vendas (período) × faixa final
+comissão_paga      = commission_payments (período)
+saldo_comissão     = comissão_período − saldoConsumo − comissão_paga
 ```
 
----
+Pagamentos de dívida (`seller_debt_payments`) continuam existindo e aparecem na timeline como histórico, mas **não entram mais no cálculo do saldo de comissão**. Ficam só como registro/abatimento informativo.
 
-## Mudanças na página Comissão (`CommissionsPage.tsx`)
+Validação rápida com o Rafa em junho:
+- Comissão: R$ 247,63
+- Consumo descontado: R$ 155,60
+- Comissão paga: R$ 0
+- **Saldo: R$ 92,03**
 
-1. **Novo card "Consumo & Dívidas do Vendedor"** dentro de cada linha da Conta Corrente:
-   - Total consumido (retiradas + dívidas manuais, todas as datas)
-   - Pagamentos de dívida
-   - Crédito legado disponível (vendas pré-junho × 10%)
-   - Saldo de consumo a abater
-2. **Novo botão "Adicionar Dívida Manual"** no header da seção de vendedores → abre Sheet (igual ao existente em SellerAccountsPage).
-3. **Novo botão "Registrar Pagamento de Dívida"** ao lado do "Pagar Comissão" em cada linha do vendedor.
-4. **Extrato do vendedor** (drawer já existente) passa a listar também:
-   - Retiradas (todas as datas, separadas em "legado" vs "período")
-   - Dívidas manuais
-   - Pagamentos de dívida
-   - Linha "Crédito legado de comissão (10%)" como ajuste informativo
-5. **KPI atualizado**: "A pagar a vendedores" passa a usar o `saldo_comissão` da nova fórmula (não muda nome, só a base de cálculo).
+## Mudanças na UI
 
----
+### 1. Card do vendedor — `CommissionsPage.tsx`
+Adicionar um mini-bloco logo abaixo do nome/faixa, antes do botão "Pagar comissão":
 
-## Mudanças no Relatório do Vendedor (`SellerReportDrawer.tsx`)
+```
+Comissão gerada     R$ 247,63
+(−) Consumo         R$ 155,60   (3 retiradas)
+(−) Comissão paga   R$   0,00
+─────────────────────────────────
+Saldo               R$  92,03
+```
 
-- Consumo passa a considerar **todas as retiradas + dívidas manuais** (não só do período).
-- Crédito legado de comissão (10% sobre vendas pré-junho) é mostrado como linha separada em "Comissão", deixando claro que abate consumo mas não é pago.
-- Mensagem do WhatsApp ganha bloco extra quando houver legado:
-  ```
-  💰 COMISSÃO
-  • Faixa atual: 12,5%
-  • Comissão gerada no período: R$ X
-  • Crédito legado (10% sobre vendas anteriores): R$ Y — abate apenas consumo
-  • Consumo total (inclui legado): R$ Z
-  • Pagamentos de dívida: R$ W
-  • Comissão paga: R$ K
-  • Saldo disponível: R$ ...
-  ```
-- O cálculo do saldo na UI e no WhatsApp segue a fórmula final acima.
+- Linha "Consumo" em destaque (cor `warning`) quando > 0.
+- Pequeno chip "consumo zerou comissão" quando `saldoConsumo ≥ accrued`.
 
----
+### 2. Drawer/Relatório do vendedor — `SellerReportDrawer.tsx`
+- Trocar a nota atual de "Saldo: 247,63 − 0 − 0 = ..." pela fórmula correta com **consumo bem destacado** em vermelho/âmbar.
+- No grid de Stats, manter "Consumo" mas adicionar tooltip/sub: "abatido da comissão".
+- Adicionar bloco "Consumo descontado" listando as retiradas que entraram no abate (data, produto, valor).
 
-## Remoção da página antiga
+### 3. Mensagem WhatsApp — `buildWhatsSales`
+Reescrever o bloco 💰 COMISSÃO para deixar a conta explícita:
 
-- Apagar `src/pages/SellerAccountsPage.tsx`.
-- Remover a rota `/seller-accounts` em `src/App.tsx`.
-- Remover o item de menu "Contas Func." em `src/components/AppLayout.tsx`.
-- Manter intactas todas as tabelas (`seller_debt_payments`, `seller_manual_debts`) e métodos do `StoreContext` — apenas mudam os locais de uso.
+```
+💰 COMISSÃO — junho/2026
+• Faixa: 12,5% (13 un.)
+• Comissão gerada: R$ 247,63
+• (−) Consumo no mês: R$ 155,60
+• (−) Comissão já paga: R$ 0,00
+──────────────────────────────
+• Saldo a receber: R$ 92,03
 
----
+🍃 CONSUMO DO MÊS (descontado da comissão)
+• Pod X (2x) • R$ 80,00
+• Pod Y (1x) • R$ 75,60
+Total: R$ 155,60
+```
 
 ## Detalhes técnicos
 
-- Cutoff legado: `PROJECT_START = startOfMonth(new Date(2026, 5, 1))` (junho/2026, fixo) — não pode usar mês atual porque já estamos depois de junho.
-- Reaproveitar `addSellerDebtPayment`, `addSellerManualDebt`, `deleteSellerDebtPayment`, `deleteSellerManualDebt` do `StoreContext`.
-- Nenhuma alteração de schema/DB.
+**`src/pages/CommissionsPage.tsx`** (`periodMetrics`, ~linha 143–165):
+- Remover `debtPaymentsTotal` da fórmula do `saldoConsumo`. Manter o cálculo da variável apenas para exibição na timeline.
+- `saldoConsumo = consumoTotal`.
+- `balance = accrued − saldoConsumo − commPaid` (inalterado em forma).
+- Card do vendedor: novo componente inline de "mini demonstrativo" usando as variáveis já calculadas (`accrued`, `saldoConsumo`, `commPaid`, `balance`).
 
----
+**`src/components/SellerReportDrawer.tsx`** (`report`, ~linha 100–169):
+- Mesmo ajuste: `saldoConsumo = consumoTotal` (sem subtrair `debtPaymentsTotal`).
+- Atualizar a nota explicativa (linha ~353) com a nova conta.
+- Atualizar `buildWhatsSales` com o template acima.
+
+**Sem mudanças** em schema, contexto ou em `seller_debt_payments` (continuam sendo armazenados e exibidos como histórico).
 
 ## Arquivos afetados
 
-**Editados**
 - `src/pages/CommissionsPage.tsx`
 - `src/components/SellerReportDrawer.tsx`
-- `src/App.tsx`
-- `src/components/AppLayout.tsx`
-
-**Removidos**
-- `src/pages/SellerAccountsPage.tsx`

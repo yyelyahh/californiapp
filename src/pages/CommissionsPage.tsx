@@ -149,7 +149,10 @@ export default function CommissionsPage() {
       const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
-      const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal);
+      // Saldo de consumo abate direto da comissão. Pagamentos de dívida (debtPaymentsTotal)
+      // não entram aqui pois geralmente quitam dívidas legadas (pré-jun/26) que estão fora do escopo.
+      const saldoConsumo = consumoTotal;
+      const retiradasCount = retiradas.length + manualDebts.length;
 
       // Saldo de comissão = acumulada no período − saldo de consumo − comissão paga no período
       const balance = accrued - saldoConsumo - commPaid;
@@ -159,7 +162,7 @@ export default function CommissionsPage() {
         accrued, baseAccrued, adjustmentsTotal,
         tier: c.tier, balance, accrualItems,
         consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
-        retiradasTotal, manualDebtsTotal,
+        retiradasTotal, manualDebtsTotal, retiradasCount,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
@@ -405,35 +408,45 @@ export default function CommissionsPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
-                    <Mini label="Comissão base" value={formatCurrency(r.baseAccrued)} tone="income" />
-                    <Mini label="Ajustes faixa" value={formatCurrency(r.adjustmentsTotal)} tone={r.adjustmentsTotal > 0 ? "income" : undefined} />
-                    <Mini label="Comissão paga" value={formatCurrency(r.commPaid)} tone="warning" />
-                    <Mini label="Abate consumo" value={formatCurrency(r.saldoConsumo)} tone={r.saldoConsumo > 0 ? "warning" : undefined} />
+                  {/* Mini demonstrativo da comissão */}
+                  <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 mb-3 text-[12px] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Comissão gerada</span>
+                      <span className="mono font-semibold text-income">{formatCurrency(r.accrued)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">
+                        (−) Consumo no mês
+                        {r.retiradasCount > 0 && (
+                          <span className="text-[10px] text-muted-foreground/70 ml-1">({r.retiradasCount} item{r.retiradasCount > 1 ? "s" : ""})</span>
+                        )}
+                      </span>
+                      <span className={cn("mono font-semibold", r.saldoConsumo > 0 ? "text-warning" : "text-muted-foreground")}>
+                        −{formatCurrency(r.saldoConsumo)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">(−) Comissão paga</span>
+                      <span className={cn("mono font-semibold", r.commPaid > 0 ? "text-warning" : "text-muted-foreground")}>
+                        −{formatCurrency(r.commPaid)}
+                      </span>
+                    </div>
+                    <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
+                      <span className="font-semibold">Saldo a receber</span>
+                      <span className={cn("mono font-bold text-sm", r.balance > 0.01 ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
+                        {formatCurrency(r.balance)}
+                      </span>
+                    </div>
+                    {r.saldoConsumo > 0 && r.saldoConsumo >= r.accrued - 0.01 && r.accrued > 0 && (
+                      <p className="text-[10px] text-warning/90 pt-0.5">⚠ Consumo zerou a comissão do mês.</p>
+                    )}
+                    {r.debtPaymentsTotal > 0 && (
+                      <p className="text-[10px] text-muted-foreground/70 pt-0.5">
+                        Pagamentos de dívida no mês: {formatCurrency(r.debtPaymentsTotal)} (apenas histórico, não abate comissão)
+                      </p>
+                    )}
                   </div>
 
-                  {(r.consumoTotal > 0 || r.debtPaymentsTotal > 0 || r.legacyCredit > 0) && (
-                    <div className="rounded-lg bg-secondary/40 px-3 py-2 mb-2 text-[11px] space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Consumo + dívidas</span>
-                        <span className="mono text-warning font-semibold">{formatCurrency(r.consumoTotal)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Pagamentos de dívida</span>
-                        <span className="mono text-income">−{formatCurrency(r.debtPaymentsTotal)}</span>
-                      </div>
-                      {r.legacyCredit > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Crédito legado (10% pré-jun/26)</span>
-                          <span className="mono text-income">−{formatCurrency(r.legacyCredit)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between border-t border-border/40 pt-1">
-                        <span className="text-muted-foreground font-semibold">Saldo de consumo a abater</span>
-                        <span className={cn("mono font-semibold", r.saldoConsumo > 0 ? "text-warning" : "text-income")}>{formatCurrency(r.saldoConsumo)}</span>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="flex flex-wrap justify-end gap-2">
                     <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
