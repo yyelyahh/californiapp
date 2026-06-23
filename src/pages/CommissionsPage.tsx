@@ -408,18 +408,46 @@ export default function CommissionsPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
                     <Mini label="Comissão base" value={formatCurrency(r.baseAccrued)} tone="income" />
                     <Mini label="Ajustes faixa" value={formatCurrency(r.adjustmentsTotal)} tone={r.adjustmentsTotal > 0 ? "income" : undefined} />
-                    <Mini label="Pago" value={formatCurrency(r.commPaid)} tone="warning" />
-                    <div className="flex sm:justify-end gap-2 items-end">
-                      <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
-                        Relatório <ArrowRight size={11} className="ml-1" />
-                      </Button>
-                      <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
-                        <Plus size={13} className="mr-1" />Pagar
-                      </Button>
+                    <Mini label="Comissão paga" value={formatCurrency(r.commPaid)} tone="warning" />
+                    <Mini label="Abate consumo" value={formatCurrency(r.saldoConsumo)} tone={r.saldoConsumo > 0 ? "warning" : undefined} />
+                  </div>
+
+                  {(r.consumoTotal > 0 || r.debtPaymentsTotal > 0 || r.legacyCredit > 0) && (
+                    <div className="rounded-lg bg-secondary/40 px-3 py-2 mb-2 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Consumo + dívidas</span>
+                        <span className="mono text-warning font-semibold">{formatCurrency(r.consumoTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Pagamentos de dívida</span>
+                        <span className="mono text-income">−{formatCurrency(r.debtPaymentsTotal)}</span>
+                      </div>
+                      {r.legacyCredit > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Crédito legado (10% pré-jun/26)</span>
+                          <span className="mono text-income">−{formatCurrency(r.legacyCredit)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between border-t border-border/40 pt-1">
+                        <span className="text-muted-foreground font-semibold">Saldo de consumo a abater</span>
+                        <span className={cn("mono font-semibold", r.saldoConsumo > 0 ? "text-warning" : "text-income")}>{formatCurrency(r.saldoConsumo)}</span>
+                      </div>
                     </div>
+                  )}
+
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
+                      Relatório <ArrowRight size={11} className="ml-1" />
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setDebtPayDrawer({ sellerId: r.seller.id }); setDebtPayForm({ amount: r.saldoConsumo > 0 ? r.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
+                      <Receipt size={12} className="mr-1" />Pagar Dívida
+                    </Button>
+                    <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
+                      <Plus size={13} className="mr-1" />Pagar Comissão
+                    </Button>
                   </div>
                 </div>
               );
