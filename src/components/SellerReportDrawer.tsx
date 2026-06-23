@@ -13,7 +13,7 @@ import {
   isWithinInterval, parseISO, format,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
+import { MessageCircleciArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
 import type { Sale } from "@/types";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
@@ -236,14 +236,20 @@ export default function SellerReportDrawer({
   };
 
   const buildWhatsStock = () => {
-    const user: ""
-  };
-
-  const shareWhatsSales = () => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsSales())}`, "_blank");
-  };
-  const shareWhatsStock = () => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsStock())}`, "_blank");
+    const lines: string[] = [];
+    lines.push(`📦 Estoque Atual — ${seller.name}`);
+    lines.push(``);
+    if (report.stockItems.length === 0) {
+      lines.push(`Total em estoque: 0 unidades`);
+      lines.push(`• Sem produtos em posse`);
+    } else {
+      lines.push(`Total em estoque: ${report.stockTotalUnits} unidades`);
+      lines.push(``);
+      report.stockItems.forEach(s => {
+        lines.push(`• ${s.name} (${s.qty}x)`);
+      });
+    }
+    return lines.join("\n");
   };
 
   const shareWhatsSales = () => {
@@ -310,9 +316,14 @@ export default function SellerReportDrawer({
           </p>
 
           {/* Export */}
-          <Button size="sm" className="h-10 w-full bg-green-600 hover:bg-green-700 text-white" onClick={shareWhats}>
-            <MessageCircle size={16} className="mr-2" /> Compartilhar no WhatsApp
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" className="h-10 w-full bg-green-600 hover:bg-green-700 text-white" onClick={shareWhatsSales}>
+              <MessageCircle size={16} className="mr-2" /> WhatsApp — Vendas
+            </Button>
+            <Button size="sm" className="h-10 w-full bg-green-700 hover:bg-green-800 text-white" onClick={shareWhatsStock}>
+              <MessageCircle size={16} className="mr-2" /> WhatsApp — Estoque
+            </Button>
+          </div>
 
 
           {/* Consumption breakdown */}
