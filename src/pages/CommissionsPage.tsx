@@ -198,7 +198,9 @@ export default function CommissionsPage() {
     ].sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime()).slice(0, 30);
     const groups: Record<string, typeof items> = {};
     items.forEach(it => {
+      if (!it.when) return;
       const d = parseISO(it.when);
+      if (isNaN(d.getTime())) return;
       const k = isToday(d) ? "Hoje" : isYesterday(d) ? "Ontem" : format(d, "dd 'de' MMM", { locale: ptBR });
       (groups[k] ||= []).push(it);
     });
