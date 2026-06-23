@@ -183,28 +183,21 @@ export default function SellerReportDrawer({
   }
 
   /* ---------- Export: WhatsApp ---------- */
-  const buildWhats = () => {
+  const buildWhatsSales = () => {
     const lines: string[] = [];
     lines.push(`📊 Relatório de ${label}`);
     lines.push(``);
     lines.push(`👤 Funcionário: ${seller.name}`);
     lines.push(``);
-    lines.push(`📦 Vendas`);
-    lines.push(`• Unidades vendidas: ${report.units}`);
-    lines.push(`• Valor em aberto: ${fmt(report.open)}`);
-    if (report.salesDetail.length) {
-      lines.push(``);
-      lines.push(`Vendas realizadas:`);
-      report.salesDetail.forEach(s => {
-        const dt = format(parseISO(s.when), "dd/MM");
-        const status = s.paid ? "Recebido" : `Em aberto • ${fmt(s.open)}`;
-        lines.push(`• ${dt} • ${s.qty}x ${s.name} • ${status}`);
-      });
-
-    }
+    lines.push(`💰 COMISSÃO`);
+    lines.push(`• Faixa atual: ${report.tier.label}`);
+    lines.push(`• Comissão gerada no período: ${fmt(report.accrued)}`);
+    lines.push(`• Consumo descontado: ${fmt(report.consumo)}`);
+    lines.push(`• Comissão paga: ${fmt(report.commPaidPeriod)}`);
+    lines.push(`• Saldo disponível: ${fmt(report.commBalance)}`);
     lines.push(``);
-    lines.push(`🍃 Consumo`);
-    lines.push(`• Total consumido: ${fmt(report.consumo)}`);
+    lines.push(`🍃 CONSUMO`);
+    lines.push(`Total consumido: ${fmt(report.consumo)}`);
     if (report.consumoBreakdown.length) {
       lines.push(``);
       lines.push(`Produtos consumidos:`);
@@ -212,32 +205,58 @@ export default function SellerReportDrawer({
         lines.push(`• ${c.name} (${c.qty}x) • ${fmt(c.total)}`);
       });
     }
+
+    const openSales = report.salesDetail.filter(s => !s.paid);
+    const paidSales = report.salesDetail.filter(s => s.paid);
+
     lines.push(``);
-    lines.push(`💰 Comissão`);
-    lines.push(`• Faixa atual: ${report.tier.label}`);
-    lines.push(`• Comissão no período: ${fmt(report.accrued)}`);
-    lines.push(`• Consumo descontado: ${fmt(report.consumo)}`);
-    lines.push(`• Comissão paga: ${fmt(report.commPaidPeriod)}`);
-    lines.push(`• Saldo disponível: ${fmt(report.commBalance)}`);
+    lines.push(`⏳ VENDAS EM ABERTO`);
+    lines.push(`Total em aberto: ${fmt(report.open)}`);
+    if (openSales.length) {
+      lines.push(``);
+      openSales.forEach(s => {
+        const dt = format(parseISO(s.when), "dd/MM");
+        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)}`);
+      });
+    }
+
     lines.push(``);
-    lines.push(`Cálculo: ${fmt(report.accrued)} − ${fmt(report.consumo)} (consumo) − ${fmt(report.commPaidPeriod)} (pagamentos) = ${fmt(report.commBalance)}`);
+    lines.push(`✅ VENDAS RECEBIDAS`);
+    lines.push(`• Unidades vendidas: ${report.units}`);
+    if (paidSales.length) {
+      lines.push(``);
+      lines.push(`Vendas recebidas:`);
+      paidSales.forEach(s => {
+        const dt = format(parseISO(s.when), "dd/MM");
+        lines.push(`• ${dt} • ${s.name}`);
+      });
+    }
+
+    return lines.join("\n");
+  };
+
+  const buildWhatsStock = () => {
+    const lines: string[] = [];
+    lines.push(`📦 Estoque Atual — ${seller.name}`);
     lines.push(``);
-    lines.push(`📦 Estoque atual`);
     if (report.stockItems.length === 0) {
+      lines.push(`Total em estoque: 0 unidades`);
       lines.push(`• Sem produtos em posse`);
     } else {
+      lines.push(`Total em estoque: ${report.stockTotalUnits} unidades`);
+      lines.push(``);
       report.stockItems.forEach(s => {
         lines.push(`• ${s.name} (${s.qty}x)`);
       });
-      lines.push(``);
-      lines.push(`Total em estoque: ${report.stockTotalUnits} unidades`);
     }
     return lines.join("\n");
   };
 
-  const shareWhats = () => {
-    const text = encodeURIComponent(buildWhats());
-    window.open(`https://wa.me/?text=${text}`, "_blank");
+  const shareWhatsSales = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsSales())}`, "_blank");
+  };
+  const shareWhatsStock = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsStock())}`, "_blank");
   };
 
 
@@ -297,9 +316,14 @@ export default function SellerReportDrawer({
           </p>
 
           {/* Export */}
-          <Button size="sm" className="h-10 w-full bg-green-600 hover:bg-green-700 text-white" onClick={shareWhats}>
-            <MessageCircle size={16} className="mr-2" /> Compartilhar no WhatsApp
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" className="h-10 w-full bg-green-600 hover:bg-green-700 text-white" onClick={shareWhatsSales}>
+              <MessageCircle size={16} className="mr-2" /> WhatsApp — Vendas
+            </Button>
+            <Button size="sm" className="h-10 w-full bg-green-700 hover:bg-green-800 text-white" onClick={shareWhatsStock}>
+              <MessageCircle size={16} className="mr-2" /> WhatsApp — Estoque
+            </Button>
+          </div>
 
 
           {/* Consumption breakdown */}
