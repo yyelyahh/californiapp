@@ -166,8 +166,8 @@ export default function SellerReportDrawer({
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date))
       .reduce((a, p) => a + p.amount, 0);
-    // Saldo de comissão = acumulada no período − saldo de consumo (total) − comissão paga no período
-    const commBalance = c.accrued - saldoConsumo - commPaidPeriod;
+    // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
+    const commBalance = c.accrued - saldoConsumo + debtPaymentsTotal - commPaidPeriod;
 
     type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
