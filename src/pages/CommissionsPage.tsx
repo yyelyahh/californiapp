@@ -211,6 +211,10 @@ export default function CommissionsPage() {
   const [wdDrawer, setWdDrawer] = useState<{ partnerId: string } | null>(null);
   const [wdForm, setWdForm] = useState({ amount: "", date: todayDateString(), notes: "" });
   const [extractFor, setExtractFor] = useState<string | null>(null);
+  const [debtPayDrawer, setDebtPayDrawer] = useState<{ sellerId: string } | null>(null);
+  const [debtPayForm, setDebtPayForm] = useState({ amount: "", date: todayDateString(), notes: "" });
+  const [manualDebtDrawer, setManualDebtDrawer] = useState<boolean>(false);
+  const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
 
   const openPay = (sellerId: string, suggested: number) => {
     setPayDrawer({ sellerId });
