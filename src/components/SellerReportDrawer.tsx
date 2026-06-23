@@ -107,7 +107,8 @@ export default function SellerReportDrawer({
     const debtPaymentsTotal = allDebtPayments.reduce((a, p) => a + p.amount, 0);
 
     const legacyCredit = 0;
-    const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal);
+    // Saldo de consumo abate direto da comissão. Pagamentos de dívida ficam só como histórico.
+    const saldoConsumo = consumoTotal;
 
     // Consumo do PERÍODO (para breakdown da mensagem)
     const consumo = retiradas.reduce((a, s) => a + s.totalPrice, 0);
