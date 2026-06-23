@@ -95,24 +95,17 @@ export default function SellerReportDrawer({
     const received = vendas.reduce((a, s) => a + (s.paidAmount || 0), 0);
     const open = Math.max(0, revenue - received);
 
-    // === Consumo TOTAL (todas as datas) — retiradas + dívidas manuais ===
-    const allSellerSales = sales.filter(s => s.sellerId === seller.id);
-    const allRetiradas = allSellerSales.filter(s => s.type === "retirada_funcionario");
-    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
-    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id);
+    // === Consumo / dívidas / pagamentos — APENAS no período ===
+    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date));
+    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date));
 
-    const retiradasTotal = allRetiradas.reduce((a, s) => a + s.totalPrice, 0);
+    const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
     const manualDebtsTotal = allManualDebts.reduce((a, d) => a + d.amount, 0);
     const consumoTotal = retiradasTotal + manualDebtsTotal;
     const debtPaymentsTotal = allDebtPayments.reduce((a, p) => a + p.amount, 0);
 
-    // Crédito legado: vendas pré-jun/26 × 10% (só abate consumo)
-    const legacySalesRevenue = allSellerSales
-      .filter(s => s.type === "venda" && isLegacy(s.date))
-      .reduce((a, s) => a + s.totalPrice, 0);
-    const legacyCredit = legacySalesRevenue * 0.10;
-
-    const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal - legacyCredit);
+    const legacyCredit = 0;
+    const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal);
 
     // Consumo do PERÍODO (para breakdown da mensagem)
     const consumo = retiradas.reduce((a, s) => a + s.totalPrice, 0);
