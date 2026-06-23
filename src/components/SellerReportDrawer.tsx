@@ -230,22 +230,24 @@ export default function SellerReportDrawer({
     lines.push(``);
     lines.push(`👤 Funcionário: ${seller.name}`);
     lines.push(``);
-    lines.push(`💰 COMISSÃO`);
-    lines.push(`• Faixa atual: ${report.tier.label}`);
-    lines.push(`• Comissão gerada no período: ${fmt(report.accrued)}`);
-    lines.push(`• Consumo descontado: ${fmt(report.saldoConsumo)}`);
-    lines.push(`• Comissão paga: ${fmt(report.commPaidPeriod)}`);
-    lines.push(`• Saldo disponível: ${fmt(report.commBalance)}`);
-    lines.push(``);
-    lines.push(`🍃 CONSUMO`);
-    lines.push(`Total consumido no período: ${fmt(report.consumo)}`);
-    lines.push(`Saldo de consumo/dívida a abater: ${fmt(report.saldoConsumo)}`);
+    lines.push(`💰 COMISSÃO — ${label}`);
+    lines.push(`• Faixa: ${report.tier.label} (${report.units} un.)`);
+    lines.push(`• Comissão gerada: ${fmt(report.accrued)}`);
+    lines.push(`• (−) Consumo no mês: ${fmt(report.saldoConsumo)}`);
+    lines.push(`• (−) Comissão já paga: ${fmt(report.commPaidPeriod)}`);
+    lines.push(`──────────────────────────────`);
+    lines.push(`• Saldo a receber: ${fmt(report.commBalance)}`);
+    if (report.debtPaymentsTotal > 0) {
+      lines.push(``);
+      lines.push(`(Pagamentos de dívida no mês: ${fmt(report.debtPaymentsTotal)} — histórico, não abate comissão)`);
+    }
     if (report.consumoBreakdown.length) {
       lines.push(``);
-      lines.push(`Produtos consumidos:`);
+      lines.push(`🍃 CONSUMO DO MÊS (descontado da comissão)`);
       report.consumoBreakdown.forEach(c => {
         lines.push(`• ${c.name} (${c.qty}x) • ${fmt(c.total)}`);
       });
+      lines.push(`Total: ${fmt(report.consumo)}`);
     }
 
     const openSales = report.salesDetail.filter(s => !s.paid);
