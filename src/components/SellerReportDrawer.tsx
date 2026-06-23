@@ -343,9 +343,13 @@ export default function SellerReportDrawer({
           {/* Commission calc note */}
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             <span className="font-semibold text-foreground">Saldo:</span>{" "}
-            {fmt(report.accrued)} − {fmt(report.consumo)} (consumo) − {fmt(report.commPaidPeriod)} (pagamentos) ={" "}
+            {fmt(report.accrued)} − {fmt(report.saldoConsumo)} (consumo a abater) − {fmt(report.commPaidPeriod)} (pagamentos) ={" "}
             <span className={cn(report.commBalance >= 0 ? "text-income" : "text-expense", "font-semibold")}>{fmt(report.commBalance)}</span>
+            {report.legacyCredit > 0 && (
+              <> · Crédito legado de <span className="font-semibold">{fmt(report.legacyCredit)}</span> abate apenas consumo.</>
+            )}
           </p>
+
 
           {/* Export */}
           <div className="grid grid-cols-2 gap-2">
