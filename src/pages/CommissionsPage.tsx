@@ -596,6 +596,52 @@ export default function CommissionsPage() {
         </SheetContent>
       </Sheet>
 
+      {/* Drawer Pagar Dívida (consumo) */}
+      <Sheet open={!!debtPayDrawer} onOpenChange={(v) => !v && setDebtPayDrawer(null)}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader><SheetTitle>Pagar Dívida (consumo)</SheetTitle></SheetHeader>
+          {debtSellerRow && (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{debtSellerRow.seller.name}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Consumo + dívidas</span><span className="mono text-warning">{formatCurrency(debtSellerRow.consumoTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Já pago</span><span className="mono">{formatCurrency(debtSellerRow.debtPaymentsTotal)}</span></div>
+                {debtSellerRow.legacyCredit > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Crédito legado (10%)</span><span className="mono text-income">{formatCurrency(debtSellerRow.legacyCredit)}</span></div>
+                )}
+                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo a abater</span><span className={cn("mono font-semibold", debtSellerRow.saldoConsumo > 0 ? "text-warning" : "text-income")}>{formatCurrency(debtSellerRow.saldoConsumo)}</span></div>
+              </div>
+              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={debtPayForm.amount} onChange={e => setDebtPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
+              <div><Label>Data</Label><Input type="date" value={debtPayForm.date} onChange={e => setDebtPayForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div><Label>Observação</Label><Input value={debtPayForm.notes} onChange={e => setDebtPayForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" /></div>
+              <Button className="w-full" onClick={submitDebtPay}>Registrar Pagamento</Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Drawer Dívida Manual */}
+      <Sheet open={manualDebtDrawer} onOpenChange={(v) => setManualDebtDrawer(v)}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader><SheetTitle>Adicionar Dívida Manual</SheetTitle></SheetHeader>
+          <div className="mt-4 space-y-4">
+            <div>
+              <Label>Funcionário</Label>
+              <Select value={manualDebtForm.sellerId} onValueChange={v => setManualDebtForm(f => ({ ...f, sellerId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={manualDebtForm.amount} onChange={e => setManualDebtForm(f => ({ ...f, amount: e.target.value }))} /></div>
+            <div><Label>Data</Label><Input type="date" value={manualDebtForm.date} onChange={e => setManualDebtForm(f => ({ ...f, date: e.target.value }))} /></div>
+            <div><Label>Observação</Label><Input value={manualDebtForm.notes} onChange={e => setManualDebtForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: adiantamento, empréstimo" /></div>
+            <Button className="w-full bg-warning hover:bg-warning/90 text-warning-foreground" onClick={submitManualDebt}>Adicionar Dívida</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Relatório do Vendedor */}
       <SellerReportDrawer
         sellerId={extractFor}
