@@ -97,14 +97,26 @@ export default function SellerReportDrawer({
     });
     const consumoBreakdown = Array.from(consumoMap.values()).sort((a, b) => b.total - a.total);
 
-    // Sales detail
-    const salesDetail = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(s => {
+    // Sales detail (chronological) + marginal commission per sale
+    const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    let runningUnits = 0; let runningRevenue = 0; let runningAccrued = 0;
+    const saleCommission = new Map<string, number>();
+    vendasChrono.forEach(s => {
+      runningUnits += s.quantity; runningRevenue += s.totalPrice;
+      const tier = getTierForUnits(runningUnits);
+      const newAccrued = runningRevenue * tier.rate;
+      saleCommission.set(s.id, Math.max(0, newAccrued - runningAccrued));
+      runningAccrued = newAccrued;
+    });
+    const salesDetail = vendasChrono.map(s => {
       const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
       return {
         id: s.id, when: s.date, qty: s.quantity, total: s.totalPrice,
         name: getProductName(s.productId), open: op, paid: op < 0.01,
+        commission: saleCommission.get(s.id) || 0,
       };
     });
+
 
     // Current stock assigned to seller
     const stockItems = productAssignments
