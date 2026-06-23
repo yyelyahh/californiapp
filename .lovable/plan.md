@@ -1,113 +1,101 @@
-## Nova área: Financeiro › Comissões e Pró-labore
+## Objetivo
 
-Nova página dedicada à gestão de comissões progressivas dos vendedores, pró-labore dos sócios e distribuição de resultados, no mesmo padrão visual das demais páginas redesenhadas.
-
----
-
-### 1. Banco de dados (migrations)
-
-Duas novas tabelas + ajustes mínimos:
-
-**`commission_payments`** — pagamentos de comissão a vendedores
-- `id uuid pk`, `seller_id uuid → sellers`, `amount numeric`, `date date`, `notes text`, `created_at timestamptz`
-- RLS: admin full access; seller pode ler os próprios (`seller_id = get_my_seller_id()`)
-- GRANTs para `authenticated` e `service_role`
-
-**`pro_labore_payments`** — pagamentos de pró-labore a sócios
-- `id uuid pk`, `partner_id uuid → partners`, `amount numeric`, `date date`, `notes text`, `created_at timestamptz`
-- RLS: admin only
-
-**`partners`** já existe. Adicionar coluna `monthly_pro_labore numeric default 0` para o "Valor Mensal" exibido na tabela.
+Eliminar a página separada "Contas de Funcionários" e trazer toda a operação (consumos, dívidas manuais, pagamentos de dívida) para dentro da página **Comissão**, com regras claras para o legado anterior ao mês 6 (junho/2026 — início do projeto).
 
 ---
 
-### 2. Lógica de comissão progressiva (frontend, em `src/lib/commissions.ts`)
+## Regras de negócio
 
-Para o período selecionado (mês atual por padrão):
+**Legado (tudo com data anterior a 01/06/2026):**
+- Vendas legadas → geram **comissão de 10% fixos** (sem progressão de faixa).
+- Consumos legados (retiradas) → entram normalmente no consumo do vendedor.
+- Dívidas manuais legadas → entram normalmente no saldo devedor.
+- Pagamentos de dívida (`seller_debt_payments`) legados → continuam abatendo consumo/dívida.
 
+**Crédito legado de comissão (10% sobre vendas pré-junho):**
+- Usado **apenas para abater consumo/dívida manual** do vendedor.
+- **Nunca** aparece como "Comissão paga ao funcionário" nem como saldo a pagar de comissão no período atual.
+- Se sobrar saldo positivo após abater consumo/dívida, é simplesmente descartado (não vira crédito futuro de comissão).
+
+**Período atual (junho/2026 em diante):**
+- Comissão progressiva normal (10% / 12,5% / 15%) já existente.
+- Consumo do período abate o saldo de comissão do período (regra atual já implementada).
+- Dívidas manuais e retiradas continuam sendo abatidas primeiro pelo crédito legado e depois pelo saldo de comissão do período.
+
+**Fórmula final do saldo do vendedor (mostrado em "Conta Corrente"):**
 ```
-unidades = soma de quantity das sales do vendedor (type='venda') no período
-faturamento = soma de total_price
-faixa:
-  unidades <= 10 → 10%
-  11–15        → 12,5%
-  >= 16        → 15%
-comissao_acumulada = faturamento * faixa
-comissao_paga      = soma de commission_payments do vendedor no período
-comissao_pendente  = max(0, acumulada - paga)
+consumo_total       = retiradas + dívidas manuais (todas as datas)
+pagamentos_dívida   = seller_debt_payments (todas as datas)
+crédito_legado      = vendas_pré_junho × 10%
+saldo_consumo       = max(0, consumo_total − pagamentos_dívida − crédito_legado)
+comissão_período    = vendas_no_período × taxa_da_faixa
+comissão_paga       = commission_payments no período
+saldo_comissão      = comissão_período − saldo_consumo − comissão_paga
 ```
 
-Próxima faixa e "faltam X unidades" derivados da mesma estrutura.
+---
+
+## Mudanças na página Comissão (`CommissionsPage.tsx`)
+
+1. **Novo card "Consumo & Dívidas do Vendedor"** dentro de cada linha da Conta Corrente:
+   - Total consumido (retiradas + dívidas manuais, todas as datas)
+   - Pagamentos de dívida
+   - Crédito legado disponível (vendas pré-junho × 10%)
+   - Saldo de consumo a abater
+2. **Novo botão "Adicionar Dívida Manual"** no header da seção de vendedores → abre Sheet (igual ao existente em SellerAccountsPage).
+3. **Novo botão "Registrar Pagamento de Dívida"** ao lado do "Pagar Comissão" em cada linha do vendedor.
+4. **Extrato do vendedor** (drawer já existente) passa a listar também:
+   - Retiradas (todas as datas, separadas em "legado" vs "período")
+   - Dívidas manuais
+   - Pagamentos de dívida
+   - Linha "Crédito legado de comissão (10%)" como ajuste informativo
+5. **KPI atualizado**: "A pagar a vendedores" passa a usar o `saldo_comissão` da nova fórmula (não muda nome, só a base de cálculo).
 
 ---
 
-### 3. Página `src/pages/CommissionsPage.tsx` (rota `/commissions`)
+## Mudanças no Relatório do Vendedor (`SellerReportDrawer.tsx`)
 
-Estrutura, top → bottom, no mesmo design system (glass-card, gradientes, tipografia, espaçamentos das páginas Vendas/Dashboard):
-
-1. **Header** — título "Comissões e Pró-labore" + subtítulo + seletor de período (mês/trimestre/ano).
-2. **KPIs (4 cards, `grid-cols-2 lg:grid-cols-4`)**
-   - Lucro Líquido (período)
-   - Comissões Pendentes
-   - Pró-labore Pendente
-   - **Saldo Disponível** = Lucro − Comissões Pendentes − Pró-labore Pendente (card destacado com gradiente)
-3. **Distribuição de Resultados** — card visual com a cascata Lucro → Comissões → Pró-labore → Saldo (barra empilhada + valores).
-4. **Tabela de Comissões dos Vendedores**
-   - Colunas: Funcionário · Unidades · Faturamento · Faixa Atual · Comissão Acumulada · Pago · Pendente · Ações
-   - Barra de progresso até a próxima faixa + texto "Faltam X un. para 15%"
-   - Botão "Registrar Pagamento" abre Drawer (Sheet)
-5. **Tabela de Pró-labore dos Sócios**
-   - Colunas: Sócio · Valor Mensal · Pago no Período · Status (Pago / Parcial / Pendente) · Ações
-   - Botão "Registrar Pró-labore" abre Drawer
-6. **Gráfico de Evolução** (Recharts, mesmo estilo do Dashboard)
-   - Linhas: Lucro Líquido, Comissões, Pró-labore, Saldo Disponível
-   - Granularidade segue filtro de período
-7. **Timeline de Histórico Financeiro**
-   - Agrupado por dia (Hoje / Ontem / data)
-   - Itens unificados: commission_payments + pro_labore_payments, ordenados desc
+- Consumo passa a considerar **todas as retiradas + dívidas manuais** (não só do período).
+- Crédito legado de comissão (10% sobre vendas pré-junho) é mostrado como linha separada em "Comissão", deixando claro que abate consumo mas não é pago.
+- Mensagem do WhatsApp ganha bloco extra quando houver legado:
+  ```
+  💰 COMISSÃO
+  • Faixa atual: 12,5%
+  • Comissão gerada no período: R$ X
+  • Crédito legado (10% sobre vendas anteriores): R$ Y — abate apenas consumo
+  • Consumo total (inclui legado): R$ Z
+  • Pagamentos de dívida: R$ W
+  • Comissão paga: R$ K
+  • Saldo disponível: R$ ...
+  ```
+- O cálculo do saldo na UI e no WhatsApp segue a fórmula final acima.
 
 ---
 
-### 4. Drawers (padrão Sheet lateral)
+## Remoção da página antiga
 
-**Drawer Comissão**: Funcionário (select) · Valor · Data · Observação · Resumo (Acumulada / Paga / Pendente).
-**Drawer Pró-labore**: Sócio (select) · Valor · Data · Observação · Resumo (Mensal / Pago / Restante).
-
-Após submit: insert no Supabase, invalidar dados via `StoreContext` (adicionar `commissionPayments`, `proLaborePayments`, `addCommissionPayment`, `addProLaborePayment`).
-
----
-
-### 5. Integração com o sistema
-
-- **`StoreContext`**: novos arrays + loaders + mutations.
-- **`AppLayout`** (sidebar): novo item "Comissões" (ícone `Wallet`) abaixo de "Despesas", visível só para admin.
-- **`App.tsx`**: rota `/commissions` protegida (não-seller).
-- **Lucro Líquido**: reusar a mesma fórmula já adotada no Dashboard reformulado (Receita − Despesas − CMV das vendas, sem subtrair compras de estoque).
+- Apagar `src/pages/SellerAccountsPage.tsx`.
+- Remover a rota `/seller-accounts` em `src/App.tsx`.
+- Remover o item de menu "Contas Func." em `src/components/AppLayout.tsx`.
+- Manter intactas todas as tabelas (`seller_debt_payments`, `seller_manual_debts`) e métodos do `StoreContext` — apenas mudam os locais de uso.
 
 ---
 
-### 6. Design tokens / consistência
+## Detalhes técnicos
 
-- Reusar `glass-card`, `text-rgb-cascade`, badges, `Sheet` (drawer), `Progress` do shadcn.
-- Mobile first: `grid-cols-2 sm:grid-cols-4`, tabelas com `overflow-x-auto` + `min-w-[640px]`, sem scroll horizontal no viewport.
-- Sem cores hardcoded — apenas tokens semânticos.
+- Cutoff legado: `PROJECT_START = startOfMonth(new Date(2026, 5, 1))` (junho/2026, fixo) — não pode usar mês atual porque já estamos depois de junho.
+- Reaproveitar `addSellerDebtPayment`, `addSellerManualDebt`, `deleteSellerDebtPayment`, `deleteSellerManualDebt` do `StoreContext`.
+- Nenhuma alteração de schema/DB.
 
 ---
 
-### Resumo de arquivos
-
-**Migrations**
-- criar `commission_payments`, `pro_labore_payments`
-- `alter table partners add column monthly_pro_labore numeric default 0`
-
-**Novos**
-- `src/pages/CommissionsPage.tsx`
-- `src/lib/commissions.ts`
-- `src/components/CommissionPaymentDrawer.tsx`
-- `src/components/ProLaborePaymentDrawer.tsx`
+## Arquivos afetados
 
 **Editados**
-- `src/App.tsx` (rota)
-- `src/components/AppLayout.tsx` (item de menu)
-- `src/context/StoreContext.tsx` (novos dados/mutations)
-- `src/types/index.ts` (novos tipos + `monthlyProLabore` em Partner)
+- `src/pages/CommissionsPage.tsx`
+- `src/components/SellerReportDrawer.tsx`
+- `src/App.tsx`
+- `src/components/AppLayout.tsx`
+
+**Removidos**
+- `src/pages/SellerAccountsPage.tsx`
