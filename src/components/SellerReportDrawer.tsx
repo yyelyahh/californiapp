@@ -42,7 +42,9 @@ function computeAccrualAdjustments(sales: Sale[]) {
 export default function SellerReportDrawer({
   sellerId, open, onClose,
 }: { sellerId: string | null; open: boolean; onClose: () => void }) {
-  const { sellers, sales, commissionPayments, productAssignments, products, getProductName } = useStore();
+  const { sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, getProductName } = useStore();
+  const LEGACY_CUTOFF = new Date(2026, 5, 1);
+  const isLegacy = (iso: string) => { try { return parseISO(iso) < LEGACY_CUTOFF; } catch { return false; } };
   const [periodKey, setPeriodKey] = useState<PeriodKey>("month");
   const [customStart, setCustomStart] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [customEnd, setCustomEnd] = useState(format(new Date(), "yyyy-MM-dd"));
