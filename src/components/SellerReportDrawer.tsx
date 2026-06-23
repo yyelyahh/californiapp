@@ -369,17 +369,18 @@ export default function SellerReportDrawer({
                 −{fmt(report.commPaidPeriod)}
               </span>
             </div>
+            {report.debtPaymentsTotal > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">(+) Pagamentos de dívida</span>
+                <span className="mono font-semibold text-income">+{fmt(report.debtPaymentsTotal)}</span>
+              </div>
+            )}
             <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
               <span className="font-semibold">Saldo a receber</span>
               <span className={cn("mono font-bold text-sm", report.commBalance >= 0 ? "text-income" : "text-expense")}>
                 {fmt(report.commBalance)}
               </span>
             </div>
-            {report.debtPaymentsTotal > 0 && (
-              <p className="text-[10px] text-muted-foreground/70 pt-0.5">
-                Pagamentos de dívida no mês: {fmt(report.debtPaymentsTotal)} (histórico, não abate comissão)
-              </p>
-            )}
           </div>
 
 
