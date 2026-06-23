@@ -125,11 +125,18 @@ export default function SellerReportDrawer({
     });
     const consumoBreakdown = Array.from(consumoMap.values()).sort((a, b) => b.total - a.total);
 
-    // Sales detail (chronological) + marginal commission per sale
+    // Sales detail (chronological) + marginal commission per sale.
+    // Legacy sales (pre-jun/2026) sempre rendem 10% flat; modernas usam faixas.
     const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const modernVendas = vendasChrono.filter(s => !isLegacy(s.date));
+    const legacyVendasInPeriod = vendasChrono.filter(s => isLegacy(s.date));
     let runningUnits = 0; let runningRevenue = 0; let runningAccrued = 0;
     const saleCommission = new Map<string, number>();
     vendasChrono.forEach(s => {
+      if (isLegacy(s.date)) {
+        saleCommission.set(s.id, s.totalPrice * 0.10);
+        return;
+      }
       runningUnits += s.quantity; runningRevenue += s.totalPrice;
       const tier = getTierForUnits(runningUnits);
       const newAccrued = runningRevenue * tier.rate;
@@ -155,8 +162,15 @@ export default function SellerReportDrawer({
       .sort((a, b) => a.name.localeCompare(b.name));
     const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
-    const c = computeSellerCommission(vendas);
-    const adjustments = computeAccrualAdjustments(vendas);
+    const cModern = computeSellerCommission(modernVendas);
+    const legacyAccruedInPeriod = legacyVendasInPeriod.reduce((a, s) => a + s.totalPrice * 0.10, 0);
+    const c = {
+      units: cModern.units + legacyVendasInPeriod.reduce((a, s) => a + s.quantity, 0),
+      revenue: cModern.revenue + legacyVendasInPeriod.reduce((a, s) => a + s.totalPrice, 0),
+      tier: cModern.tier,
+      accrued: cModern.accrued + legacyAccruedInPeriod,
+    };
+    const adjustments = computeAccrualAdjustments(modernVendas);
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date))
       .reduce((a, p) => a + p.amount, 0);
