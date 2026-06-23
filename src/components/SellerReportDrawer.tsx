@@ -172,10 +172,11 @@ export default function SellerReportDrawer({
     // Saldo de comissão = acumulada no período − saldo de consumo (total) − comissão paga no período
     const commBalance = c.accrued - saldoConsumo - commPaidPeriod;
 
+    type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
       | { kind: "venda"; when: string; label: string; amount: number; sub: string }
-      | { kind: "retirada"; when: string; label: string; amount: number; sub: string }
-      | { kind: "pagamento"; when: string; label: string; amount: number; sub?: string }
+      | { kind: "retirada"; when: string; label: string; amount: number; sub: string; source?: { type: DeletableKind; id: string } }
+      | { kind: "pagamento"; when: string; label: string; amount: number; sub?: string; source?: { type: DeletableKind; id: string } }
       | { kind: "ajuste"; when: string; label: string; amount: number; sub?: string };
 
     const movs: Mov[] = [];
@@ -198,13 +199,13 @@ export default function SellerReportDrawer({
       });
     });
     allManualDebts.filter(d => inPeriod(d.date)).forEach(d => {
-      movs.push({ kind: "retirada", when: d.date, label: "Dívida manual", amount: d.amount, sub: d.notes || "" });
+      movs.push({ kind: "retirada", when: d.date, label: "Dívida manual", amount: d.amount, sub: d.notes || "", source: { type: "manual_debt", id: d.id } });
     });
     allDebtPayments.filter(p => inPeriod(p.date)).forEach(p => {
-      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes });
+      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes, source: { type: "debt_payment", id: p.id } });
     });
     commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).forEach(p => {
-      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes });
+      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes, source: { type: "commission_payment", id: p.id } });
     });
     adjustments.forEach(a => movs.push({ kind: "ajuste", when: a.when, label: a.label, amount: a.amount }));
     movs.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
