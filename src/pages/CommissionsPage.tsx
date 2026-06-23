@@ -162,7 +162,7 @@ export default function CommissionsPage() {
         accrued, baseAccrued, adjustmentsTotal,
         tier: c.tier, balance, accrualItems,
         consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
-        retiradasTotal, manualDebtsTotal,
+        retiradasTotal, manualDebtsTotal, retiradasCount,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
