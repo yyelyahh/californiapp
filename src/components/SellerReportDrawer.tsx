@@ -13,7 +13,7 @@ import {
   isWithinInterval, parseISO, format,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageCircleciArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
+import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
 import type { Sale } from "@/types";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
