@@ -225,7 +225,7 @@ export default function SellerReportDrawer({
     lines.push(`• Unidades vendidas: ${report.units}`);
     if (paidSales.length) {
       lines.push(``);
-      lines.push(`Vendasys recebidas:`);
+      lines.push(`Vendas recebidas:`);
       paidSales.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
         lines.push(`• ${dt} • ${s.name}`);
@@ -236,21 +236,14 @@ export default function SellerReportDrawer({
   };
 
   const buildWhatsStock = () => {
-    const lines: string[] = [];
-    lines.push(`📦 Estoque Atual — ${seller.name}`);
-    lines.push(``);
+    const user: ""
   };
-    if (report.stockItems.length === 0) {
-      lines.push(`Total em estoque: 0 unidades`);
-      lines.push(`• Sem produtos em posse`);
-    } else {
-      lines.push(`Total em estoque: ${report.stockTotalUnits} unidades`);
-      lines.push(``);
-      report.stockItems.forEach(s => {
-        lines.push(`• ${s.name} (${s.qty}x)`);
-      });
-    }
-    return lines.join("\n");
+
+  const shareWhatsSales = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsSales())}`, "_blank");
+  };
+  const shareWhatsStock = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsStock())}`, "_blank");
   };
 
   const shareWhatsSales = () => {
