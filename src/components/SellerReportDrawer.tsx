@@ -235,12 +235,11 @@ export default function SellerReportDrawer({
     lines.push(`• Comissão gerada: ${fmt(report.accrued)}`);
     lines.push(`• (−) Consumo no mês: ${fmt(report.saldoConsumo)}`);
     lines.push(`• (−) Comissão já paga: ${fmt(report.commPaidPeriod)}`);
+    if (report.debtPaymentsTotal > 0) {
+      lines.push(`• (+) Pagamentos de dívida: ${fmt(report.debtPaymentsTotal)}`);
+    }
     lines.push(`──────────────────────────────`);
     lines.push(`• Saldo a receber: ${fmt(report.commBalance)}`);
-    if (report.debtPaymentsTotal > 0) {
-      lines.push(``);
-      lines.push(`(Pagamentos de dívida no mês: ${fmt(report.debtPaymentsTotal)} — histórico, não abate comissão)`);
-    }
     if (report.consumoBreakdown.length) {
       lines.push(``);
       lines.push(`🍃 CONSUMO DO MÊS (descontado da comissão)`);
