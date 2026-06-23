@@ -125,7 +125,7 @@ export default function CommissionsPage() {
     const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // Conta Corrente do vendedor — APENAS comissão (não inclui valor bruto das vendas)
+    // Conta Corrente do vendedor — comissão do período + abate consumo (incluindo legado)
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
@@ -133,20 +133,38 @@ export default function CommissionsPage() {
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = computeSellerCommission(vendas);
-      const accrued = c.accrued; // comissão total = receita × taxa da faixa atual
+      const accrued = c.accrued;
       const units = c.units;
 
-      // Quebra cronológica em accruals + ajustes de faixa (para o extrato)
       const accrualItems = computeAccrualHistory(vendas);
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
 
-      const balance = accrued - commPaid;
+      // === Consumo / dívidas / pagamentos / crédito legado (TODAS as datas) ===
+      const allSellerSales = sales.filter(s => s.sellerId === seller.id);
+      const retiradas = allSellerSales.filter(s => s.type === "retirada_funcionario");
+      const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
+      const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
+      const consumoTotal = retiradasTotal + manualDebtsTotal;
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id).reduce((a, p) => a + p.amount, 0);
+
+      // Crédito legado: vendas anteriores a 01/06/2026 valem 10% (só abate consumo)
+      const legacySales = allSellerSales.filter(s => s.type === "venda" && isLegacy(s.date));
+      const legacySalesRevenue = legacySales.reduce((a, s) => a + s.totalPrice, 0);
+      const legacyCredit = legacySalesRevenue * 0.10;
+
+      const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal - legacyCredit);
+
+      // Saldo de comissão = acumulada no período − saldo de consumo − comissão paga no período
+      const balance = accrued - saldoConsumo - commPaid;
 
       return {
         seller, units, vendasTotal, commPaid,
         accrued, baseAccrued, adjustmentsTotal,
         tier: c.tier, balance, accrualItems,
+        consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
+        retiradasTotal, manualDebtsTotal,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
