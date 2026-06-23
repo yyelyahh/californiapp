@@ -246,7 +246,31 @@ export default function CommissionsPage() {
     setWdDrawer(null);
   };
 
+  const submitDebtPay = async () => {
+    if (!debtPayDrawer || !Number(debtPayForm.amount)) return;
+    await addSellerDebtPayment({
+      sellerId: debtPayDrawer.sellerId,
+      amount: Number(debtPayForm.amount),
+      date: localDateToISO(debtPayForm.date),
+      notes: debtPayForm.notes || undefined,
+    });
+    setDebtPayDrawer(null);
+  };
+
+  const submitManualDebt = async () => {
+    if (!manualDebtForm.sellerId || !Number(manualDebtForm.amount)) return;
+    await addSellerManualDebt({
+      sellerId: manualDebtForm.sellerId,
+      amount: Number(manualDebtForm.amount),
+      date: localDateToISO(manualDebtForm.date),
+      notes: manualDebtForm.notes || undefined,
+    });
+    setManualDebtDrawer(false);
+    setManualDebtForm({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+  };
+
   const sellerRow = payDrawer ? periodMetrics.perSeller.find(r => r.seller.id === payDrawer.sellerId) : null;
+  const debtSellerRow = debtPayDrawer ? periodMetrics.perSeller.find(r => r.seller.id === debtPayDrawer.sellerId) : null;
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
 
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
