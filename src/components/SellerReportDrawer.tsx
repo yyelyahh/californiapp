@@ -198,7 +198,7 @@ export default function SellerReportDrawer({
       report.salesDetail.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
         const status = s.paid ? "Recebido" : `Em aberto • ${fmt(s.open)}`;
-        lines.push(`• ${dt} • ${s.qty}x ${s.name} • Comissão ${fmt(s.commission)} • ${status}`);
+        lines.push(`• ${dt} • ${s.qty}x ${s.name} • ${status}`);
       });
 
     }
