@@ -125,18 +125,14 @@ export default function SellerReportDrawer({
     const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const modernVendas = vendasChrono.filter(s => !isLegacy(s.date));
     const legacyVendasInPeriod = vendasChrono.filter(s => isLegacy(s.date));
-    let runningUnits = 0; let runningRevenue = 0; let runningAccrued = 0;
+    // Comissão por venda = totalPrice × faixa final do vendedor no período
+    // (legadas continuam fixas em 10%)
+    const modernUnitsTotal = vendasChrono.filter(s => !isLegacy(s.date)).reduce((a, s) => a + s.quantity, 0);
+    const finalTier = getTierForUnits(modernUnitsTotal);
     const saleCommission = new Map<string, number>();
     vendasChrono.forEach(s => {
-      if (isLegacy(s.date)) {
-        saleCommission.set(s.id, s.totalPrice * 0.10);
-        return;
-      }
-      runningUnits += s.quantity; runningRevenue += s.totalPrice;
-      const tier = getTierForUnits(runningUnits);
-      const newAccrued = runningRevenue * tier.rate;
-      saleCommission.set(s.id, Math.max(0, newAccrued - runningAccrued));
-      runningAccrued = newAccrued;
+      const rate = isLegacy(s.date) ? 0.10 : finalTier.rate;
+      saleCommission.set(s.id, s.totalPrice * rate);
     });
     const salesDetail = vendasChrono.map(s => {
       const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
