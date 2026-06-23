@@ -13,7 +13,7 @@ import {
   isWithinInterval, parseISO, format,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { FileText, FileSpreadsheet, MessageCircle, ArrowUpCircle, ArrowDownCircle, Package } from "lucide-react";
+import { FileText, FileSpreadsheet, MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
 import type { Sale } from "@/types";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -45,7 +45,7 @@ function computeAccrualAdjustments(sales: Sale[]) {
 export default function SellerReportDrawer({
   sellerId, open, onClose,
 }: { sellerId: string | null; open: boolean; onClose: () => void }) {
-  const { sellers, sales, commissionPayments, getProductName } = useStore();
+  const { sellers, sales, commissionPayments, productAssignments, products, getProductName } = useStore();
   const [periodKey, setPeriodKey] = useState<PeriodKey>("month");
   const [customStart, setCustomStart] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [customEnd, setCustomEnd] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -89,13 +89,43 @@ export default function SellerReportDrawer({
     const received = vendas.reduce((a, s) => a + (s.paidAmount || 0), 0);
     const open = Math.max(0, revenue - received);
     const consumo = retiradas.reduce((a, s) => a + s.totalPrice, 0);
+    const consumoUnits = retiradas.reduce((a, s) => a + s.quantity, 0);
+
+    // Group consumption by product
+    const consumoMap = new Map<string, { name: string; qty: number; total: number }>();
+    retiradas.forEach(s => {
+      const cur = consumoMap.get(s.productId) || { name: getProductName(s.productId), qty: 0, total: 0 };
+      cur.qty += s.quantity; cur.total += s.totalPrice;
+      consumoMap.set(s.productId, cur);
+    });
+    const consumoBreakdown = Array.from(consumoMap.values()).sort((a, b) => b.total - a.total);
+
+    // Sales detail
+    const salesDetail = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(s => {
+      const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
+      return {
+        id: s.id, when: s.date, qty: s.quantity, total: s.totalPrice,
+        name: getProductName(s.productId), open: op, paid: op < 0.01,
+      };
+    });
+
+    // Current stock assigned to seller
+    const stockItems = productAssignments
+      .filter(a => a.sellerId === seller.id && a.quantity > 0)
+      .map(a => {
+        const p = products.find(pp => pp.id === a.productId);
+        return { id: a.id, name: getProductName(a.productId), qty: a.quantity, brand: p?.brand || "" };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
     const c = computeSellerCommission(vendas);
     const adjustments = computeAccrualAdjustments(vendas);
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date))
       .reduce((a, p) => a + p.amount, 0);
-    const commBalance = c.accrued - commPaidPeriod;
+    // Saldo = acumulada - consumo - pago
+    const commBalance = c.accrued - consumo - commPaidPeriod;
 
     type Mov =
       | { kind: "venda"; when: string; label: string; amount: number; sub: string }
@@ -105,13 +135,12 @@ export default function SellerReportDrawer({
 
     const movs: Mov[] = [];
     vendas.forEach(s => {
-      const open = Math.max(0, s.totalPrice - (s.paidAmount || 0));
+      const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
       movs.push({
-        kind: "venda",
-        when: s.date,
+        kind: "venda", when: s.date,
         label: `${s.quantity}x ${getProductName(s.productId)}`,
         amount: s.totalPrice,
-        sub: `Recebido ${fmt(s.paidAmount || 0)} · Em aberto ${fmt(open)}`,
+        sub: `Recebido ${fmt(s.paidAmount || 0)} · Em aberto ${fmt(op)}`,
       });
     });
     retiradas.forEach(s => {
@@ -128,10 +157,11 @@ export default function SellerReportDrawer({
     movs.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
 
     return {
-      units, revenue, received, open, consumo,
+      units, revenue, received, open, consumo, consumoUnits, consumoBreakdown,
+      salesDetail, stockItems, stockTotalUnits,
       tier: c.tier, accrued: c.accrued, commPaidPeriod, commBalance, movs,
     };
-  }, [seller, sales, commissionPayments, start, end, getProductName]);
+  }, [seller, sales, commissionPayments, productAssignments, products, start, end, getProductName]);
 
   if (!seller || !report) {
     return (
@@ -143,22 +173,54 @@ export default function SellerReportDrawer({
 
   /* ---------- Export: WhatsApp ---------- */
   const buildWhats = () => {
-    return [
-      `📊 Relatório · ${label}`,
-      ``,
-      `👤 ${seller.name}`,
-      ``,
-      `📦 Unidades Vendidas: ${report.units}`,
-      `💰 Faturamento: ${fmt(report.revenue)}`,
-      `✅ Recebido: ${fmt(report.received)}`,
-      `⏳ Em Aberto: ${fmt(report.open)}`,
-      `📉 Consumo: ${fmt(report.consumo)}`,
-      ``,
-      `🏆 Faixa Atual: ${report.tier.label}`,
-      `💵 Comissão Acumulada: ${fmt(report.accrued)}`,
-      `💸 Comissão Paga: ${fmt(report.commPaidPeriod)}`,
-      `🟢 Saldo Disponível: ${fmt(report.commBalance)}`,
-    ].join("\n");
+    const lines: string[] = [];
+    lines.push(`📊 Relatório de ${label}`);
+    lines.push(``);
+    lines.push(`👤 Funcionário: ${seller.name}`);
+    lines.push(``);
+    lines.push(`📦 Vendas`);
+    lines.push(`• Unidades vendidas: ${report.units}`);
+    lines.push(`• Valor em aberto: ${fmt(report.open)}`);
+    if (report.salesDetail.length) {
+      lines.push(``);
+      lines.push(`Vendas realizadas:`);
+      report.salesDetail.forEach(s => {
+        const dt = format(parseISO(s.when), "dd/MM");
+        const status = s.paid ? "Recebido" : `Em aberto • ${fmt(s.open)}`;
+        lines.push(`• ${dt} • ${s.qty}x ${s.name} • ${status}`);
+      });
+    }
+    lines.push(``);
+    lines.push(`🍃 Consumo`);
+    lines.push(`• Total consumido: ${fmt(report.consumo)}`);
+    if (report.consumoBreakdown.length) {
+      lines.push(``);
+      lines.push(`Produtos consumidos:`);
+      report.consumoBreakdown.forEach(c => {
+        lines.push(`• ${c.name} (${c.qty}x) • ${fmt(c.total)}`);
+      });
+    }
+    lines.push(``);
+    lines.push(`💰 Comissão`);
+    lines.push(`• Faixa atual: ${report.tier.label}`);
+    lines.push(`• Comissão no período: ${fmt(report.accrued)}`);
+    lines.push(`• Consumo descontado: ${fmt(report.consumo)}`);
+    lines.push(`• Comissão paga: ${fmt(report.commPaidPeriod)}`);
+    lines.push(`• Saldo disponível: ${fmt(report.commBalance)}`);
+    lines.push(``);
+    lines.push(`Cálculo: ${fmt(report.accrued)} − ${fmt(report.consumo)} (consumo) − ${fmt(report.commPaidPeriod)} (pagamentos) = ${fmt(report.commBalance)}`);
+    lines.push(``);
+    lines.push(`📦 Estoque atual`);
+    if (report.stockItems.length === 0) {
+      lines.push(`• Sem produtos em posse`);
+    } else {
+      report.stockItems.forEach(s => {
+        lines.push(`• ${s.name} (${s.qty}x)`);
+      });
+      lines.push(``);
+      lines.push(`Total em estoque: ${report.stockTotalUnits} unidades`);
+    }
+    return lines.join("\n");
   };
 
   const shareWhats = () => {
@@ -177,14 +239,38 @@ export default function SellerReportDrawer({
       ["Faturamento", report.revenue],
       ["Recebido", report.received],
       ["Em aberto", report.open],
-      ["Consumo / Retiradas", report.consumo],
+      ["Consumo / Retiradas (valor)", report.consumo],
+      ["Consumo / Retiradas (unidades)", report.consumoUnits],
       [],
       ["Faixa atual", report.tier.label],
       ["Comissão acumulada", report.accrued],
+      ["Consumo descontado", report.consumo],
       ["Comissão paga (período)", report.commPaidPeriod],
       ["Saldo de comissão", report.commBalance],
+      [],
+      ["Estoque atual (unidades)", report.stockTotalUnits],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Resumo");
+
+    const salesRows = [
+      ["Data", "Qtd", "Produto", "Valor total", "Recebido?", "Em aberto"],
+      ...report.salesDetail.map(s => [
+        formatDateBR(s.when), s.qty, s.name, s.total, s.paid ? "Sim" : "Não", s.open,
+      ]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(salesRows), "Vendas");
+
+    const consumoRows = [
+      ["Produto", "Qtd", "Valor"],
+      ...report.consumoBreakdown.map(c => [c.name, c.qty, c.total]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(consumoRows), "Consumo");
+
+    const stockRows = [
+      ["Produto", "Qtd"],
+      ...report.stockItems.map(s => [s.name, s.qty]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stockRows), "Estoque atual");
 
     const rows = [
       ["Data", "Tipo", "Descrição", "Valor", "Observação"],
@@ -201,7 +287,7 @@ export default function SellerReportDrawer({
     XLSX.writeFile(wb, `relatorio_${seller.name.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd")}.xlsx`);
   };
 
-  /* ---------- Export: PDF (light, legível, identidade California) ---------- */
+  /* ---------- Export: PDF ---------- */
   const exportPdf = () => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const w = doc.internal.pageSize.getWidth();
@@ -215,10 +301,8 @@ export default function SellerReportDrawer({
     const AMBER: [number, number, number] = [202, 138, 4];
     const RED: [number, number, number] = [220, 38, 38];
 
-    // Top accent bar
     doc.setFillColor(...PURPLE); doc.rect(0, 0, w, 6, "F");
 
-    // Header
     doc.setTextColor(...INK);
     doc.setFont("helvetica", "bold"); doc.setFontSize(20);
     doc.text("CALIFORNIA", 40, 50);
@@ -227,7 +311,6 @@ export default function SellerReportDrawer({
     doc.setFontSize(9);
     doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy HH:mm")}`, w - 40, 50, { align: "right" });
 
-    // Identity card
     doc.setFillColor(...SOFT);
     doc.setDrawColor(...BORDER);
     doc.roundedRect(40, 90, w - 80, 60, 8, 8, "FD");
@@ -236,17 +319,16 @@ export default function SellerReportDrawer({
     doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...MUTED);
     doc.text(`Período: ${label}`, 56, 134);
 
-    // Summary grid
     const startY = 170;
     const items: [string, string, [number, number, number]?][] = [
       ["Unidades vendidas", String(report.units), INK],
       ["Faturamento", fmt(report.revenue), GREEN],
-      ["Recebido", fmt(report.received), GREEN],
       ["Em aberto", fmt(report.open), AMBER],
-      ["Consumo / Retiradas", fmt(report.consumo), AMBER],
+      ["Consumo (valor)", fmt(report.consumo), AMBER],
+      ["Consumo (unid.)", String(report.consumoUnits), AMBER],
+      ["Estoque atual", `${report.stockTotalUnits} un.`, PURPLE],
       ["Faixa atual", report.tier.label, PURPLE],
       ["Comissão acumulada", fmt(report.accrued), GREEN],
-      ["Comissão paga", fmt(report.commPaidPeriod), AMBER],
       ["Saldo disponível", fmt(report.commBalance), report.commBalance >= 0 ? GREEN : RED],
     ];
     const cardW = (w - 80 - 16) / 3; const cardH = 56;
@@ -264,37 +346,88 @@ export default function SellerReportDrawer({
       doc.text(it[1], x + 12, y + 40);
     });
 
-    const tableY = startY + 3 * (cardH + 8) + 12;
-    doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
-    doc.text("Movimentações do período", 40, tableY);
+    let cursorY = startY + 3 * (cardH + 8) + 12;
 
-    autoTable(doc, {
-      startY: tableY + 10,
-      head: [["Data", "Tipo", "Descrição", "Valor"]],
-      body: report.movs.map(m => [
-        formatDateBR(m.when),
-        m.kind === "venda" ? "Venda"
-          : m.kind === "retirada" ? "Retirada"
-          : m.kind === "pagamento" ? "Pagam. comissão"
-          : "Ajuste comissão",
-        m.label,
-        (m.kind === "pagamento" || m.kind === "retirada" ? "− " : "+ ") + fmt(m.amount),
-      ]),
-      theme: "grid",
-      styles: { fontSize: 9, textColor: INK, cellPadding: 6, lineColor: BORDER, lineWidth: 0.5 },
-      headStyles: { fillColor: PURPLE, textColor: [255, 255, 255], fontStyle: "bold" },
-      alternateRowStyles: { fillColor: SOFT },
-      bodyStyles: { fillColor: [255, 255, 255] },
-      columnStyles: { 3: { halign: "right", font: "courier", fontStyle: "bold" } },
-      margin: { left: 40, right: 40, top: 40 },
-      didDrawPage: () => {
-        const pw = doc.internal.pageSize.getWidth();
-        const ph = doc.internal.pageSize.getHeight();
-        doc.setFillColor(...PURPLE); doc.rect(0, 0, pw, 6, "F");
-        doc.setTextColor(...MUTED); doc.setFontSize(8); doc.setFont("helvetica", "normal");
-        doc.text("California · Relatório gerado pelo sistema", 40, ph - 20);
-      },
-    });
+    // Commission breakdown line
+    doc.setTextColor(...MUTED); doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text(
+      `Cálculo do saldo: ${fmt(report.accrued)} − ${fmt(report.consumo)} (consumo) − ${fmt(report.commPaidPeriod)} (pagamentos) = ${fmt(report.commBalance)}`,
+      40, cursorY,
+    );
+    cursorY += 18;
+
+    const sectionHeader = (title: string) => {
+      doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+      doc.text(title, 40, cursorY);
+      cursorY += 6;
+    };
+
+    const drawTable = (head: string[][], body: any[][], rightCols: number[] = []) => {
+      autoTable(doc, {
+        startY: cursorY + 6,
+        head, body,
+        theme: "grid",
+        styles: { fontSize: 9, textColor: INK, cellPadding: 6, lineColor: BORDER, lineWidth: 0.5 },
+        headStyles: { fillColor: PURPLE, textColor: [255, 255, 255], fontStyle: "bold" },
+        alternateRowStyles: { fillColor: SOFT },
+        bodyStyles: { fillColor: [255, 255, 255] },
+        columnStyles: rightCols.reduce((acc, c) => ({ ...acc, [c]: { halign: "right", font: "courier", fontStyle: "bold" } }), {}),
+        margin: { left: 40, right: 40, top: 40 },
+        didDrawPage: () => {
+          const pw = doc.internal.pageSize.getWidth();
+          const ph = doc.internal.pageSize.getHeight();
+          doc.setFillColor(...PURPLE); doc.rect(0, 0, pw, 6, "F");
+          doc.setTextColor(...MUTED); doc.setFontSize(8); doc.setFont("helvetica", "normal");
+          doc.text("California · Relatório gerado pelo sistema", 40, ph - 20);
+        },
+      });
+      cursorY = (doc as any).lastAutoTable.finalY + 16;
+    };
+
+    sectionHeader("Vendas do período");
+    if (report.salesDetail.length === 0) {
+      doc.setTextColor(...MUTED); doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      doc.text("Sem vendas no período.", 40, cursorY + 12); cursorY += 24;
+    } else {
+      drawTable(
+        [["Data", "Qtd", "Produto", "Valor", "Status"]],
+        report.salesDetail.map(s => [
+          formatDateBR(s.when), s.qty, s.name, fmt(s.total),
+          s.paid ? "Recebido" : `Em aberto ${fmt(s.open)}`,
+        ]),
+        [3],
+      );
+    }
+
+    sectionHeader("Consumo / Retiradas");
+    if (report.consumoBreakdown.length === 0) {
+      doc.setTextColor(...MUTED); doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      doc.text("Sem consumo no período.", 40, cursorY + 12); cursorY += 24;
+    } else {
+      drawTable(
+        [["Produto", "Qtd", "Valor"]],
+        [
+          ...report.consumoBreakdown.map(c => [c.name, c.qty, fmt(c.total)]),
+          [{ content: "Total", styles: { fontStyle: "bold" } }, { content: report.consumoUnits, styles: { fontStyle: "bold" } }, { content: fmt(report.consumo), styles: { fontStyle: "bold" } }],
+        ],
+        [2],
+      );
+    }
+
+    sectionHeader("Estoque atual em posse do vendedor");
+    if (report.stockItems.length === 0) {
+      doc.setTextColor(...MUTED); doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      doc.text("Sem produtos atribuídos.", 40, cursorY + 12); cursorY += 24;
+    } else {
+      drawTable(
+        [["Produto", "Qtd"]],
+        [
+          ...report.stockItems.map(s => [s.name, s.qty]),
+          [{ content: "Total em estoque", styles: { fontStyle: "bold" } }, { content: `${report.stockTotalUnits} un.`, styles: { fontStyle: "bold" } }],
+        ],
+        [1],
+      );
+    }
 
     doc.save(`relatorio_${seller.name.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd")}.pdf`);
   };
@@ -338,14 +471,21 @@ export default function SellerReportDrawer({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <Stat label="Unidades" value={String(report.units)} />
             <Stat label="Faturamento" value={fmt(report.revenue)} tone="income" />
-            <Stat label="Recebido" value={fmt(report.received)} tone="income" />
             <Stat label="Em aberto" value={fmt(report.open)} tone="warning" />
             <Stat label="Consumo" value={fmt(report.consumo)} tone="warning" />
             <Stat label="Comissão" value={fmt(report.accrued)} tone="income" />
-            <Stat label="Comissão paga" value={fmt(report.commPaidPeriod)} tone="warning" />
-            <Stat label="Saldo comissão" value={fmt(report.commBalance)} strong
+            <Stat label="Paga" value={fmt(report.commPaidPeriod)} tone="warning" />
+            <Stat label="Saldo" value={fmt(report.commBalance)} strong
               tone={report.commBalance >= 0 ? "income" : "expense"} />
+            <Stat label="Estoque" value={`${report.stockTotalUnits} un.`} />
           </div>
+
+          {/* Commission calc note */}
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <span className="font-semibold text-foreground">Saldo:</span>{" "}
+            {fmt(report.accrued)} − {fmt(report.consumo)} (consumo) − {fmt(report.commPaidPeriod)} (pagamentos) ={" "}
+            <span className={cn(report.commBalance >= 0 ? "text-income" : "text-expense", "font-semibold")}>{fmt(report.commBalance)}</span>
+          </p>
 
           {/* Export buttons */}
           <div className="grid grid-cols-3 gap-2">
@@ -358,6 +498,51 @@ export default function SellerReportDrawer({
             <Button size="sm" className="h-9 bg-green-600 hover:bg-green-700 text-white" onClick={shareWhats}>
               <MessageCircle size={14} className="mr-1.5" /> WhatsApp
             </Button>
+          </div>
+
+          {/* Consumption breakdown */}
+          {report.consumoBreakdown.length > 0 && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Consumo no período</p>
+              <div className="space-y-1">
+                {report.consumoBreakdown.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-[11px] text-muted-foreground">Qtd: {c.qty}</p>
+                    </div>
+                    <span className="mono text-sm font-semibold text-warning">{fmt(c.total)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold">
+                  <span>Total consumido</span>
+                  <span className="mono text-warning">{fmt(report.consumo)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Current stock */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+              <Boxes size={12} /> Estoque atual do vendedor
+            </p>
+            {report.stockItems.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">Sem produtos atribuídos.</p>
+            ) : (
+              <div className="space-y-1">
+                {report.stockItems.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                    <p className="text-sm font-medium truncate">{s.name}</p>
+                    <span className="mono text-sm font-semibold text-primary">{s.qty}x</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold">
+                  <span>Total em posse</span>
+                  <span className="mono text-primary">{report.stockTotalUnits} unidades</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Movements */}
