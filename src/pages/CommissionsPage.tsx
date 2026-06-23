@@ -140,21 +140,16 @@ export default function CommissionsPage() {
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
 
-      // === Consumo / dívidas / pagamentos / crédito legado (TODAS as datas) ===
-      const allSellerSales = sales.filter(s => s.sellerId === seller.id);
-      const retiradas = allSellerSales.filter(s => s.type === "retirada_funcionario");
+      // === Consumo / dívidas / pagamentos — APENAS no período ===
+      const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
       const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date));
       const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
       const consumoTotal = retiradasTotal + manualDebtsTotal;
-      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id).reduce((a, p) => a + p.amount, 0);
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
-      // Crédito legado: vendas anteriores a 01/06/2026 valem 10% (só abate consumo)
-      const legacySales = allSellerSales.filter(s => s.type === "venda" && isLegacy(s.date));
-      const legacySalesRevenue = legacySales.reduce((a, s) => a + s.totalPrice, 0);
-      const legacyCredit = legacySalesRevenue * 0.10;
-
-      const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal - legacyCredit);
+      const legacyCredit = 0;
+      const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal);
 
       // Saldo de comissão = acumulada no período − saldo de consumo − comissão paga no período
       const balance = accrued - saldoConsumo - commPaid;
