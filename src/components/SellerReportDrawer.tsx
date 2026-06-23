@@ -452,6 +452,24 @@ export default function SellerReportDrawer({
                         credit ? "text-income" : "text-warning")}>
                         {credit ? "+" : "−"}{fmt(m.amount)}
                       </span>
+                      {"source" in m && m.source && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-expense"
+                          onClick={async () => {
+                            const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmLabel: "Apagar", variant: "destructive" });
+                            if (!ok) return;
+                            const src = m.source!;
+                            if (src.type === "manual_debt") await deleteSellerManualDebt(src.id);
+                            else if (src.type === "debt_payment") await deleteSellerDebtPayment(src.id);
+                            else if (src.type === "commission_payment") await deleteCommissionPayment(src.id);
+                          }}
+                          aria-label="Apagar"
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      )}
                     </div>
                   );
                 })}
