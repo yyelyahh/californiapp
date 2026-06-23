@@ -149,13 +149,13 @@ export default function CommissionsPage() {
       const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
-      // Saldo de consumo abate direto da comissão. Pagamentos de dívida (debtPaymentsTotal)
-      // não entram aqui pois geralmente quitam dívidas legadas (pré-jun/26) que estão fora do escopo.
+      // Saldo de consumo abate direto da comissão.
+      // Pagamentos de dívida no período somam de volta ao saldo do vendedor (crédito).
       const saldoConsumo = consumoTotal;
       const retiradasCount = retiradas.length + manualDebts.length;
 
-      // Saldo de comissão = acumulada no período − saldo de consumo − comissão paga no período
-      const balance = accrued - saldoConsumo - commPaid;
+      // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
+      const balance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
 
       return {
         seller, units, vendasTotal, commPaid,
@@ -431,19 +431,22 @@ export default function CommissionsPage() {
                         −{formatCurrency(r.commPaid)}
                       </span>
                     </div>
+                    {r.debtPaymentsTotal > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">(+) Pagamentos de dívida</span>
+                        <span className="mono font-semibold text-income">
+                          +{formatCurrency(r.debtPaymentsTotal)}
+                        </span>
+                      </div>
+                    )}
                     <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
                       <span className="font-semibold">Saldo a receber</span>
                       <span className={cn("mono font-bold text-sm", r.balance > 0.01 ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
                         {formatCurrency(r.balance)}
                       </span>
                     </div>
-                    {r.saldoConsumo > 0 && r.saldoConsumo >= r.accrued - 0.01 && r.accrued > 0 && (
+                    {r.saldoConsumo > 0 && r.saldoConsumo >= r.accrued + r.debtPaymentsTotal - 0.01 && r.accrued > 0 && (
                       <p className="text-[10px] text-warning/90 pt-0.5">⚠ Consumo zerou a comissão do mês.</p>
-                    )}
-                    {r.debtPaymentsTotal > 0 && (
-                      <p className="text-[10px] text-muted-foreground/70 pt-0.5">
-                        Pagamentos de dívida no mês: {formatCurrency(r.debtPaymentsTotal)} (apenas histórico, não abate comissão)
-                      </p>
                     )}
                   </div>
 

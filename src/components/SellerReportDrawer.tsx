@@ -107,7 +107,7 @@ export default function SellerReportDrawer({
     const debtPaymentsTotal = allDebtPayments.reduce((a, p) => a + p.amount, 0);
 
     const legacyCredit = 0;
-    // Saldo de consumo abate direto da comissão. Pagamentos de dívida ficam só como histórico.
+    // Saldo de consumo abate direto da comissão. Pagamentos de dívida no período somam de volta ao saldo (crédito).
     const saldoConsumo = consumoTotal;
 
     // Consumo do PERÍODO (para breakdown da mensagem)
@@ -166,8 +166,8 @@ export default function SellerReportDrawer({
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date))
       .reduce((a, p) => a + p.amount, 0);
-    // Saldo de comissão = acumulada no período − saldo de consumo (total) − comissão paga no período
-    const commBalance = c.accrued - saldoConsumo - commPaidPeriod;
+    // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
+    const commBalance = c.accrued - saldoConsumo + debtPaymentsTotal - commPaidPeriod;
 
     type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
@@ -235,12 +235,11 @@ export default function SellerReportDrawer({
     lines.push(`• Comissão gerada: ${fmt(report.accrued)}`);
     lines.push(`• (−) Consumo no mês: ${fmt(report.saldoConsumo)}`);
     lines.push(`• (−) Comissão já paga: ${fmt(report.commPaidPeriod)}`);
+    if (report.debtPaymentsTotal > 0) {
+      lines.push(`• (+) Pagamentos de dívida: ${fmt(report.debtPaymentsTotal)}`);
+    }
     lines.push(`──────────────────────────────`);
     lines.push(`• Saldo a receber: ${fmt(report.commBalance)}`);
-    if (report.debtPaymentsTotal > 0) {
-      lines.push(``);
-      lines.push(`(Pagamentos de dívida no mês: ${fmt(report.debtPaymentsTotal)} — histórico, não abate comissão)`);
-    }
     if (report.consumoBreakdown.length) {
       lines.push(``);
       lines.push(`🍃 CONSUMO DO MÊS (descontado da comissão)`);
@@ -370,17 +369,18 @@ export default function SellerReportDrawer({
                 −{fmt(report.commPaidPeriod)}
               </span>
             </div>
+            {report.debtPaymentsTotal > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">(+) Pagamentos de dívida</span>
+                <span className="mono font-semibold text-income">+{fmt(report.debtPaymentsTotal)}</span>
+              </div>
+            )}
             <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
               <span className="font-semibold">Saldo a receber</span>
               <span className={cn("mono font-bold text-sm", report.commBalance >= 0 ? "text-income" : "text-expense")}>
                 {fmt(report.commBalance)}
               </span>
             </div>
-            {report.debtPaymentsTotal > 0 && (
-              <p className="text-[10px] text-muted-foreground/70 pt-0.5">
-                Pagamentos de dívida no mês: {fmt(report.debtPaymentsTotal)} (histórico, não abate comissão)
-              </p>
-            )}
           </div>
 
 
