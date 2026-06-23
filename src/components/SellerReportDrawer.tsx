@@ -350,15 +350,37 @@ export default function SellerReportDrawer({
             <Stat label="Estoque" value={`${report.stockTotalUnits} un.`} />
           </div>
 
-          {/* Commission calc note */}
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            <span className="font-semibold text-foreground">Saldo:</span>{" "}
-            {fmt(report.accrued)} − {fmt(report.saldoConsumo)} (consumo a abater) − {fmt(report.commPaidPeriod)} (pagamentos) ={" "}
-            <span className={cn(report.commBalance >= 0 ? "text-income" : "text-expense", "font-semibold")}>{fmt(report.commBalance)}</span>
-            {report.legacyCredit > 0 && (
-              <> · Crédito legado de <span className="font-semibold">{fmt(report.legacyCredit)}</span> abate apenas consumo.</>
+          {/* Demonstrativo da comissão */}
+          <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-[12px] space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Comissão gerada ({report.tier.label})</span>
+              <span className="mono font-semibold text-income">{fmt(report.accrued)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">(−) Consumo no mês</span>
+              <span className={cn("mono font-semibold", report.saldoConsumo > 0 ? "text-warning" : "text-muted-foreground")}>
+                −{fmt(report.saldoConsumo)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">(−) Comissão paga</span>
+              <span className={cn("mono font-semibold", report.commPaidPeriod > 0 ? "text-warning" : "text-muted-foreground")}>
+                −{fmt(report.commPaidPeriod)}
+              </span>
+            </div>
+            <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
+              <span className="font-semibold">Saldo a receber</span>
+              <span className={cn("mono font-bold text-sm", report.commBalance >= 0 ? "text-income" : "text-expense")}>
+                {fmt(report.commBalance)}
+              </span>
+            </div>
+            {report.debtPaymentsTotal > 0 && (
+              <p className="text-[10px] text-muted-foreground/70 pt-0.5">
+                Pagamentos de dívida no mês: {fmt(report.debtPaymentsTotal)} (histórico, não abate comissão)
+              </p>
             )}
-          </p>
+          </div>
+
 
 
           {/* Export */}
