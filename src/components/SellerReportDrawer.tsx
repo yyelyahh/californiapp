@@ -145,13 +145,15 @@ export default function SellerReportDrawer({
     const movs: Mov[] = [];
     vendas.forEach(s => {
       const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
+      const comm = saleCommission.get(s.id) || 0;
       movs.push({
         kind: "venda", when: s.date,
         label: `${s.quantity}x ${getProductName(s.productId)}`,
-        amount: s.totalPrice,
-        sub: `Recebido ${fmt(s.paidAmount || 0)} · Em aberto ${fmt(op)}`,
+        amount: comm,
+        sub: `Venda ${fmt(s.totalPrice)} · Recebido ${fmt(s.paidAmount || 0)} · Em aberto ${fmt(op)}`,
       });
     });
+
     retiradas.forEach(s => {
       movs.push({
         kind: "retirada", when: s.date,
