@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X,
+  ArrowRight, Users, X, HandCoins, Receipt,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -80,6 +80,8 @@ export default function CommissionsPage() {
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
+    addSellerDebtPayment, deleteSellerDebtPayment,
+    addSellerManualDebt, deleteSellerManualDebt,
     getSellerName, deleteSeller,
   } = store;
 
@@ -90,8 +92,12 @@ export default function CommissionsPage() {
 
   const [period, setPeriod] = useState<Period>("month");
 
-  // Cutoff: ignora qualquer movimentação anterior ao mês atual (início do projeto)
-  const PROJECT_START = useMemo(() => startOfMonth(new Date()), []);
+  // Cutoff legado: tudo antes de 01/06/2026 é tratado como legado (10% de comissão, só abate consumo)
+  const LEGACY_CUTOFF = useMemo(() => new Date(2026, 5, 1), []);
+  const isLegacy = (iso: string) => {
+    try { return parseISO(iso) < LEGACY_CUTOFF; } catch { return false; }
+  };
+  const PROJECT_START = LEGACY_CUTOFF;
 
   const { start, end, label } = useMemo(() => {
     const now = new Date();
@@ -119,7 +125,7 @@ export default function CommissionsPage() {
     const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // Conta Corrente do vendedor — APENAS comissão (não inclui valor bruto das vendas)
+    // Conta Corrente do vendedor — comissão do período + abate consumo (incluindo legado)
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
@@ -127,20 +133,38 @@ export default function CommissionsPage() {
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = computeSellerCommission(vendas);
-      const accrued = c.accrued; // comissão total = receita × taxa da faixa atual
+      const accrued = c.accrued;
       const units = c.units;
 
-      // Quebra cronológica em accruals + ajustes de faixa (para o extrato)
       const accrualItems = computeAccrualHistory(vendas);
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
 
-      const balance = accrued - commPaid;
+      // === Consumo / dívidas / pagamentos / crédito legado (TODAS as datas) ===
+      const allSellerSales = sales.filter(s => s.sellerId === seller.id);
+      const retiradas = allSellerSales.filter(s => s.type === "retirada_funcionario");
+      const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
+      const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
+      const consumoTotal = retiradasTotal + manualDebtsTotal;
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id).reduce((a, p) => a + p.amount, 0);
+
+      // Crédito legado: vendas anteriores a 01/06/2026 valem 10% (só abate consumo)
+      const legacySales = allSellerSales.filter(s => s.type === "venda" && isLegacy(s.date));
+      const legacySalesRevenue = legacySales.reduce((a, s) => a + s.totalPrice, 0);
+      const legacyCredit = legacySalesRevenue * 0.10;
+
+      const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal - legacyCredit);
+
+      // Saldo de comissão = acumulada no período − saldo de consumo − comissão paga no período
+      const balance = accrued - saldoConsumo - commPaid;
 
       return {
         seller, units, vendasTotal, commPaid,
         accrued, baseAccrued, adjustmentsTotal,
         tier: c.tier, balance, accrualItems,
+        consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
+        retiradasTotal, manualDebtsTotal,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
@@ -187,6 +211,10 @@ export default function CommissionsPage() {
   const [wdDrawer, setWdDrawer] = useState<{ partnerId: string } | null>(null);
   const [wdForm, setWdForm] = useState({ amount: "", date: todayDateString(), notes: "" });
   const [extractFor, setExtractFor] = useState<string | null>(null);
+  const [debtPayDrawer, setDebtPayDrawer] = useState<{ sellerId: string } | null>(null);
+  const [debtPayForm, setDebtPayForm] = useState({ amount: "", date: todayDateString(), notes: "" });
+  const [manualDebtDrawer, setManualDebtDrawer] = useState<boolean>(false);
+  const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
 
   const openPay = (sellerId: string, suggested: number) => {
     setPayDrawer({ sellerId });
@@ -218,7 +246,31 @@ export default function CommissionsPage() {
     setWdDrawer(null);
   };
 
+  const submitDebtPay = async () => {
+    if (!debtPayDrawer || !Number(debtPayForm.amount)) return;
+    await addSellerDebtPayment({
+      sellerId: debtPayDrawer.sellerId,
+      amount: Number(debtPayForm.amount),
+      date: localDateToISO(debtPayForm.date),
+      notes: debtPayForm.notes || undefined,
+    });
+    setDebtPayDrawer(null);
+  };
+
+  const submitManualDebt = async () => {
+    if (!manualDebtForm.sellerId || !Number(manualDebtForm.amount)) return;
+    await addSellerManualDebt({
+      sellerId: manualDebtForm.sellerId,
+      amount: Number(manualDebtForm.amount),
+      date: localDateToISO(manualDebtForm.date),
+      notes: manualDebtForm.notes || undefined,
+    });
+    setManualDebtDrawer(false);
+    setManualDebtForm({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+  };
+
   const sellerRow = payDrawer ? periodMetrics.perSeller.find(r => r.seller.id === payDrawer.sellerId) : null;
+  const debtSellerRow = debtPayDrawer ? periodMetrics.perSeller.find(r => r.seller.id === debtPayDrawer.sellerId) : null;
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
 
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
@@ -289,9 +341,14 @@ export default function CommissionsPage() {
         <div className="px-4 sm:px-5 pt-4 pb-3 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Conta Corrente dos Vendedores</h2>
-            <p className="text-[11px] text-muted-foreground">Saldo unificado · vendas + bônus − retiradas − pagamentos</p>
+            <p className="text-[11px] text-muted-foreground">Comissão do período + consumo + dívidas − pagamentos</p>
           </div>
-          <Badge variant="secondary" className="text-[11px]">{periodMetrics.perSeller.length}</Badge>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
+              <HandCoins size={12} className="mr-1" />Dívida Manual
+            </Button>
+            <Badge variant="secondary" className="text-[11px]">{periodMetrics.perSeller.length}</Badge>
+          </div>
         </div>
         {periodMetrics.perSeller.length === 0 ? (
           <p className="px-5 pb-5 text-xs text-muted-foreground">Nenhum vendedor cadastrado.</p>
@@ -351,18 +408,46 @@ export default function CommissionsPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
                     <Mini label="Comissão base" value={formatCurrency(r.baseAccrued)} tone="income" />
                     <Mini label="Ajustes faixa" value={formatCurrency(r.adjustmentsTotal)} tone={r.adjustmentsTotal > 0 ? "income" : undefined} />
-                    <Mini label="Pago" value={formatCurrency(r.commPaid)} tone="warning" />
-                    <div className="flex sm:justify-end gap-2 items-end">
-                      <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
-                        Relatório <ArrowRight size={11} className="ml-1" />
-                      </Button>
-                      <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
-                        <Plus size={13} className="mr-1" />Pagar
-                      </Button>
+                    <Mini label="Comissão paga" value={formatCurrency(r.commPaid)} tone="warning" />
+                    <Mini label="Abate consumo" value={formatCurrency(r.saldoConsumo)} tone={r.saldoConsumo > 0 ? "warning" : undefined} />
+                  </div>
+
+                  {(r.consumoTotal > 0 || r.debtPaymentsTotal > 0 || r.legacyCredit > 0) && (
+                    <div className="rounded-lg bg-secondary/40 px-3 py-2 mb-2 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Consumo + dívidas</span>
+                        <span className="mono text-warning font-semibold">{formatCurrency(r.consumoTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Pagamentos de dívida</span>
+                        <span className="mono text-income">−{formatCurrency(r.debtPaymentsTotal)}</span>
+                      </div>
+                      {r.legacyCredit > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Crédito legado (10% pré-jun/26)</span>
+                          <span className="mono text-income">−{formatCurrency(r.legacyCredit)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between border-t border-border/40 pt-1">
+                        <span className="text-muted-foreground font-semibold">Saldo de consumo a abater</span>
+                        <span className={cn("mono font-semibold", r.saldoConsumo > 0 ? "text-warning" : "text-income")}>{formatCurrency(r.saldoConsumo)}</span>
+                      </div>
                     </div>
+                  )}
+
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
+                      Relatório <ArrowRight size={11} className="ml-1" />
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setDebtPayDrawer({ sellerId: r.seller.id }); setDebtPayForm({ amount: r.saldoConsumo > 0 ? r.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
+                      <Receipt size={12} className="mr-1" />Pagar Dívida
+                    </Button>
+                    <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
+                      <Plus size={13} className="mr-1" />Pagar Comissão
+                    </Button>
                   </div>
                 </div>
               );
@@ -508,6 +593,52 @@ export default function CommissionsPage() {
               <Button className="w-full" onClick={submitWd}>Registrar Retirada</Button>
             </div>
           )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Drawer Pagar Dívida (consumo) */}
+      <Sheet open={!!debtPayDrawer} onOpenChange={(v) => !v && setDebtPayDrawer(null)}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader><SheetTitle>Pagar Dívida (consumo)</SheetTitle></SheetHeader>
+          {debtSellerRow && (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{debtSellerRow.seller.name}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Consumo + dívidas</span><span className="mono text-warning">{formatCurrency(debtSellerRow.consumoTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Já pago</span><span className="mono">{formatCurrency(debtSellerRow.debtPaymentsTotal)}</span></div>
+                {debtSellerRow.legacyCredit > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Crédito legado (10%)</span><span className="mono text-income">{formatCurrency(debtSellerRow.legacyCredit)}</span></div>
+                )}
+                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo a abater</span><span className={cn("mono font-semibold", debtSellerRow.saldoConsumo > 0 ? "text-warning" : "text-income")}>{formatCurrency(debtSellerRow.saldoConsumo)}</span></div>
+              </div>
+              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={debtPayForm.amount} onChange={e => setDebtPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
+              <div><Label>Data</Label><Input type="date" value={debtPayForm.date} onChange={e => setDebtPayForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div><Label>Observação</Label><Input value={debtPayForm.notes} onChange={e => setDebtPayForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" /></div>
+              <Button className="w-full" onClick={submitDebtPay}>Registrar Pagamento</Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Drawer Dívida Manual */}
+      <Sheet open={manualDebtDrawer} onOpenChange={(v) => setManualDebtDrawer(v)}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader><SheetTitle>Adicionar Dívida Manual</SheetTitle></SheetHeader>
+          <div className="mt-4 space-y-4">
+            <div>
+              <Label>Funcionário</Label>
+              <Select value={manualDebtForm.sellerId} onValueChange={v => setManualDebtForm(f => ({ ...f, sellerId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={manualDebtForm.amount} onChange={e => setManualDebtForm(f => ({ ...f, amount: e.target.value }))} /></div>
+            <div><Label>Data</Label><Input type="date" value={manualDebtForm.date} onChange={e => setManualDebtForm(f => ({ ...f, date: e.target.value }))} /></div>
+            <div><Label>Observação</Label><Input value={manualDebtForm.notes} onChange={e => setManualDebtForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: adiantamento, empréstimo" /></div>
+            <Button className="w-full bg-warning hover:bg-warning/90 text-warning-foreground" onClick={submitManualDebt}>Adicionar Dívida</Button>
+          </div>
         </SheetContent>
       </Sheet>
 

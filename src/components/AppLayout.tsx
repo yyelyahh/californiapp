@@ -15,7 +15,7 @@ const allNavItems = [
   { to: "/investors", icon: Users, label: "Investidores", adminOnly: true },
   { to: "/revenue", icon: DollarSign, label: "Receita", adminOnly: true },
   { to: "/sellers", icon: UserCheck, label: "Vendedores", adminOnly: true },
-  { to: "/seller-accounts", icon: Wallet, label: "Contas Func.", adminOnly: true },
+
 
 ];
 

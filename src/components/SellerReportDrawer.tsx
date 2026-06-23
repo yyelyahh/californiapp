@@ -42,7 +42,9 @@ function computeAccrualAdjustments(sales: Sale[]) {
 export default function SellerReportDrawer({
   sellerId, open, onClose,
 }: { sellerId: string | null; open: boolean; onClose: () => void }) {
-  const { sellers, sales, commissionPayments, productAssignments, products, getProductName } = useStore();
+  const { sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, getProductName } = useStore();
+  const LEGACY_CUTOFF = new Date(2026, 5, 1);
+  const isLegacy = (iso: string) => { try { return parseISO(iso) < LEGACY_CUTOFF; } catch { return false; } };
   const [periodKey, setPeriodKey] = useState<PeriodKey>("month");
   const [customStart, setCustomStart] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [customEnd, setCustomEnd] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -85,10 +87,29 @@ export default function SellerReportDrawer({
     const revenue = vendas.reduce((a, s) => a + s.totalPrice, 0);
     const received = vendas.reduce((a, s) => a + (s.paidAmount || 0), 0);
     const open = Math.max(0, revenue - received);
+
+    // === Consumo TOTAL (todas as datas) — retiradas + dívidas manuais ===
+    const allSellerSales = sales.filter(s => s.sellerId === seller.id);
+    const allRetiradas = allSellerSales.filter(s => s.type === "retirada_funcionario");
+    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id);
+    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id);
+
+    const retiradasTotal = allRetiradas.reduce((a, s) => a + s.totalPrice, 0);
+    const manualDebtsTotal = allManualDebts.reduce((a, d) => a + d.amount, 0);
+    const consumoTotal = retiradasTotal + manualDebtsTotal;
+    const debtPaymentsTotal = allDebtPayments.reduce((a, p) => a + p.amount, 0);
+
+    // Crédito legado: vendas pré-jun/26 × 10% (só abate consumo)
+    const legacySalesRevenue = allSellerSales
+      .filter(s => s.type === "venda" && isLegacy(s.date))
+      .reduce((a, s) => a + s.totalPrice, 0);
+    const legacyCredit = legacySalesRevenue * 0.10;
+
+    const saldoConsumo = Math.max(0, consumoTotal - debtPaymentsTotal - legacyCredit);
+
+    // Consumo do PERÍODO (para breakdown da mensagem)
     const consumo = retiradas.reduce((a, s) => a + s.totalPrice, 0);
     const consumoUnits = retiradas.reduce((a, s) => a + s.quantity, 0);
-
-    // Group consumption by product
     const consumoMap = new Map<string, { name: string; qty: number; total: number }>();
     retiradas.forEach(s => {
       const cur = consumoMap.get(s.productId) || { name: getProductName(s.productId), qty: 0, total: 0 };
@@ -117,7 +138,6 @@ export default function SellerReportDrawer({
       };
     });
 
-
     // Current stock assigned to seller
     const stockItems = productAssignments
       .filter(a => a.sellerId === seller.id && a.quantity > 0)
@@ -133,8 +153,8 @@ export default function SellerReportDrawer({
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date))
       .reduce((a, p) => a + p.amount, 0);
-    // Saldo = acumulada - consumo - pago
-    const commBalance = c.accrued - consumo - commPaidPeriod;
+    // Saldo de comissão = acumulada no período − saldo de consumo (total) − comissão paga no período
+    const commBalance = c.accrued - saldoConsumo - commPaidPeriod;
 
     type Mov =
       | { kind: "venda"; when: string; label: string; amount: number; sub: string }
@@ -161,6 +181,12 @@ export default function SellerReportDrawer({
         amount: s.totalPrice, sub: s.notes || "",
       });
     });
+    allManualDebts.filter(d => inPeriod(d.date)).forEach(d => {
+      movs.push({ kind: "retirada", when: d.date, label: "Dívida manual", amount: d.amount, sub: d.notes || "" });
+    });
+    allDebtPayments.filter(p => inPeriod(p.date)).forEach(p => {
+      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes });
+    });
     commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).forEach(p => {
       movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes });
     });
@@ -171,8 +197,9 @@ export default function SellerReportDrawer({
       units, revenue, received, open, consumo, consumoUnits, consumoBreakdown,
       salesDetail, stockItems, stockTotalUnits,
       tier: c.tier, accrued: c.accrued, commPaidPeriod, commBalance, movs,
+      consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
     };
-  }, [seller, sales, commissionPayments, productAssignments, products, start, end, getProductName]);
+  }, [seller, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, start, end, getProductName]);
 
   if (!seller || !report) {
     return (
@@ -192,7 +219,12 @@ export default function SellerReportDrawer({
     lines.push(`💰 COMISSÃO`);
     lines.push(`• Faixa atual: ${report.tier.label}`);
     lines.push(`• Comissão gerada no período: ${fmt(report.accrued)}`);
-    lines.push(`• Consumo descontado: ${fmt(report.consumo)}`);
+    if (report.legacyCredit > 0) {
+      lines.push(`• Crédito legado (10% s/ vendas anteriores): ${fmt(report.legacyCredit)} — abate apenas consumo`);
+    }
+    lines.push(`• Consumo total (inclui legado e dívidas): ${fmt(report.consumoTotal)}`);
+    lines.push(`• Pagamentos de dívida: ${fmt(report.debtPaymentsTotal)}`);
+    lines.push(`• Saldo de consumo a abater: ${fmt(report.saldoConsumo)}`);
     lines.push(`• Comissão paga: ${fmt(report.commPaidPeriod)}`);
     lines.push(`• Saldo disponível: ${fmt(report.commBalance)}`);
     lines.push(``);
@@ -311,9 +343,13 @@ export default function SellerReportDrawer({
           {/* Commission calc note */}
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             <span className="font-semibold text-foreground">Saldo:</span>{" "}
-            {fmt(report.accrued)} − {fmt(report.consumo)} (consumo) − {fmt(report.commPaidPeriod)} (pagamentos) ={" "}
+            {fmt(report.accrued)} − {fmt(report.saldoConsumo)} (consumo a abater) − {fmt(report.commPaidPeriod)} (pagamentos) ={" "}
             <span className={cn(report.commBalance >= 0 ? "text-income" : "text-expense", "font-semibold")}>{fmt(report.commBalance)}</span>
+            {report.legacyCredit > 0 && (
+              <> · Crédito legado de <span className="font-semibold">{fmt(report.legacyCredit)}</span> abate apenas consumo.</>
+            )}
           </p>
+
 
           {/* Export */}
           <div className="grid grid-cols-2 gap-2">
