@@ -13,11 +13,8 @@ import {
   isWithinInterval, parseISO, format,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { FileText, FileSpreadsheet, MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
+import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes } from "lucide-react";
 import type { Sale } from "@/types";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
 
