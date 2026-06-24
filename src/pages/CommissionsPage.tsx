@@ -217,6 +217,40 @@ export default function CommissionsPage() {
   const [debtPayForm, setDebtPayForm] = useState({ amount: "", date: todayDateString(), notes: "" });
   const [manualDebtDrawer, setManualDebtDrawer] = useState<boolean>(false);
   const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
+
+  const availableProducts = useMemo(() => {
+    return products
+      .map(p => {
+        const assigned = productAssignments.filter(a => a.productId === p.id).reduce((s, a) => s + a.quantity, 0);
+        return { ...p, availableToAssign: Math.max(0, p.stock - assigned) };
+      })
+      .filter(p => p.availableToAssign > 0);
+  }, [products, productAssignments]);
+
+  const toggleAssignProduct = (productId: string, checked: boolean) => {
+    setAssignForm(f => {
+      const next = { ...f.selectedProducts };
+      if (checked) next[productId] = "1"; else delete next[productId];
+      return { ...f, selectedProducts: next };
+    });
+  };
+
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
+    for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
+      const p = availableProducts.find(x => x.id === productId);
+      const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
+      if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
+    }
+    setAssignForm({ sellerId: "", selectedProducts: {} });
+    setAssignOpen(false);
+  };
+
+  const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
+  const assignTotalUnits = Object.values(assignForm.selectedProducts).reduce((s, v) => s + (Number(v) || 0), 0);
 
   const openPay = (sellerId: string, suggested: number) => {
     setPayDrawer({ sellerId });
