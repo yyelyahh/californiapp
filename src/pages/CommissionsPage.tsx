@@ -311,36 +311,11 @@ export default function CommissionsPage() {
         </div>
       </div>
 
-      {/* Demonstrativo */}
-      <div className="rounded-2xl p-[1px] bg-gradient-to-br from-primary/40 via-border to-transparent">
-        <div className="rounded-2xl bg-card px-4 py-4 sm:px-6 sm:py-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold tracking-tight">Demonstrativo do Período</h2>
-            <span className="text-[11px] text-muted-foreground mono">{label}</span>
-          </div>
-          <div className="space-y-2 text-sm">
-            <DemoRow label="Lucro Líquido" value={periodMetrics.netProfit} tone="income" />
-            <DemoRow label="(−) A pagar a vendedores" value={-periodMetrics.totalSellerBalance} tone="warning" />
-            <DemoRow label="(−) Retiradas dos Sócios" value={-periodMetrics.totalWithdrawalsPeriod} tone="warning" />
-            <div className="border-t border-dashed border-border my-2" />
-            <div className="flex items-baseline justify-between gap-3 pt-1">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Saldo Disponível</p>
-                <p className="text-[11px] text-muted-foreground">Pronto para retirada ou reinvestimento</p>
-              </div>
-              <p className={cn("text-2xl sm:text-3xl font-bold mono", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>
-                {formatCurrency(periodMetrics.available)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Conta Corrente dos Vendedores */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 sm:px-5 pt-4 pb-3 flex items-center justify-between gap-2">
+      {/* Vendedores */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border pb-2">
           <div>
-            <h2 className="text-sm font-semibold tracking-tight">Conta Corrente dos Vendedores</h2>
+            <h2 className="text-sm font-semibold tracking-tight">Vendedores</h2>
             <p className="text-[11px] text-muted-foreground">Comissão do período + consumo + dívidas − pagamentos</p>
           </div>
           <div className="flex items-center gap-2">
@@ -350,20 +325,22 @@ export default function CommissionsPage() {
             <Badge variant="secondary" className="text-[11px]">{periodMetrics.perSeller.length}</Badge>
           </div>
         </div>
+
         {periodMetrics.perSeller.length === 0 ? (
-          <p className="px-5 pb-5 text-xs text-muted-foreground">Nenhum vendedor cadastrado.</p>
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-xs text-muted-foreground">
+            Nenhum vendedor cadastrado.
+          </div>
         ) : (
-          <div className="divide-y divide-border/40">
+          <div className="grid gap-2 grid-cols-1 lg:grid-cols-2">
             {periodMetrics.perSeller.map((r, idx) => {
               const next = getNextTier(r.tier);
               const remaining = unitsUntilNextTier(r.units);
-              const pct = progressToNextTier(r.units);
               const isLeader = periodMetrics.leader?.seller.id === r.seller.id;
-              const barPct = (r.vendasTotal / maxVendas) * 100;
               const positive = r.balance > 0.01;
               return (
-                <div key={r.seller.id} className="px-4 sm:px-5 py-4 group/seller">
-                  <div className="flex items-start justify-between gap-3 mb-2">
+                <div key={r.seller.id} className="rounded-xl border border-border bg-card px-3.5 py-3 group/seller">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
                     <button onClick={() => setExtractFor(r.seller.id)} className="flex items-center gap-2 min-w-0 text-left hover:opacity-80 transition-opacity">
                       <span className={cn(
                         "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold mono shrink-0",
@@ -374,92 +351,51 @@ export default function CommissionsPage() {
                           <p className="text-sm font-semibold truncate">{r.seller.name}</p>
                           {isLeader && <Crown size={12} className="text-warning shrink-0" />}
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          <span className="mono">{r.units}</span> un. · faturamento <span className="mono">{formatCurrency(r.vendasTotal)}</span> · faixa <span className="font-mono">{r.tier.label}</span>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          <span className="mono">{r.units}</span> un. · <span className="mono">{formatCurrency(r.vendasTotal)}</span> · faixa <span className="mono">{r.tier.label}</span>
                         </p>
                       </div>
                     </button>
-                    <div className="flex items-start gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo de Comissão</p>
-                        <p className={cn("text-base sm:text-lg mono font-bold", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
-                          {formatCurrency(r.balance)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={async () => { if (await confirm({ title: "Remover vendedor", description: `Remover ${r.seller.name} da lista de comissão?\n\nIsso excluirá o vendedor permanentemente.` })) deleteSeller(r.seller.id); }}
-                        className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100"
-                        aria-label="Remover vendedor"
-                      ><X size={14} /></button>
-                    </div>
+                    <button
+                      onClick={async () => { if (await confirm({ title: "Remover vendedor", description: `Remover ${r.seller.name}?` })) deleteSeller(r.seller.id); }}
+                      className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100 shrink-0"
+                      aria-label="Remover vendedor"
+                    ><X size={13} /></button>
                   </div>
 
-                  <div className="h-1 rounded-full bg-secondary overflow-hidden mb-3">
-                    <div className={cn("h-full", isLeader ? "bg-gradient-to-r from-warning to-primary" : "bg-primary/60")} style={{ width: `${barPct}%` }} />
-                  </div>
-
-                  {next && (
-                    <div className="rounded-lg bg-secondary/40 px-3 py-2 mb-3">
-                      <div className="flex items-center justify-between text-[11px] mb-1.5">
-                        <span className="text-muted-foreground">Para atingir <span className="text-foreground font-semibold">{next.label}</span></span>
-                        <span className="mono"><span className="text-foreground font-semibold">{remaining}</span> un. restantes</span>
-                      </div>
-                      <Progress value={pct} className="h-1.5" />
-                    </div>
-                  )}
-
-                  {/* Mini demonstrativo da comissão */}
-                  <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 mb-3 text-[12px] space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Comissão gerada</span>
-                      <span className="mono font-semibold text-income">{formatCurrency(r.accrued)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        (−) Consumo no mês
-                        {r.retiradasCount > 0 && (
-                          <span className="text-[10px] text-muted-foreground/70 ml-1">({r.retiradasCount} item{r.retiradasCount > 1 ? "s" : ""})</span>
-                        )}
-                      </span>
-                      <span className={cn("mono font-semibold", r.saldoConsumo > 0 ? "text-warning" : "text-muted-foreground")}>
-                        −{formatCurrency(r.saldoConsumo)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">(−) Comissão paga</span>
-                      <span className={cn("mono font-semibold", r.commPaid > 0 ? "text-warning" : "text-muted-foreground")}>
-                        −{formatCurrency(r.commPaid)}
-                      </span>
-                    </div>
+                  {/* Linhas compactas */}
+                  <div className="text-[12px] space-y-1 mb-2.5">
+                    <Line label="Comissão" value={formatCurrency(r.accrued)} tone="income" />
+                    <Line label="Consumo" value={`−${formatCurrency(r.retiradasTotal)}`} tone={r.retiradasTotal > 0 ? "warning" : "muted"} />
+                    <Line label="Dívidas" value={`−${formatCurrency(r.manualDebtsTotal)}`} tone={r.manualDebtsTotal > 0 ? "warning" : "muted"} />
+                    <Line label="Pago" value={`−${formatCurrency(r.commPaid)}`} tone={r.commPaid > 0 ? "warning" : "muted"} />
                     {r.debtPaymentsTotal > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">(+) Pagamentos de dívida</span>
-                        <span className="mono font-semibold text-income">
-                          +{formatCurrency(r.debtPaymentsTotal)}
-                        </span>
-                      </div>
+                      <Line label="(+) Pgto. dívida" value={`+${formatCurrency(r.debtPaymentsTotal)}`} tone="income" />
                     )}
-                    <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
-                      <span className="font-semibold">Saldo a receber</span>
-                      <span className={cn("mono font-bold text-sm", r.balance > 0.01 ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
+                    <div className="flex items-center justify-between border-t border-border/40 pt-1.5">
+                      <span className="font-semibold">Saldo</span>
+                      <span className={cn("mono font-bold text-sm", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
                         {formatCurrency(r.balance)}
                       </span>
                     </div>
-                    {r.saldoConsumo > 0 && r.saldoConsumo >= r.accrued + r.debtPaymentsTotal - 0.01 && r.accrued > 0 && (
-                      <p className="text-[10px] text-warning/90 pt-0.5">⚠ Consumo zerou a comissão do mês.</p>
-                    )}
                   </div>
 
+                  {/* Próxima faixa compacta */}
+                  {next && (
+                    <p className="text-[11px] text-muted-foreground mb-2.5">
+                      Próxima faixa <span className="text-foreground font-semibold">{next.label}</span> · faltam <span className="mono text-foreground font-semibold">{remaining}</span> un.
+                    </p>
+                  )}
 
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
-                      Relatório <ArrowRight size={11} className="ml-1" />
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
+                      Extrato <ArrowRight size={11} className="ml-1" />
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setDebtPayDrawer({ sellerId: r.seller.id }); setDebtPayForm({ amount: r.saldoConsumo > 0 ? r.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
-                      <Receipt size={12} className="mr-1" />Pagar Dívida
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setDebtPayDrawer({ sellerId: r.seller.id }); setDebtPayForm({ amount: r.saldoConsumo > 0 ? r.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
+                      <Receipt size={11} className="mr-1" />Pagar Dívida
                     </Button>
-                    <Button size="sm" variant={positive ? "default" : "secondary"} className="h-8" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
-                      <Plus size={13} className="mr-1" />Pagar Comissão
+                    <Button size="sm" variant={positive ? "default" : "secondary"} className="h-7 text-[11px]" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
+                      <Plus size={11} className="mr-1" />Pagar
                     </Button>
                   </div>
                 </div>
@@ -469,62 +405,48 @@ export default function CommissionsPage() {
         )}
       </div>
 
-      {/* Retiradas dos Sócios */}
-      <div className="space-y-3">
-        <div className="flex items-end justify-between">
+      {/* Retiradas dos Sócios — compacto */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Retiradas dos Sócios</h2>
-            <p className="text-[11px] text-muted-foreground">Histórico de retiradas reais de cada sócio</p>
+            <p className="text-[11px] text-muted-foreground">Valores retirados no período</p>
           </div>
         </div>
         {periodMetrics.perPartner.length === 0 ? (
-          <div className="glass-card p-5 text-xs text-muted-foreground">Nenhum sócio cadastrado.</div>
+          <p className="px-4 py-5 text-xs text-muted-foreground">Nenhum sócio cadastrado.</p>
         ) : (
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="divide-y divide-border/40">
             {periodMetrics.perPartner.map(r => (
-              <div key={r.partner.id} className="glass-card p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{r.partner.name}</p>
-                    <p className="text-[11px] text-muted-foreground">Sócio · {r.partner.percentage}%</p>
-                  </div>
-                  {r.count > 0 && <Badge variant="secondary" className="text-[10px]">{r.count} no período</Badge>}
+              <div key={r.partner.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{r.partner.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sócio · {r.partner.percentage}%{r.count > 0 ? ` · ${r.count} no período` : ""}
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Mini label="No período" value={formatCurrency(r.periodAmt)} strong tone={r.periodAmt > 0 ? "warning" : undefined} />
-                  <Mini label="No ano" value={formatCurrency(r.yearAmt)} />
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-warning" : "text-muted-foreground")}>
+                    {formatCurrency(r.periodAmt)}
+                  </span>
+                  <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => openWd(r.partner.id)}>
+                    <Plus size={11} className="mr-1" />Registrar
+                  </Button>
                 </div>
-
-                <div className="rounded-lg bg-secondary/40 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Última retirada</p>
-                  {r.last ? (
-                    <div className="flex items-baseline justify-between gap-2 mt-0.5">
-                      <span className="text-sm mono font-semibold">{formatCurrency(r.last.amount)}</span>
-                      <span className="text-[11px] text-muted-foreground mono">{formatDateBR(r.last.date)}</span>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Nenhuma ainda</p>
-                  )}
-                </div>
-
-                <Button size="sm" className="h-8 w-full" onClick={() => openWd(r.partner.id)}>
-                  <Plus size={13} className="mr-1" />Registrar Retirada
-                </Button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Histórico */}
-      <div className="glass-card p-4 sm:p-5">
-        <div className="flex items-center gap-2 mb-3">
+      {/* Histórico Financeiro — timeline */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-border">
           <Clock size={14} className="text-muted-foreground" />
           <h2 className="text-sm font-semibold tracking-tight">Histórico Financeiro</h2>
         </div>
         {Object.keys(timeline).length === 0 ? (
-          <div className="flex items-start gap-2.5 py-1">
+          <div className="flex items-start gap-2.5 px-4 py-5">
             <Inbox size={14} className="text-muted-foreground mt-0.5 shrink-0" />
             <div>
               <p className="text-xs text-foreground">Nenhum pagamento registrado ainda.</p>
@@ -532,22 +454,22 @@ export default function CommissionsPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y divide-border/40">
             {Object.entries(timeline).map(([day, items]) => (
-              <div key={day}>
+              <div key={day} className="px-3.5 py-2.5">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">{day}</div>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {items.map(it => (
-                    <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-secondary/40 transition-colors">
+                    <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-secondary/40 transition-colors group/hist">
                       <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", it.kind === "commission" ? "bg-warning" : "bg-fixed")} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">
-                          <span className="text-muted-foreground">{it.kind === "commission" ? "Pagamento a" : "Retirada"}</span>{" "}
+                        <p className="text-[13px] truncate">
+                          <span className="text-muted-foreground">{it.kind === "commission" ? "Pagamento de Comissão" : "Retirada Sócio"}</span>{" · "}
                           <span className="font-medium">{it.who}</span>
                         </p>
                         {it.notes && <p className="text-[11px] text-muted-foreground truncate">{it.notes}</p>}
                       </div>
-                      <span className="mono text-sm font-semibold">{formatCurrency(it.amount)}</span>
+                      <span className="mono text-[13px] font-semibold">{formatCurrency(it.amount)}</span>
                       <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
                       <button
                         onClick={async () => {
@@ -555,9 +477,9 @@ export default function CommissionsPage() {
                           if (!ok) return;
                           it.kind === "commission" ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id);
                         }}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1 opacity-0 group-hover/hist:opacity-100"
                         aria-label="Excluir"
-                      ><Trash2 size={13} /></button>
+                      ><Trash2 size={12} /></button>
                     </div>
                   ))}
                 </div>
@@ -566,6 +488,7 @@ export default function CommissionsPage() {
           </div>
         )}
       </div>
+
 
       {/* Drawer Pagar Vendedor */}
       <Sheet open={!!payDrawer} onOpenChange={(v) => !v && setPayDrawer(null)}>
