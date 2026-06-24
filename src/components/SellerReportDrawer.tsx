@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
 import { computeSellerCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
 import { formatDateBR } from "@/lib/date-utils";
@@ -332,188 +333,191 @@ export default function SellerReportDrawer({
             )}
           </div>
 
-          {/* Identity */}
-          <div className="rounded-lg bg-secondary/50 p-3">
-            <p className="text-sm font-semibold">{seller.name}</p>
-            <p className="text-[11px] text-muted-foreground">{label} · faixa {report.tier.label}</p>
+          {/* Header: identity + balance */}
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-base font-semibold leading-tight">{seller.name}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {label} · Faixa {report.tier.label}
+            </p>
+            <div className="mt-3 pt-3 border-t border-border/60">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo atual</p>
+              <p className={cn(
+                "mono text-2xl font-bold mt-0.5",
+                report.commBalance >= 0 ? "text-income" : "text-expense"
+              )}>
+                {fmt(report.commBalance)}
+              </p>
+            </div>
           </div>
 
-          {/* Summary grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <Stat label="Unidades" value={String(report.units)} />
-            <Stat label="Faturamento" value={fmt(report.revenue)} tone="income" />
-            <Stat label="Em aberto" value={fmt(report.open)} tone="warning" />
-            <Stat label="Consumo" value={fmt(report.consumo)} tone="warning" />
-            <Stat label="Comissão" value={fmt(report.accrued)} tone="income" />
-            <Stat label="Paga" value={fmt(report.commPaidPeriod)} tone="warning" />
-            <Stat label="Saldo" value={fmt(report.commBalance)} strong
-              tone={report.commBalance >= 0 ? "income" : "expense"} />
-            <Stat label="Estoque" value={`${report.stockTotalUnits} un.`} />
-          </div>
-
-          {/* Demonstrativo da comissão */}
-          <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-[12px] space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Comissão gerada ({report.tier.label})</span>
-              <span className="mono font-semibold text-income">{fmt(report.accrued)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">(−) Consumo no mês</span>
-              <span className={cn("mono font-semibold", report.saldoConsumo > 0 ? "text-warning" : "text-muted-foreground")}>
-                −{fmt(report.saldoConsumo)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">(−) Comissão paga</span>
-              <span className={cn("mono font-semibold", report.commPaidPeriod > 0 ? "text-warning" : "text-muted-foreground")}>
-                −{fmt(report.commPaidPeriod)}
-              </span>
-            </div>
+          {/* Financial summary list */}
+          <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-[13px] space-y-1.5">
+            <SummaryRow label="Comissão gerada" value={fmt(report.accrued)} tone="income" sign="+" />
+            <SummaryRow label="Consumo" value={fmt(report.saldoConsumo)} tone={report.saldoConsumo > 0 ? "warning" : "muted"} sign="−" />
             {report.debtPaymentsTotal > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">(+) Pagamentos de dívida</span>
-                <span className="mono font-semibold text-income">+{fmt(report.debtPaymentsTotal)}</span>
-              </div>
+              <SummaryRow label="Pagamentos de dívida" value={fmt(report.debtPaymentsTotal)} tone="income" sign="+" />
             )}
-            <div className="border-t border-border/40 pt-1.5 flex items-center justify-between">
-              <span className="font-semibold">Saldo a receber</span>
-              <span className={cn("mono font-bold text-sm", report.commBalance >= 0 ? "text-income" : "text-expense")}>
+            <SummaryRow label="Comissão paga" value={fmt(report.commPaidPeriod)} tone={report.commPaidPeriod > 0 ? "warning" : "muted"} sign="−" />
+            <div className="border-t border-border/40 pt-2 mt-1 flex items-center justify-between">
+              <span className="font-semibold">Saldo final</span>
+              <span className={cn("mono font-bold", report.commBalance >= 0 ? "text-income" : "text-expense")}>
                 {fmt(report.commBalance)}
               </span>
             </div>
           </div>
 
-
-
-          {/* Export */}
+          {/* Actions */}
           <div className="grid grid-cols-2 gap-2">
-            <Button size="sm" className="h-10 w-full bg-green-600 hover:bg-green-700 text-white" onClick={shareWhatsSales}>
-              <MessageCircle size={16} className="mr-2" /> WhatsApp — Vendas
+            <Button size="sm" variant="outline" className="h-10 w-full" onClick={shareWhatsSales}>
+              <MessageCircle size={15} className="mr-2" /> Compartilhar Relatório
             </Button>
-            <Button size="sm" className="h-10 w-full bg-green-700 hover:bg-green-800 text-white" onClick={shareWhatsStock}>
-              <MessageCircle size={16} className="mr-2" /> WhatsApp — Estoque
+            <Button size="sm" variant="outline" className="h-10 w-full" onClick={shareWhatsStock}>
+              <Boxes size={15} className="mr-2" /> Compartilhar Estoque
             </Button>
           </div>
 
+          {/* Tabs */}
+          <Tabs defaultValue="resumo" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="resumo">Resumo</TabsTrigger>
+              <TabsTrigger value="consumo">Consumo</TabsTrigger>
+              <TabsTrigger value="estoque">Estoque</TabsTrigger>
+              <TabsTrigger value="mov">Movim.</TabsTrigger>
+            </TabsList>
 
-          {/* Consumption breakdown */}
-          {report.consumoBreakdown.length > 0 && (
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Consumo no período</p>
-              <div className="space-y-1">
-                {report.consumoBreakdown.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{c.name}</p>
-                      <p className="text-[11px] text-muted-foreground">Qtd: {c.qty}</p>
-                    </div>
-                    <span className="mono text-sm font-semibold text-warning">{fmt(c.total)}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold">
-                  <span>Total consumido</span>
-                  <span className="mono text-warning">{fmt(report.consumo)}</span>
-                </div>
+            {/* Resumo */}
+            <TabsContent value="resumo" className="mt-3">
+              <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+                <KV label="Unidades vendidas" value={String(report.units)} />
+                <KV label="Faturamento" value={fmt(report.revenue)} tone="income" />
+                <KV label="Valor em aberto" value={fmt(report.open)} tone="warning" />
+                <KV label="Faixa atual" value={report.tier.label} />
+                <KV label="Comissão acumulada" value={fmt(report.accrued)} tone="income" />
+                <KV label="Saldo final" value={fmt(report.commBalance)} tone={report.commBalance >= 0 ? "income" : "expense"} strong />
               </div>
-            </div>
-          )}
+            </TabsContent>
 
-          {/* Current stock */}
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
-              <Boxes size={12} /> Estoque atual do vendedor
-            </p>
-            {report.stockItems.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">Sem produtos atribuídos.</p>
-            ) : (
-              <div className="space-y-1">
-                {report.stockItems.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-                    <p className="text-sm font-medium truncate">{s.name}</p>
-                    <span className="mono text-sm font-semibold text-primary">{s.qty}x</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold">
-                  <span>Total em posse</span>
-                  <span className="mono text-primary">{report.stockTotalUnits} unidades</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Movements */}
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Movimentações</p>
-            {report.movs.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">Sem movimentações no período.</p>
-            ) : (
-              <div className="space-y-1">
-                {report.movs.map((m, i) => {
-                  const credit = m.kind === "venda" || m.kind === "ajuste" || m.kind === "pagamento";
-                  return (
-                    <div key={i} className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
-                      <div className={cn(
-                        "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-                        m.kind === "venda" && "bg-income/15 text-income",
-                        m.kind === "retirada" && "bg-warning/15 text-warning",
-                        m.kind === "pagamento" && "bg-income/15 text-income",
-                        m.kind === "ajuste" && "bg-primary/15 text-primary",
-                      )}>
-                        {m.kind === "retirada" ? <Package size={13} /> :
-                          credit ? <ArrowUpCircle size={13} /> : <ArrowDownCircle size={13} />}
+            {/* Consumo */}
+            <TabsContent value="consumo" className="mt-3">
+              {report.consumoBreakdown.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-6 text-center">Sem consumo no período.</p>
+              ) : (
+                <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+                  {report.consumoBreakdown.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <p className="text-[11px] text-muted-foreground">Qtd: {c.qty}</p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{m.label}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          <span className="mono">{formatDateBR(m.when)}</span>
-                          {"sub" in m && m.sub ? ` · ${m.sub}` : ""}
-                        </p>
-                      </div>
-                      <span className={cn("mono text-sm font-semibold shrink-0",
-                        credit ? "text-income" : "text-warning")}>
-                        {credit ? "+" : "−"}{fmt(m.amount)}
-                      </span>
-                      {"source" in m && m.source && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-expense"
-                          onClick={async () => {
-                            const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmText: "Apagar", destructive: true });
-                            if (!ok) return;
-                            const src = m.source!;
-                            if (src.type === "manual_debt") await deleteSellerManualDebt(src.id);
-                            else if (src.type === "debt_payment") await deleteSellerDebtPayment(src.id);
-                            else if (src.type === "commission_payment") await deleteCommissionPayment(src.id);
-                          }}
-                          aria-label="Apagar"
-                        >
-                          <Trash2 size={13} />
-                        </Button>
-                      )}
+                      <span className="mono text-sm font-semibold text-warning shrink-0 ml-2">{fmt(c.total)}</span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  ))}
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-secondary/40">
+                    <span className="text-sm font-semibold">Total consumido</span>
+                    <span className="mono text-sm font-bold text-warning">{fmt(report.consumo)}</span>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Estoque */}
+            <TabsContent value="estoque" className="mt-3">
+              {report.stockItems.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-6 text-center">Sem produtos atribuídos.</p>
+              ) : (
+                <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+                  {report.stockItems.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between px-3 py-2.5">
+                      <p className="text-sm font-medium truncate">{s.name}</p>
+                      <span className="mono text-sm font-semibold text-primary shrink-0 ml-2">{s.qty}x</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-secondary/40">
+                    <span className="text-sm font-semibold">Total em posse</span>
+                    <span className="mono text-sm font-bold text-primary">{report.stockTotalUnits} un.</span>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Movimentações — extrato */}
+            <TabsContent value="mov" className="mt-3">
+              {report.movs.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-6 text-center">Sem movimentações no período.</p>
+              ) : (
+                <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+                  {report.movs.map((m, i) => {
+                    const credit = m.kind === "venda" || m.kind === "ajuste" || m.kind === "pagamento";
+                    return (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-muted-foreground mono">{formatDateBR(m.when)}</p>
+                          <p className="text-sm font-medium truncate">{m.label}</p>
+                        </div>
+                        <span className={cn(
+                          "mono text-sm font-semibold shrink-0",
+                          credit ? "text-income" : "text-warning"
+                        )}>
+                          {credit ? "+" : "−"} {fmt(m.amount)}
+                        </span>
+                        {"source" in m && m.source && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-expense"
+                            onClick={async () => {
+                              const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmText: "Apagar", destructive: true });
+                              if (!ok) return;
+                              const src = m.source!;
+                              if (src.type === "manual_debt") await deleteSellerManualDebt(src.id);
+                              else if (src.type === "debt_payment") await deleteSellerDebtPayment(src.id);
+                              else if (src.type === "commission_payment") await deleteCommissionPayment(src.id);
+                            }}
+                            aria-label="Apagar"
+                          >
+                            <Trash2 size={13} />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function Stat({ label, value, tone, strong }: { label: string; value: string; tone?: "income" | "warning" | "expense"; strong?: boolean }) {
+function SummaryRow({ label, value, tone, sign }: { label: string; value: string; tone: "income" | "warning" | "muted"; sign: "+" | "−" }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 min-w-0">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={cn(
-        "mt-0.5 text-sm mono truncate",
-        strong && "font-bold text-base",
+    <div className="flex items-center justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn(
+        "mono font-semibold",
+        tone === "income" && "text-income",
+        tone === "warning" && "text-warning",
+        tone === "muted" && "text-muted-foreground",
+      )}>
+        {sign}{value}
+      </span>
+    </div>
+  );
+}
+
+function KV({ label, value, tone, strong }: { label: string; value: string; tone?: "income" | "warning" | "expense"; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2.5">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className={cn(
+        "mono text-sm font-semibold",
+        strong && "text-base font-bold",
         tone === "income" && "text-income",
         tone === "warning" && "text-warning",
         tone === "expense" && "text-expense",
-      )}>{value}</p>
+      )}>{value}</span>
     </div>
   );
 }
