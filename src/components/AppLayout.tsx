@@ -22,7 +22,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { signOut, role } = useAuth();
 
   const navItems = allNavItems.filter(item => role === "admin" || !item.adminOnly);
-  const mobileNavItems = navItems.slice(0, 5);
+  const bottomBarRoutes = ["/dashboard", "/products", "/sales", "/commissions"];
+  const mobileNavItems = navItems.filter(item => bottomBarRoutes.includes(item.to));
 
   return (
     <div className="flex h-screen">
