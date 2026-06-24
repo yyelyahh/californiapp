@@ -145,6 +145,21 @@ export default function SellerReportDrawer({
       };
     });
 
+    // Todas as vendas em aberto do vendedor (independentemente do período)
+    const allOpenSales = sales
+      .filter(s => s.sellerId === seller.id && s.type === "venda")
+      .map(s => {
+        const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
+        return {
+          id: s.id, when: s.date, qty: s.quantity, total: s.totalPrice,
+          name: getProductName(s.productId), open: op, paid: op < 0.01,
+          commission: 0,
+        };
+      })
+      .filter(s => !s.paid)
+      .sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
+    const allOpenAmount = allOpenSales.reduce((a, s) => a + s.open, 0);
+
     // Current stock assigned to seller
     const stockItems = productAssignments
       .filter(a => a.sellerId === seller.id && a.quantity > 0)
