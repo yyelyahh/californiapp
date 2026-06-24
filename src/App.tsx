@@ -13,8 +13,6 @@ import StockEntryPage from "@/pages/StockEntryPage";
 import SalesPage from "@/pages/SalesPage";
 import ExpensesPage from "@/pages/ExpensesPage";
 import InvestorsPage from "@/pages/InvestorsPage";
-import MonthlyRevenuePage from "@/pages/MonthlyRevenuePage";
-import SellersPage from "@/pages/SellersPage";
 
 import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
@@ -52,8 +50,8 @@ function ProtectedRoutes() {
           <Route path="/sales" element={<SalesPage />} />
           {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
           {!isSeller && <Route path="/investors" element={<InvestorsPage />} />}
-          {!isSeller && <Route path="/revenue" element={<MonthlyRevenuePage />} />}
-          {!isSeller && <Route path="/sellers" element={<SellersPage />} />}
+          {!isSeller && <Route path="/revenue" element={<Navigate to="/commissions" replace />} />}
+          {!isSeller && <Route path="/sellers" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/losses" element={<LossesPage />} />}
           {!isSeller && <Route path="/commissions" element={<CommissionsPage />} />}

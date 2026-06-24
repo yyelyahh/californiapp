@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X, HandCoins, Receipt,
+  ArrowRight, Users, X, HandCoins, Receipt, Package,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -76,12 +77,13 @@ export default function CommissionsPage() {
   const store = useStore();
   const confirm = useConfirm();
   const {
-    sellers, partners, sales, expenses, products,
+    sellers, partners, sales, expenses, products, productAssignments,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, deleteSellerDebtPayment,
     addSellerManualDebt, deleteSellerManualDebt,
+    addProductAssignment,
     getSellerName, deleteSeller,
   } = store;
 
@@ -215,6 +217,40 @@ export default function CommissionsPage() {
   const [debtPayForm, setDebtPayForm] = useState({ amount: "", date: todayDateString(), notes: "" });
   const [manualDebtDrawer, setManualDebtDrawer] = useState<boolean>(false);
   const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
+
+  const availableProducts = useMemo(() => {
+    return products
+      .map(p => {
+        const assigned = productAssignments.filter(a => a.productId === p.id).reduce((s, a) => s + a.quantity, 0);
+        return { ...p, availableToAssign: Math.max(0, p.stock - assigned) };
+      })
+      .filter(p => p.availableToAssign > 0);
+  }, [products, productAssignments]);
+
+  const toggleAssignProduct = (productId: string, checked: boolean) => {
+    setAssignForm(f => {
+      const next = { ...f.selectedProducts };
+      if (checked) next[productId] = "1"; else delete next[productId];
+      return { ...f, selectedProducts: next };
+    });
+  };
+
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
+    for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
+      const p = availableProducts.find(x => x.id === productId);
+      const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
+      if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
+    }
+    setAssignForm({ sellerId: "", selectedProducts: {} });
+    setAssignOpen(false);
+  };
+
+  const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
+  const assignTotalUnits = Object.values(assignForm.selectedProducts).reduce((s, v) => s + (Number(v) || 0), 0);
 
   const openPay = (sellerId: string, suggested: number) => {
     setPayDrawer({ sellerId });
@@ -319,6 +355,9 @@ export default function CommissionsPage() {
             <p className="text-[11px] text-muted-foreground">Comissão do período + consumo + dívidas − pagamentos</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => setAssignOpen(true)}>
+              <Package size={12} className="mr-1" />Atribuir Estoque
+            </Button>
             <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
               <HandCoins size={12} className="mr-1" />Dívida Manual
             </Button>
@@ -577,6 +616,82 @@ export default function CommissionsPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Drawer Atribuir Estoque */}
+      <Sheet open={assignOpen} onOpenChange={setAssignOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+          <SheetHeader className="px-6 py-4 border-b border-border">
+            <SheetTitle className="text-base font-semibold">Atribuir Estoque</SheetTitle>
+            <p className="text-xs text-muted-foreground">Selecione vendedor e produtos a consignar</p>
+          </SheetHeader>
+          <form onSubmit={handleAssign} className="flex-1 px-6 py-5 space-y-5">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Vendedor</Label>
+              <Select value={assignForm.sellerId} onValueChange={v => setAssignForm(f => ({ ...f, sellerId: v }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                <SelectContent>
+                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Produtos disponíveis</Label>
+                <span className="text-[10px] text-muted-foreground">{assignSelectedCount} selecionado{assignSelectedCount !== 1 ? "s" : ""}</span>
+              </div>
+              <div className="rounded-lg border border-border divide-y divide-border/60 max-h-72 overflow-y-auto">
+                {availableProducts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground p-4 text-center">Todos os produtos já estão totalmente atribuídos.</p>
+                ) : (
+                  availableProducts.map(p => {
+                    const isChecked = Object.prototype.hasOwnProperty.call(assignForm.selectedProducts, p.id);
+                    return (
+                      <div key={p.id} className={cn("px-3 py-2 transition-colors", isChecked && "bg-primary/5")}>
+                        <div className="flex items-center gap-2">
+                          <Checkbox id={`assign-${p.id}`} checked={isChecked} onCheckedChange={(c) => toggleAssignProduct(p.id, !!c)} />
+                          <label htmlFor={`assign-${p.id}`} className="text-xs cursor-pointer flex-1 flex items-center justify-between">
+                            <span className="font-medium">{p.flavor} <span className="text-muted-foreground font-normal">· {p.model}</span></span>
+                            <span className="mono text-[10px] text-muted-foreground">{p.availableToAssign} disp.</span>
+                          </label>
+                        </div>
+                        {isChecked && (
+                          <Input type="number" min="1" max={p.availableToAssign} placeholder="Qtd"
+                            value={assignForm.selectedProducts[p.id]}
+                            onChange={e => setAssignForm(f => ({
+                              ...f,
+                              selectedProducts: { ...f.selectedProducts, [p.id]: String(Math.max(1, Math.min(Number(e.target.value) || 1, p.availableToAssign))) }
+                            }))}
+                            className="ml-6 mt-1.5 w-24 h-7 text-xs mono" />
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            {assignSelectedCount > 0 && (
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Resumo</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Produtos</span>
+                  <span className="mono font-medium">{assignSelectedCount}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Unidades</span>
+                  <span className="mono font-semibold">{assignTotalUnits}</span>
+                </div>
+              </div>
+            )}
+            <SheetFooter className="px-0">
+              <Button type="submit" className="w-full h-10" disabled={assignSelectedCount === 0 || availableProducts.length === 0}>
+                Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}
+              </Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+
 
       {/* Relatório do Vendedor */}
       <SellerReportDrawer
