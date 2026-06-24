@@ -11,7 +11,7 @@ const allNavItems = [
   { to: "/losses", icon: AlertTriangle, label: "Perdas", adminOnly: true },
   { to: "/sales", icon: ShoppingCart, label: "Vendas", adminOnly: false },
   { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
-  { to: "/commissions", icon: Sparkles, label: "Comissão", adminOnly: true },
+  { to: "/commissions", icon: Sparkles, label: "Distribuição", adminOnly: true },
   { to: "/investors", icon: Users, label: "Investidores", adminOnly: true },
   { to: "/revenue", icon: DollarSign, label: "Receita", adminOnly: true },
   { to: "/sellers", icon: UserCheck, label: "Vendedores", adminOnly: true },
