@@ -355,6 +355,9 @@ export default function CommissionsPage() {
             <p className="text-[11px] text-muted-foreground">Comissão do período + consumo + dívidas − pagamentos</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => setAssignOpen(true)}>
+              <Package size={12} className="mr-1" />Atribuir Estoque
+            </Button>
             <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
               <HandCoins size={12} className="mr-1" />Dívida Manual
             </Button>
