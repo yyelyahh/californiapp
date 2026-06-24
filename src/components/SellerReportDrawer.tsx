@@ -145,6 +145,21 @@ export default function SellerReportDrawer({
       };
     });
 
+    // Todas as vendas em aberto do vendedor (independentemente do período)
+    const allOpenSales = sales
+      .filter(s => s.sellerId === seller.id && s.type === "venda")
+      .map(s => {
+        const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
+        return {
+          id: s.id, when: s.date, qty: s.quantity, total: s.totalPrice,
+          name: getProductName(s.productId), open: op, paid: op < 0.01,
+          commission: 0,
+        };
+      })
+      .filter(s => !s.paid)
+      .sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
+    const allOpenAmount = allOpenSales.reduce((a, s) => a + s.open, 0);
+
     // Current stock assigned to seller
     const stockItems = productAssignments
       .filter(a => a.sellerId === seller.id && a.quantity > 0)
@@ -213,6 +228,7 @@ export default function SellerReportDrawer({
       salesDetail, stockItems, stockTotalUnits,
       tier: c.tier, accrued: c.accrued, commPaidPeriod, commBalance, movs,
       consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
+      allOpenSales, allOpenAmount,
     };
   }, [seller, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, start, end, getProductName]);
 
@@ -250,17 +266,16 @@ export default function SellerReportDrawer({
       lines.push(`Total: ${fmt(report.consumo)}`);
     }
 
-    const openSales = report.salesDetail.filter(s => !s.paid);
     const paidSales = report.salesDetail.filter(s => s.paid);
 
     lines.push(``);
     lines.push(`⏳ VENDAS EM ABERTO`);
-    lines.push(`Total em aberto: ${fmt(report.open)}`);
-    if (openSales.length) {
+    lines.push(`Total em aberto: ${fmt(report.allOpenAmount)}`);
+    if (report.allOpenSales.length) {
       lines.push(``);
-      openSales.forEach(s => {
+      report.allOpenSales.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
-        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)}`);
+        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)} · Em aberto ${fmt(s.open)}`);
       });
     }
 
