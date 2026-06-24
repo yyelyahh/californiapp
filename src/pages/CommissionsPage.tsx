@@ -77,12 +77,13 @@ export default function CommissionsPage() {
   const store = useStore();
   const confirm = useConfirm();
   const {
-    sellers, partners, sales, expenses, products,
+    sellers, partners, sales, expenses, products, productAssignments,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, deleteSellerDebtPayment,
     addSellerManualDebt, deleteSellerManualDebt,
+    addProductAssignment,
     getSellerName, deleteSeller,
   } = store;
 
