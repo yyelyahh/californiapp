@@ -228,6 +228,7 @@ export default function SellerReportDrawer({
       salesDetail, stockItems, stockTotalUnits,
       tier: c.tier, accrued: c.accrued, commPaidPeriod, commBalance, movs,
       consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
+      allOpenSales, allOpenAmount,
     };
   }, [seller, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, start, end, getProductName]);
 
