@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
 import { computeSellerCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
 import { formatDateBR } from "@/lib/date-utils";
