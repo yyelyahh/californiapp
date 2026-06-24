@@ -266,17 +266,16 @@ export default function SellerReportDrawer({
       lines.push(`Total: ${fmt(report.consumo)}`);
     }
 
-    const openSales = report.salesDetail.filter(s => !s.paid);
     const paidSales = report.salesDetail.filter(s => s.paid);
 
     lines.push(``);
     lines.push(`⏳ VENDAS EM ABERTO`);
-    lines.push(`Total em aberto: ${fmt(report.open)}`);
-    if (openSales.length) {
+    lines.push(`Total em aberto: ${fmt(report.allOpenAmount)}`);
+    if (report.allOpenSales.length) {
       lines.push(``);
-      openSales.forEach(s => {
+      report.allOpenSales.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
-        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)}`);
+        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)} · Em aberto ${fmt(s.open)}`);
       });
     }
 
