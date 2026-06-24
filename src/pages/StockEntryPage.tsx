@@ -328,7 +328,14 @@ export default function StockEntryPage() {
                 disabled={validEntries.length === 0 || submitting}
                 className="w-full h-10"
               >
-                {submitting ? "Registrando..." : `Registrar ${validEntries.length || ""} entrada${validEntries.length !== 1 ? "s" : ""}`.trim()}
+                {submitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    Registrando…
+                  </span>
+                ) : (
+                  `Registrar ${validEntries.length || ""} entrada${validEntries.length !== 1 ? "s" : ""}`.trim()
+                )}
               </Button>
             </SheetFooter>
           </SheetContent>
