@@ -617,6 +617,82 @@ export default function CommissionsPage() {
         </SheetContent>
       </Sheet>
 
+      {/* Drawer Atribuir Estoque */}
+      <Sheet open={assignOpen} onOpenChange={setAssignOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+          <SheetHeader className="px-6 py-4 border-b border-border">
+            <SheetTitle className="text-base font-semibold">Atribuir Estoque</SheetTitle>
+            <p className="text-xs text-muted-foreground">Selecione vendedor e produtos a consignar</p>
+          </SheetHeader>
+          <form onSubmit={handleAssign} className="flex-1 px-6 py-5 space-y-5">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Vendedor</Label>
+              <Select value={assignForm.sellerId} onValueChange={v => setAssignForm(f => ({ ...f, sellerId: v }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                <SelectContent>
+                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Produtos disponíveis</Label>
+                <span className="text-[10px] text-muted-foreground">{assignSelectedCount} selecionado{assignSelectedCount !== 1 ? "s" : ""}</span>
+              </div>
+              <div className="rounded-lg border border-border divide-y divide-border/60 max-h-72 overflow-y-auto">
+                {availableProducts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground p-4 text-center">Todos os produtos já estão totalmente atribuídos.</p>
+                ) : (
+                  availableProducts.map(p => {
+                    const isChecked = Object.prototype.hasOwnProperty.call(assignForm.selectedProducts, p.id);
+                    return (
+                      <div key={p.id} className={cn("px-3 py-2 transition-colors", isChecked && "bg-primary/5")}>
+                        <div className="flex items-center gap-2">
+                          <Checkbox id={`assign-${p.id}`} checked={isChecked} onCheckedChange={(c) => toggleAssignProduct(p.id, !!c)} />
+                          <label htmlFor={`assign-${p.id}`} className="text-xs cursor-pointer flex-1 flex items-center justify-between">
+                            <span className="font-medium">{p.flavor} <span className="text-muted-foreground font-normal">· {p.model}</span></span>
+                            <span className="mono text-[10px] text-muted-foreground">{p.availableToAssign} disp.</span>
+                          </label>
+                        </div>
+                        {isChecked && (
+                          <Input type="number" min="1" max={p.availableToAssign} placeholder="Qtd"
+                            value={assignForm.selectedProducts[p.id]}
+                            onChange={e => setAssignForm(f => ({
+                              ...f,
+                              selectedProducts: { ...f.selectedProducts, [p.id]: String(Math.max(1, Math.min(Number(e.target.value) || 1, p.availableToAssign))) }
+                            }))}
+                            className="ml-6 mt-1.5 w-24 h-7 text-xs mono" />
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            {assignSelectedCount > 0 && (
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Resumo</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Produtos</span>
+                  <span className="mono font-medium">{assignSelectedCount}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Unidades</span>
+                  <span className="mono font-semibold">{assignTotalUnits}</span>
+                </div>
+              </div>
+            )}
+            <SheetFooter className="px-0">
+              <Button type="submit" className="w-full h-10" disabled={assignSelectedCount === 0 || availableProducts.length === 0}>
+                Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}
+              </Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+
+
       {/* Relatório do Vendedor */}
       <SellerReportDrawer
         sellerId={extractFor}
