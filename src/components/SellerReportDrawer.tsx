@@ -367,7 +367,7 @@ export default function SellerReportDrawer({
           </div>
 
           {/* Actions */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Button size="sm" variant="outline" className="h-10 w-full" onClick={shareWhatsSales}>
               <MessageCircle size={15} className="mr-2" /> Compartilhar Relatório
             </Button>
