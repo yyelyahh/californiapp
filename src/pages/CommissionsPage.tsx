@@ -609,16 +609,16 @@ function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: 
   );
 }
 
-function DemoRow({ label, value, tone }: { label: string; value: number; tone?: "income" | "warning" | "expense" }) {
+function Line({ label, value, tone }: { label: string; value: string; tone?: "income" | "warning" | "muted" }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center justify-between">
       <span className="text-muted-foreground">{label}</span>
       <span className={cn(
         "mono font-semibold",
-        tone === "income" && value >= 0 && "text-income",
+        tone === "income" && "text-income",
         tone === "warning" && "text-warning",
-        tone === "expense" && "text-expense",
-      )}>{formatCurrency(value)}</span>
+        tone === "muted" && "text-muted-foreground",
+      )}>{value}</span>
     </div>
   );
 }
