@@ -13,8 +13,6 @@ import StockEntryPage from "@/pages/StockEntryPage";
 import SalesPage from "@/pages/SalesPage";
 import ExpensesPage from "@/pages/ExpensesPage";
 import InvestorsPage from "@/pages/InvestorsPage";
-import MonthlyRevenuePage from "@/pages/MonthlyRevenuePage";
-import SellersPage from "@/pages/SellersPage";
 
 import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
