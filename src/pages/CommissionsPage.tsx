@@ -360,6 +360,9 @@ export default function CommissionsPage() {
             <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => setAssignOpen(true)}>
               <Package size={12} className="mr-1" />Atribuir Estoque
             </Button>
+            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => { setTransferForm({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" }); setTransferOpen(true); }}>
+              <ArrowLeftRight size={12} className="mr-1" />Transferir
+            </Button>
             <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
               <HandCoins size={12} className="mr-1" />Dívida Manual
             </Button>
