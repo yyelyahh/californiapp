@@ -472,30 +472,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { data: refreshedAssignments } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
       if (refreshedAssignments) setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
 
-      // Auto-debit X% from seller's debt on a regular sale (not retirada)
-      if (saleType === "venda") {
-        const seller = sellers.find(sl => sl.id === s.sellerId);
-        const pct = seller?.debtPercentage ?? 0;
-        const [retiradasRes, manualDebtsRes, paymentsRes] = await Promise.all([
-          supabase.from("sales").select("total_price").eq("seller_id", s.sellerId).eq("type", "retirada_funcionario"),
-          supabase.from("seller_manual_debts" as any).select("amount").eq("seller_id", s.sellerId),
-          supabase.from("seller_debt_payments" as any).select("amount").eq("seller_id", s.sellerId),
-        ]);
-        const retiradas = (retiradasRes.data ?? []).reduce((sum: number, sl: any) => sum + Number(sl.total_price || 0), 0);
-        const manualDebts = ((manualDebtsRes.data as any[]) ?? []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
-        const paid = ((paymentsRes.data as any[]) ?? []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
-        const balance = Math.max(0, retiradas + manualDebts - paid);
-        const abatement = Math.min(balance, totalPrice * (pct / 100));
-        if (pct > 0 && abatement > 0) {
-          const { data: pData, error: pErr } = await supabase.from("seller_debt_payments" as any).insert({
-            seller_id: s.sellerId, sale_id: newSale.id, amount: abatement,
-            date: s.date, notes: `Abatimento automático (${pct}%)`,
-          }).select().single();
-          if (!pErr && pData) {
-            setSellerDebtPayments(prev => [...prev, mapSellerDebtPayment(pData)]);
-          }
-        }
-      }
+      // Abatimento automático legado (10%) removido — comissão atual é gerenciada via página de Distribuição.
+
     }
   }, [products, productAssignments, sellers, sellerDebtPayments, sales]);
 
