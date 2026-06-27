@@ -719,6 +719,78 @@ export default function CommissionsPage() {
 
 
 
+      {/* Drawer Transferir Estoque */}
+      <Sheet open={transferOpen} onOpenChange={setTransferOpen}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle className="text-base font-semibold">Transferir Estoque</SheetTitle>
+            <p className="text-xs text-muted-foreground">Mova itens consignados de um vendedor para outro</p>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">De (vendedor origem)</Label>
+              <Select value={transferForm.fromSellerId} onValueChange={v => setTransferForm(f => ({ ...f, fromSellerId: v, assignmentId: "", quantity: "" }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                <SelectContent>
+                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {transferForm.fromSellerId && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Produto a transferir</Label>
+                {transferFromAssignments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground rounded-lg border border-border p-3 text-center">Este vendedor não possui estoque atribuído.</p>
+                ) : (
+                  <Select value={transferForm.assignmentId} onValueChange={v => setTransferForm(f => ({ ...f, assignmentId: v, quantity: "" }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
+                    <SelectContent>
+                      {transferFromAssignments.map(a => (
+                        <SelectItem key={a.id} value={a.id}>{a.productLabel} — {a.quantity} un.</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
+            {transferForm.assignmentId && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Para (vendedor destino)</Label>
+                  <Select value={transferForm.toSellerId} onValueChange={v => setTransferForm(f => ({ ...f, toSellerId: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.filter(s => s.id !== transferForm.fromSellerId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Quantidade (máx. {transferMaxQty})</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max={transferMaxQty}
+                    value={transferForm.quantity}
+                    onChange={e => setTransferForm(f => ({ ...f, quantity: String(Math.max(1, Math.min(Number(e.target.value) || 1, transferMaxQty))) }))}
+                    className="h-9 mono"
+                  />
+                </div>
+              </>
+            )}
+
+            <Button
+              className="w-full"
+              onClick={submitTransfer}
+              disabled={!transferForm.assignmentId || !transferForm.toSellerId || !Number(transferForm.quantity)}
+            >
+              <ArrowLeftRight size={14} className="mr-1.5" />Transferir
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Relatório do Vendedor */}
       <SellerReportDrawer
         sellerId={extractFor}
