@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X, HandCoins, Receipt, Package,
+  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -83,7 +83,7 @@ export default function CommissionsPage() {
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, deleteSellerDebtPayment,
     addSellerManualDebt, deleteSellerManualDebt,
-    addProductAssignment,
+    addProductAssignment, transferProductAssignment,
     getSellerName, deleteSeller,
   } = store;
 
@@ -219,6 +219,8 @@ export default function CommissionsPage() {
   const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferForm, setTransferForm] = useState<{ fromSellerId: string; assignmentId: string; toSellerId: string; quantity: string }>({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
 
   const availableProducts = useMemo(() => {
     return products
@@ -251,6 +253,27 @@ export default function CommissionsPage() {
 
   const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
   const assignTotalUnits = Object.values(assignForm.selectedProducts).reduce((s, v) => s + (Number(v) || 0), 0);
+
+  // Transfer logic
+  const transferFromAssignments = useMemo(() => {
+    if (!transferForm.fromSellerId) return [];
+    return productAssignments
+      .filter(a => a.sellerId === transferForm.fromSellerId && a.quantity > 0)
+      .map(a => {
+        const p = products.find(x => x.id === a.productId);
+        return { ...a, productLabel: p ? `${p.flavor} · ${p.model}` : "—" };
+      });
+  }, [productAssignments, products, transferForm.fromSellerId]);
+  const transferSelected = transferFromAssignments.find(a => a.id === transferForm.assignmentId);
+  const transferMaxQty = transferSelected?.quantity ?? 0;
+
+  const submitTransfer = async () => {
+    const qty = Number(transferForm.quantity);
+    if (!transferForm.assignmentId || !transferForm.toSellerId || qty <= 0) return;
+    await transferProductAssignment(transferForm.assignmentId, transferForm.toSellerId, qty);
+    setTransferOpen(false);
+    setTransferForm({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
+  };
 
   const openPay = (sellerId: string, suggested: number) => {
     setPayDrawer({ sellerId });
@@ -357,6 +380,9 @@ export default function CommissionsPage() {
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => setAssignOpen(true)}>
               <Package size={12} className="mr-1" />Atribuir Estoque
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => { setTransferForm({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" }); setTransferOpen(true); }}>
+              <ArrowLeftRight size={12} className="mr-1" />Transferir
             </Button>
             <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
               <HandCoins size={12} className="mr-1" />Dívida Manual
@@ -692,6 +718,78 @@ export default function CommissionsPage() {
       </Sheet>
 
 
+
+      {/* Drawer Transferir Estoque */}
+      <Sheet open={transferOpen} onOpenChange={setTransferOpen}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle className="text-base font-semibold">Transferir Estoque</SheetTitle>
+            <p className="text-xs text-muted-foreground">Mova itens consignados de um vendedor para outro</p>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">De (vendedor origem)</Label>
+              <Select value={transferForm.fromSellerId} onValueChange={v => setTransferForm(f => ({ ...f, fromSellerId: v, assignmentId: "", quantity: "" }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                <SelectContent>
+                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {transferForm.fromSellerId && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Produto a transferir</Label>
+                {transferFromAssignments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground rounded-lg border border-border p-3 text-center">Este vendedor não possui estoque atribuído.</p>
+                ) : (
+                  <Select value={transferForm.assignmentId} onValueChange={v => setTransferForm(f => ({ ...f, assignmentId: v, quantity: "" }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
+                    <SelectContent>
+                      {transferFromAssignments.map(a => (
+                        <SelectItem key={a.id} value={a.id}>{a.productLabel} — {a.quantity} un.</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
+            {transferForm.assignmentId && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Para (vendedor destino)</Label>
+                  <Select value={transferForm.toSellerId} onValueChange={v => setTransferForm(f => ({ ...f, toSellerId: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                    <SelectContent>
+                      {sellers.filter(s => s.id !== transferForm.fromSellerId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Quantidade (máx. {transferMaxQty})</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max={transferMaxQty}
+                    value={transferForm.quantity}
+                    onChange={e => setTransferForm(f => ({ ...f, quantity: String(Math.max(1, Math.min(Number(e.target.value) || 1, transferMaxQty))) }))}
+                    className="h-9 mono"
+                  />
+                </div>
+              </>
+            )}
+
+            <Button
+              className="w-full"
+              onClick={submitTransfer}
+              disabled={!transferForm.assignmentId || !transferForm.toSellerId || !Number(transferForm.quantity)}
+            >
+              <ArrowLeftRight size={14} className="mr-1.5" />Transferir
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Relatório do Vendedor */}
       <SellerReportDrawer
