@@ -83,7 +83,7 @@ export default function CommissionsPage() {
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, deleteSellerDebtPayment,
     addSellerManualDebt, deleteSellerManualDebt,
-    addProductAssignment,
+    addProductAssignment, transferProductAssignment,
     getSellerName, deleteSeller,
   } = store;
 
