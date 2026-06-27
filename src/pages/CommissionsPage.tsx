@@ -254,6 +254,27 @@ export default function CommissionsPage() {
   const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
   const assignTotalUnits = Object.values(assignForm.selectedProducts).reduce((s, v) => s + (Number(v) || 0), 0);
 
+  // Transfer logic
+  const transferFromAssignments = useMemo(() => {
+    if (!transferForm.fromSellerId) return [];
+    return productAssignments
+      .filter(a => a.sellerId === transferForm.fromSellerId && a.quantity > 0)
+      .map(a => {
+        const p = products.find(x => x.id === a.productId);
+        return { ...a, productLabel: p ? `${p.flavor} · ${p.model}` : "—" };
+      });
+  }, [productAssignments, products, transferForm.fromSellerId]);
+  const transferSelected = transferFromAssignments.find(a => a.id === transferForm.assignmentId);
+  const transferMaxQty = transferSelected?.quantity ?? 0;
+
+  const submitTransfer = async () => {
+    const qty = Number(transferForm.quantity);
+    if (!transferForm.assignmentId || !transferForm.toSellerId || qty <= 0) return;
+    await transferProductAssignment(transferForm.assignmentId, transferForm.toSellerId, qty);
+    setTransferOpen(false);
+    setTransferForm({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
+  };
+
   const openPay = (sellerId: string, suggested: number) => {
     setPayDrawer({ sellerId });
     setPayForm({ amount: suggested > 0 ? suggested.toFixed(2) : "", date: todayDateString(), notes: "" });
