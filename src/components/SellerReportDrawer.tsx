@@ -157,6 +157,7 @@ export default function SellerReportDrawer({
           id: s.id, when: s.date, qty: s.quantity, total: s.totalPrice,
           name: getProductName(s.productId), open: op, paid: op < 0.01,
           commission: 0,
+          paymentMethod: s.paymentMethod,
         };
       })
       .filter(s => !s.paid)
@@ -278,7 +279,8 @@ export default function SellerReportDrawer({
       lines.push(``);
       report.allOpenSales.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
-        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)} · Em aberto ${fmt(s.open)}`);
+        const pm = s.paymentMethod === "pix" ? " 💠 PIX" : s.paymentMethod === "dinheiro" ? " 💵 DINHEIRO" : "";
+        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)} · Em aberto ${fmt(s.open)}${pm}`);
       });
     }
 
