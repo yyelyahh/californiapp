@@ -451,6 +451,16 @@ export default function SalesPage() {
               </td>
               <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
               <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-warning" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
+              {!isRet && (
+                <td className="py-2.5 px-3 text-center">
+                  {s.paymentMethod ? (
+                    <span className={cn(
+                      "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                      s.paymentMethod === "pix" ? "bg-primary/10 text-primary" : "bg-income/10 text-income"
+                    )}>{s.paymentMethod === "pix" ? "Pix" : "Dinheiro"}</span>
+                  ) : <span className="text-muted-foreground/50 text-[11px]">—</span>}
+                </td>
+              )}
               {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
               {!isRet && (
                 <td className="py-2.5 px-3 text-right mono text-sm">
@@ -600,12 +610,13 @@ export default function SalesPage() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm min-w-[640px]">
+                  <table className="w-full text-sm min-w-[720px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                         <th className="text-left py-2 px-3">Produto</th>
                         <th className="text-right py-2 px-3 w-[50px]">Qtd</th>
                         <th className="text-right py-2 px-3 w-[100px]">Total</th>
+                        <th className="text-center py-2 px-3 w-[90px]">Pagto</th>
                         <th className="text-right py-2 px-3 w-[100px]">Recebido</th>
                         <th className="text-right py-2 px-3 w-[100px]">Falta</th>
                         <th className="text-left py-2 px-3 w-[70px]">Status</th>
