@@ -211,6 +211,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
     sellerId: r.seller_id || undefined,
     type: (r.type === "retirada_funcionario" ? "retirada_funcionario" : "venda"),
+    paymentMethod: (r.payment_method === "pix" || r.payment_method === "dinheiro") ? r.payment_method : undefined,
   });
 
   const mapSeller = (r: any): Seller => ({
@@ -442,6 +443,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       type: saleType,
     };
     if (s.sellerId) insertData.seller_id = s.sellerId;
+    if (saleType === "venda" && s.paymentMethod) insertData.payment_method = s.paymentMethod;
     const { data, error } = await supabase.from("sales").insert(insertData).select().single();
     if (error) { toast.error("Erro ao registrar venda"); throw error; }
     const newSale = mapSale(data);
@@ -488,6 +490,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.paidAmount !== undefined) dbUpdates.paid_amount = updates.paidAmount;
     if (updates.sellerId !== undefined) dbUpdates.seller_id = updates.sellerId || null;
     if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (updates.paymentMethod !== undefined) dbUpdates.payment_method = updates.paymentMethod || null;
     const { error } = await supabase.from("sales").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar venda"); return; }
     setSales(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));

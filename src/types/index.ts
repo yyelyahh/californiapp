@@ -21,6 +21,7 @@ export interface StockEntry {
 }
 
 export type SaleType = "venda" | "retirada_funcionario";
+export type PaymentMethod = "pix" | "dinheiro";
 
 export interface StockLoss {
   id: string;
@@ -44,6 +45,7 @@ export interface Sale {
   paidAmount: number;
   sellerId?: string;
   type: SaleType;
+  paymentMethod?: PaymentMethod;
 }
 
 export interface SellerDebtPayment {

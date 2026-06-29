@@ -17,7 +17,7 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario" };
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as "pix" | "dinheiro" };
 
 export default function SalesPage() {
   const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
@@ -102,6 +102,7 @@ export default function SalesPage() {
       paidAmount: String(s.paidAmount || 0),
       sellerId: s.sellerId || "",
       type: s.type || "venda",
+      paymentMethod: s.paymentMethod || "pix",
     });
     setOpen(true);
   };
@@ -131,6 +132,7 @@ export default function SalesPage() {
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
           sellerId: form.sellerId || undefined,
           type: form.type,
+          paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
         });
       } else {
         const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
@@ -144,6 +146,7 @@ export default function SalesPage() {
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
           sellerId: effectiveSellerId,
           type: form.type,
+          paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
         });
       }
       setForm(emptyForm);
@@ -248,6 +251,33 @@ export default function SalesPage() {
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Parcelas</Label><Input type="number" min="1" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} /></div>
           <div><Label>Valor Recebido (R$)</Label><Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} /></div>
+        </div>
+      )}
+      {!isRetirada && (
+        <div>
+          <Label className="mb-2 block">Forma de Pagamento</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, paymentMethod: "pix" }))}
+              className={cn(
+                "px-3 py-2 rounded-md text-sm font-medium border transition",
+                form.paymentMethod === "pix"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+              )}
+            >Pix</button>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, paymentMethod: "dinheiro" }))}
+              className={cn(
+                "px-3 py-2 rounded-md text-sm font-medium border transition",
+                form.paymentMethod === "dinheiro"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+              )}
+            >Dinheiro</button>
+          </div>
         </div>
       )}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
@@ -421,6 +451,16 @@ export default function SalesPage() {
               </td>
               <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
               <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-warning" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
+              {!isRet && (
+                <td className="py-2.5 px-3 text-center">
+                  {s.paymentMethod ? (
+                    <span className={cn(
+                      "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                      s.paymentMethod === "pix" ? "bg-primary/10 text-primary" : "bg-income/10 text-income"
+                    )}>{s.paymentMethod === "pix" ? "Pix" : "Dinheiro"}</span>
+                  ) : <span className="text-muted-foreground/50 text-[11px]">—</span>}
+                </td>
+              )}
               {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
               {!isRet && (
                 <td className="py-2.5 px-3 text-right mono text-sm">
@@ -570,12 +610,13 @@ export default function SalesPage() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm min-w-[640px]">
+                  <table className="w-full text-sm min-w-[720px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                         <th className="text-left py-2 px-3">Produto</th>
                         <th className="text-right py-2 px-3 w-[50px]">Qtd</th>
                         <th className="text-right py-2 px-3 w-[100px]">Total</th>
+                        <th className="text-center py-2 px-3 w-[90px]">Pagto</th>
                         <th className="text-right py-2 px-3 w-[100px]">Recebido</th>
                         <th className="text-right py-2 px-3 w-[100px]">Falta</th>
                         <th className="text-left py-2 px-3 w-[70px]">Status</th>

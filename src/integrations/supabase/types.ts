@@ -358,6 +358,7 @@ export type Database = {
           installments: number
           notes: string | null
           paid_amount: number
+          payment_method: string | null
           product_id: string
           quantity: number
           seller_id: string | null
@@ -372,6 +373,7 @@ export type Database = {
           installments?: number
           notes?: string | null
           paid_amount?: number
+          payment_method?: string | null
           product_id: string
           quantity: number
           seller_id?: string | null
@@ -386,6 +388,7 @@ export type Database = {
           installments?: number
           notes?: string | null
           paid_amount?: number
+          payment_method?: string | null
           product_id?: string
           quantity?: number
           seller_id?: string | null
