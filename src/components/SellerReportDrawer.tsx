@@ -124,15 +124,18 @@ export default function SellerReportDrawer({
 
     // Sales detail (chronological) + marginal commission per sale.
     // Legacy sales (pre-jun/2026) sempre rendem 10% flat; modernas usam faixas.
+    // IMPORTANTE: comissão só é creditada em vendas QUITADAS (em aberto = 0).
+    const isPaid = (s: typeof vendas[number]) => (s.paidAmount || 0) >= s.totalPrice - 0.01;
     const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const modernVendas = vendasChrono.filter(s => !isLegacy(s.date));
-    const legacyVendasInPeriod = vendasChrono.filter(s => isLegacy(s.date));
-    // Comissão por venda = totalPrice × faixa final do vendedor no período
-    // (legadas continuam fixas em 10%)
-    const modernUnitsTotal = vendasChrono.filter(s => !isLegacy(s.date)).reduce((a, s) => a + s.quantity, 0);
+    const vendasPagasChrono = vendasChrono.filter(isPaid);
+    const modernVendas = vendasPagasChrono.filter(s => !isLegacy(s.date));
+    const legacyVendasInPeriod = vendasPagasChrono.filter(s => isLegacy(s.date));
+    // Faixa final calculada apenas com vendas pagas no período
+    const modernUnitsTotal = modernVendas.reduce((a, s) => a + s.quantity, 0);
     const finalTier = getTierForUnits(modernUnitsTotal);
     const saleCommission = new Map<string, number>();
     vendasChrono.forEach(s => {
+      if (!isPaid(s)) { saleCommission.set(s.id, 0); return; }
       const rate = isLegacy(s.date) ? 0.10 : finalTier.rate;
       saleCommission.set(s.id, s.totalPrice * rate);
     });
