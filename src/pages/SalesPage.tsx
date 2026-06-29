@@ -253,6 +253,33 @@ export default function SalesPage() {
           <div><Label>Valor Recebido (R$)</Label><Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} /></div>
         </div>
       )}
+      {!isRetirada && (
+        <div>
+          <Label className="mb-2 block">Forma de Pagamento</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, paymentMethod: "pix" }))}
+              className={cn(
+                "px-3 py-2 rounded-md text-sm font-medium border transition",
+                form.paymentMethod === "pix"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+              )}
+            >Pix</button>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, paymentMethod: "dinheiro" }))}
+              className={cn(
+                "px-3 py-2 rounded-md text-sm font-medium border transition",
+                form.paymentMethod === "dinheiro"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+              )}
+            >Dinheiro</button>
+          </div>
+        </div>
+      )}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
         <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-warning/10" : "bg-secondary/50")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
