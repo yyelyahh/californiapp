@@ -131,14 +131,16 @@ export default function CommissionsPage() {
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
+      // Comissão só é creditada em vendas QUITADAS
+      const vendasPagas = vendas.filter(s => (s.paidAmount || 0) >= s.totalPrice - 0.01);
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
 
-      const c = computeSellerCommission(vendas);
+      const c = computeSellerCommission(vendasPagas);
       const accrued = c.accrued;
       const units = c.units;
 
-      const accrualItems = computeAccrualHistory(vendas);
+      const accrualItems = computeAccrualHistory(vendasPagas);
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
 
