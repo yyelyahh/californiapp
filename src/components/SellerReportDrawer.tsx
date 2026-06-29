@@ -280,7 +280,7 @@ export default function SellerReportDrawer({
       report.allOpenSales.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
         const pm = s.paymentMethod === "pix" ? " 💠 PIX" : s.paymentMethod === "dinheiro" ? " 💵 DINHEIRO" : "";
-        lines.push(`• ${dt} • ${s.name} • ${fmt(s.total)} · Em aberto ${fmt(s.open)}${pm}`);
+        lines.push(`• ${dt} • ${s.name} • Em aberto ${fmt(s.open)}${pm}`);
       });
     }
 
