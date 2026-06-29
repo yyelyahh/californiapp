@@ -17,7 +17,7 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario" };
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as "pix" | "dinheiro" };
 
 export default function SalesPage() {
   const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
@@ -102,6 +102,7 @@ export default function SalesPage() {
       paidAmount: String(s.paidAmount || 0),
       sellerId: s.sellerId || "",
       type: s.type || "venda",
+      paymentMethod: s.paymentMethod || "pix",
     });
     setOpen(true);
   };
@@ -131,6 +132,7 @@ export default function SalesPage() {
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
           sellerId: form.sellerId || undefined,
           type: form.type,
+          paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
         });
       } else {
         const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
@@ -144,6 +146,7 @@ export default function SalesPage() {
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
           sellerId: effectiveSellerId,
           type: form.type,
+          paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
         });
       }
       setForm(emptyForm);
