@@ -261,33 +261,53 @@ export default function SalesPage() {
           <div><Label>Valor Recebido (R$)</Label><Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} /></div>
         </div>
       )}
-      {!isRetirada && (
-        <div>
-          <Label className="mb-2 block">Forma de Pagamento</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, paymentMethod: "pix" }))}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium border transition",
-                form.paymentMethod === "pix"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-              )}
-            >Pix</button>
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, paymentMethod: "dinheiro" }))}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium border transition",
-                form.paymentMethod === "dinheiro"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-              )}
-            >Dinheiro</button>
+      {!isRetirada && (() => {
+        const total = Number(form.quantity) * Number(form.unitPrice);
+        const paid = Number(form.paidAmount) || 0;
+        const isPending = total > 0 ? paid < total - 0.01 : false;
+        const sellerName = form.sellerId ? getSellerName(form.sellerId) : (isSeller && sellerId ? getSellerName(sellerId) : "");
+        const paidOpts: { id: PaymentMethodValue; label: string; disabled?: boolean }[] = [
+          { id: "pix", label: "Pix" },
+          { id: "dinheiro", label: "Dinheiro" },
+        ];
+        const pendingOpts: { id: PaymentMethodValue; label: string; disabled?: boolean }[] = [
+          { id: "pix_pendente", label: "Falta receber Pix" },
+          { id: "dinheiro_pendente", label: "Falta receber Dinheiro" },
+          { id: "dinheiro_com_vendedor", label: sellerName ? `Dinheiro com ${sellerName}` : "Dinheiro com vendedor", disabled: !sellerName },
+          { id: "pendente", label: "Falta receber (a definir)" },
+        ];
+        const opts = isPending ? pendingOpts : paidOpts;
+        const currentValid = opts.some(o => o.id === form.paymentMethod && !o.disabled);
+        if (!currentValid) {
+          const fallback = opts.find(o => !o.disabled)?.id ?? "pix";
+          if (form.paymentMethod !== fallback) {
+            setTimeout(() => setForm(f => ({ ...f, paymentMethod: fallback })), 0);
+          }
+        }
+        return (
+          <div>
+            <Label className="mb-2 block">Forma de Pagamento</Label>
+            <div className={cn("grid gap-2", isPending ? "grid-cols-2" : "grid-cols-2")}>
+              {opts.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={opt.disabled}
+                  onClick={() => !opt.disabled && setForm(f => ({ ...f, paymentMethod: opt.id }))}
+                  className={cn(
+                    "px-3 py-2 rounded-md text-sm font-medium border transition text-left",
+                    form.paymentMethod === opt.id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-secondary text-muted-foreground border-border hover:text-foreground",
+                    opt.disabled && "opacity-40 cursor-not-allowed hover:text-muted-foreground"
+                  )}
+                  title={opt.disabled ? "Selecione um vendedor para usar esta opção" : undefined}
+                >{opt.label}</button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
         <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-warning/10" : "bg-secondary/50")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
