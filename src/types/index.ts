@@ -21,7 +21,13 @@ export interface StockEntry {
 }
 
 export type SaleType = "venda" | "retirada_funcionario";
-export type PaymentMethod = "pix" | "dinheiro";
+export type PaymentMethod =
+  | "pix"
+  | "dinheiro"
+  | "pix_pendente"
+  | "dinheiro_pendente"
+  | "dinheiro_com_vendedor"
+  | "pendente";
 
 export interface StockLoss {
   id: string;

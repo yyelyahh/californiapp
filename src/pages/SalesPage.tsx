@@ -17,7 +17,15 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as "pix" | "dinheiro" };
+type PaymentMethodValue =
+  | "pix"
+  | "dinheiro"
+  | "pix_pendente"
+  | "dinheiro_pendente"
+  | "dinheiro_com_vendedor"
+  | "pendente";
+
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue };
 
 export default function SalesPage() {
   const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
@@ -253,33 +261,53 @@ export default function SalesPage() {
           <div><Label>Valor Recebido (R$)</Label><Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} /></div>
         </div>
       )}
-      {!isRetirada && (
-        <div>
-          <Label className="mb-2 block">Forma de Pagamento</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, paymentMethod: "pix" }))}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium border transition",
-                form.paymentMethod === "pix"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-              )}
-            >Pix</button>
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, paymentMethod: "dinheiro" }))}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium border transition",
-                form.paymentMethod === "dinheiro"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-              )}
-            >Dinheiro</button>
+      {!isRetirada && (() => {
+        const total = Number(form.quantity) * Number(form.unitPrice);
+        const paid = Number(form.paidAmount) || 0;
+        const isPending = total > 0 ? paid < total - 0.01 : false;
+        const sellerName = form.sellerId ? getSellerName(form.sellerId) : (isSeller && sellerId ? getSellerName(sellerId) : "");
+        const paidOpts: { id: PaymentMethodValue; label: string; disabled?: boolean }[] = [
+          { id: "pix", label: "Pix" },
+          { id: "dinheiro", label: "Dinheiro" },
+        ];
+        const pendingOpts: { id: PaymentMethodValue; label: string; disabled?: boolean }[] = [
+          { id: "pix_pendente", label: "Falta receber Pix" },
+          { id: "dinheiro_pendente", label: "Falta receber Dinheiro" },
+          { id: "dinheiro_com_vendedor", label: sellerName ? `Dinheiro com ${sellerName}` : "Dinheiro com vendedor", disabled: !sellerName },
+          { id: "pendente", label: "Falta receber (a definir)" },
+        ];
+        const opts = isPending ? pendingOpts : paidOpts;
+        const currentValid = opts.some(o => o.id === form.paymentMethod && !o.disabled);
+        if (!currentValid) {
+          const fallback = opts.find(o => !o.disabled)?.id ?? "pix";
+          if (form.paymentMethod !== fallback) {
+            setTimeout(() => setForm(f => ({ ...f, paymentMethod: fallback })), 0);
+          }
+        }
+        return (
+          <div>
+            <Label className="mb-2 block">Forma de Pagamento</Label>
+            <div className={cn("grid gap-2", isPending ? "grid-cols-2" : "grid-cols-2")}>
+              {opts.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={opt.disabled}
+                  onClick={() => !opt.disabled && setForm(f => ({ ...f, paymentMethod: opt.id }))}
+                  className={cn(
+                    "px-3 py-2 rounded-md text-sm font-medium border transition text-left",
+                    form.paymentMethod === opt.id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-secondary text-muted-foreground border-border hover:text-foreground",
+                    opt.disabled && "opacity-40 cursor-not-allowed hover:text-muted-foreground"
+                  )}
+                  title={opt.disabled ? "Selecione um vendedor para usar esta opção" : undefined}
+                >{opt.label}</button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
         <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-warning/10" : "bg-secondary/50")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
@@ -453,12 +481,20 @@ export default function SalesPage() {
               <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-warning" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
               {!isRet && (
                 <td className="py-2.5 px-3 text-center">
-                  {s.paymentMethod ? (
-                    <span className={cn(
-                      "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                      s.paymentMethod === "pix" ? "bg-primary/10 text-primary" : "bg-income/10 text-income"
-                    )}>{s.paymentMethod === "pix" ? "Pix" : "Dinheiro"}</span>
-                  ) : <span className="text-muted-foreground/50 text-[11px]">—</span>}
+                  {(() => {
+                    if (!s.paymentMethod) return <span className="text-muted-foreground/50 text-[11px]">—</span>;
+                    const pm = s.paymentMethod;
+                    const map: Record<string, { label: string; cls: string }> = {
+                      pix: { label: "Pix", cls: "bg-primary/10 text-primary" },
+                      dinheiro: { label: "Dinheiro", cls: "bg-income/10 text-income" },
+                      pix_pendente: { label: "Falta Pix", cls: "bg-warning/15 text-warning" },
+                      dinheiro_pendente: { label: "Falta Dinheiro", cls: "bg-warning/15 text-warning" },
+                      dinheiro_com_vendedor: { label: `Dinheiro c/ ${s.sellerId ? getSellerName(s.sellerId) : "vendedor"}`, cls: "bg-warning/15 text-warning" },
+                      pendente: { label: "Falta receber", cls: "bg-muted text-muted-foreground" },
+                    };
+                    const info = map[pm] ?? { label: pm, cls: "bg-muted text-muted-foreground" };
+                    return <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium", info.cls)}>{info.label}</span>;
+                  })()}
                 </td>
               )}
               {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
