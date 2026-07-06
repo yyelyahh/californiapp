@@ -1,23 +1,62 @@
 ## Objetivo
 
-Transformar a homepage (`/`) em um indicador puro de estoque, sem CTAs de marketing (WhatsApp, "Falar no WhatsApp"), e permitir acessar esse catálogo mesmo estando logado dentro do sistema.
+Ampliar as opções de forma de pagamento no registro de venda: quando a venda é **pendente** (paidAmount < total), oferecer 4 opções em vez de 2. Quando a venda é registrada como **paga**, manter apenas Pix / Dinheiro.
+
+## Novas opções (venda pendente)
+
+1. `pix_pendente` — "Falta receber Pix"
+2. `dinheiro_pendente` — "Falta receber Dinheiro"
+3. `dinheiro_com_vendedor` — "Dinheiro com {nome do vendedor}" (cliente já pagou ao vendedor; continua em aberto do ponto de vista do admin, é dívida do vendedor)
+4. `pendente` — "Falta receber (sem especificação)"
+
+Para venda **paga**, mantém: `pix` / `dinheiro`.
 
 ## Mudanças
 
-### 1. `src/pages/LandingPage.tsx` — limpar marketing
-- Remover o botão verde "Falar no WhatsApp" da hero.
-- Remover o botão flutuante do WhatsApp (canto inferior direito) e o ícone `MessageCircle` do import.
-- Manter apenas: header, badge "Catálogo ao vivo", título, subtítulo, botão "Ver Catálogo", stats, seção Marcas, seção Catálogo, footer.
-- No header, quando o usuário estiver logado, o botão "Painel" continua levando ao app; adicionar também um link discreto "Voltar ao painel" no footer para reforçar (opcional, o botão do header já resolve).
+### 1. Tipos (`src/types/index.ts`)
+Estender `PaymentMethod`:
+```ts
+export type PaymentMethod =
+  | "pix" | "dinheiro"
+  | "pix_pendente" | "dinheiro_pendente"
+  | "dinheiro_com_vendedor" | "pendente";
+```
+A coluna `payment_method` (text) já aceita qualquer valor — nenhuma migração necessária.
 
-### 2. Acesso ao catálogo estando logado
-Hoje `AuthGate` redireciona `/login` quando logado, mas `/` (LandingPage) já é pública e funciona logado — o problema é que não há entrada visível para ela dentro do app.
+### 2. Formulário de venda (`src/pages/SalesPage.tsx`)
+- Detectar `isPending = Number(paidAmount) < Number(total)` no form.
+- Renderizar dinamicamente os botões de método:
+  - Se paga → Pix / Dinheiro (como hoje).
+  - Se pendente → 4 botões (Falta Pix, Falta Dinheiro, Dinheiro c/ vendedor, Falta receber).
+- Se o usuário alterna paid ↔ pendente e o método atual não pertence ao novo conjunto, resetar para o primeiro válido (`pix` ou `pix_pendente`).
+- A opção "Dinheiro com vendedor" só fica habilitada quando um vendedor está selecionado no form; caso contrário mostra tooltip/estado desabilitado.
 
-- Adicionar item **"Catálogo"** (ícone `Boxes` ou `Sparkles`) na navegação lateral e no menu mobile do `AppLayout.tsx`, disponível para admin e vendedor, apontando para `/` (rota externa ao layout, abre a LandingPage).
-- Como `/` fica fora do `ProtectedRoutes`, o `NavLink` usará `to="/"` normalmente; a LandingPage já detecta `user` e mostra "Painel" no header, permitindo voltar.
+### 3. Exibição na tabela de vendas (`src/pages/SalesPage.tsx`, coluna "Pagto")
+Ampliar o mapeamento de rótulos e cores:
+- `pix` → "Pix" (primary)
+- `dinheiro` → "Dinheiro" (income)
+- `pix_pendente` → "Falta Pix" (muted/warning)
+- `dinheiro_pendente` → "Falta Dinheiro" (muted/warning)
+- `dinheiro_com_vendedor` → "Dinheiro c/ {vendedor}" (warning)
+- `pendente` → "Falta receber" (muted)
 
-### 3. Sem mudanças em backend, tipos ou lógica de negócio.
+### 4. Relatório WhatsApp (`src/components/SellerReportDrawer.tsx`)
+Na seção de vendas em aberto, substituir a lógica atual de `💠 PIX` / `💵 DINHEIRO` por texto puro (sem emojis extras) conforme o método:
+- `pix_pendente` ou `pix` → `Pix`
+- `dinheiro_pendente` ou `dinheiro` → `Dinheiro`
+- `dinheiro_com_vendedor` → `Dinheiro com {nome do vendedor}`
+- `pendente` ou ausente → `A definir`
+
+Formato final da linha:
+```
+• 27/06 • Strawberry Watermelon · Ice King 40K • Em aberto R$ 159,00 · Dinheiro com João
+```
+
+### 5. Compatibilidade
+- Vendas antigas com `pix`/`dinheiro` continuam funcionando.
+- Nenhuma mudança em cálculo de comissão, estoque ou dívidas — apenas rótulos/tracking do método.
 
 ## Arquivos afetados
-- `src/pages/LandingPage.tsx`
-- `src/components/AppLayout.tsx`
+- `src/types/index.ts`
+- `src/pages/SalesPage.tsx`
+- `src/components/SellerReportDrawer.tsx`
