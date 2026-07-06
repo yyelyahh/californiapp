@@ -279,7 +279,21 @@ export default function SellerReportDrawer({
       lines.push(``);
       report.allOpenSales.forEach(s => {
         const dt = format(parseISO(s.when), "dd/MM");
-        const pm = s.paymentMethod === "pix" ? " 💠 PIX" : s.paymentMethod === "dinheiro" ? " 💵 DINHEIRO" : "";
+        let pm = "";
+        switch (s.paymentMethod) {
+          case "pix":
+          case "pix_pendente":
+            pm = " · Pix"; break;
+          case "dinheiro":
+          case "dinheiro_pendente":
+            pm = " · Dinheiro"; break;
+          case "dinheiro_com_vendedor":
+            pm = ` · Dinheiro com ${seller.name}`; break;
+          case "pendente":
+            pm = " · A definir"; break;
+          default:
+            pm = "";
+        }
         lines.push(`• ${dt} • ${s.name} • Em aberto ${fmt(s.open)}${pm}`);
       });
     }
