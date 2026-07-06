@@ -211,7 +211,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
     sellerId: r.seller_id || undefined,
     type: (r.type === "retirada_funcionario" ? "retirada_funcionario" : "venda"),
-    paymentMethod: (r.payment_method === "pix" || r.payment_method === "dinheiro") ? r.payment_method : undefined,
+    paymentMethod: (["pix","dinheiro","pix_pendente","dinheiro_pendente","dinheiro_com_vendedor","pendente"].includes(r.payment_method)) ? r.payment_method : undefined,
   });
 
   const mapSeller = (r: any): Seller => ({
