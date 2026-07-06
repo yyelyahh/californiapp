@@ -134,16 +134,8 @@ export default function LandingPage() {
                 Ver Catálogo
               </a>
             </Button>
-            <Button
-              asChild
-              className="gap-2 h-11 px-6 bg-green-600 hover:bg-green-700 text-white border-0"
-            >
-              <a href="https://wa.me/5551997141255" target="_blank" rel="noopener noreferrer">
-                <MessageCircle size={16} />
-                Falar no WhatsApp
-              </a>
-            </Button>
           </div>
+
 
           <div className="grid grid-cols-3 gap-3 md:gap-6 max-w-2xl mx-auto">
             {[
