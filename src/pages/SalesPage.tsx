@@ -481,12 +481,20 @@ export default function SalesPage() {
               <td className={cn("py-2.5 px-3 text-right mono text-sm font-semibold", isRet ? "text-warning" : "text-foreground")}>{formatCurrency(s.totalPrice)}</td>
               {!isRet && (
                 <td className="py-2.5 px-3 text-center">
-                  {s.paymentMethod ? (
-                    <span className={cn(
-                      "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                      s.paymentMethod === "pix" ? "bg-primary/10 text-primary" : "bg-income/10 text-income"
-                    )}>{s.paymentMethod === "pix" ? "Pix" : "Dinheiro"}</span>
-                  ) : <span className="text-muted-foreground/50 text-[11px]">—</span>}
+                  {(() => {
+                    if (!s.paymentMethod) return <span className="text-muted-foreground/50 text-[11px]">—</span>;
+                    const pm = s.paymentMethod;
+                    const map: Record<string, { label: string; cls: string }> = {
+                      pix: { label: "Pix", cls: "bg-primary/10 text-primary" },
+                      dinheiro: { label: "Dinheiro", cls: "bg-income/10 text-income" },
+                      pix_pendente: { label: "Falta Pix", cls: "bg-warning/15 text-warning" },
+                      dinheiro_pendente: { label: "Falta Dinheiro", cls: "bg-warning/15 text-warning" },
+                      dinheiro_com_vendedor: { label: `Dinheiro c/ ${s.sellerId ? getSellerName(s.sellerId) : "vendedor"}`, cls: "bg-warning/15 text-warning" },
+                      pendente: { label: "Falta receber", cls: "bg-muted text-muted-foreground" },
+                    };
+                    const info = map[pm] ?? { label: pm, cls: "bg-muted text-muted-foreground" };
+                    return <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium", info.cls)}>{info.label}</span>;
+                  })()}
                 </td>
               )}
               {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
