@@ -186,8 +186,46 @@ export default function SellerReportDrawer({
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date))
       .reduce((a, p) => a + p.amount, 0);
-    // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
-    const commBalance = c.accrued - saldoConsumo + debtPaymentsTotal - commPaidPeriod;
+
+    // === Saldo trazido de períodos anteriores (antes de `start`) ===
+    // Mesma fórmula, agrupando vendas modernas por mês para aplicar a faixa correta.
+    const beforeStart = (iso: string) => {
+      try { return parseISO(iso).getTime() < start.getTime(); } catch { return false; }
+    };
+    const priorSales = sales.filter(s => s.sellerId === seller.id && beforeStart(s.date));
+    const priorVendas = priorSales.filter(s => s.type === "venda");
+    const priorRetiradas = priorSales.filter(s => s.type === "retirada_funcionario");
+    const priorPaidVendas = priorVendas.filter(s => (s.paidAmount || 0) >= s.totalPrice - 0.01);
+    const monthKey = (iso: string) => { const d = parseISO(iso); return `${d.getFullYear()}-${d.getMonth()}`; };
+    const monthlyGroups = new Map<string, typeof priorPaidVendas>();
+    priorPaidVendas.forEach(s => {
+      const k = monthKey(s.date);
+      const arr = monthlyGroups.get(k) || [];
+      arr.push(s); monthlyGroups.set(k, arr);
+    });
+    let priorAccrued = 0;
+    monthlyGroups.forEach(group => {
+      const legacyG = group.filter(s => isLegacy(s.date));
+      const modernG = group.filter(s => !isLegacy(s.date));
+      const modernUnits = modernG.reduce((a, s) => a + s.quantity, 0);
+      const tierM = getTierForUnits(modernUnits);
+      priorAccrued += modernG.reduce((a, s) => a + s.totalPrice * tierM.rate, 0);
+      priorAccrued += legacyG.reduce((a, s) => a + s.totalPrice * 0.10, 0);
+    });
+    const priorConsumo =
+      priorRetiradas.reduce((a, s) => a + s.totalPrice, 0) +
+      sellerManualDebts.filter(d => d.sellerId === seller.id && beforeStart(d.date)).reduce((a, d) => a + d.amount, 0);
+    const priorDebtPayments = sellerDebtPayments
+      .filter(p => p.sellerId === seller.id && beforeStart(p.date))
+      .reduce((a, p) => a + p.amount, 0);
+    const priorCommPaid = commissionPayments
+      .filter(p => p.sellerId === seller.id && beforeStart(p.date))
+      .reduce((a, p) => a + p.amount, 0);
+    const previousBalance = priorAccrued - priorConsumo + priorDebtPayments - priorCommPaid;
+
+    // Saldo do período + saldo trazido
+    const periodBalance = c.accrued - saldoConsumo + debtPaymentsTotal - commPaidPeriod;
+    const commBalance = periodBalance + previousBalance;
 
     type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
@@ -233,6 +271,7 @@ export default function SellerReportDrawer({
       tier: c.tier, accrued: c.accrued, commPaidPeriod, commBalance, movs,
       consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
       allOpenSales, allOpenAmount,
+      previousBalance, periodBalance,
     };
   }, [seller, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, start, end, getProductName]);
 
@@ -258,6 +297,10 @@ export default function SellerReportDrawer({
     lines.push(`• (−) Comissão já paga: ${fmt(report.commPaidPeriod)}`);
     if (report.debtPaymentsTotal > 0) {
       lines.push(`• (+) Pagamentos de dívida: ${fmt(report.debtPaymentsTotal)}`);
+    }
+    if (Math.abs(report.previousBalance) > 0.005) {
+      const sign = report.previousBalance >= 0 ? "+" : "−";
+      lines.push(`• (${sign}) Saldo anterior: ${fmt(Math.abs(report.previousBalance))}`);
     }
     lines.push(`──────────────────────────────`);
     lines.push(`• Saldo a receber: ${fmt(report.commBalance)}`);
@@ -392,6 +435,14 @@ export default function SellerReportDrawer({
               <SummaryRow label="Pagamentos de dívida" value={fmt(report.debtPaymentsTotal)} tone="income" sign="+" />
             )}
             <SummaryRow label="Comissão paga" value={fmt(report.commPaidPeriod)} tone={report.commPaidPeriod > 0 ? "warning" : "muted"} sign="−" />
+            {Math.abs(report.previousBalance) > 0.005 && (
+              <SummaryRow
+                label="Saldo anterior"
+                value={fmt(Math.abs(report.previousBalance))}
+                tone={report.previousBalance >= 0 ? "income" : "warning"}
+                sign={report.previousBalance >= 0 ? "+" : "−"}
+              />
+            )}
             <div className="border-t border-border/40 pt-2 mt-1 flex items-center justify-between">
               <span className="font-semibold">Saldo final</span>
               <span className={cn("mono font-bold", report.commBalance >= 0 ? "text-income" : "text-expense")}>
