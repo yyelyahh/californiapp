@@ -435,6 +435,14 @@ export default function SellerReportDrawer({
               <SummaryRow label="Pagamentos de dívida" value={fmt(report.debtPaymentsTotal)} tone="income" sign="+" />
             )}
             <SummaryRow label="Comissão paga" value={fmt(report.commPaidPeriod)} tone={report.commPaidPeriod > 0 ? "warning" : "muted"} sign="−" />
+            {Math.abs(report.previousBalance) > 0.005 && (
+              <SummaryRow
+                label="Saldo anterior"
+                value={fmt(Math.abs(report.previousBalance))}
+                tone={report.previousBalance >= 0 ? "income" : "warning"}
+                sign={report.previousBalance >= 0 ? "+" : "−"}
+              />
+            )}
             <div className="border-t border-border/40 pt-2 mt-1 flex items-center justify-between">
               <span className="font-semibold">Saldo final</span>
               <span className={cn("mono font-bold", report.commBalance >= 0 ? "text-income" : "text-expense")}>
