@@ -298,6 +298,10 @@ export default function SellerReportDrawer({
     if (report.debtPaymentsTotal > 0) {
       lines.push(`• (+) Pagamentos de dívida: ${fmt(report.debtPaymentsTotal)}`);
     }
+    if (Math.abs(report.previousBalance) > 0.005) {
+      const sign = report.previousBalance >= 0 ? "+" : "−";
+      lines.push(`• (${sign}) Saldo anterior: ${fmt(Math.abs(report.previousBalance))}`);
+    }
     lines.push(`──────────────────────────────`);
     lines.push(`• Saldo a receber: ${fmt(report.commBalance)}`);
     if (report.consumoBreakdown.length) {
