@@ -718,8 +718,17 @@ export default function CommissionsPage() {
               </div>
             )}
             <SheetFooter className="px-0">
-              <Button type="submit" className="w-full h-10" disabled={assignSelectedCount === 0 || availableProducts.length === 0}>
-                Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}
+              <Button type="submit" className="w-full h-10" disabled={assignSubmitting || assignSelectedCount === 0 || availableProducts.length === 0}>
+                {assignSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    Atribuindo…
+                  </span>
+                ) : (
+                  <>Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}</>
+                )}
+              </Button>
+            </SheetFooter>
               </Button>
             </SheetFooter>
           </form>
