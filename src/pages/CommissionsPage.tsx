@@ -220,6 +220,7 @@ export default function CommissionsPage() {
   const [manualDebtDrawer, setManualDebtDrawer] = useState<boolean>(false);
   const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
   const [assignOpen, setAssignOpen] = useState(false);
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferForm, setTransferForm] = useState<{ fromSellerId: string; assignmentId: string; toSellerId: string; quantity: string }>({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
@@ -243,14 +244,20 @@ export default function CommissionsPage() {
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (assignSubmitting) return;
     if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
-    for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
-      const p = availableProducts.find(x => x.id === productId);
-      const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
-      if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
+    setAssignSubmitting(true);
+    try {
+      for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
+        const p = availableProducts.find(x => x.id === productId);
+        const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
+        if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
+      }
+      setAssignForm({ sellerId: "", selectedProducts: {} });
+      setAssignOpen(false);
+    } finally {
+      setAssignSubmitting(false);
     }
-    setAssignForm({ sellerId: "", selectedProducts: {} });
-    setAssignOpen(false);
   };
 
   const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
@@ -711,8 +718,15 @@ export default function CommissionsPage() {
               </div>
             )}
             <SheetFooter className="px-0">
-              <Button type="submit" className="w-full h-10" disabled={assignSelectedCount === 0 || availableProducts.length === 0}>
-                Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}
+              <Button type="submit" className="w-full h-10" disabled={assignSubmitting || assignSelectedCount === 0 || availableProducts.length === 0}>
+                {assignSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    Atribuindo…
+                  </span>
+                ) : (
+                  <>Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}</>
+                )}
               </Button>
             </SheetFooter>
           </form>
