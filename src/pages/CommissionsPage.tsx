@@ -244,14 +244,20 @@ export default function CommissionsPage() {
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (assignSubmitting) return;
     if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
-    for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
-      const p = availableProducts.find(x => x.id === productId);
-      const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
-      if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
+    setAssignSubmitting(true);
+    try {
+      for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
+        const p = availableProducts.find(x => x.id === productId);
+        const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
+        if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
+      }
+      setAssignForm({ sellerId: "", selectedProducts: {} });
+      setAssignOpen(false);
+    } finally {
+      setAssignSubmitting(false);
     }
-    setAssignForm({ sellerId: "", selectedProducts: {} });
-    setAssignOpen(false);
   };
 
   const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
