@@ -729,8 +729,6 @@ export default function CommissionsPage() {
                 )}
               </Button>
             </SheetFooter>
-              </Button>
-            </SheetFooter>
           </form>
         </SheetContent>
       </Sheet>
