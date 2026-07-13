@@ -372,23 +372,35 @@ export default function CommissionsPage() {
         </Select>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — Distribuição do dinheiro */}
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-        <KPI icon={<TrendingUp size={14} />} label="Lucro Líquido" value={formatCurrency(periodMetrics.netProfit)} tone={periodMetrics.netProfit >= 0 ? "income" : "expense"} />
-        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Soma dos saldos positivos" />
-        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="warning" sub="No período" />
-        <div className="rounded-xl p-[1px] bg-gradient-to-br from-primary/60 via-primary/20 to-transparent">
+        <KPI icon={<TrendingUp size={14} />} label="Lucro Líquido" value={formatCurrency(periodMetrics.netProfit)} tone={periodMetrics.netProfit >= 0 ? "income" : "expense"} sub="Receita − compras − despesas" />
+        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Comissões pendentes" />
+        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="fixed" sub="No período" />
+        <div className={cn(
+          "rounded-xl p-[1px] bg-gradient-to-br",
+          periodMetrics.available >= 0 ? "from-income/60 via-income/20 to-transparent" : "from-expense/60 via-expense/20 to-transparent"
+        )}>
           <div className="rounded-xl bg-card px-3 py-3 h-full">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              <Sparkles size={14} className="text-primary" /> Saldo Disponível
+              <Sparkles size={14} className={periodMetrics.available >= 0 ? "text-income" : "text-expense"} /> Saldo Disponível
             </div>
-            <p className={cn("mt-1 text-lg sm:text-xl font-semibold mono", periodMetrics.available >= 0 ? "text-foreground" : "text-expense")}>
+            <p className={cn("mt-1 text-lg sm:text-xl font-semibold mono", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>
               {formatCurrency(periodMetrics.available)}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Lucro − vendedores − retiradas</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Lucro − comissões − retiradas</p>
           </div>
         </div>
       </div>
+
+      {/* Distribuição do Lucro */}
+      <ProfitDistribution
+        netProfit={periodMetrics.netProfit}
+        pendingCommissions={periodMetrics.totalSellerBalance}
+        withdrawals={periodMetrics.totalWithdrawalsPeriod}
+        available={periodMetrics.available}
+      />
+
 
       {/* Vendedores */}
       <div className="space-y-3">
