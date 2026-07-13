@@ -306,9 +306,19 @@ export default function CommissionsPage() {
   };
   const submitWd = async () => {
     if (!wdDrawer || !Number(wdForm.amount)) return;
+    const amt = Number(wdForm.amount);
+    if (amt > periodMetrics.available + 0.005) {
+      const ok = await confirm({
+        title: "Retirada acima do saldo disponível",
+        description: `Saldo disponível: ${formatCurrency(periodMetrics.available)}\nValor: ${formatCurrency(amt)}\n\nO saldo ficará negativo. Deseja continuar?`,
+        confirmText: "Registrar mesmo assim",
+        destructive: false,
+      });
+      if (!ok) return;
+    }
     await addWithdrawal({
       partnerId: wdDrawer.partnerId,
-      amount: Number(wdForm.amount),
+      amount: amt,
       date: localDateToISO(wdForm.date),
       notes: wdForm.notes || undefined,
     });
