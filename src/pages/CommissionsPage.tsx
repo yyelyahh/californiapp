@@ -224,6 +224,7 @@ export default function CommissionsPage() {
   const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferForm, setTransferForm] = useState<{ fromSellerId: string; assignmentId: string; toSellerId: string; quantity: string }>({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
+  const [timelineFilter, setTimelineFilter] = useState<"all" | "commission" | "withdrawal">("all");
 
   const availableProducts = useMemo(() => {
     return products
@@ -305,9 +306,19 @@ export default function CommissionsPage() {
   };
   const submitWd = async () => {
     if (!wdDrawer || !Number(wdForm.amount)) return;
+    const amt = Number(wdForm.amount);
+    if (amt > periodMetrics.available + 0.005) {
+      const ok = await confirm({
+        title: "Retirada acima do saldo disponível",
+        description: `Saldo disponível: ${formatCurrency(periodMetrics.available)}\nValor: ${formatCurrency(amt)}\n\nO saldo ficará negativo. Deseja continuar?`,
+        confirmText: "Registrar mesmo assim",
+        destructive: false,
+      });
+      if (!ok) return;
+    }
     await addWithdrawal({
       partnerId: wdDrawer.partnerId,
-      amount: Number(wdForm.amount),
+      amount: amt,
       date: localDateToISO(wdForm.date),
       notes: wdForm.notes || undefined,
     });
@@ -361,23 +372,35 @@ export default function CommissionsPage() {
         </Select>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — Distribuição do dinheiro */}
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-        <KPI icon={<TrendingUp size={14} />} label="Lucro Líquido" value={formatCurrency(periodMetrics.netProfit)} tone={periodMetrics.netProfit >= 0 ? "income" : "expense"} />
-        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Soma dos saldos positivos" />
-        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="warning" sub="No período" />
-        <div className="rounded-xl p-[1px] bg-gradient-to-br from-primary/60 via-primary/20 to-transparent">
+        <KPI icon={<TrendingUp size={14} />} label="Lucro Líquido" value={formatCurrency(periodMetrics.netProfit)} tone={periodMetrics.netProfit >= 0 ? "income" : "expense"} sub="Receita − compras − despesas" />
+        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Comissões pendentes" />
+        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="fixed" sub="No período" />
+        <div className={cn(
+          "rounded-xl p-[1px] bg-gradient-to-br",
+          periodMetrics.available >= 0 ? "from-income/60 via-income/20 to-transparent" : "from-expense/60 via-expense/20 to-transparent"
+        )}>
           <div className="rounded-xl bg-card px-3 py-3 h-full">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              <Sparkles size={14} className="text-primary" /> Saldo Disponível
+              <Sparkles size={14} className={periodMetrics.available >= 0 ? "text-income" : "text-expense"} /> Saldo Disponível
             </div>
-            <p className={cn("mt-1 text-lg sm:text-xl font-semibold mono", periodMetrics.available >= 0 ? "text-foreground" : "text-expense")}>
+            <p className={cn("mt-1 text-lg sm:text-xl font-semibold mono", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>
               {formatCurrency(periodMetrics.available)}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Lucro − vendedores − retiradas</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Lucro − comissões − retiradas</p>
           </div>
         </div>
       </div>
+
+      {/* Distribuição do Lucro */}
+      <ProfitDistribution
+        netProfit={periodMetrics.netProfit}
+        pendingCommissions={periodMetrics.totalSellerBalance}
+        withdrawals={periodMetrics.totalWithdrawalsPeriod}
+        available={periodMetrics.available}
+      />
+
 
       {/* Vendedores */}
       <div className="space-y-3">
@@ -479,32 +502,47 @@ export default function CommissionsPage() {
         )}
       </div>
 
-      {/* Retiradas dos Sócios — compacto */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">
+      {/* Retiradas dos Sócios — cards individuais */}
+      <div className="space-y-3">
+        <div className="flex items-end justify-between gap-2 border-b border-border pb-2">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Retiradas dos Sócios</h2>
-            <p className="text-[11px] text-muted-foreground">Valores retirados no período</p>
+            <p className="text-[11px] text-muted-foreground">Registre a retirada de cada sócio no período</p>
           </div>
         </div>
         {periodMetrics.perPartner.length === 0 ? (
-          <p className="px-4 py-5 text-xs text-muted-foreground">Nenhum sócio cadastrado.</p>
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-xs text-muted-foreground">
+            Nenhum sócio cadastrado.
+          </div>
         ) : (
-          <div className="divide-y divide-border/40">
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
             {periodMetrics.perPartner.map(r => (
-              <div key={r.partner.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{r.partner.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Sócio · {r.partner.percentage}%{r.count > 0 ? ` · ${r.count} no período` : ""}
-                  </p>
+              <div key={r.partner.id} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{r.partner.name}</p>
+                    <p className="text-[11px] text-muted-foreground">Sócio · {r.partner.percentage}%</p>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-fixed/10 flex items-center justify-center shrink-0">
+                    <Users size={14} className="text-fixed" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-warning" : "text-muted-foreground")}>
-                    {formatCurrency(r.periodAmt)}
-                  </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">No período</p>
+                    <p className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-fixed" : "text-muted-foreground")}>{formatCurrency(r.periodAmt)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">No ano</p>
+                    <p className="mono text-sm font-medium">{formatCurrency(r.yearAmt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
+                  <p className="text-[11px] text-muted-foreground">
+                    {r.last ? `Última: ${formatDateBR(r.last.date)}` : "Nenhuma retirada"}
+                  </p>
                   <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => openWd(r.partner.id)}>
-                    <Plus size={11} className="mr-1" />Registrar
+                    <Plus size={11} className="mr-1" />Registrar retirada
                   </Button>
                 </div>
               </div>
@@ -513,55 +551,131 @@ export default function CommissionsPage() {
         )}
       </div>
 
-      {/* Histórico Financeiro — timeline */}
+      {/* Histórico Financeiro — timeline com filtros */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-border">
-          <Clock size={14} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold tracking-tight">Histórico Financeiro</h2>
-        </div>
-        {Object.keys(timeline).length === 0 ? (
-          <div className="flex items-start gap-2.5 px-4 py-5">
-            <Inbox size={14} className="text-muted-foreground mt-0.5 shrink-0" />
-            <div>
-              <p className="text-xs text-foreground">Nenhum pagamento registrado ainda.</p>
-              <p className="text-[11px] text-muted-foreground">Pagamentos a vendedores e retiradas dos sócios aparecerão aqui.</p>
-            </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Clock size={14} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold tracking-tight">Histórico Financeiro</h2>
           </div>
-        ) : (
-          <div className="divide-y divide-border/40">
-            {Object.entries(timeline).map(([day, items]) => (
-              <div key={day} className="px-3.5 py-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">{day}</div>
-                <div className="space-y-0.5">
-                  {items.map(it => (
-                    <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-secondary/40 transition-colors group/hist">
-                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", it.kind === "commission" ? "bg-warning" : "bg-fixed")} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] truncate">
-                          <span className="text-muted-foreground">{it.kind === "commission" ? "Pagamento de Comissão" : "Retirada Sócio"}</span>{" · "}
-                          <span className="font-medium">{it.who}</span>
-                        </p>
-                        {it.notes && <p className="text-[11px] text-muted-foreground truncate">{it.notes}</p>}
-                      </div>
-                      <span className="mono text-[13px] font-semibold">{formatCurrency(it.amount)}</span>
-                      <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
-                      <button
-                        onClick={async () => {
-                          const ok = await confirm({ title: "Excluir registro", description: it.kind === "commission" ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?" });
-                          if (!ok) return;
-                          it.kind === "commission" ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id);
-                        }}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1 opacity-0 group-hover/hist:opacity-100"
-                        aria-label="Excluir"
-                      ><Trash2 size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div className="flex items-center gap-1 rounded-lg bg-secondary/60 p-0.5">
+            {([
+              { k: "all", label: "Tudo" },
+              { k: "withdrawal", label: "Retiradas" },
+              { k: "commission", label: "Comissões" },
+            ] as const).map(t => (
+              <button
+                key={t.k}
+                onClick={() => setTimelineFilter(t.k)}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                  timelineFilter === t.k ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >{t.label}</button>
             ))}
           </div>
-        )}
+        </div>
+        {(() => {
+          const filteredGroups: Record<string, any[]> = {};
+          Object.entries(timeline).forEach(([day, items]) => {
+            const filtered = items.filter(it => timelineFilter === "all" ? true : it.kind === timelineFilter);
+            if (filtered.length > 0) filteredGroups[day] = filtered;
+          });
+          if (Object.keys(filteredGroups).length === 0) {
+            return (
+              <div className="flex items-start gap-2.5 px-4 py-5">
+                <Inbox size={14} className="text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs text-foreground">Nenhum registro no filtro atual.</p>
+                  <p className="text-[11px] text-muted-foreground">Retiradas e comissões pagas aparecerão aqui.</p>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="divide-y divide-border/40">
+              {Object.entries(filteredGroups).map(([day, items]) => (
+                <div key={day} className="px-3.5 py-2.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">{day}</div>
+                  <div className="space-y-0.5">
+                    {items.map(it => {
+                      const isCommission = it.kind === "commission";
+                      return (
+                        <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-secondary/40 transition-colors group/hist">
+                          <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center shrink-0",
+                            isCommission ? "bg-warning/15 text-warning" : "bg-fixed/15 text-fixed"
+                          )}>
+                            {isCommission ? <Wallet size={12} /> : <Users size={12} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] truncate">
+                              <span className="text-muted-foreground">{isCommission ? "Comissão paga" : "Retirada"}</span>{" · "}
+                              <span className="font-medium">{it.who}</span>
+                            </p>
+                            {it.notes && <p className="text-[11px] text-muted-foreground truncate">{it.notes}</p>}
+                          </div>
+                          <span className={cn("mono text-[13px] font-semibold", isCommission ? "text-warning" : "text-fixed")}>
+                            −{formatCurrency(it.amount)}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({ title: "Excluir registro", description: isCommission ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?" });
+                              if (!ok) return;
+                              isCommission ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id);
+                            }}
+                            className="text-muted-foreground hover:text-destructive transition-colors p-1 opacity-0 group-hover/hist:opacity-100"
+                            aria-label="Excluir"
+                          ><Trash2 size={12} /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
+
+      {/* Insights */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp size={14} className="text-primary" />
+          <h2 className="text-sm font-semibold tracking-tight">Insights · {label}</h2>
+        </div>
+        <ul className="space-y-1.5 text-[13px]">
+          <li className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-income shrink-0" />
+            <span className="text-muted-foreground">Lucro líquido:</span>
+            <span className={cn("mono font-semibold", periodMetrics.netProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.netProfit)}</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
+            <span className="text-muted-foreground">
+              {periodMetrics.totalSellerBalance > 0.01
+                ? <>Comissões pendentes aos vendedores: <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span></>
+                : <>Nenhuma comissão pendente aos vendedores.</>}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
+            <span className="text-muted-foreground">
+              {periodMetrics.totalWithdrawalsPeriod > 0.01
+                ? <>Sócios retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no período</>
+                : <>Nenhuma retirada dos sócios no período.</>}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Sparkles size={12} className={periodMetrics.available >= 0 ? "text-income" : "text-expense"} />
+            <span className="text-muted-foreground">Permanecem</span>
+            <span className={cn("mono font-semibold", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.available)}</span>
+            <span className="text-muted-foreground">disponíveis em caixa</span>
+          </li>
+        </ul>
+      </div>
+
 
 
       {/* Drawer Pagar Vendedor */}
@@ -817,7 +931,7 @@ export default function CommissionsPage() {
   );
 }
 
-function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: "income" | "expense" | "warning" }) {
+function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: "income" | "expense" | "warning" | "fixed" }) {
   return (
     <div className="rounded-xl border border-border bg-card px-3 py-3 min-w-0">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
@@ -825,6 +939,7 @@ function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: 
           tone === "income" && "text-income",
           tone === "expense" && "text-expense",
           tone === "warning" && "text-warning",
+          tone === "fixed" && "text-fixed",
         )}>{icon}</span>
         {label}
       </div>
@@ -832,11 +947,80 @@ function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: 
         "mt-1 text-lg sm:text-xl font-semibold mono break-all",
         tone === "expense" && "text-expense",
         tone === "income" && "text-income",
+        tone === "warning" && "text-warning",
+        tone === "fixed" && "text-fixed",
       )}>{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</p>}
     </div>
   );
 }
+
+function ProfitDistribution({ netProfit, pendingCommissions, withdrawals, available }: {
+  netProfit: number; pendingCommissions: number; withdrawals: number; available: number;
+}) {
+  const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+  const base = Math.max(0.0001, netProfit);
+  const pctAvail = Math.max(0, Math.min(100, (available / base) * 100));
+  const pctComm = Math.max(0, Math.min(100, (pendingCommissions / base) * 100));
+  const pctWd = Math.max(0, Math.min(100, (withdrawals / base) * 100));
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">Distribuição do Lucro</h2>
+          <p className="text-[11px] text-muted-foreground">Como o lucro do período está sendo repartido</p>
+        </div>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Ledger */}
+        <div className="space-y-1.5 text-[13px]">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Lucro Líquido</span>
+            <span className={cn("mono font-semibold", netProfit >= 0 ? "text-income" : "text-expense")}>{fmt(netProfit)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">(−) Comissões pendentes</span>
+            <span className="mono text-warning">−{fmt(pendingCommissions)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">(−) Retiradas dos sócios</span>
+            <span className="mono text-fixed">−{fmt(withdrawals)}</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
+            <span className="font-semibold">Saldo disponível</span>
+            <span className={cn("mono font-bold text-base", available >= 0 ? "text-income" : "text-expense")}>{fmt(available)}</span>
+          </div>
+        </div>
+        {/* Bar */}
+        <div className="flex flex-col justify-center gap-3">
+          <div className="h-3 w-full rounded-full overflow-hidden bg-secondary flex">
+            {available > 0 && <div className="bg-income h-full" style={{ width: `${pctAvail}%` }} />}
+            <div className="bg-warning h-full" style={{ width: `${pctComm}%` }} />
+            <div className="bg-fixed h-full" style={{ width: `${pctWd}%` }} />
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-[11px]">
+            <LegendItem color="bg-income" label="Disponível" value={fmt(Math.max(0, available))} />
+            <LegendItem color="bg-warning" label="Comissões" value={fmt(pendingCommissions)} />
+            <LegendItem color="bg-fixed" label="Retiradas" value={fmt(withdrawals)} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LegendItem({ color, label, value }: { color: string; label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5">
+        <span className={cn("w-2 h-2 rounded-full shrink-0", color)} />
+        <span className="text-muted-foreground truncate">{label}</span>
+      </div>
+      <p className="mono font-semibold text-[12px] mt-0.5 truncate">{value}</p>
+    </div>
+  );
+}
+
 
 function Line({ label, value, tone }: { label: string; value: string; tone?: "income" | "warning" | "muted" }) {
   return (
