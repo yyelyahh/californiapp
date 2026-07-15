@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss, CommissionPayment, ProLaborePayment } from "@/types";
+import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss, CommissionPayment, ProLaborePayment, PartnerContribution, Loan, LoanPayment, FinancialEvent, FinancialEventKind } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -76,6 +76,31 @@ interface StoreContextType {
   getSellerDebt: (id: string) => number;
   getSellerPaid: (id: string) => number;
   getSellerBalance: (id: string) => number;
+  // ---- Novo modelo financeiro ----
+  partnerContributions: PartnerContribution[];
+  loans: Loan[];
+  loanPayments: LoanPayment[];
+  financialEvents: FinancialEvent[];
+  addPartnerContribution: (c: Omit<PartnerContribution, "id" | "createdAt">) => Promise<void>;
+  deletePartnerContribution: (id: string) => Promise<void>;
+  addLoan: (l: Omit<Loan, "id" | "createdAt">) => Promise<void>;
+  updateLoan: (id: string, l: Partial<Loan>) => Promise<void>;
+  deleteLoan: (id: string) => Promise<void>;
+  addLoanPayment: (p: Omit<LoanPayment, "id" | "createdAt">) => Promise<void>;
+  deleteLoanPayment: (id: string) => Promise<void>;
+  refreshFinancialEvents: () => Promise<void>;
+  // Selectors do novo modelo (contabilidade simplificada)
+  getCash: () => number;
+  getInventoryCostValue: () => number;
+  getReceivables: () => number;
+  getPartnerCapital: () => number;
+  getLoansOutstanding: () => number;
+  getAccumulatedProfit: () => number;
+  getDistributedProfit: () => number;
+  getRetainedEarnings: () => number;
+  getDistributableProfit: (pendingCommissions?: number) => number;
+  getLoanPaid: (loanId: string) => number;
+  getLoanRemaining: (loanId: string) => number;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -96,6 +121,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [commissionPayments, setCommissionPayments] = useState<CommissionPayment[]>([]);
   const [proLaborePayments, setProLaborePayments] = useState<ProLaborePayment[]>([]);
+  const [partnerContributions, setPartnerContributions] = useState<PartnerContribution[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
+  const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -119,7 +148,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes] = await Promise.all([
+        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes, pcRes, loanRes, lpRes, feRes] = await Promise.all([
           fetchProductsList(),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -135,6 +164,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("commission_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("pro_labore_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("partner_contributions" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("loans" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("loan_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true }),
         ]) as any;
 
         setProducts(prodList);
@@ -152,6 +185,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
         if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
         if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
+        if (pcRes?.data) setPartnerContributions((pcRes.data as any[]).map(mapPartnerContribution));
+        if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
+        if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
+        if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
@@ -162,18 +199,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     fetchAll();
 
     // ---- Realtime sync: any change in shared tables refreshes the affected slice ----
+    const refetchFinancialEvents = async () => {
+      const { data } = await supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true });
+      if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+    };
     const channel = supabase
       .channel("store-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async () => {
         setProducts(await fetchProductsList());
+        refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, async () => {
         const { data } = await supabase.from("sales").select("*").order("created_at", { ascending: true });
         if (data) setSales(data.map(mapSale));
+        refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "stock_entries" }, async () => {
         const { data } = await supabase.from("stock_entries").select("*").order("created_at", { ascending: true });
         if (data) setStockEntries(data.map(mapStockEntry));
+        refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "product_assignments" }, async () => {
         const { data } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
@@ -186,7 +230,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, async () => {
         const { data } = await supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true });
         if (data) setStockLosses((data as any[]).map(mapStockLoss));
+        refetchFinancialEvents();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "partner_contributions" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_payments" }, refetchFinancialEvents)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -275,6 +326,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const mapProLaborePayment = (r: any): ProLaborePayment => ({
     id: r.id, partnerId: r.partner_id,
     amount: Number(r.amount), date: r.date, notes: r.notes,
+  });
+
+  const mapPartnerContribution = (r: any): PartnerContribution => ({
+    id: r.id, partnerId: r.partner_id, amount: Number(r.amount),
+    date: r.date, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapLoan = (r: any): Loan => ({
+    id: r.id, lenderName: r.lender_name,
+    principal: Number(r.principal), interestAmount: Number(r.interest_amount ?? 0),
+    receivedDate: r.received_date, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapLoanPayment = (r: any): LoanPayment => ({
+    id: r.id, loanId: r.loan_id,
+    principalAmount: Number(r.principal_amount ?? 0),
+    interestAmount: Number(r.interest_amount ?? 0),
+    date: r.date, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapFinancialEvent = (r: any): FinancialEvent => ({
+    id: r.id, kind: r.kind as FinancialEventKind,
+    date: r.event_date, createdAt: r.created_at,
+    description: r.description, amount: Number(r.amount),
+    cashDelta: Number(r.cash_delta), inventoryDelta: Number(r.inventory_delta),
+    receivableDelta: Number(r.receivable_delta), loanDelta: Number(r.loan_delta),
+    partnerCapitalDelta: Number(r.partner_capital_delta),
+    accumulatedProfitDelta: Number(r.accumulated_profit_delta),
+    distributedProfitDelta: Number(r.distributed_profit_delta),
+    refTable: r.ref_table, refId: r.ref_id, notes: r.notes ?? undefined,
   });
 
   // ---- Products ----
@@ -866,6 +947,109 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return getSellerDebt(id) - getSellerPaid(id);
   }, [getSellerPaid, getSellerDebt]);
 
+  // ---- Novo modelo financeiro ----
+  const refreshFinancialEvents = useCallback(async () => {
+    const { data } = await supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true });
+    if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+  }, []);
+
+  const addPartnerContribution = useCallback(async (c: Omit<PartnerContribution, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("partner_contributions" as any).insert({
+      partner_id: c.partnerId, amount: c.amount, date: c.date, notes: c.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar aporte"); return; }
+    setPartnerContributions(prev => [...prev, mapPartnerContribution(data)]);
+    await refreshFinancialEvents();
+    toast.success("Aporte registrado");
+  }, [refreshFinancialEvents]);
+
+  const deletePartnerContribution = useCallback(async (id: string) => {
+    const { error } = await supabase.from("partner_contributions" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir aporte"); return; }
+    setPartnerContributions(prev => prev.filter(x => x.id !== id));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const addLoan = useCallback(async (l: Omit<Loan, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("loans" as any).insert({
+      lender_name: l.lenderName, principal: l.principal,
+      interest_amount: l.interestAmount ?? 0,
+      received_date: l.receivedDate, notes: l.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar empréstimo"); return; }
+    setLoans(prev => [...prev, mapLoan(data)]);
+    await refreshFinancialEvents();
+    toast.success("Empréstimo registrado");
+  }, [refreshFinancialEvents]);
+
+  const updateLoan = useCallback(async (id: string, updates: Partial<Loan>) => {
+    const dbUpdates: any = {};
+    if (updates.lenderName !== undefined) dbUpdates.lender_name = updates.lenderName;
+    if (updates.principal !== undefined) dbUpdates.principal = updates.principal;
+    if (updates.interestAmount !== undefined) dbUpdates.interest_amount = updates.interestAmount;
+    if (updates.receivedDate !== undefined) dbUpdates.received_date = updates.receivedDate;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    const { error } = await supabase.from("loans" as any).update(dbUpdates).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar empréstimo"); return; }
+    setLoans(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const deleteLoan = useCallback(async (id: string) => {
+    const { error } = await supabase.from("loans" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir empréstimo"); return; }
+    setLoans(prev => prev.filter(x => x.id !== id));
+    setLoanPayments(prev => prev.filter(p => p.loanId !== id));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const addLoanPayment = useCallback(async (p: Omit<LoanPayment, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("loan_payments" as any).insert({
+      loan_id: p.loanId,
+      principal_amount: p.principalAmount ?? 0,
+      interest_amount: p.interestAmount ?? 0,
+      date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pagamento"); return; }
+    setLoanPayments(prev => [...prev, mapLoanPayment(data)]);
+    await refreshFinancialEvents();
+    toast.success("Pagamento registrado");
+  }, [refreshFinancialEvents]);
+
+  const deleteLoanPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("loan_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir pagamento"); return; }
+    setLoanPayments(prev => prev.filter(x => x.id !== id));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const getLoanPaid = useCallback((loanId: string) => {
+    return loanPayments.filter(p => p.loanId === loanId).reduce((s, p) => s + p.principalAmount + p.interestAmount, 0);
+  }, [loanPayments]);
+
+  const getLoanRemaining = useCallback((loanId: string) => {
+    const l = loans.find(x => x.id === loanId);
+    if (!l) return 0;
+    const total = l.principal + l.interestAmount;
+    return Math.max(0, total - getLoanPaid(loanId));
+  }, [loans, getLoanPaid]);
+
+  // ---- Selectors do razão (derivados de financial_events) ----
+  const sumDelta = (field: keyof FinancialEvent) =>
+    financialEvents.reduce((s, e) => s + (Number(e[field] as number) || 0), 0);
+
+  const getCash = useCallback(() => sumDelta("cashDelta"), [financialEvents]);
+  const getInventoryCostValue = useCallback(() => sumDelta("inventoryDelta"), [financialEvents]);
+  const getReceivables = useCallback(() => sumDelta("receivableDelta"), [financialEvents]);
+  const getPartnerCapital = useCallback(() => sumDelta("partnerCapitalDelta"), [financialEvents]);
+  const getLoansOutstanding = useCallback(() => sumDelta("loanDelta"), [financialEvents]);
+  const getAccumulatedProfit = useCallback(() => sumDelta("accumulatedProfitDelta"), [financialEvents]);
+  const getDistributedProfit = useCallback(() => sumDelta("distributedProfitDelta"), [financialEvents]);
+  const getRetainedEarnings = useCallback(() => getAccumulatedProfit() - getDistributedProfit(), [getAccumulatedProfit, getDistributedProfit]);
+  const getDistributableProfit = useCallback((pendingCommissions: number = 0) => {
+    return getRetainedEarnings() - pendingCommissions;
+  }, [getRetainedEarnings]);
+
   return (
     <StoreContext.Provider value={{
       products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
@@ -883,6 +1067,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
       getSellerDebt, getSellerPaid, getSellerBalance,
+      partnerContributions, loans, loanPayments, financialEvents,
+      addPartnerContribution, deletePartnerContribution,
+      addLoan, updateLoan, deleteLoan,
+      addLoanPayment, deleteLoanPayment,
+      refreshFinancialEvents,
+      getCash, getInventoryCostValue, getReceivables,
+      getPartnerCapital, getLoansOutstanding,
+      getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
+      getLoanPaid, getLoanRemaining,
     }}>
       {children}
     </StoreContext.Provider>

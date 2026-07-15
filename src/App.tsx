@@ -12,7 +12,7 @@ import ProductsPage from "@/pages/ProductsPage";
 import StockEntryPage from "@/pages/StockEntryPage";
 import SalesPage from "@/pages/SalesPage";
 import ExpensesPage from "@/pages/ExpensesPage";
-import InvestorsPage from "@/pages/InvestorsPage";
+import FinancePage from "@/pages/FinancePage";
 
 import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
@@ -49,7 +49,8 @@ function ProtectedRoutes() {
           {!isSeller && <Route path="/stock" element={<StockEntryPage />} />}
           <Route path="/sales" element={<SalesPage />} />
           {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
-          {!isSeller && <Route path="/investors" element={<InvestorsPage />} />}
+          {!isSeller && <Route path="/investors" element={<Navigate to="/finance" replace />} />}
+          {!isSeller && <Route path="/finance" element={<FinancePage />} />}
           {!isSeller && <Route path="/revenue" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/sellers" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}

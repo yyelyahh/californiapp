@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, ChevronLeft, ChevronRight, LogOut, Menu, X, AlertTriangle, Sparkles, Boxes } from "lucide-react";
+import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, ChevronLeft, ChevronRight, LogOut, Menu, X, AlertTriangle, Sparkles, Boxes, Landmark, Wallet } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -12,7 +12,7 @@ const allNavItems = [
   { to: "/sales", icon: ShoppingCart, label: "Vendas", adminOnly: false },
   { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
   { to: "/commissions", icon: Sparkles, label: "Distribuição", adminOnly: true },
-  { to: "/investors", icon: Users, label: "Investidores", adminOnly: true },
+  { to: "/finance", icon: Wallet, label: "Financeiro", adminOnly: true },
   { to: "/", icon: Boxes, label: "Catálogo", adminOnly: false },
 ];
 

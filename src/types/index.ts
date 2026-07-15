@@ -144,3 +144,65 @@ export interface ProductAssignment {
   notes?: string;
   createdAt: string;
 }
+
+// ---- Novo modelo financeiro (contabilidade simplificada) ----
+
+export interface PartnerContribution {
+  id: string;
+  partnerId: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Loan {
+  id: string;
+  lenderName: string;
+  principal: number;
+  interestAmount: number;
+  receivedDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface LoanPayment {
+  id: string;
+  loanId: string;
+  principalAmount: number;
+  interestAmount: number;
+  date: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export type FinancialEventKind =
+  | "partner_contribution"
+  | "loan_received"
+  | "loan_payment"
+  | "stock_purchase"
+  | "sale"
+  | "sale_cogs"
+  | "expense"
+  | "withdrawal"
+  | "commission_paid"
+  | "stock_loss";
+
+export interface FinancialEvent {
+  id: string;
+  kind: FinancialEventKind;
+  date: string;
+  createdAt: string;
+  description: string;
+  amount: number;
+  cashDelta: number;
+  inventoryDelta: number;
+  receivableDelta: number;
+  loanDelta: number;
+  partnerCapitalDelta: number;
+  accumulatedProfitDelta: number;
+  distributedProfitDelta: number;
+  refTable: string;
+  refId: string;
+  notes?: string;
+}

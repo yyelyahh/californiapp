@@ -85,6 +85,7 @@ export default function CommissionsPage() {
     addSellerManualDebt, deleteSellerManualDebt,
     addProductAssignment, transferProductAssignment,
     getSellerName, deleteSeller,
+    getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getInventoryCostValue, getCash,
   } = store;
 
   // Retiradas dos sócios = proLaborePayments (apenas relabel semântico)
@@ -142,22 +143,20 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
-    // === Lucro Operacional (ALL-TIME, sem COGS): o que a operação gera antes de reinvestir ===
-    // = Receita recebida − Despesas − Pagamentos a investidores
-    const vendasAll = sales.filter(s => s.type === "venda");
-    const revenue = vendasAll.reduce((a, s) => a + (s.paidAmount || 0), 0);
+    // === Novo modelo contábil (all-time, derivado do ledger financial_events) ===
+    // Lucro operacional acumulado = Receita reconhecida − CPV − Despesas − Juros − Comissões − Perdas
+    // Compras de estoque e retiradas NÃO afetam o lucro (são trocas patrimoniais).
+    const accumulatedProfit = getAccumulatedProfit();
+    const distributedProfit = getDistributedProfit();
+    const retainedEarnings = getRetainedEarnings();
+    const cashBalance = getCash();
+    const inventoryValue = getInventoryCostValue();
+
+    // Mantido para compatibilidade com o resto da tela
+    const operatingProfit = accumulatedProfit;
+    const revenue = sales.filter(s => s.type === "venda").reduce((a, s) => a + (s.paidAmount || 0), 0);
     const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
-    const totalInvestorPayments = dividends.reduce((a, d) => a + d.amount, 0);
-    const operatingProfit = revenue - totalExpenses - totalInvestorPayments;
-
-    // Reinvestimento em estoque (todas as compras de estoque cadastradas)
-    const stockReinvestment = stockEntries.reduce((a, e) => a + (e.totalCost || 0), 0);
-
-    // Caixa Livre = Lucro Operacional − Reinvestido em estoque
-    const freeCash = operatingProfit - stockReinvestment;
-
-    // Mantido para compatibilidade com o resto da tela (usado em Insights / drawers)
-    const netProfit = operatingProfit;
+    const netProfit = accumulatedProfit;
 
     // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
@@ -211,16 +210,25 @@ export default function CommissionsPage() {
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
-    const available = freeCash - totalSellerBalance - totalWithdrawalsPeriod;
+    // Saldo disponível para nova retirada = lucros retidos − comissões pendentes
+    // (Retiradas já foram descontadas dentro de retainedEarnings via distributedProfit)
+    const available = retainedEarnings - totalSellerBalance;
+
+    // Métrica auxiliar: quanto foi reinvestido em estoque (apenas informativo)
+    const stockReinvestment = inventoryValue; // valor atual do estoque a custo
 
     return {
-      revenue, netProfit, operatingProfit, stockReinvestment, freeCash,
-      periodExpenses: totalExpenses, totalInvestorPayments,
+      revenue, netProfit, operatingProfit,
+      accumulatedProfit, distributedProfit, retainedEarnings,
+      cashBalance, inventoryValue,
+      stockReinvestment, freeCash: cashBalance,
+      periodExpenses: totalExpenses, totalInvestorPayments: 0,
       perSeller, leader, totalSellerBalance,
       perPartner, totalWithdrawalsPeriod,
       available,
     };
-  }, [sales, expenses, products, sellers, partners, dividends, stockEntries, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end, getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getCash, getInventoryCostValue]);
+
 
 
   const timeline = useMemo(() => {

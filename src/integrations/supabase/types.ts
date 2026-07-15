@@ -183,6 +183,109 @@ export type Database = {
         }
         Relationships: []
       }
+      loan_payments: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          interest_amount: number
+          loan_id: string
+          notes: string | null
+          principal_amount: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          interest_amount?: number
+          loan_id: string
+          notes?: string | null
+          principal_amount?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          interest_amount?: number
+          loan_id?: string
+          notes?: string | null
+          principal_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          created_at: string
+          id: string
+          interest_amount: number
+          lender_name: string
+          notes: string | null
+          principal: number
+          received_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interest_amount?: number
+          lender_name: string
+          notes?: string | null
+          principal: number
+          received_date?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interest_amount?: number
+          lender_name?: string
+          notes?: string | null
+          principal?: number
+          received_date?: string
+        }
+        Relationships: []
+      }
+      partner_contributions: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          partner_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          partner_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          partner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_contributions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_payments: {
         Row: {
           amount: number
@@ -596,7 +699,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      financial_events: {
+        Row: {
+          accumulated_profit_delta: number | null
+          amount: number | null
+          cash_delta: number | null
+          created_at: string | null
+          description: string | null
+          distributed_profit_delta: number | null
+          event_date: string | null
+          id: string | null
+          inventory_delta: number | null
+          kind: string | null
+          loan_delta: number | null
+          notes: string | null
+          partner_capital_delta: number | null
+          receivable_delta: number | null
+          ref_id: string | null
+          ref_table: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_my_seller_id: { Args: never; Returns: string }

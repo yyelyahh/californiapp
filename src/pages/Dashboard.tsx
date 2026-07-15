@@ -19,7 +19,7 @@ const GERAL = "geral";
 export default function Dashboard() {
   const store = useStore();
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
-  const investedCapital = store.getTotalInvested();
+  const inventoryAtCost = store.getInventoryCostValue();
 
   const monthOptions = useMemo(() => {
     const set = new Set<string>();
@@ -151,7 +151,7 @@ export default function Dashboard() {
         ["Margem líquida (%)", fmt(periodStats.netMargin)],
         ["Reposição de estoque (investimento)", fmt(periodStats.restock)],
         ["Estoque atual (unidades)", totalStock],
-        ["Capital investido em estoque", fmt(investedCapital)],
+        ["Estoque a custo (razão)", fmt(inventoryAtCost)],
       ];
       const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
       wsResumo["!cols"] = [{ wch: 40 }, { wch: 18 }];
@@ -283,7 +283,7 @@ export default function Dashboard() {
         <SecondaryStat icon={Percent} label="Margem bruta" value={`${periodStats.grossMargin.toFixed(1)}%`} />
         <SecondaryStat icon={Receipt} label="Despesas" value={formatCurrency(periodStats.expenses)} />
         <SecondaryStat icon={Boxes} label="Reposição de estoque" value={formatCurrency(periodStats.restock)} hint="investimento em ativos" />
-        <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(investedCapital)} />
+        <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(inventoryAtCost)} />
       </div>
 
 
