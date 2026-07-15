@@ -24,6 +24,7 @@ function formatCurrency(v: number) {
 export default function AddProductDialog() {
   const { products, addProduct } = useStore();
   const [open, setOpen] = useState(false);
+  const [brandSelect, setBrandSelect] = useState("");
   const [brand, setBrand] = useState("");
   const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
