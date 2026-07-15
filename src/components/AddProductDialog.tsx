@@ -137,9 +137,12 @@ export default function AddProductDialog() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Marca</Label>
-                <Select value={brand} onValueChange={handleBrandChange}>
+                <Select value={brandSelect} onValueChange={handleBrandChange}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{BRANDS.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}</SelectContent>
+                  <SelectContent>
+                    {allBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
+                    <SelectItem value="__new__">+ Nova marca</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -153,6 +156,9 @@ export default function AddProductDialog() {
                 </Select>
               </div>
             </div>
+            {brandSelect === "__new__" && (
+              <Input value={brand} onChange={e => setBrand(e.target.value)} placeholder="Nome da nova marca" autoFocus />
+            )}
             {modelSelect === "__new__" && (
               <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, 30K, TE 30K" autoFocus />
             )}
