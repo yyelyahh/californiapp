@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
-  endOfYear, isWithinInterval, parseISO, isToday, isYesterday,
+  endOfYear, isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
@@ -71,7 +71,7 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 
-type Period = "month" | "quarter" | "year";
+type Period = "month" | "lastMonth" | "quarter" | "custom";
 
 export default function CommissionsPage() {
   const store = useStore();
@@ -93,6 +93,8 @@ export default function CommissionsPage() {
   const deleteWithdrawal = deleteProLaborePayment;
 
   const [period, setPeriod] = useState<Period>("month");
+  const [customStart, setCustomStart] = useState<string>(todayDateString());
+  const [customEnd, setCustomEnd] = useState<string>(todayDateString());
 
   // Cutoff legado: tudo antes de 01/06/2026 é tratado como legado (10% de comissão, só abate consumo)
   const LEGACY_CUTOFF = useMemo(() => new Date(2026, 5, 1), []);
@@ -104,37 +106,58 @@ export default function CommissionsPage() {
   const { start, end, label } = useMemo(() => {
     const now = new Date();
     let s: Date, e: Date, l: string;
-    if (period === "month") { s = startOfMonth(now); e = endOfMonth(now); l = format(now, "MMMM/yyyy", { locale: ptBR }); }
-    else if (period === "quarter") { s = startOfQuarter(now); e = endOfQuarter(now); l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`; }
-    else { s = startOfYear(now); e = endOfYear(now); l = format(now, "yyyy"); }
-    if (s < PROJECT_START) s = PROJECT_START;
+    if (period === "month") {
+      s = startOfMonth(now); e = endOfMonth(now);
+      l = format(now, "MMMM/yyyy", { locale: ptBR });
+    } else if (period === "lastMonth") {
+      const prev = subMonths(now, 1);
+      s = startOfMonth(prev); e = endOfMonth(prev);
+      l = format(prev, "MMMM/yyyy", { locale: ptBR });
+    } else if (period === "quarter") {
+      s = startOfQuarter(now); e = endOfQuarter(now);
+      l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`;
+    } else {
+      // custom
+      try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
+      try { e = parseISO(customEnd); } catch { e = endOfMonth(now); }
+      if (e < s) e = s;
+      l = `${format(s, "dd/MM/yyyy")} – ${format(e, "dd/MM/yyyy")}`;
+    }
     return { start: s, end: e, label: l };
-  }, [period, PROJECT_START]);
+  }, [period, customStart, customEnd, PROJECT_START]);
 
   const inPeriod = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start, end }); } catch { return false; }
+  };
+  // Cumulativo desde 01/06/2026 até o fim do período selecionado — usado para Lucro e Retiradas
+  const inCumulative = (iso: string) => {
+    try {
+      const d = parseISO(iso);
+      return d >= PROJECT_START && d <= end;
+    } catch { return false; }
   };
   const inYear = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start: PROJECT_START, end: endOfYear(new Date()) }); } catch { return false; }
   };
 
+
   const periodMetrics = useMemo(() => {
-    const salesPeriod = sales.filter(s => inPeriod(s.date));
-    const vendasPeriod = salesPeriod.filter(s => s.type === "venda");
-    const revenue = vendasPeriod.reduce((a, s) => a + s.totalPrice, 0);
-    const cogs = vendasPeriod.reduce((a, s) => a + (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
+    // === Lucro Líquido: CUMULATIVO desde 01/06/2026 até fim do período selecionado ===
+    const vendasCum = sales.filter(s => s.type === "venda" && inCumulative(s.date));
+    const revenue = vendasCum.reduce((a, s) => a + s.totalPrice, 0);
+    const cogs = vendasCum.reduce((a, s) => a + (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
     const grossProfit = revenue - cogs;
-    const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
+    const periodExpenses = expenses.filter(e => inCumulative(e.date)).reduce((a, e) => a + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // Conta Corrente do vendedor — comissão do período + abate consumo (incluindo legado)
+    // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
+    const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
-      // Comissão só é creditada em vendas QUITADAS
       const vendasPagas = vendas.filter(s => (s.paidAmount || 0) >= s.totalPrice - 0.01);
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
-      const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
+      const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = computeSellerCommission(vendasPagas);
       const accrued = c.accrued;
@@ -144,21 +167,17 @@ export default function CommissionsPage() {
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
 
-      // === Consumo / dívidas / pagamentos — APENAS no período ===
       const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
       const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date));
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date) && !isLegacy(d.date));
       const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
       const consumoTotal = retiradasTotal + manualDebtsTotal;
-      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
-      // Saldo de consumo abate direto da comissão.
-      // Pagamentos de dívida no período somam de volta ao saldo do vendedor (crédito).
       const saldoConsumo = consumoTotal;
       const retiradasCount = retiradas.length + manualDebts.length;
 
-      // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
       const balance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
 
       return {
@@ -173,13 +192,13 @@ export default function CommissionsPage() {
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
     const leader = perSeller.find(r => r.vendasTotal > 0) || null;
 
-    // Retiradas dos sócios
+    // Retiradas dos sócios — CUMULATIVO desde 01/06/2026 até fim do período
     const perPartner = partners.map(partner => {
       const list = withdrawals.filter(w => w.partnerId === partner.id);
-      const periodAmt = list.filter(w => inPeriod(w.date)).reduce((a, w) => a + w.amount, 0);
+      const periodAmt = list.filter(w => inCumulative(w.date)).reduce((a, w) => a + w.amount, 0);
       const yearAmt = list.filter(w => inYear(w.date)).reduce((a, w) => a + w.amount, 0);
       const last = list.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      return { partner, periodAmt, yearAmt, last, count: list.filter(w => inPeriod(w.date)).length };
+      return { partner, periodAmt, yearAmt, last, count: list.filter(w => inCumulative(w.date)).length };
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
@@ -192,6 +211,7 @@ export default function CommissionsPage() {
       available,
     };
   }, [sales, expenses, products, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
+
 
   const timeline = useMemo(() => {
     const items = [
@@ -362,14 +382,24 @@ export default function CommissionsPage() {
           <h1 className="text-xl font-semibold tracking-tight">Distribuição</h1>
           <p className="text-xs text-muted-foreground">Comissões, consumos, pagamentos e retiradas dos sócios · {label}</p>
         </div>
-        <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
-          <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="month">Mês atual</SelectItem>
-            <SelectItem value="quarter">Trimestre</SelectItem>
-            <SelectItem value="year">Ano</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
+            <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Mês atual</SelectItem>
+              <SelectItem value="lastMonth">Mês anterior</SelectItem>
+              <SelectItem value="quarter">Trimestre</SelectItem>
+              <SelectItem value="custom">Período personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {period === "custom" && (
+            <div className="flex items-center gap-1.5">
+              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9 w-[150px]" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9 w-[150px]" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPIs — Distribuição do dinheiro */}
@@ -959,55 +989,36 @@ function ProfitDistribution({ netProfit, pendingCommissions, withdrawals, availa
   netProfit: number; pendingCommissions: number; withdrawals: number; available: number;
 }) {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-  const base = Math.max(0.0001, netProfit);
-  const pctAvail = Math.max(0, Math.min(100, (available / base) * 100));
-  const pctComm = Math.max(0, Math.min(100, (pendingCommissions / base) * 100));
-  const pctWd = Math.max(0, Math.min(100, (withdrawals / base) * 100));
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4 gap-2">
         <div>
           <h2 className="text-sm font-semibold tracking-tight">Distribuição do Lucro</h2>
-          <p className="text-[11px] text-muted-foreground">Como o lucro do período está sendo repartido</p>
+          <p className="text-[11px] text-muted-foreground">Como o lucro está sendo repartido (acumulado desde 01/06/2026)</p>
         </div>
       </div>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Ledger */}
-        <div className="space-y-1.5 text-[13px]">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Lucro Líquido</span>
-            <span className={cn("mono font-semibold", netProfit >= 0 ? "text-income" : "text-expense")}>{fmt(netProfit)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">(−) Comissões pendentes</span>
-            <span className="mono text-warning">−{fmt(pendingCommissions)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">(−) Retiradas dos sócios</span>
-            <span className="mono text-fixed">−{fmt(withdrawals)}</span>
-          </div>
-          <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
-            <span className="font-semibold">Saldo disponível</span>
-            <span className={cn("mono font-bold text-base", available >= 0 ? "text-income" : "text-expense")}>{fmt(available)}</span>
-          </div>
+      <div className="space-y-1.5 text-[13px] max-w-xl">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Lucro Líquido</span>
+          <span className={cn("mono font-semibold", netProfit >= 0 ? "text-income" : "text-expense")}>{fmt(netProfit)}</span>
         </div>
-        {/* Bar */}
-        <div className="flex flex-col justify-center gap-3">
-          <div className="h-3 w-full rounded-full overflow-hidden bg-secondary flex">
-            {available > 0 && <div className="bg-income h-full" style={{ width: `${pctAvail}%` }} />}
-            <div className="bg-warning h-full" style={{ width: `${pctComm}%` }} />
-            <div className="bg-fixed h-full" style={{ width: `${pctWd}%` }} />
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-[11px]">
-            <LegendItem color="bg-income" label="Disponível" value={fmt(Math.max(0, available))} />
-            <LegendItem color="bg-warning" label="Comissões" value={fmt(pendingCommissions)} />
-            <LegendItem color="bg-fixed" label="Retiradas" value={fmt(withdrawals)} />
-          </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">(−) Comissões pendentes</span>
+          <span className="mono text-warning">−{fmt(pendingCommissions)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">(−) Retiradas dos sócios</span>
+          <span className="mono text-fixed">−{fmt(withdrawals)}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
+          <span className="font-semibold">Saldo disponível</span>
+          <span className={cn("mono font-bold text-base", available >= 0 ? "text-income" : "text-expense")}>{fmt(available)}</span>
         </div>
       </div>
     </div>
   );
 }
+
 
 function LegendItem({ color, label, value }: { color: string; label: string; value: string }) {
   return (
