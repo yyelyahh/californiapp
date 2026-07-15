@@ -71,9 +71,16 @@ export default function AddProductDialog() {
   const potentialProfit = unitMargin * newProducts.length;
 
   const handleBrandChange = (value: string) => {
-    setBrand(value);
+    setBrandSelect(value);
     setModelSelect("");
     setModel("");
+    if (value === "__new__") {
+      setBrand("");
+      setPurchasePrice("");
+      setSalePrice("");
+      return;
+    }
+    setBrand(value);
     const preset = BRAND_PRESETS[value];
     if (preset) {
       setPurchasePrice(preset.purchasePrice ? String(preset.purchasePrice) : "");
