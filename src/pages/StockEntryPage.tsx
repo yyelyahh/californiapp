@@ -17,7 +17,7 @@ const BRAND_PRESETS: Record<string, number> = {
   Elfbar: 68,
   Nikbar: 0,
 };
-const BRANDS = Object.keys(BRAND_PRESETS);
+const DEFAULT_BRANDS = Object.keys(BRAND_PRESETS);
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -79,6 +79,12 @@ export default function StockEntryPage() {
     products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
     return Array.from(set).sort();
   }, [products, brand]);
+
+  const allBrands = useMemo(() => {
+    const set = new Set<string>(DEFAULT_BRANDS);
+    products.forEach(p => p.brand && set.add(p.brand));
+    return Array.from(set).sort();
+  }, [products]);
 
   const handleBrandChange = (value: string) => {
     setBrand(value);
@@ -228,7 +234,7 @@ export default function StockEntryPage() {
                   <Select value={brand} onValueChange={handleBrandChange}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Marca" /></SelectTrigger>
                     <SelectContent>
-                      {BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                      {allBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
