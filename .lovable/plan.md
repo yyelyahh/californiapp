@@ -1,37 +1,44 @@
-## Ajustes na página Distribuição
+## Duas métricas de lucro lado a lado
 
-Reformular os cálculos e o escopo temporal dos KPIs da página, mantendo o layout atual.
+Mostrar duas visões complementares na página Distribuição, deixando claro quanto foi reinvestido em estoque.
 
-### Novas regras
+### Métricas
 
-**Lucro Líquido (all-time, sem filtro de data)**
-- Receita = soma de `paidAmount` de todas as vendas (`type = "venda"`), ou seja, apenas o que foi efetivamente recebido.
-- (−) COGS: custo de compra × quantidade de todas as vendas recebidas (proporcional ao `paidAmount / totalPrice` quando a venda foi parcialmente paga, para não descontar custo de mercadoria ainda não realizada).
-- (−) Despesas: todas do sistema, sem filtro.
-- (−) Pagamentos a investidores: soma de todos os `dividends` cadastrados na página Investidores.
-- Resultado exibido no card "Lucro Líquido" e no bloco "Distribuição do Lucro".
+**Lucro Operacional** (o que a operação gera antes de decidir onde alocar)
+- = Receita recebida − Despesas − Pagamentos a investidores
+- Não desconta custo de mercadoria nem compras de estoque.
+- Representa o "dinheiro que a operação gerou" antes de reinvestir.
 
-**Comissões / Vendedores (inalterado)**
-- Continuam limitadas ao período selecionado no topo (Mês / Mês anterior / Trimestre / Personalizado).
-- Corte de 01/06/2026 permanece: nada antes dessa data conta como comissão.
-- O bloco "Vendedores" continua reagindo ao seletor de período.
+**Caixa Livre** (o que efetivamente sobrou depois de reinvestir em estoque)
+- = Lucro Operacional − Todas as compras de estoque (`stock_entries.totalCost`)
+- Reflete o caixa real disponível — se você reinvestiu tudo em estoque, esse valor cai.
 
-**Retiradas dos Sócios (all-time)**
-- Somar todas as retiradas de todos os sócios, sem filtro de data.
-- Card "Retiradas dos Sócios" e ledger da distribuição usam esse total.
-- Cards individuais de cada sócio passam a mostrar "Total retirado" (all-time) no lugar de "no período"; o "último saque" continua.
+**Reinvestimento em estoque** (informativo)
+- = Soma de todas as compras de estoque cadastradas.
+- Exibido como linha auxiliar para explicar a diferença entre as duas métricas.
 
-**Saldo Disponível**
-- Fórmula: `Lucro Líquido (all-time) − Comissões pendentes (do período) − Retiradas (all-time)`.
-- Validação do diálogo "saldo ficará negativo" continua usando esse valor.
+Todas as três continuam **all-time**, sem filtro de data. Comissões e vendedores continuam limitados ao período selecionado.
 
-### Ajustes de UI/textos
-- Substituir os subtítulos "No período" dos cards Lucro e Retiradas por "Total acumulado".
-- Ajustar labels do bloco "Distribuição do Lucro" e do rodapé de insights para refletir all-time em Lucro e Retiradas.
-- Manter o seletor de período no topo, mas deixar claro que ele afeta apenas Comissões/Vendedores (label do seletor: "Período (comissões)").
+### Mudanças de UI
+
+- Grid superior de KPIs passa de 4 para 5 cards (em telas menores, 2 colunas):
+  1. Lucro Operacional
+  2. Caixa Livre (destaque, cor conforme sinal)
+  3. Reinvestido em Estoque
+  4. A pagar a vendedores
+  5. Retiradas dos Sócios
+- Bloco "Distribuição do Lucro" passa a mostrar o ledger a partir do Lucro Operacional:
+  - Lucro Operacional
+  - (−) Reinvestido em estoque → Caixa Livre
+  - (−) Comissões pendentes
+  - (−) Retiradas dos sócios
+  - = Saldo Disponível
+- "Saldo Disponível" (usado na validação de retirada negativa) passa a ser calculado a partir do **Caixa Livre**: `caixaLivre − comissões pendentes − retiradas`.
+- Rodapé de Insights ganha uma linha explicando quanto foi reinvestido.
 
 ### Arquivos
+
 - `src/pages/CommissionsPage.tsx`
-  - Adicionar carregamento de `dividends` do store.
-  - Ajustar `periodMetrics`: separar `netProfit` (all-time, com COGS proporcional ao recebido) e `totalWithdrawals` (all-time) das métricas de comissão (que continuam usando `inPeriod` + corte legado).
-  - Ajustar componente `ProfitDistribution` e rodapé de insights com os novos rótulos.
+  - Adicionar `stockEntries` do store.
+  - Em `periodMetrics`: calcular `operatingProfit`, `stockReinvestment`, `freeCash`; remover COGS proporcional; recalcular `available` a partir de `freeCash`.
+  - Ajustar cards, `ProfitDistribution` e insights.
