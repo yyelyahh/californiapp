@@ -94,7 +94,7 @@ export default function AddProductDialog() {
   };
 
   const handleReset = () => {
-    setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
+    setBrandSelect(""); setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
     setPurchasePrice(""); setSalePrice("");
   };
 
