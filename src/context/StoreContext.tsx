@@ -933,6 +933,109 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return getSellerDebt(id) - getSellerPaid(id);
   }, [getSellerPaid, getSellerDebt]);
 
+  // ---- Novo modelo financeiro ----
+  const refreshFinancialEvents = useCallback(async () => {
+    const { data } = await supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true });
+    if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+  }, []);
+
+  const addPartnerContribution = useCallback(async (c: Omit<PartnerContribution, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("partner_contributions" as any).insert({
+      partner_id: c.partnerId, amount: c.amount, date: c.date, notes: c.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar aporte"); return; }
+    setPartnerContributions(prev => [...prev, mapPartnerContribution(data)]);
+    await refreshFinancialEvents();
+    toast.success("Aporte registrado");
+  }, [refreshFinancialEvents]);
+
+  const deletePartnerContribution = useCallback(async (id: string) => {
+    const { error } = await supabase.from("partner_contributions" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir aporte"); return; }
+    setPartnerContributions(prev => prev.filter(x => x.id !== id));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const addLoan = useCallback(async (l: Omit<Loan, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("loans" as any).insert({
+      lender_name: l.lenderName, principal: l.principal,
+      interest_amount: l.interestAmount ?? 0,
+      received_date: l.receivedDate, notes: l.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar empréstimo"); return; }
+    setLoans(prev => [...prev, mapLoan(data)]);
+    await refreshFinancialEvents();
+    toast.success("Empréstimo registrado");
+  }, [refreshFinancialEvents]);
+
+  const updateLoan = useCallback(async (id: string, updates: Partial<Loan>) => {
+    const dbUpdates: any = {};
+    if (updates.lenderName !== undefined) dbUpdates.lender_name = updates.lenderName;
+    if (updates.principal !== undefined) dbUpdates.principal = updates.principal;
+    if (updates.interestAmount !== undefined) dbUpdates.interest_amount = updates.interestAmount;
+    if (updates.receivedDate !== undefined) dbUpdates.received_date = updates.receivedDate;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    const { error } = await supabase.from("loans" as any).update(dbUpdates).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar empréstimo"); return; }
+    setLoans(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const deleteLoan = useCallback(async (id: string) => {
+    const { error } = await supabase.from("loans" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir empréstimo"); return; }
+    setLoans(prev => prev.filter(x => x.id !== id));
+    setLoanPayments(prev => prev.filter(p => p.loanId !== id));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const addLoanPayment = useCallback(async (p: Omit<LoanPayment, "id" | "createdAt">) => {
+    const { data, error } = await supabase.from("loan_payments" as any).insert({
+      loan_id: p.loanId,
+      principal_amount: p.principalAmount ?? 0,
+      interest_amount: p.interestAmount ?? 0,
+      date: p.date, notes: p.notes,
+    } as any).select().single();
+    if (error) { toast.error("Erro ao registrar pagamento"); return; }
+    setLoanPayments(prev => [...prev, mapLoanPayment(data)]);
+    await refreshFinancialEvents();
+    toast.success("Pagamento registrado");
+  }, [refreshFinancialEvents]);
+
+  const deleteLoanPayment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("loan_payments" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir pagamento"); return; }
+    setLoanPayments(prev => prev.filter(x => x.id !== id));
+    await refreshFinancialEvents();
+  }, [refreshFinancialEvents]);
+
+  const getLoanPaid = useCallback((loanId: string) => {
+    return loanPayments.filter(p => p.loanId === loanId).reduce((s, p) => s + p.principalAmount + p.interestAmount, 0);
+  }, [loanPayments]);
+
+  const getLoanRemaining = useCallback((loanId: string) => {
+    const l = loans.find(x => x.id === loanId);
+    if (!l) return 0;
+    const total = l.principal + l.interestAmount;
+    return Math.max(0, total - getLoanPaid(loanId));
+  }, [loans, getLoanPaid]);
+
+  // ---- Selectors do razão (derivados de financial_events) ----
+  const sumDelta = (field: keyof FinancialEvent) =>
+    financialEvents.reduce((s, e) => s + (Number(e[field] as number) || 0), 0);
+
+  const getCash = useCallback(() => sumDelta("cashDelta"), [financialEvents]);
+  const getInventoryCostValue = useCallback(() => sumDelta("inventoryDelta"), [financialEvents]);
+  const getReceivables = useCallback(() => sumDelta("receivableDelta"), [financialEvents]);
+  const getPartnerCapital = useCallback(() => sumDelta("partnerCapitalDelta"), [financialEvents]);
+  const getLoansOutstanding = useCallback(() => sumDelta("loanDelta"), [financialEvents]);
+  const getAccumulatedProfit = useCallback(() => sumDelta("accumulatedProfitDelta"), [financialEvents]);
+  const getDistributedProfit = useCallback(() => sumDelta("distributedProfitDelta"), [financialEvents]);
+  const getRetainedEarnings = useCallback(() => getAccumulatedProfit() - getDistributedProfit(), [getAccumulatedProfit, getDistributedProfit]);
+  const getDistributableProfit = useCallback((pendingCommissions: number = 0) => {
+    return getRetainedEarnings() - pendingCommissions;
+  }, [getRetainedEarnings]);
+
   return (
     <StoreContext.Provider value={{
       products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
@@ -950,6 +1053,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
       getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
       getSellerDebt, getSellerPaid, getSellerBalance,
+      partnerContributions, loans, loanPayments, financialEvents,
+      addPartnerContribution, deletePartnerContribution,
+      addLoan, updateLoan, deleteLoan,
+      addLoanPayment, deleteLoanPayment,
+      refreshFinancialEvents,
+      getCash, getInventoryCostValue, getReceivables,
+      getPartnerCapital, getLoansOutstanding,
+      getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
+      getLoanPaid, getLoanRemaining,
     }}>
       {children}
     </StoreContext.Provider>
