@@ -51,6 +51,7 @@ function ProtectedRoutes() {
           <Route path="/sales" element={<SalesPage />} />
           {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
           {!isSeller && <Route path="/investors" element={<InvestorsPage />} />}
+          {!isSeller && <Route path="/finance" element={<FinancePage />} />}
           {!isSeller && <Route path="/revenue" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/sellers" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}
