@@ -151,7 +151,7 @@ export default function Dashboard() {
         ["Margem líquida (%)", fmt(periodStats.netMargin)],
         ["Reposição de estoque (investimento)", fmt(periodStats.restock)],
         ["Estoque atual (unidades)", totalStock],
-        ["Capital investido em estoque", fmt(inventoryAtCost)],
+        ["Estoque a custo (razão)", fmt(inventoryAtCost)],
       ];
       const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
       wsResumo["!cols"] = [{ wch: 40 }, { wch: 18 }];
