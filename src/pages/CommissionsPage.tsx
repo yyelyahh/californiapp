@@ -211,15 +211,16 @@ export default function CommissionsPage() {
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
-    const available = netProfit - totalSellerBalance - totalWithdrawalsPeriod;
+    const available = freeCash - totalSellerBalance - totalWithdrawalsPeriod;
 
     return {
-      revenue, cogs, grossProfit, netProfit, periodExpenses: totalExpenses, totalInvestorPayments,
+      revenue, netProfit, operatingProfit, stockReinvestment, freeCash,
+      periodExpenses: totalExpenses, totalInvestorPayments,
       perSeller, leader, totalSellerBalance,
       perPartner, totalWithdrawalsPeriod,
       available,
     };
-  }, [sales, expenses, products, sellers, partners, dividends, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
+  }, [sales, expenses, products, sellers, partners, dividends, stockEntries, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
 
 
   const timeline = useMemo(() => {
