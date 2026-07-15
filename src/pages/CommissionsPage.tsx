@@ -71,7 +71,7 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 
-type Period = "month" | "quarter" | "year";
+type Period = "month" | "lastMonth" | "quarter" | "custom";
 
 export default function CommissionsPage() {
   const store = useStore();
