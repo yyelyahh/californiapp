@@ -148,7 +148,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes] = await Promise.all([
+        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes, pcRes, loanRes, lpRes, feRes] = await Promise.all([
           fetchProductsList(),
           supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
           supabase.from("sales").select("*").order("created_at", { ascending: true }),
@@ -164,6 +164,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("commission_payments" as any).select("*").order("created_at", { ascending: true }),
           supabase.from("pro_labore_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("partner_contributions" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("loans" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("loan_payments" as any).select("*").order("created_at", { ascending: true }),
+          supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true }),
         ]) as any;
 
         setProducts(prodList);
@@ -181,6 +185,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
         if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
         if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
+        if (pcRes?.data) setPartnerContributions((pcRes.data as any[]).map(mapPartnerContribution));
+        if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
+        if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
+        if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
