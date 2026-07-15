@@ -93,6 +93,8 @@ export default function CommissionsPage() {
   const deleteWithdrawal = deleteProLaborePayment;
 
   const [period, setPeriod] = useState<Period>("month");
+  const [customStart, setCustomStart] = useState<string>(todayDateString());
+  const [customEnd, setCustomEnd] = useState<string>(todayDateString());
 
   // Cutoff legado: tudo antes de 01/06/2026 é tratado como legado (10% de comissão, só abate consumo)
   const LEGACY_CUTOFF = useMemo(() => new Date(2026, 5, 1), []);
@@ -104,19 +106,40 @@ export default function CommissionsPage() {
   const { start, end, label } = useMemo(() => {
     const now = new Date();
     let s: Date, e: Date, l: string;
-    if (period === "month") { s = startOfMonth(now); e = endOfMonth(now); l = format(now, "MMMM/yyyy", { locale: ptBR }); }
-    else if (period === "quarter") { s = startOfQuarter(now); e = endOfQuarter(now); l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`; }
-    else { s = startOfYear(now); e = endOfYear(now); l = format(now, "yyyy"); }
-    if (s < PROJECT_START) s = PROJECT_START;
+    if (period === "month") {
+      s = startOfMonth(now); e = endOfMonth(now);
+      l = format(now, "MMMM/yyyy", { locale: ptBR });
+    } else if (period === "lastMonth") {
+      const prev = subMonths(now, 1);
+      s = startOfMonth(prev); e = endOfMonth(prev);
+      l = format(prev, "MMMM/yyyy", { locale: ptBR });
+    } else if (period === "quarter") {
+      s = startOfQuarter(now); e = endOfQuarter(now);
+      l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`;
+    } else {
+      // custom
+      try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
+      try { e = parseISO(customEnd); } catch { e = endOfMonth(now); }
+      if (e < s) e = s;
+      l = `${format(s, "dd/MM/yyyy")} – ${format(e, "dd/MM/yyyy")}`;
+    }
     return { start: s, end: e, label: l };
-  }, [period, PROJECT_START]);
+  }, [period, customStart, customEnd, PROJECT_START]);
 
   const inPeriod = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start, end }); } catch { return false; }
   };
+  // Cumulativo desde 01/06/2026 até o fim do período selecionado — usado para Lucro e Retiradas
+  const inCumulative = (iso: string) => {
+    try {
+      const d = parseISO(iso);
+      return d >= PROJECT_START && d <= end;
+    } catch { return false; }
+  };
   const inYear = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start: PROJECT_START, end: endOfYear(new Date()) }); } catch { return false; }
   };
+
 
   const periodMetrics = useMemo(() => {
     const salesPeriod = sales.filter(s => inPeriod(s.date));
