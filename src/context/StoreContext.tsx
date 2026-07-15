@@ -199,18 +199,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     fetchAll();
 
     // ---- Realtime sync: any change in shared tables refreshes the affected slice ----
+    const refetchFinancialEvents = async () => {
+      const { data } = await supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true });
+      if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+    };
     const channel = supabase
       .channel("store-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async () => {
         setProducts(await fetchProductsList());
+        refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, async () => {
         const { data } = await supabase.from("sales").select("*").order("created_at", { ascending: true });
         if (data) setSales(data.map(mapSale));
+        refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "stock_entries" }, async () => {
         const { data } = await supabase.from("stock_entries").select("*").order("created_at", { ascending: true });
         if (data) setStockEntries(data.map(mapStockEntry));
+        refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "product_assignments" }, async () => {
         const { data } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
@@ -223,7 +230,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, async () => {
         const { data } = await supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true });
         if (data) setStockLosses((data as any[]).map(mapStockLoss));
+        refetchFinancialEvents();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "partner_contributions" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_payments" }, refetchFinancialEvents)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
