@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
-  endOfYear, isWithinInterval, parseISO, isToday, isYesterday,
+  endOfYear, isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
