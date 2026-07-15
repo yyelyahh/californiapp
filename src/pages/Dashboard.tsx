@@ -151,7 +151,7 @@ export default function Dashboard() {
         ["Margem líquida (%)", fmt(periodStats.netMargin)],
         ["Reposição de estoque (investimento)", fmt(periodStats.restock)],
         ["Estoque atual (unidades)", totalStock],
-        ["Capital investido em estoque", fmt(investedCapital)],
+        ["Capital investido em estoque", fmt(inventoryAtCost)],
       ];
       const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
       wsResumo["!cols"] = [{ wch: 40 }, { wch: 18 }];
@@ -283,7 +283,7 @@ export default function Dashboard() {
         <SecondaryStat icon={Percent} label="Margem bruta" value={`${periodStats.grossMargin.toFixed(1)}%`} />
         <SecondaryStat icon={Receipt} label="Despesas" value={formatCurrency(periodStats.expenses)} />
         <SecondaryStat icon={Boxes} label="Reposição de estoque" value={formatCurrency(periodStats.restock)} hint="investimento em ativos" />
-        <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(investedCapital)} />
+        <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(inventoryAtCost)} />
       </div>
 
 
