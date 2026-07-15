@@ -15,7 +15,7 @@ const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }
   Nikbar: { purchasePrice: 0, salePrice: 0 },
 };
 
-const BRANDS = Object.keys(BRAND_PRESETS);
+const DEFAULT_BRANDS = Object.keys(BRAND_PRESETS);
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -24,6 +24,7 @@ function formatCurrency(v: number) {
 export default function AddProductDialog() {
   const { products, addProduct } = useStore();
   const [open, setOpen] = useState(false);
+  const [brandSelect, setBrandSelect] = useState("");
   const [brand, setBrand] = useState("");
   const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
@@ -37,6 +38,12 @@ export default function AddProductDialog() {
   const existingKeys = useMemo(() => new Set(
     products.map(p => `${p.brand}|${p.model}|${p.flavor}`.toLowerCase())
   ), [products]);
+
+  const allBrands = useMemo(() => {
+    const set = new Set<string>(DEFAULT_BRANDS);
+    products.forEach(p => p.brand && set.add(p.brand));
+    return Array.from(set).sort();
+  }, [products]);
 
   const existingModels = useMemo(() => {
     if (!brand) return [];
@@ -64,9 +71,16 @@ export default function AddProductDialog() {
   const potentialProfit = unitMargin * newProducts.length;
 
   const handleBrandChange = (value: string) => {
-    setBrand(value);
+    setBrandSelect(value);
     setModelSelect("");
     setModel("");
+    if (value === "__new__") {
+      setBrand("");
+      setPurchasePrice("");
+      setSalePrice("");
+      return;
+    }
+    setBrand(value);
     const preset = BRAND_PRESETS[value];
     if (preset) {
       setPurchasePrice(preset.purchasePrice ? String(preset.purchasePrice) : "");
@@ -80,7 +94,7 @@ export default function AddProductDialog() {
   };
 
   const handleReset = () => {
-    setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
+    setBrandSelect(""); setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
     setPurchasePrice(""); setSalePrice("");
   };
 
@@ -123,9 +137,12 @@ export default function AddProductDialog() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Marca</Label>
-                <Select value={brand} onValueChange={handleBrandChange}>
+                <Select value={brandSelect} onValueChange={handleBrandChange}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{BRANDS.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}</SelectContent>
+                  <SelectContent>
+                    {allBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
+                    <SelectItem value="__new__">+ Nova marca</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -139,6 +156,9 @@ export default function AddProductDialog() {
                 </Select>
               </div>
             </div>
+            {brandSelect === "__new__" && (
+              <Input value={brand} onChange={e => setBrand(e.target.value)} placeholder="Nome da nova marca" autoFocus />
+            )}
             {modelSelect === "__new__" && (
               <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, 30K, TE 30K" autoFocus />
             )}
