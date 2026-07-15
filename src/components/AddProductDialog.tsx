@@ -15,7 +15,7 @@ const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }
   Nikbar: { purchasePrice: 0, salePrice: 0 },
 };
 
-const BRANDS = Object.keys(BRAND_PRESETS);
+const DEFAULT_BRANDS = Object.keys(BRAND_PRESETS);
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
