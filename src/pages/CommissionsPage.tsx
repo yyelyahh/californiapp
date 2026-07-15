@@ -85,6 +85,7 @@ export default function CommissionsPage() {
     addSellerManualDebt, deleteSellerManualDebt,
     addProductAssignment, transferProductAssignment,
     getSellerName, deleteSeller,
+    getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getInventoryCostValue, getCash,
   } = store;
 
   // Retiradas dos sócios = proLaborePayments (apenas relabel semântico)
