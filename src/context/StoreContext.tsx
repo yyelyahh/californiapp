@@ -121,6 +121,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [commissionPayments, setCommissionPayments] = useState<CommissionPayment[]>([]);
   const [proLaborePayments, setProLaborePayments] = useState<ProLaborePayment[]>([]);
+  const [partnerContributions, setPartnerContributions] = useState<PartnerContribution[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
+  const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
   const isAdmin = role === "admin";
