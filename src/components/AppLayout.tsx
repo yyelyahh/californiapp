@@ -13,7 +13,6 @@ const allNavItems = [
   { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
   { to: "/commissions", icon: Sparkles, label: "Distribuição", adminOnly: true },
   { to: "/finance", icon: Wallet, label: "Financeiro", adminOnly: true },
-  { to: "/finance", icon: Landmark, label: "Empréstimos", adminOnly: true },
   { to: "/", icon: Boxes, label: "Catálogo", adminOnly: false },
 ];
 
