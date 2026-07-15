@@ -314,6 +314,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     amount: Number(r.amount), date: r.date, notes: r.notes,
   });
 
+  const mapPartnerContribution = (r: any): PartnerContribution => ({
+    id: r.id, partnerId: r.partner_id, amount: Number(r.amount),
+    date: r.date, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapLoan = (r: any): Loan => ({
+    id: r.id, lenderName: r.lender_name,
+    principal: Number(r.principal), interestAmount: Number(r.interest_amount ?? 0),
+    receivedDate: r.received_date, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapLoanPayment = (r: any): LoanPayment => ({
+    id: r.id, loanId: r.loan_id,
+    principalAmount: Number(r.principal_amount ?? 0),
+    interestAmount: Number(r.interest_amount ?? 0),
+    date: r.date, notes: r.notes, createdAt: r.created_at,
+  });
+
+  const mapFinancialEvent = (r: any): FinancialEvent => ({
+    id: r.id, kind: r.kind as FinancialEventKind,
+    date: r.event_date, createdAt: r.created_at,
+    description: r.description, amount: Number(r.amount),
+    cashDelta: Number(r.cash_delta), inventoryDelta: Number(r.inventory_delta),
+    receivableDelta: Number(r.receivable_delta), loanDelta: Number(r.loan_delta),
+    partnerCapitalDelta: Number(r.partner_capital_delta),
+    accumulatedProfitDelta: Number(r.accumulated_profit_delta),
+    distributedProfitDelta: Number(r.distributed_profit_delta),
+    refTable: r.ref_table, refId: r.ref_id, notes: r.notes ?? undefined,
+  });
+
   // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
     const { data, error } = await supabase.from("products").insert({
