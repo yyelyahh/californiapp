@@ -989,55 +989,36 @@ function ProfitDistribution({ netProfit, pendingCommissions, withdrawals, availa
   netProfit: number; pendingCommissions: number; withdrawals: number; available: number;
 }) {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-  const base = Math.max(0.0001, netProfit);
-  const pctAvail = Math.max(0, Math.min(100, (available / base) * 100));
-  const pctComm = Math.max(0, Math.min(100, (pendingCommissions / base) * 100));
-  const pctWd = Math.max(0, Math.min(100, (withdrawals / base) * 100));
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4 gap-2">
         <div>
           <h2 className="text-sm font-semibold tracking-tight">Distribuição do Lucro</h2>
-          <p className="text-[11px] text-muted-foreground">Como o lucro do período está sendo repartido</p>
+          <p className="text-[11px] text-muted-foreground">Como o lucro está sendo repartido (acumulado desde 01/06/2026)</p>
         </div>
       </div>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Ledger */}
-        <div className="space-y-1.5 text-[13px]">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Lucro Líquido</span>
-            <span className={cn("mono font-semibold", netProfit >= 0 ? "text-income" : "text-expense")}>{fmt(netProfit)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">(−) Comissões pendentes</span>
-            <span className="mono text-warning">−{fmt(pendingCommissions)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">(−) Retiradas dos sócios</span>
-            <span className="mono text-fixed">−{fmt(withdrawals)}</span>
-          </div>
-          <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
-            <span className="font-semibold">Saldo disponível</span>
-            <span className={cn("mono font-bold text-base", available >= 0 ? "text-income" : "text-expense")}>{fmt(available)}</span>
-          </div>
+      <div className="space-y-1.5 text-[13px] max-w-xl">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Lucro Líquido</span>
+          <span className={cn("mono font-semibold", netProfit >= 0 ? "text-income" : "text-expense")}>{fmt(netProfit)}</span>
         </div>
-        {/* Bar */}
-        <div className="flex flex-col justify-center gap-3">
-          <div className="h-3 w-full rounded-full overflow-hidden bg-secondary flex">
-            {available > 0 && <div className="bg-income h-full" style={{ width: `${pctAvail}%` }} />}
-            <div className="bg-warning h-full" style={{ width: `${pctComm}%` }} />
-            <div className="bg-fixed h-full" style={{ width: `${pctWd}%` }} />
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-[11px]">
-            <LegendItem color="bg-income" label="Disponível" value={fmt(Math.max(0, available))} />
-            <LegendItem color="bg-warning" label="Comissões" value={fmt(pendingCommissions)} />
-            <LegendItem color="bg-fixed" label="Retiradas" value={fmt(withdrawals)} />
-          </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">(−) Comissões pendentes</span>
+          <span className="mono text-warning">−{fmt(pendingCommissions)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">(−) Retiradas dos sócios</span>
+          <span className="mono text-fixed">−{fmt(withdrawals)}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
+          <span className="font-semibold">Saldo disponível</span>
+          <span className={cn("mono font-bold text-base", available >= 0 ? "text-income" : "text-expense")}>{fmt(available)}</span>
         </div>
       </div>
     </div>
   );
 }
+
 
 function LegendItem({ color, label, value }: { color: string; label: string; value: string }) {
   return (
