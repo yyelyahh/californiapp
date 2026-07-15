@@ -382,14 +382,24 @@ export default function CommissionsPage() {
           <h1 className="text-xl font-semibold tracking-tight">Distribuição</h1>
           <p className="text-xs text-muted-foreground">Comissões, consumos, pagamentos e retiradas dos sócios · {label}</p>
         </div>
-        <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
-          <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="month">Mês atual</SelectItem>
-            <SelectItem value="quarter">Trimestre</SelectItem>
-            <SelectItem value="year">Ano</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
+            <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Mês atual</SelectItem>
+              <SelectItem value="lastMonth">Mês anterior</SelectItem>
+              <SelectItem value="quarter">Trimestre</SelectItem>
+              <SelectItem value="custom">Período personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {period === "custom" && (
+            <div className="flex items-center gap-1.5">
+              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9 w-[150px]" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9 w-[150px]" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPIs — Distribuição do dinheiro */}
