@@ -1,62 +1,37 @@
-## Objetivo
+## Ajustes na página Distribuição
 
-Ampliar as opções de forma de pagamento no registro de venda: quando a venda é **pendente** (paidAmount < total), oferecer 4 opções em vez de 2. Quando a venda é registrada como **paga**, manter apenas Pix / Dinheiro.
+Reformular os cálculos e o escopo temporal dos KPIs da página, mantendo o layout atual.
 
-## Novas opções (venda pendente)
+### Novas regras
 
-1. `pix_pendente` — "Falta receber Pix"
-2. `dinheiro_pendente` — "Falta receber Dinheiro"
-3. `dinheiro_com_vendedor` — "Dinheiro com {nome do vendedor}" (cliente já pagou ao vendedor; continua em aberto do ponto de vista do admin, é dívida do vendedor)
-4. `pendente` — "Falta receber (sem especificação)"
+**Lucro Líquido (all-time, sem filtro de data)**
+- Receita = soma de `paidAmount` de todas as vendas (`type = "venda"`), ou seja, apenas o que foi efetivamente recebido.
+- (−) COGS: custo de compra × quantidade de todas as vendas recebidas (proporcional ao `paidAmount / totalPrice` quando a venda foi parcialmente paga, para não descontar custo de mercadoria ainda não realizada).
+- (−) Despesas: todas do sistema, sem filtro.
+- (−) Pagamentos a investidores: soma de todos os `dividends` cadastrados na página Investidores.
+- Resultado exibido no card "Lucro Líquido" e no bloco "Distribuição do Lucro".
 
-Para venda **paga**, mantém: `pix` / `dinheiro`.
+**Comissões / Vendedores (inalterado)**
+- Continuam limitadas ao período selecionado no topo (Mês / Mês anterior / Trimestre / Personalizado).
+- Corte de 01/06/2026 permanece: nada antes dessa data conta como comissão.
+- O bloco "Vendedores" continua reagindo ao seletor de período.
 
-## Mudanças
+**Retiradas dos Sócios (all-time)**
+- Somar todas as retiradas de todos os sócios, sem filtro de data.
+- Card "Retiradas dos Sócios" e ledger da distribuição usam esse total.
+- Cards individuais de cada sócio passam a mostrar "Total retirado" (all-time) no lugar de "no período"; o "último saque" continua.
 
-### 1. Tipos (`src/types/index.ts`)
-Estender `PaymentMethod`:
-```ts
-export type PaymentMethod =
-  | "pix" | "dinheiro"
-  | "pix_pendente" | "dinheiro_pendente"
-  | "dinheiro_com_vendedor" | "pendente";
-```
-A coluna `payment_method` (text) já aceita qualquer valor — nenhuma migração necessária.
+**Saldo Disponível**
+- Fórmula: `Lucro Líquido (all-time) − Comissões pendentes (do período) − Retiradas (all-time)`.
+- Validação do diálogo "saldo ficará negativo" continua usando esse valor.
 
-### 2. Formulário de venda (`src/pages/SalesPage.tsx`)
-- Detectar `isPending = Number(paidAmount) < Number(total)` no form.
-- Renderizar dinamicamente os botões de método:
-  - Se paga → Pix / Dinheiro (como hoje).
-  - Se pendente → 4 botões (Falta Pix, Falta Dinheiro, Dinheiro c/ vendedor, Falta receber).
-- Se o usuário alterna paid ↔ pendente e o método atual não pertence ao novo conjunto, resetar para o primeiro válido (`pix` ou `pix_pendente`).
-- A opção "Dinheiro com vendedor" só fica habilitada quando um vendedor está selecionado no form; caso contrário mostra tooltip/estado desabilitado.
+### Ajustes de UI/textos
+- Substituir os subtítulos "No período" dos cards Lucro e Retiradas por "Total acumulado".
+- Ajustar labels do bloco "Distribuição do Lucro" e do rodapé de insights para refletir all-time em Lucro e Retiradas.
+- Manter o seletor de período no topo, mas deixar claro que ele afeta apenas Comissões/Vendedores (label do seletor: "Período (comissões)").
 
-### 3. Exibição na tabela de vendas (`src/pages/SalesPage.tsx`, coluna "Pagto")
-Ampliar o mapeamento de rótulos e cores:
-- `pix` → "Pix" (primary)
-- `dinheiro` → "Dinheiro" (income)
-- `pix_pendente` → "Falta Pix" (muted/warning)
-- `dinheiro_pendente` → "Falta Dinheiro" (muted/warning)
-- `dinheiro_com_vendedor` → "Dinheiro c/ {vendedor}" (warning)
-- `pendente` → "Falta receber" (muted)
-
-### 4. Relatório WhatsApp (`src/components/SellerReportDrawer.tsx`)
-Na seção de vendas em aberto, substituir a lógica atual de `💠 PIX` / `💵 DINHEIRO` por texto puro (sem emojis extras) conforme o método:
-- `pix_pendente` ou `pix` → `Pix`
-- `dinheiro_pendente` ou `dinheiro` → `Dinheiro`
-- `dinheiro_com_vendedor` → `Dinheiro com {nome do vendedor}`
-- `pendente` ou ausente → `A definir`
-
-Formato final da linha:
-```
-• 27/06 • Strawberry Watermelon · Ice King 40K • Em aberto R$ 159,00 · Dinheiro com João
-```
-
-### 5. Compatibilidade
-- Vendas antigas com `pix`/`dinheiro` continuam funcionando.
-- Nenhuma mudança em cálculo de comissão, estoque ou dívidas — apenas rótulos/tracking do método.
-
-## Arquivos afetados
-- `src/types/index.ts`
-- `src/pages/SalesPage.tsx`
-- `src/components/SellerReportDrawer.tsx`
+### Arquivos
+- `src/pages/CommissionsPage.tsx`
+  - Adicionar carregamento de `dividends` do store.
+  - Ajustar `periodMetrics`: separar `netProfit` (all-time, com COGS proporcional ao recebido) e `totalWithdrawals` (all-time) das métricas de comissão (que continuam usando `inPeriod` + corte legado).
+  - Ajustar componente `ProfitDistribution` e rodapé de insights com os novos rótulos.
