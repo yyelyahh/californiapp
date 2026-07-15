@@ -19,7 +19,7 @@ const GERAL = "geral";
 export default function Dashboard() {
   const store = useStore();
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
-  const investedCapital = store.getTotalInvested();
+  const inventoryAtCost = store.getInventoryCostValue();
 
   const monthOptions = useMemo(() => {
     const set = new Set<string>();
