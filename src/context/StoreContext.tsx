@@ -76,6 +76,31 @@ interface StoreContextType {
   getSellerDebt: (id: string) => number;
   getSellerPaid: (id: string) => number;
   getSellerBalance: (id: string) => number;
+  // ---- Novo modelo financeiro ----
+  partnerContributions: PartnerContribution[];
+  loans: Loan[];
+  loanPayments: LoanPayment[];
+  financialEvents: FinancialEvent[];
+  addPartnerContribution: (c: Omit<PartnerContribution, "id" | "createdAt">) => Promise<void>;
+  deletePartnerContribution: (id: string) => Promise<void>;
+  addLoan: (l: Omit<Loan, "id" | "createdAt">) => Promise<void>;
+  updateLoan: (id: string, l: Partial<Loan>) => Promise<void>;
+  deleteLoan: (id: string) => Promise<void>;
+  addLoanPayment: (p: Omit<LoanPayment, "id" | "createdAt">) => Promise<void>;
+  deleteLoanPayment: (id: string) => Promise<void>;
+  refreshFinancialEvents: () => Promise<void>;
+  // Selectors do novo modelo (contabilidade simplificada)
+  getCash: () => number;
+  getInventoryCostValue: () => number;
+  getReceivables: () => number;
+  getPartnerCapital: () => number;
+  getLoansOutstanding: () => number;
+  getAccumulatedProfit: () => number;
+  getDistributedProfit: () => number;
+  getRetainedEarnings: () => number;
+  getDistributableProfit: (pendingCommissions?: number) => number;
+  getLoanPaid: (loanId: string) => number;
+  getLoanRemaining: (loanId: string) => number;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
