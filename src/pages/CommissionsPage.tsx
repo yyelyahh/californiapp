@@ -142,22 +142,22 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
-    const salesPeriod = sales.filter(s => inPeriod(s.date));
-    const vendasPeriod = salesPeriod.filter(s => s.type === "venda");
-    const revenue = vendasPeriod.reduce((a, s) => a + s.totalPrice, 0);
-    const cogs = vendasPeriod.reduce((a, s) => a + (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
+    // === Lucro Líquido: CUMULATIVO desde 01/06/2026 até fim do período selecionado ===
+    const vendasCum = sales.filter(s => s.type === "venda" && inCumulative(s.date));
+    const revenue = vendasCum.reduce((a, s) => a + s.totalPrice, 0);
+    const cogs = vendasCum.reduce((a, s) => a + (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
     const grossProfit = revenue - cogs;
-    const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
+    const periodExpenses = expenses.filter(e => inCumulative(e.date)).reduce((a, e) => a + e.amount, 0);
     const netProfit = grossProfit - periodExpenses;
 
-    // Conta Corrente do vendedor — comissão do período + abate consumo (incluindo legado)
+    // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
+    const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
-      // Comissão só é creditada em vendas QUITADAS
       const vendasPagas = vendas.filter(s => (s.paidAmount || 0) >= s.totalPrice - 0.01);
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
-      const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
+      const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = computeSellerCommission(vendasPagas);
       const accrued = c.accrued;
@@ -167,21 +167,17 @@ export default function CommissionsPage() {
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
 
-      // === Consumo / dívidas / pagamentos — APENAS no período ===
       const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
       const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date));
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date) && !isLegacy(d.date));
       const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
       const consumoTotal = retiradasTotal + manualDebtsTotal;
-      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).reduce((a, p) => a + p.amount, 0);
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
-      // Saldo de consumo abate direto da comissão.
-      // Pagamentos de dívida no período somam de volta ao saldo do vendedor (crédito).
       const saldoConsumo = consumoTotal;
       const retiradasCount = retiradas.length + manualDebts.length;
 
-      // Saldo de comissão = acumulada − consumo + pagamentos de dívida − comissão paga
       const balance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
 
       return {
@@ -196,13 +192,13 @@ export default function CommissionsPage() {
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
     const leader = perSeller.find(r => r.vendasTotal > 0) || null;
 
-    // Retiradas dos sócios
+    // Retiradas dos sócios — CUMULATIVO desde 01/06/2026 até fim do período
     const perPartner = partners.map(partner => {
       const list = withdrawals.filter(w => w.partnerId === partner.id);
-      const periodAmt = list.filter(w => inPeriod(w.date)).reduce((a, w) => a + w.amount, 0);
+      const periodAmt = list.filter(w => inCumulative(w.date)).reduce((a, w) => a + w.amount, 0);
       const yearAmt = list.filter(w => inYear(w.date)).reduce((a, w) => a + w.amount, 0);
       const last = list.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      return { partner, periodAmt, yearAmt, last, count: list.filter(w => inPeriod(w.date)).length };
+      return { partner, periodAmt, yearAmt, last, count: list.filter(w => inCumulative(w.date)).length };
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
@@ -215,6 +211,7 @@ export default function CommissionsPage() {
       available,
     };
   }, [sales, expenses, products, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
+
 
   const timeline = useMemo(() => {
     const items = [
