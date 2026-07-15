@@ -692,8 +692,18 @@ export default function CommissionsPage() {
         <ul className="space-y-1.5 text-[13px]">
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-income shrink-0" />
-            <span className="text-muted-foreground">Lucro líquido:</span>
-            <span className={cn("mono font-semibold", periodMetrics.netProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.netProfit)}</span>
+            <span className="text-muted-foreground">Lucro operacional:</span>
+            <span className={cn("mono font-semibold", periodMetrics.operatingProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.operatingProfit)}</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
+            <span className="text-muted-foreground">Reinvestido em estoque:</span>
+            <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.stockReinvestment)}</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Sparkles size={12} className={periodMetrics.freeCash >= 0 ? "text-income" : "text-expense"} />
+            <span className="text-muted-foreground">Caixa livre:</span>
+            <span className={cn("mono font-semibold", periodMetrics.freeCash >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.freeCash)}</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
