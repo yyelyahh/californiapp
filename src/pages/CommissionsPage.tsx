@@ -77,7 +77,7 @@ export default function CommissionsPage() {
   const store = useStore();
   const confirm = useConfirm();
   const {
-    sellers, partners, sales, expenses, products, productAssignments, dividends,
+    sellers, partners, sales, expenses, products, productAssignments, dividends, stockEntries,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
@@ -142,21 +142,22 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
-    // === Lucro Líquido: ALL-TIME, sem restrição de data ===
-    // Receita = somente valor recebido (paidAmount) das vendas
-    // COGS proporcional ao paidAmount / totalPrice
-    // (-) despesas (todas) (-) pagamentos a investidores (todos os dividends)
+    // === Lucro Operacional (ALL-TIME, sem COGS): o que a operação gera antes de reinvestir ===
+    // = Receita recebida − Despesas − Pagamentos a investidores
     const vendasAll = sales.filter(s => s.type === "venda");
     const revenue = vendasAll.reduce((a, s) => a + (s.paidAmount || 0), 0);
-    const cogs = vendasAll.reduce((a, s) => {
-      const cost = (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity;
-      const ratio = s.totalPrice > 0 ? Math.min(1, (s.paidAmount || 0) / s.totalPrice) : 0;
-      return a + cost * ratio;
-    }, 0);
-    const grossProfit = revenue - cogs;
     const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
     const totalInvestorPayments = dividends.reduce((a, d) => a + d.amount, 0);
-    const netProfit = grossProfit - totalExpenses - totalInvestorPayments;
+    const operatingProfit = revenue - totalExpenses - totalInvestorPayments;
+
+    // Reinvestimento em estoque (todas as compras de estoque cadastradas)
+    const stockReinvestment = stockEntries.reduce((a, e) => a + (e.totalCost || 0), 0);
+
+    // Caixa Livre = Lucro Operacional − Reinvestido em estoque
+    const freeCash = operatingProfit - stockReinvestment;
+
+    // Mantido para compatibilidade com o resto da tela (usado em Insights / drawers)
+    const netProfit = operatingProfit;
 
     // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
