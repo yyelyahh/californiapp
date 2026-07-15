@@ -77,7 +77,7 @@ export default function CommissionsPage() {
   const store = useStore();
   const confirm = useConfirm();
   const {
-    sellers, partners, sales, expenses, products, productAssignments,
+    sellers, partners, sales, expenses, products, productAssignments, dividends,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
@@ -142,13 +142,21 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
-    // === Lucro Líquido: CUMULATIVO desde 01/06/2026 até fim do período selecionado ===
-    const vendasCum = sales.filter(s => s.type === "venda" && inCumulative(s.date));
-    const revenue = vendasCum.reduce((a, s) => a + s.totalPrice, 0);
-    const cogs = vendasCum.reduce((a, s) => a + (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
+    // === Lucro Líquido: ALL-TIME, sem restrição de data ===
+    // Receita = somente valor recebido (paidAmount) das vendas
+    // COGS proporcional ao paidAmount / totalPrice
+    // (-) despesas (todas) (-) pagamentos a investidores (todos os dividends)
+    const vendasAll = sales.filter(s => s.type === "venda");
+    const revenue = vendasAll.reduce((a, s) => a + (s.paidAmount || 0), 0);
+    const cogs = vendasAll.reduce((a, s) => {
+      const cost = (products.find(p => p.id === s.productId)?.purchasePrice ?? 0) * s.quantity;
+      const ratio = s.totalPrice > 0 ? Math.min(1, (s.paidAmount || 0) / s.totalPrice) : 0;
+      return a + cost * ratio;
+    }, 0);
     const grossProfit = revenue - cogs;
-    const periodExpenses = expenses.filter(e => inCumulative(e.date)).reduce((a, e) => a + e.amount, 0);
-    const netProfit = grossProfit - periodExpenses;
+    const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
+    const totalInvestorPayments = dividends.reduce((a, d) => a + d.amount, 0);
+    const netProfit = grossProfit - totalExpenses - totalInvestorPayments;
 
     // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
@@ -192,25 +200,25 @@ export default function CommissionsPage() {
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
     const leader = perSeller.find(r => r.vendasTotal > 0) || null;
 
-    // Retiradas dos sócios — CUMULATIVO desde 01/06/2026 até fim do período
+    // Retiradas dos sócios — ALL-TIME, sem restrição de data
     const perPartner = partners.map(partner => {
       const list = withdrawals.filter(w => w.partnerId === partner.id);
-      const periodAmt = list.filter(w => inCumulative(w.date)).reduce((a, w) => a + w.amount, 0);
+      const periodAmt = list.reduce((a, w) => a + w.amount, 0); // all-time total
       const yearAmt = list.filter(w => inYear(w.date)).reduce((a, w) => a + w.amount, 0);
       const last = list.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      return { partner, periodAmt, yearAmt, last, count: list.filter(w => inCumulative(w.date)).length };
+      return { partner, periodAmt, yearAmt, last, count: list.length };
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
     const available = netProfit - totalSellerBalance - totalWithdrawalsPeriod;
 
     return {
-      revenue, cogs, grossProfit, netProfit, periodExpenses,
+      revenue, cogs, grossProfit, netProfit, periodExpenses: totalExpenses, totalInvestorPayments,
       perSeller, leader, totalSellerBalance,
       perPartner, totalWithdrawalsPeriod,
       available,
     };
-  }, [sales, expenses, products, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
+  }, [sales, expenses, products, sellers, partners, dividends, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end]);
 
 
   const timeline = useMemo(() => {
@@ -404,9 +412,9 @@ export default function CommissionsPage() {
 
       {/* KPIs — Distribuição do dinheiro */}
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-        <KPI icon={<TrendingUp size={14} />} label="Lucro Líquido" value={formatCurrency(periodMetrics.netProfit)} tone={periodMetrics.netProfit >= 0 ? "income" : "expense"} sub="Receita − compras − despesas" />
-        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Comissões pendentes" />
-        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="fixed" sub="No período" />
+        <KPI icon={<TrendingUp size={14} />} label="Lucro Líquido" value={formatCurrency(periodMetrics.netProfit)} tone={periodMetrics.netProfit >= 0 ? "income" : "expense"} sub="Recebido − custos − despesas − investidores" />
+        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Comissões pendentes no período" />
+        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="fixed" sub="Total acumulado" />
         <div className={cn(
           "rounded-xl p-[1px] bg-gradient-to-br",
           periodMetrics.available >= 0 ? "from-income/60 via-income/20 to-transparent" : "from-expense/60 via-expense/20 to-transparent"
@@ -559,7 +567,7 @@ export default function CommissionsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">No período</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total retirado</p>
                     <p className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-fixed" : "text-muted-foreground")}>{formatCurrency(r.periodAmt)}</p>
                   </div>
                   <div>
@@ -693,8 +701,8 @@ export default function CommissionsPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
             <span className="text-muted-foreground">
               {periodMetrics.totalWithdrawalsPeriod > 0.01
-                ? <>Sócios retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no período</>
-                : <>Nenhuma retirada dos sócios no período.</>}
+                ? <>Sócios já retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no total</>
+                : <>Nenhuma retirada dos sócios registrada.</>}
             </span>
           </li>
           <li className="flex items-center gap-2">
