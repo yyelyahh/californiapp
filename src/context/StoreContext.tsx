@@ -238,6 +238,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "partner_contributions" }, refetchFinancialEvents)
       .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, refetchFinancialEvents)
       .on("postgres_changes", { event: "*", schema: "public", table: "loan_payments" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_manual_debts" }, refetchFinancialEvents)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_debt_payments" }, refetchFinancialEvents)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
