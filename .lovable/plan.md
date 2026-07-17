@@ -1,66 +1,72 @@
+# Auditoria dos valores do Financeiro
 
-## Contexto do problema
+Fui direto no banco somar cada linha do ledger `financial_events`. Aqui está o que cada card está mostrando hoje e onde estão os erros conceituais.
 
-Confirmado no banco: as "27 unidades sumidas" são, na verdade, **26 vendas com `type = 'retirada_funcionario'`** (retiradas de estoque que viram dívida do vendedor). A view `financial_events` filtra `WHERE s.type = 'venda'` — então essas retiradas:
+## Números atuais (fonte de verdade)
 
-- **decrementam** `products.stock` (código de venda executa para qualquer type)
-- **não geram** eventos no ledger (nem saída de estoque, nem contas a receber)
+**Ativo**
+- Caixa: **R$ 3.064,95** (soma de todas as entradas/saídas de dinheiro)
+- Estoque a custo (ledger): **R$ 2.634,21** — módulo Produtos mostra R$ 2.609,33 → resíduo ~R$ 25 é o desvio conhecido de custo histórico vs. atual
+- A Receber: **R$ 2.906,80** ← o que você contestou
+- **Total Ativo: R$ 8.605,96**
 
-Além disso, duas tabelas inteiras estão fora do ledger:
-- `seller_manual_debts` (R$ 993,91) — dívidas manuais lançadas para o vendedor
-- `seller_debt_payments` (R$ 842,47) — pagamentos dessas dívidas
+**Passivo + PL**
+- Capital dos sócios: R$ 0,00 (nenhum aporte cadastrado ainda)
+- Empréstimos pendentes: R$ 0,00 (todos quitados)
+- Lucros retidos: **R$ 6.618,14** (acumulado 11.512,14 − distribuído 4.894,00)
+- **Total Passivo+PL: R$ 6.618,14**
 
-Resultado: o ledger continua "vendo" 26 unidades no estoque que fisicamente já saíram, inflando o cálculo em ~R$ 1.766.
+**Δ = R$ 1.987,82** → livro NÃO está batendo. Esse desalinhamento é sintoma dos problemas abaixo.
 
-## O que este plano faz
+## Composição do "A Receber" (R$ 2.906,80)
 
-Estende a view `financial_events` para reconhecer três tipos de evento novos, mantendo a identidade Ativo = Passivo + PL:
+| Origem | Valor |
+|---|---|
+| Vendas em aberto (`type = venda`, saldo devedor) | R$ 1.036,00 |
+| Retiradas de funcionário (`type = retirada_funcionario`, 27 registros, 0 pago) | R$ 1.721,36 |
+| Dívidas manuais (`seller_manual_debts`, 3 registros) | R$ 993,91 |
+| Pagamentos de dívida (`seller_debt_payments`, 29 registros) | −R$ 842,47 |
+| **Total** | **R$ 2.906,80** |
 
-### 1. `retirada_funcionario` (a partir de `sales` com esse type)
-Modela como venda a prazo para o vendedor — estoque sai, vira conta a receber, gera margem:
-- `inventory_delta = − (products.purchase_price × quantity)`
-- `receivable_delta = + total_price`
-- `accumulated_profit_delta = + (total_price − purchase_price × quantity)`
-- `cash_delta = 0`
+## Problemas identificados
 
-### 2. `seller_manual_debt` (a partir de `seller_manual_debts`)
-Dívida lançada manualmente pelo admin — cria conta a receber sem afetar caixa nem estoque. Como representa um valor devido pelo vendedor por consumo/quebra já contabilizada em outro lugar, tratamos como **reclassificação** que aumenta o A Receber e reduz o Lucro Acumulado (equivale a reconhecer uma perda que virou dívida):
-- `receivable_delta = + amount`
-- `accumulated_profit_delta = − amount` — a decidir com o usuário (ver questão abaixo)
+### 1. Dívidas manuais estão contabilizadas com contrapartida errada (Δ = 2 × 993,91 = 1.987,82)
+No ledger, cada `seller_manual_debt` faz:
+- `receivable_delta = +993,91` (Ativo sobe)
+- `accumulated_profit_delta = −993,91` (PL cai)
 
-### 3. `seller_debt_payment` (a partir de `seller_debt_payments`)
-Recebimento de dívida do vendedor — caixa entra, conta a receber cai:
-- `cash_delta = + amount`
-- `receivable_delta = − amount`
+Como Ativo↑ e PL↓ ao mesmo tempo, o balanço rompe em exatamente **2 × 993,91 = R$ 1.987,82** — que é o Δ do livro. Essa é a causa matemática exata do "livro não bate".
 
-## Impacto esperado no card "Estoque (a custo)"
+Além disso, o modelo assume que dívida manual é "perda absorvida", mas na prática ela costuma cobrir consumo/quebra que **já saiu do estoque em outro lançamento** (retirada de funcionário, perda). Ou seja, hoje o mesmo prejuízo é reconhecido duas vezes.
 
-```text
-Antes:  R$ 4.466,85
-− CPV das 26 retiradas: R$ 1.766,39
-Depois: R$ 2.700,46
-Produtos (referência):  R$ 2.609,33
-Resíduo:                R$    91,13
-```
+### 2. Retirada de funcionário + Dívida manual = potencial duplicação de A Receber
+As 27 retiradas de funcionário já geram R$ 1.721,36 de conta a receber (produto sai, vendedor deve). Se as dívidas manuais estão sendo lançadas para cobrir consumo desses mesmos itens, o vendedor aparece devendo o valor duas vezes.
 
-O resíduo de ~R$ 91 é a **outra causa da divergência já diagnosticada**: entradas registradas ao custo histórico da nota vs. saídas (CPV) valoradas ao `purchase_price` atual do produto. Fechá-lo exige mudar a valoração para custo médio ou FIFO — fora do escopo deste passo.
+Precisa esclarecer: **dívida manual serve para o quê hoje?** Se é para lançar consumo que **não** tem retirada de estoque correspondente (ex.: quebrou um pod que estava com ele), fica. Se é uma cópia manual do que a retirada já registrou, tem que sair.
+
+### 3. Vendas de funcionário viram receita imediata mesmo sem pagamento
+O ledger reconhece as 27 retiradas como venda (receita + CPV → lucro) no ato da retirada, mesmo com `paid_amount = 0`. Isso infla o "Lucros retidos" em ~R$ 1.721 antes de o dinheiro entrar. Vendas normais em aberto (R$ 1.036) têm o mesmo comportamento.
+
+Isso é regime de competência (correto contabilmente), mas incompatível com a política que você usa em Distribuição ("comissão só quando pago"). Vale alinhar: ou o Financeiro também espera o pagamento, ou o card explicita que Lucros Retidos inclui vendas ainda a receber.
+
+### 4. Caixa (R$ 3.064,95) — verificar se bate
+Não temos referência externa. Se você tem o extrato real da conta/dinheiro em mãos, comparar com esse número é o teste final. Se divergir, provavelmente está faltando lançamento em algum canal (recebimentos fora do sistema, pagamentos manuais).
+
+## Perguntas antes de corrigir
+
+1. **Dívida manual** (`seller_manual_debts`): representa consumo/quebra que **já saiu** do estoque via retirada de funcionário, ou é um lançamento independente para casos sem retirada?
+2. **Retirada de funcionário**: você considera receita no ato ou só quando o vendedor paga? (Isso muda como o lucro operacional é calculado.)
+3. **Caixa (R$ 3.064,95)**: você consegue comparar com o saldo real hoje? Se sim, quanto está no caixa/conta de fato?
+
+## Correções propostas (depende das respostas acima)
+
+- **Sempre corrigir**: refazer o lançamento de `seller_manual_debt` no ledger para respeitar a partida dobrada. Se representa perda real → `inventory_delta = −amount` (ou `accumulated_profit_delta = −amount` **sem** subir A Receber, ou subir A Receber **e** reduzir estoque). Se é apenas reclassificação → só mover valores dentro do Ativo, sem tocar PL.
+- **Se dívidas manuais duplicam retiradas** (resposta 1): remover o receivable duplicado — mantém só a retirada como fonte da conta a receber.
+- **Se retirada de funcionário não deve virar receita antes de pagar** (resposta 2): reclassificar como transferência interna (estoque → conta a receber pelo custo, sem tocar lucro), e só reconhecer margem no `seller_debt_payment`.
+- **Ledger consistente**: fechar essas duas frentes derruba o Δ para ~R$ 25 (só o resíduo de valoração de estoque, que fica para depois).
 
 ## Arquivos afetados
+- **Migração**: `CREATE OR REPLACE VIEW public.financial_events` corrigindo `seller_manual_debt`, `seller_withdrawal` (retirada de funcionário) e possivelmente `seller_debt_payment`.
+- **Sem mudança no frontend**: `FinancePage.tsx` lê tudo pela view — os cards passam a mostrar valores corretos automaticamente.
 
-- **Nova migração** (`supabase/migrations/…_extend_financial_events.sql`)
-  - `CREATE OR REPLACE VIEW public.financial_events` adicionando três `UNION ALL`:
-    - `retirada_funcionario` (join `sales` × `products`, filtro `type = 'retirada_funcionario'`)
-    - `seller_manual_debt` (from `seller_manual_debts`)
-    - `seller_debt_payment` (from `seller_debt_payments`)
-  - View continua `SECURITY INVOKER` (padrão) e herda as policies das tabelas fonte.
-- **`src/context/StoreContext.tsx`**
-  - Adicionar canais realtime para `seller_manual_debts` e `seller_debt_payments` que refazem `financial_events` (retiradas já disparam via `sales`).
-  - Nenhuma mudança nos seletores (`getInventoryCostValue`, `getReceivables`, `getCash`, etc.) — todos leem da view.
-- **`src/pages/FinancePage.tsx`**
-  - Nenhuma mudança de código. Cards passam a refletir os novos valores automaticamente.
-  - Histórico de movimentações passará a mostrar as três novas linhas de evento.
-
-## Perguntas antes de implementar
-
-1. **Manual debts geram lançamento de perda?** Hoje `seller_manual_debts` (R$ 993,91) representam quê? Cobrança por produto quebrado/consumido pelo vendedor? Se sim, o correto é `accumulated_profit_delta = − amount` (a empresa reconhece o valor como perda absorvida via dívida). Se for cobrança de algo já contabilizado, o profit_delta deve ser 0 — só reclassifica um ativo em outro.
-2. **Margem em retirada de funcionário deve virar lucro?** Nas 26 retiradas, `total_price − CPV = −45,03` (vendidas ~ao custo, algumas abaixo). Confirma que retirada é conceitualmente uma venda (reconhece receita e CPV) e não uma transferência interna a custo?
+Aguardando suas respostas às 3 perguntas para escolher a variante certa da correção.
