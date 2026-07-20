@@ -10,10 +10,10 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight,
+  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight, AlertTriangle,
 } from "lucide-react";
 import {
-  format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
+  format, startOfMonth, endOfMonth, startOfYear,
   endOfYear, isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -71,7 +71,7 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 
-type Period = "month" | "lastMonth" | "quarter" | "custom";
+type Period = "month" | "lastMonth" | "custom";
 
 export default function CommissionsPage() {
   const store = useStore();
@@ -114,9 +114,6 @@ export default function CommissionsPage() {
       const prev = subMonths(now, 1);
       s = startOfMonth(prev); e = endOfMonth(prev);
       l = format(prev, "MMMM/yyyy", { locale: ptBR });
-    } else if (period === "quarter") {
-      s = startOfQuarter(now); e = endOfQuarter(now);
-      l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`;
     } else {
       // custom
       try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
@@ -143,23 +140,60 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
-    // === Novo modelo contábil (all-time, derivado do ledger financial_events) ===
-    // Lucro operacional acumulado = Receita reconhecida − CPV − Despesas − Juros − Comissões − Perdas
-    // Compras de estoque e retiradas NÃO afetam o lucro (são trocas patrimoniais).
-    const accumulatedProfit = getAccumulatedProfit();
-    const distributedProfit = getDistributedProfit();
-    const retainedEarnings = getRetainedEarnings();
-    const cashBalance = getCash();
-    const inventoryValue = getInventoryCostValue();
+    // === LUCRO DO PERÍODO — espelha a fórmula do Dashboard ===
+    // Lucro bruto = receita (totalPrice) − CPV (product.purchasePrice × qty), vendas type=venda no período
+    const vendasNoPeriodo = sales.filter(s => s.type === "venda" && inPeriod(s.date));
+    const revenue = vendasNoPeriodo.reduce((a, s) => a + s.totalPrice, 0);
+    const cogs = vendasNoPeriodo.reduce((a, s) => {
+      const p = products.find(x => x.id === s.productId);
+      return a + (p?.purchasePrice ?? 0) * s.quantity;
+    }, 0);
+    const grossProfit = revenue - cogs;
 
-    // Mantido para compatibilidade com o resto da tela
-    const operatingProfit = accumulatedProfit;
-    const revenue = sales.filter(s => s.type === "venda").reduce((a, s) => a + (s.paidAmount || 0), 0);
-    const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
-    const netProfit = accumulatedProfit;
+    const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
+    const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
+    const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
-    // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
+    // === Balanço por vendedor — período + saldo anterior (cumulativo desde 01/06/2026) ===
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
+
+    // Saldo anterior: agrupa por mês para aplicar corretamente a faixa de comissão
+    const priorEnd = new Date(start.getTime() - 1);
+    const inPriorRange = (iso: string) => {
+      try {
+        const d = parseISO(iso);
+        return d >= PROJECT_START && d <= priorEnd;
+      } catch { return false; }
+    };
+    const priorBalanceFor = (sellerId: string) => {
+      const paidSales = sales.filter(s =>
+        s.sellerId === sellerId && s.type === "venda" &&
+        inPriorRange(s.date) &&
+        (s.paidAmount || 0) >= s.totalPrice - 0.01
+      );
+      // agrupa por mês → aplica faixa por mês
+      const byMonth = new Map<string, typeof paidSales>();
+      paidSales.forEach(s => {
+        const key = s.date.slice(0, 7);
+        (byMonth.get(key) || byMonth.set(key, []).get(key)!).push(s);
+      });
+      let accrued = 0;
+      byMonth.forEach(list => { accrued += computeSellerCommission(list).accrued; });
+      const retiradas = sales
+        .filter(s => s.sellerId === sellerId && s.type === "retirada_funcionario" && inPriorRange(s.date))
+        .reduce((a, s) => a + s.totalPrice, 0);
+      const manualDebts = sellerManualDebts
+        .filter(d => d.sellerId === sellerId && inPriorRange(d.date))
+        .reduce((a, d) => a + d.amount, 0);
+      const debtPay = sellerDebtPayments
+        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
+        .reduce((a, p) => a + p.amount, 0);
+      const commPaid = commissionPayments
+        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
+        .reduce((a, p) => a + p.amount, 0);
+      return accrued - retiradas - manualDebts + debtPay - commPaid;
+    };
+
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
@@ -186,7 +220,9 @@ export default function CommissionsPage() {
       const saldoConsumo = consumoTotal;
       const retiradasCount = retiradas.length + manualDebts.length;
 
-      const balance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
+      const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
+      const priorBalance = priorBalanceFor(seller.id);
+      const balance = periodBalance + priorBalance;
 
       return {
         seller, units, vendasTotal, commPaid,
@@ -194,40 +230,43 @@ export default function CommissionsPage() {
         tier: c.tier, balance, accrualItems,
         consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
         retiradasTotal, manualDebtsTotal, retiradasCount,
+        periodBalance, priorBalance,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
+    const priorPayableSum = perSeller.reduce((a, x) => a + x.priorBalance, 0);
+    const periodPayableSum = perSeller.reduce((a, x) => a + x.periodBalance, 0);
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
     const leader = perSeller.find(r => r.vendasTotal > 0) || null;
 
-    // Retiradas dos sócios — ALL-TIME, sem restrição de data
+    // === Distribuível aos sócios ===
+    const distribuivel = Math.max(0, netProfit - totalSellerBalance);
+    const totalPartnerPct = partners.reduce((a, p) => a + (p.percentage || 0), 0);
+
+    // === Retiradas dos sócios ===
     const perPartner = partners.map(partner => {
       const list = withdrawals.filter(w => w.partnerId === partner.id);
-      const periodAmt = list.reduce((a, w) => a + w.amount, 0); // all-time total
+      const periodAmt = list.filter(w => inPeriod(w.date)).reduce((a, w) => a + w.amount, 0);
       const yearAmt = list.filter(w => inYear(w.date)).reduce((a, w) => a + w.amount, 0);
+      const allTimeAmt = list.reduce((a, w) => a + w.amount, 0);
       const last = list.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      return { partner, periodAmt, yearAmt, last, count: list.length };
+      const pct = partner.percentage || 0;
+      const alvo = totalPartnerPct > 0 ? distribuivel * (pct / totalPartnerPct) : 0;
+      const faltaPagar = Math.max(0, alvo - periodAmt);
+      const excedente = Math.max(0, periodAmt - alvo);
+      return { partner, periodAmt, yearAmt, allTimeAmt, last, count: list.length, alvo, faltaPagar, excedente };
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
-    // Saldo disponível para nova retirada = lucros retidos − comissões pendentes
-    // (Retiradas já foram descontadas dentro de retainedEarnings via distributedProfit)
-    const available = retainedEarnings - totalSellerBalance;
-
-    // Métrica auxiliar: quanto foi reinvestido em estoque (apenas informativo)
-    const stockReinvestment = inventoryValue; // valor atual do estoque a custo
+    const available = distribuivel;
 
     return {
-      revenue, netProfit, operatingProfit,
-      accumulatedProfit, distributedProfit, retainedEarnings,
-      cashBalance, inventoryValue,
-      stockReinvestment, freeCash: cashBalance,
-      periodExpenses: totalExpenses, totalInvestorPayments: 0,
-      perSeller, leader, totalSellerBalance,
-      perPartner, totalWithdrawalsPeriod,
+      revenue, cogs, grossProfit, periodExpenses, periodInvestorPayments, netProfit,
+      perSeller, leader, totalSellerBalance, priorPayableSum, periodPayableSum,
+      perPartner, totalWithdrawalsPeriod, distribuivel,
       available,
     };
-  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end, getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getCash, getInventoryCostValue]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, PROJECT_START]);
 
 
 
@@ -406,7 +445,6 @@ export default function CommissionsPage() {
             <SelectContent>
               <SelectItem value="month">Mês atual</SelectItem>
               <SelectItem value="lastMonth">Mês anterior</SelectItem>
-              <SelectItem value="quarter">Trimestre</SelectItem>
               <SelectItem value="custom">Período personalizado</SelectItem>
             </SelectContent>
           </Select>
@@ -420,37 +458,31 @@ export default function CommissionsPage() {
         </div>
       </div>
 
-      {/* KPIs — Distribuição do dinheiro */}
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-5">
-        <KPI icon={<TrendingUp size={14} />} label="Lucro Operacional" value={formatCurrency(periodMetrics.operatingProfit)} tone={periodMetrics.operatingProfit >= 0 ? "income" : "expense"} sub="Recebido − despesas − investidores" />
-        <div className={cn(
-          "rounded-xl p-[1px] bg-gradient-to-br",
-          periodMetrics.freeCash >= 0 ? "from-income/60 via-income/20 to-transparent" : "from-expense/60 via-expense/20 to-transparent"
-        )}>
-          <div className="rounded-xl bg-card px-3 py-3 h-full">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              <Sparkles size={14} className={periodMetrics.freeCash >= 0 ? "text-income" : "text-expense"} /> Caixa Livre
-            </div>
-            <p className={cn("mt-1 text-lg sm:text-xl font-semibold mono", periodMetrics.freeCash >= 0 ? "text-income" : "text-expense")}>
-              {formatCurrency(periodMetrics.freeCash)}
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Operacional − estoque</p>
-          </div>
-        </div>
-        <KPI icon={<Package size={14} />} label="Reinvestido em Estoque" value={formatCurrency(periodMetrics.stockReinvestment)} tone="fixed" sub="Todas as compras" />
-        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Comissões pendentes no período" />
-        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="fixed" sub="Total acumulado" />
+      {/* KPIs — 3 métricas principais */}
+      <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
+        <KPI
+          icon={<TrendingUp size={14} />}
+          label="Lucro líquido no período"
+          value={formatCurrency(periodMetrics.netProfit)}
+          tone={periodMetrics.netProfit >= 0 ? "income" : "expense"}
+          sub={`Bruto ${formatCurrency(periodMetrics.grossProfit)} − despesas ${formatCurrency(periodMetrics.periodExpenses)} − investidores ${formatCurrency(periodMetrics.periodInvestorPayments)}`}
+        />
+        <KPI
+          icon={<Wallet size={14} />}
+          label="A pagar a vendedores"
+          value={formatCurrency(periodMetrics.totalSellerBalance)}
+          tone="warning"
+          sub={`Anterior ${formatCurrency(periodMetrics.priorPayableSum)} + no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
+        />
+        <KPI
+          icon={<Crown size={14} />}
+          label="Para distribuir aos sócios"
+          value={formatCurrency(periodMetrics.distribuivel)}
+          tone={periodMetrics.distribuivel > 0 ? "income" : "fixed"}
+          sub="Lucro líquido − a pagar a vendedores"
+        />
       </div>
 
-      {/* Distribuição do Lucro */}
-      <ProfitDistribution
-        operatingProfit={periodMetrics.operatingProfit}
-        stockReinvestment={periodMetrics.stockReinvestment}
-        freeCash={periodMetrics.freeCash}
-        pendingCommissions={periodMetrics.totalSellerBalance}
-        withdrawals={periodMetrics.totalWithdrawalsPeriod}
-        available={periodMetrics.available}
-      />
 
 
 
@@ -579,14 +611,22 @@ export default function CommissionsPage() {
                     <Users size={14} className="text-fixed" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total retirado</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Alvo no período</p>
+                    <p className="mono text-sm font-semibold text-primary">{formatCurrency(r.alvo)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Retirado</p>
                     <p className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-fixed" : "text-muted-foreground")}>{formatCurrency(r.periodAmt)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">No ano</p>
-                    <p className="mono text-sm font-medium">{formatCurrency(r.yearAmt)}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {r.excedente > 0.01 ? "Excedente" : "Falta pagar"}
+                    </p>
+                    <p className={cn("mono text-sm font-semibold", r.excedente > 0.01 ? "text-expense" : r.faltaPagar > 0.01 ? "text-warning" : "text-income")}>
+                      {formatCurrency(r.excedente > 0.01 ? r.excedente : r.faltaPagar)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
@@ -700,40 +740,26 @@ export default function CommissionsPage() {
         <ul className="space-y-1.5 text-[13px]">
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-income shrink-0" />
-            <span className="text-muted-foreground">Lucro operacional:</span>
-            <span className={cn("mono font-semibold", periodMetrics.operatingProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.operatingProfit)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
-            <span className="text-muted-foreground">Reinvestido em estoque:</span>
-            <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.stockReinvestment)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <Sparkles size={12} className={periodMetrics.freeCash >= 0 ? "text-income" : "text-expense"} />
-            <span className="text-muted-foreground">Caixa livre:</span>
-            <span className={cn("mono font-semibold", periodMetrics.freeCash >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.freeCash)}</span>
+            <span className="text-muted-foreground">Lucro líquido:</span>
+            <span className={cn("mono font-semibold", periodMetrics.netProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.netProfit)}</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
-            <span className="text-muted-foreground">
-              {periodMetrics.totalSellerBalance > 0.01
-                ? <>Comissões pendentes aos vendedores: <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span></>
-                : <>Nenhuma comissão pendente aos vendedores.</>}
-            </span>
+            <span className="text-muted-foreground">A pagar a vendedores (incl. saldo anterior):</span>
+            <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Crown size={12} className="text-primary" />
+            <span className="text-muted-foreground">Distribuível aos sócios:</span>
+            <span className={cn("mono font-semibold", periodMetrics.distribuivel > 0 ? "text-income" : "text-muted-foreground")}>{formatCurrency(periodMetrics.distribuivel)}</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
             <span className="text-muted-foreground">
               {periodMetrics.totalWithdrawalsPeriod > 0.01
-                ? <>Sócios já retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no total</>
-                : <>Nenhuma retirada dos sócios registrada.</>}
+                ? <>Sócios já retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no período</>
+                : <>Nenhuma retirada dos sócios no período.</>}
             </span>
-          </li>
-          <li className="flex items-center gap-2">
-            <Sparkles size={12} className={periodMetrics.available >= 0 ? "text-income" : "text-expense"} />
-            <span className="text-muted-foreground">Permanecem</span>
-            <span className={cn("mono font-semibold", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.available)}</span>
-            <span className="text-muted-foreground">disponíveis em caixa</span>
           </li>
         </ul>
       </div>

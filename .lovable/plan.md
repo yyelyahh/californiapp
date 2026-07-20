@@ -1,72 +1,90 @@
-# Auditoria dos valores do Financeiro
+## Objetivo
 
-Fui direto no banco somar cada linha do ledger `financial_events`. Aqui está o que cada card está mostrando hoje e onde estão os erros conceituais.
+Simplificar a página **Distribuição** para responder três perguntas objetivas por período:
+1. Quanto sobrou de lucro?
+2. Quanto devo aos vendedores?
+3. Quanto cabe a cada sócio e quanto ainda falta pagar?
 
-## Números atuais (fonte de verdade)
+Só frontend (`src/pages/CommissionsPage.tsx`). Nada de banco/ledger.
 
-**Ativo**
-- Caixa: **R$ 3.064,95** (soma de todas as entradas/saídas de dinheiro)
-- Estoque a custo (ledger): **R$ 2.634,21** — módulo Produtos mostra R$ 2.609,33 → resíduo ~R$ 25 é o desvio conhecido de custo histórico vs. atual
-- A Receber: **R$ 2.906,80** ← o que você contestou
-- **Total Ativo: R$ 8.605,96**
+---
 
-**Passivo + PL**
-- Capital dos sócios: R$ 0,00 (nenhum aporte cadastrado ainda)
-- Empréstimos pendentes: R$ 0,00 (todos quitados)
-- Lucros retidos: **R$ 6.618,14** (acumulado 11.512,14 − distribuído 4.894,00)
-- **Total Passivo+PL: R$ 6.618,14**
+## Fórmulas acordadas
 
-**Δ = R$ 1.987,82** → livro NÃO está batendo. Esse desalinhamento é sintoma dos problemas abaixo.
+**Período:** mês atual · mês anterior · personalizado (removemos "trimestre").
 
-## Composição do "A Receber" (R$ 2.906,80)
+**Lucro bruto do período** — espelha a fórmula do Dashboard:
+```
+Receita (totalPrice das vendas type=venda no período)
+  − CPV (product.purchasePrice × quantity)
+  = Lucro bruto
+```
 
-| Origem | Valor |
-|---|---|
-| Vendas em aberto (`type = venda`, saldo devedor) | R$ 1.036,00 |
-| Retiradas de funcionário (`type = retirada_funcionario`, 27 registros, 0 pago) | R$ 1.721,36 |
-| Dívidas manuais (`seller_manual_debts`, 3 registros) | R$ 993,91 |
-| Pagamentos de dívida (`seller_debt_payments`, 29 registros) | −R$ 842,47 |
-| **Total** | **R$ 2.906,80** |
+**Lucro líquido do período:**
+```
+Lucro bruto − Despesas do período − Pagamentos a investidores no período
+```
+(Pagamentos a investidores = tabela `dividends` filtrada por data.)
 
-## Problemas identificados
+**A pagar a vendedores** (dois números explícitos):
+- `Saldo anterior` = soma do saldo devido de cada vendedor **até o dia anterior ao início do período** (mesma fórmula já usada no `SellerReportDrawer`: comissão acumulada − consumo + pagamentos de dívida − comissões pagas, respeitando cutoff 01/06/2026 e faixas por mês).
+- `Gerado no período` = mesmo cálculo restrito ao período.
+- `Total a pagar` = anterior + período (só a parte positiva por vendedor, conforme regra atual de `Math.max(0, balance)`).
 
-### 1. Dívidas manuais estão contabilizadas com contrapartida errada (Δ = 2 × 993,91 = 1.987,82)
-No ledger, cada `seller_manual_debt` faz:
-- `receivable_delta = +993,91` (Ativo sobe)
-- `accumulated_profit_delta = −993,91` (PL cai)
+**Lucro a distribuir aos sócios:**
+```
+Lucro líquido do período − Total a pagar a vendedores
+```
+Se negativo, mostra 0 e exibe aviso ("período no vermelho").
 
-Como Ativo↑ e PL↓ ao mesmo tempo, o balanço rompe em exatamente **2 × 993,91 = R$ 1.987,82** — que é o Δ do livro. Essa é a causa matemática exata do "livro não bate".
+**Divisão entre sócios** — usa `partners.percentage` (não hardcoded). Para cada sócio:
+- `alvo = distribuivel × (percentage/100)`
+- `retirado_no_periodo = soma de proLaborePayments do sócio no período`
+- `falta_pagar = max(0, alvo − retirado_no_periodo)`
+- `excedente = max(0, retirado_no_periodo − alvo)` (informativo)
 
-Além disso, o modelo assume que dívida manual é "perda absorvida", mas na prática ela costuma cobrir consumo/quebra que **já saiu do estoque em outro lançamento** (retirada de funcionário, perda). Ou seja, hoje o mesmo prejuízo é reconhecido duas vezes.
+---
 
-### 2. Retirada de funcionário + Dívida manual = potencial duplicação de A Receber
-As 27 retiradas de funcionário já geram R$ 1.721,36 de conta a receber (produto sai, vendedor deve). Se as dívidas manuais estão sendo lançadas para cobrir consumo desses mesmos itens, o vendedor aparece devendo o valor duas vezes.
+## UI
 
-Precisa esclarecer: **dívida manual serve para o quê hoje?** Se é para lançar consumo que **não** tem retirada de estoque correspondente (ex.: quebrou um pod que estava com ele), fica. Se é uma cópia manual do que a retirada já registrou, tem que sair.
+**Filtro de período** (topo): três botões — Mês atual · Mês anterior · Personalizado (com dois date inputs quando ativo). Remove "Trimestre".
 
-### 3. Vendas de funcionário viram receita imediata mesmo sem pagamento
-O ledger reconhece as 27 retiradas como venda (receita + CPV → lucro) no ato da retirada, mesmo com `paid_amount = 0`. Isso infla o "Lucros retidos" em ~R$ 1.721 antes de o dinheiro entrar. Vendas normais em aberto (R$ 1.036) têm o mesmo comportamento.
+**3 cards principais** substituem os 4 atuais:
+1. **Lucro líquido no período** (verde/vermelho conforme sinal) — mostra também: receita, CPV, despesas, investidores como sub-linhas discretas.
+2. **A pagar a vendedores** — mostra `Saldo anterior + Gerado no período = Total`. Ao lado, badge com nº de vendedores com saldo positivo.
+3. **Lucro a distribuir aos sócios** — valor grande + linha "= Lucro líquido − A pagar a vendedores".
 
-Isso é regime de competência (correto contabilmente), mas incompatível com a política que você usa em Distribuição ("comissão só quando pago"). Vale alinhar: ou o Financeiro também espera o pagamento, ou o card explicita que Lucros Retidos inclui vendas ainda a receber.
+**Cards por sócio** (substituem o retângulo "Distribuição do Lucro" que sai): um card por sócio com:
+- Nome + % configurada
+- `Alvo do período`
+- `Retirado no período`
+- **`Falta pagar` (destacado)** ou **`Excedente`** se já passou do alvo
+- Botão "Registrar retirada" (fluxo atual mantido)
 
-### 4. Caixa (R$ 3.064,95) — verificar se bate
-Não temos referência externa. Se você tem o extrato real da conta/dinheiro em mãos, comparar com esse número é o teste final. Se divergir, provavelmente está faltando lançamento em algum canal (recebimentos fora do sistema, pagamentos manuais).
+**Mantém sem mudança:**
+- Cards de vendedores abaixo (comissão/consumo/saldo), com o mesmo fluxo de pagar comissão.
+- Seção de atribuição de estoque, transferências, timeline, drawers.
+- Fluxo de "Extrato do funcionário".
 
-## Perguntas antes de corrigir
+**Remove:**
+- Retângulo "Distribuição do Lucro" (ledger visual antigo).
+- Filtro "Trimestre".
+- Card "Saldo Disponível" no formato atual (substituído pelo "Lucro a distribuir").
+- Métricas "reinvestido em estoque" / "caixa livre" da seção principal (permanecem no Financeiro).
 
-1. **Dívida manual** (`seller_manual_debts`): representa consumo/quebra que **já saiu** do estoque via retirada de funcionário, ou é um lançamento independente para casos sem retirada?
-2. **Retirada de funcionário**: você considera receita no ato ou só quando o vendedor paga? (Isso muda como o lucro operacional é calculado.)
-3. **Caixa (R$ 3.064,95)**: você consegue comparar com o saldo real hoje? Se sim, quanto está no caixa/conta de fato?
+---
 
-## Correções propostas (depende das respostas acima)
+## Detalhes técnicos
 
-- **Sempre corrigir**: refazer o lançamento de `seller_manual_debt` no ledger para respeitar a partida dobrada. Se representa perda real → `inventory_delta = −amount` (ou `accumulated_profit_delta = −amount` **sem** subir A Receber, ou subir A Receber **e** reduzir estoque). Se é apenas reclassificação → só mover valores dentro do Ativo, sem tocar PL.
-- **Se dívidas manuais duplicam retiradas** (resposta 1): remover o receivable duplicado — mantém só a retirada como fonte da conta a receber.
-- **Se retirada de funcionário não deve virar receita antes de pagar** (resposta 2): reclassificar como transferência interna (estoque → conta a receber pelo custo, sem tocar lucro), e só reconhecer margem no `seller_debt_payment`.
-- **Ledger consistente**: fechar essas duas frentes derruba o Δ para ~R$ 25 (só o resíduo de valoração de estoque, que fica para depois).
+- Cálculo de `Saldo anterior` por vendedor: extrair para função `computePriorSellerBalance(sellerId, beforeDate)` dentro do próprio `CommissionsPage.tsx` (ou reutilizar de `SellerReportDrawer` se já expõe). Precisa agrupar vendas por mês para aplicar a faixa correta (mesmo padrão do drawer que já valida a lógica).
+- `periodMetrics` no arquivo será reescrito: sai `accumulatedProfit/retainedEarnings/available` como base e entra `grossProfit/netProfit/sellerPayable/distribuivel/perPartnerTargets`.
+- Filtro "Mês atual" já é o default — apenas remover o case `quarter` do `Period` type e do switch.
+- Nada muda no `StoreContext`, no ledger (`financial_events`) nem na página Financeiro.
 
-## Arquivos afetados
-- **Migração**: `CREATE OR REPLACE VIEW public.financial_events` corrigindo `seller_manual_debt`, `seller_withdrawal` (retirada de funcionário) e possivelmente `seller_debt_payment`.
-- **Sem mudança no frontend**: `FinancePage.tsx` lê tudo pela view — os cards passam a mostrar valores corretos automaticamente.
+---
 
-Aguardando suas respostas às 3 perguntas para escolher a variante certa da correção.
+## Escopo do que NÃO muda
+
+- Página Financeiro continua com a visão contábil all-time (Ativo/Passivo/PL).
+- Ledger, tabelas e migrations: intocados.
+- Regras de comissão (10%/12,5%/15% pós-01/06/2026, 10% legado antes): intocadas.
