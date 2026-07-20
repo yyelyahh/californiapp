@@ -445,7 +445,6 @@ export default function CommissionsPage() {
             <SelectContent>
               <SelectItem value="month">Mês atual</SelectItem>
               <SelectItem value="lastMonth">Mês anterior</SelectItem>
-              <SelectItem value="quarter">Trimestre</SelectItem>
               <SelectItem value="custom">Período personalizado</SelectItem>
             </SelectContent>
           </Select>
