@@ -458,37 +458,31 @@ export default function CommissionsPage() {
         </div>
       </div>
 
-      {/* KPIs — Distribuição do dinheiro */}
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-5">
-        <KPI icon={<TrendingUp size={14} />} label="Lucro Operacional" value={formatCurrency(periodMetrics.operatingProfit)} tone={periodMetrics.operatingProfit >= 0 ? "income" : "expense"} sub="Recebido − despesas − investidores" />
-        <div className={cn(
-          "rounded-xl p-[1px] bg-gradient-to-br",
-          periodMetrics.freeCash >= 0 ? "from-income/60 via-income/20 to-transparent" : "from-expense/60 via-expense/20 to-transparent"
-        )}>
-          <div className="rounded-xl bg-card px-3 py-3 h-full">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              <Sparkles size={14} className={periodMetrics.freeCash >= 0 ? "text-income" : "text-expense"} /> Caixa Livre
-            </div>
-            <p className={cn("mt-1 text-lg sm:text-xl font-semibold mono", periodMetrics.freeCash >= 0 ? "text-income" : "text-expense")}>
-              {formatCurrency(periodMetrics.freeCash)}
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Operacional − estoque</p>
-          </div>
-        </div>
-        <KPI icon={<Package size={14} />} label="Reinvestido em Estoque" value={formatCurrency(periodMetrics.stockReinvestment)} tone="fixed" sub="Todas as compras" />
-        <KPI icon={<Wallet size={14} />} label="A pagar a vendedores" value={formatCurrency(periodMetrics.totalSellerBalance)} tone="warning" sub="Comissões pendentes no período" />
-        <KPI icon={<Users size={14} />} label="Retiradas dos Sócios" value={formatCurrency(periodMetrics.totalWithdrawalsPeriod)} tone="fixed" sub="Total acumulado" />
+      {/* KPIs — 3 métricas principais */}
+      <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
+        <KPI
+          icon={<TrendingUp size={14} />}
+          label="Lucro líquido no período"
+          value={formatCurrency(periodMetrics.netProfit)}
+          tone={periodMetrics.netProfit >= 0 ? "income" : "expense"}
+          sub={`Bruto ${formatCurrency(periodMetrics.grossProfit)} − despesas ${formatCurrency(periodMetrics.periodExpenses)} − investidores ${formatCurrency(periodMetrics.periodInvestorPayments)}`}
+        />
+        <KPI
+          icon={<Wallet size={14} />}
+          label="A pagar a vendedores"
+          value={formatCurrency(periodMetrics.totalSellerBalance)}
+          tone="warning"
+          sub={`Anterior ${formatCurrency(periodMetrics.priorPayableSum)} + no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
+        />
+        <KPI
+          icon={<Crown size={14} />}
+          label="Para distribuir aos sócios"
+          value={formatCurrency(periodMetrics.distribuivel)}
+          tone={periodMetrics.distribuivel > 0 ? "income" : "fixed"}
+          sub="Lucro líquido − a pagar a vendedores"
+        />
       </div>
 
-      {/* Distribuição do Lucro */}
-      <ProfitDistribution
-        operatingProfit={periodMetrics.operatingProfit}
-        stockReinvestment={periodMetrics.stockReinvestment}
-        freeCash={periodMetrics.freeCash}
-        pendingCommissions={periodMetrics.totalSellerBalance}
-        withdrawals={periodMetrics.totalWithdrawalsPeriod}
-        available={periodMetrics.available}
-      />
 
 
 
