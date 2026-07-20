@@ -114,9 +114,6 @@ export default function CommissionsPage() {
       const prev = subMonths(now, 1);
       s = startOfMonth(prev); e = endOfMonth(prev);
       l = format(prev, "MMMM/yyyy", { locale: ptBR });
-    } else if (period === "quarter") {
-      s = startOfQuarter(now); e = endOfQuarter(now);
-      l = `${format(startOfQuarter(now), "MMM", { locale: ptBR })}–${format(endOfQuarter(now), "MMM/yyyy", { locale: ptBR })}`;
     } else {
       // custom
       try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
