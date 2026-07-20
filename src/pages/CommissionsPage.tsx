@@ -611,14 +611,22 @@ export default function CommissionsPage() {
                     <Users size={14} className="text-fixed" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total retirado</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Alvo no período</p>
+                    <p className="mono text-sm font-semibold text-primary">{formatCurrency(r.alvo)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Retirado</p>
                     <p className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-fixed" : "text-muted-foreground")}>{formatCurrency(r.periodAmt)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">No ano</p>
-                    <p className="mono text-sm font-medium">{formatCurrency(r.yearAmt)}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {r.excedente > 0.01 ? "Excedente" : "Falta pagar"}
+                    </p>
+                    <p className={cn("mono text-sm font-semibold", r.excedente > 0.01 ? "text-expense" : r.faltaPagar > 0.01 ? "text-warning" : "text-income")}>
+                      {formatCurrency(r.excedente > 0.01 ? r.excedente : r.faltaPagar)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
