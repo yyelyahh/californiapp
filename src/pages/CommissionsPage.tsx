@@ -140,23 +140,60 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
-    // === Novo modelo contábil (all-time, derivado do ledger financial_events) ===
-    // Lucro operacional acumulado = Receita reconhecida − CPV − Despesas − Juros − Comissões − Perdas
-    // Compras de estoque e retiradas NÃO afetam o lucro (são trocas patrimoniais).
-    const accumulatedProfit = getAccumulatedProfit();
-    const distributedProfit = getDistributedProfit();
-    const retainedEarnings = getRetainedEarnings();
-    const cashBalance = getCash();
-    const inventoryValue = getInventoryCostValue();
+    // === LUCRO DO PERÍODO — espelha a fórmula do Dashboard ===
+    // Lucro bruto = receita (totalPrice) − CPV (product.purchasePrice × qty), vendas type=venda no período
+    const vendasNoPeriodo = sales.filter(s => s.type === "venda" && inPeriod(s.date));
+    const revenue = vendasNoPeriodo.reduce((a, s) => a + s.totalPrice, 0);
+    const cogs = vendasNoPeriodo.reduce((a, s) => {
+      const p = products.find(x => x.id === s.productId);
+      return a + (p?.purchasePrice ?? 0) * s.quantity;
+    }, 0);
+    const grossProfit = revenue - cogs;
 
-    // Mantido para compatibilidade com o resto da tela
-    const operatingProfit = accumulatedProfit;
-    const revenue = sales.filter(s => s.type === "venda").reduce((a, s) => a + (s.paidAmount || 0), 0);
-    const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
-    const netProfit = accumulatedProfit;
+    const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
+    const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
+    const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
-    // Conta Corrente do vendedor — comissão do PERÍODO selecionado, ignorando qualquer coisa antes de 01/06/2026
+    // === Balanço por vendedor — período + saldo anterior (cumulativo desde 01/06/2026) ===
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
+
+    // Saldo anterior: agrupa por mês para aplicar corretamente a faixa de comissão
+    const priorEnd = new Date(start.getTime() - 1);
+    const inPriorRange = (iso: string) => {
+      try {
+        const d = parseISO(iso);
+        return d >= PROJECT_START && d <= priorEnd;
+      } catch { return false; }
+    };
+    const priorBalanceFor = (sellerId: string) => {
+      const paidSales = sales.filter(s =>
+        s.sellerId === sellerId && s.type === "venda" &&
+        inPriorRange(s.date) &&
+        (s.paidAmount || 0) >= s.totalPrice - 0.01
+      );
+      // agrupa por mês → aplica faixa por mês
+      const byMonth = new Map<string, typeof paidSales>();
+      paidSales.forEach(s => {
+        const key = s.date.slice(0, 7);
+        (byMonth.get(key) || byMonth.set(key, []).get(key)!).push(s);
+      });
+      let accrued = 0;
+      byMonth.forEach(list => { accrued += computeSellerCommission(list).accrued; });
+      const retiradas = sales
+        .filter(s => s.sellerId === sellerId && s.type === "retirada_funcionario" && inPriorRange(s.date))
+        .reduce((a, s) => a + s.totalPrice, 0);
+      const manualDebts = sellerManualDebts
+        .filter(d => d.sellerId === sellerId && inPriorRange(d.date))
+        .reduce((a, d) => a + d.amount, 0);
+      const debtPay = sellerDebtPayments
+        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
+        .reduce((a, p) => a + p.amount, 0);
+      const commPaid = commissionPayments
+        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
+        .reduce((a, p) => a + p.amount, 0);
+      return accrued - retiradas - manualDebts + debtPay - commPaid;
+    };
+
     const perSeller = sellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
@@ -183,7 +220,9 @@ export default function CommissionsPage() {
       const saldoConsumo = consumoTotal;
       const retiradasCount = retiradas.length + manualDebts.length;
 
-      const balance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
+      const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
+      const priorBalance = priorBalanceFor(seller.id);
+      const balance = periodBalance + priorBalance;
 
       return {
         seller, units, vendasTotal, commPaid,
@@ -191,40 +230,43 @@ export default function CommissionsPage() {
         tier: c.tier, balance, accrualItems,
         consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
         retiradasTotal, manualDebtsTotal, retiradasCount,
+        periodBalance, priorBalance,
       };
     }).sort((a, b) => b.vendasTotal - a.vendasTotal);
 
+    const priorPayableSum = perSeller.reduce((a, x) => a + x.priorBalance, 0);
+    const periodPayableSum = perSeller.reduce((a, x) => a + x.periodBalance, 0);
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
     const leader = perSeller.find(r => r.vendasTotal > 0) || null;
 
-    // Retiradas dos sócios — ALL-TIME, sem restrição de data
+    // === Distribuível aos sócios ===
+    const distribuivel = Math.max(0, netProfit - totalSellerBalance);
+    const totalPartnerPct = partners.reduce((a, p) => a + (p.percentage || 0), 0);
+
+    // === Retiradas dos sócios ===
     const perPartner = partners.map(partner => {
       const list = withdrawals.filter(w => w.partnerId === partner.id);
-      const periodAmt = list.reduce((a, w) => a + w.amount, 0); // all-time total
+      const periodAmt = list.filter(w => inPeriod(w.date)).reduce((a, w) => a + w.amount, 0);
       const yearAmt = list.filter(w => inYear(w.date)).reduce((a, w) => a + w.amount, 0);
+      const allTimeAmt = list.reduce((a, w) => a + w.amount, 0);
       const last = list.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      return { partner, periodAmt, yearAmt, last, count: list.length };
+      const pct = partner.percentage || 0;
+      const alvo = totalPartnerPct > 0 ? distribuivel * (pct / totalPartnerPct) : 0;
+      const faltaPagar = Math.max(0, alvo - periodAmt);
+      const excedente = Math.max(0, periodAmt - alvo);
+      return { partner, periodAmt, yearAmt, allTimeAmt, last, count: list.length, alvo, faltaPagar, excedente };
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
-    // Saldo disponível para nova retirada = lucros retidos − comissões pendentes
-    // (Retiradas já foram descontadas dentro de retainedEarnings via distributedProfit)
-    const available = retainedEarnings - totalSellerBalance;
-
-    // Métrica auxiliar: quanto foi reinvestido em estoque (apenas informativo)
-    const stockReinvestment = inventoryValue; // valor atual do estoque a custo
+    const available = distribuivel;
 
     return {
-      revenue, netProfit, operatingProfit,
-      accumulatedProfit, distributedProfit, retainedEarnings,
-      cashBalance, inventoryValue,
-      stockReinvestment, freeCash: cashBalance,
-      periodExpenses: totalExpenses, totalInvestorPayments: 0,
-      perSeller, leader, totalSellerBalance,
-      perPartner, totalWithdrawalsPeriod,
+      revenue, cogs, grossProfit, periodExpenses, periodInvestorPayments, netProfit,
+      perSeller, leader, totalSellerBalance, priorPayableSum, periodPayableSum,
+      perPartner, totalWithdrawalsPeriod, distribuivel,
       available,
     };
-  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, period, start, end, getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getCash, getInventoryCostValue]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, PROJECT_START]);
 
 
 
