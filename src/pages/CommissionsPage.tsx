@@ -10,10 +10,10 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight,
+  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight, AlertTriangle,
 } from "lucide-react";
 import {
-  format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
+  format, startOfMonth, endOfMonth, startOfYear,
   endOfYear, isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
