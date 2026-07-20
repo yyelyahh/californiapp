@@ -732,40 +732,26 @@ export default function CommissionsPage() {
         <ul className="space-y-1.5 text-[13px]">
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-income shrink-0" />
-            <span className="text-muted-foreground">Lucro operacional:</span>
-            <span className={cn("mono font-semibold", periodMetrics.operatingProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.operatingProfit)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
-            <span className="text-muted-foreground">Reinvestido em estoque:</span>
-            <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.stockReinvestment)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <Sparkles size={12} className={periodMetrics.freeCash >= 0 ? "text-income" : "text-expense"} />
-            <span className="text-muted-foreground">Caixa livre:</span>
-            <span className={cn("mono font-semibold", periodMetrics.freeCash >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.freeCash)}</span>
+            <span className="text-muted-foreground">Lucro líquido:</span>
+            <span className={cn("mono font-semibold", periodMetrics.netProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.netProfit)}</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
-            <span className="text-muted-foreground">
-              {periodMetrics.totalSellerBalance > 0.01
-                ? <>Comissões pendentes aos vendedores: <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span></>
-                : <>Nenhuma comissão pendente aos vendedores.</>}
-            </span>
+            <span className="text-muted-foreground">A pagar a vendedores (incl. saldo anterior):</span>
+            <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Crown size={12} className="text-primary" />
+            <span className="text-muted-foreground">Distribuível aos sócios:</span>
+            <span className={cn("mono font-semibold", periodMetrics.distribuivel > 0 ? "text-income" : "text-muted-foreground")}>{formatCurrency(periodMetrics.distribuivel)}</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
             <span className="text-muted-foreground">
               {periodMetrics.totalWithdrawalsPeriod > 0.01
-                ? <>Sócios já retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no total</>
-                : <>Nenhuma retirada dos sócios registrada.</>}
+                ? <>Sócios já retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no período</>
+                : <>Nenhuma retirada dos sócios no período.</>}
             </span>
-          </li>
-          <li className="flex items-center gap-2">
-            <Sparkles size={12} className={periodMetrics.available >= 0 ? "text-income" : "text-expense"} />
-            <span className="text-muted-foreground">Permanecem</span>
-            <span className={cn("mono font-semibold", periodMetrics.available >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.available)}</span>
-            <span className="text-muted-foreground">disponíveis em caixa</span>
           </li>
         </ul>
       </div>
