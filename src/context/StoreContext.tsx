@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 // Columns readable by every authenticated user (purchase_price is admin-only via RPC)
-const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,created_at";
+const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,created_at";
 
 interface StoreContextType {
   products: Product[];
