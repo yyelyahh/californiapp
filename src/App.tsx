@@ -16,6 +16,7 @@ import FinancePage from "@/pages/FinancePage";
 
 import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
+import InsightsPage from "@/pages/InsightsPage";
 
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
