@@ -79,6 +79,7 @@ export default function ProductsPage() {
     setEditForm({
       name: p.name, brand: p.brand, model: p.model || '', flavor: p.flavor,
       purchasePrice: String(p.purchasePrice), salePrice: String(p.salePrice), stock: String(p.stock),
+      minStock: String(p.minStock ?? 0),
     });
   };
 
@@ -93,6 +94,7 @@ export default function ProductsPage() {
       purchasePrice: Number(editForm.purchasePrice) || 0,
       salePrice: Number(editForm.salePrice) || 0,
       stock: Number(editForm.stock) || 0,
+      minStock: Number(editForm.minStock) || 0,
     });
     setEditId(null);
   };
