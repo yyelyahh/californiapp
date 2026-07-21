@@ -248,7 +248,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const mapProduct = (r: any): Product => ({
     id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
     purchasePrice: Number(r.purchase_price ?? 0), salePrice: Number(r.sale_price),
-    stock: r.stock, createdAt: r.created_at,
+    stock: r.stock, minStock: Number(r.min_stock ?? 0), createdAt: r.created_at,
   });
 
   const mapStockEntry = (r: any): StockEntry => ({
