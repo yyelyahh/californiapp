@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 // Columns readable by every authenticated user (purchase_price is admin-only via RPC)
-const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,created_at";
+const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,created_at";
 
 interface StoreContextType {
   products: Product[];
@@ -140,7 +140,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return data.map((r: any) => ({
       id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
       purchasePrice: costs[r.id] ?? 0, salePrice: Number(r.sale_price),
-      stock: r.stock, createdAt: r.created_at,
+      stock: r.stock, minStock: Number(r.min_stock ?? 0), createdAt: r.created_at,
     }));
   }, [isAdmin]);
 
@@ -248,7 +248,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const mapProduct = (r: any): Product => ({
     id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
     purchasePrice: Number(r.purchase_price ?? 0), salePrice: Number(r.sale_price),
-    stock: r.stock, createdAt: r.created_at,
+    stock: r.stock, minStock: Number(r.min_stock ?? 0), createdAt: r.created_at,
   });
 
   const mapStockEntry = (r: any): StockEntry => ({
@@ -365,6 +365,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.from("products").insert({
       name: p.name, brand: p.brand, model: p.model, flavor: p.flavor,
       purchase_price: p.purchasePrice, sale_price: p.salePrice, stock: 0,
+      min_stock: p.minStock ?? 0,
     }).select(PRODUCT_COLS).single();
     if (error) { toast.error("Erro ao adicionar produto"); return; }
     setProducts(prev => [...prev, mapProduct({ ...data, purchase_price: p.purchasePrice })]);
@@ -379,6 +380,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
     if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
     if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
+    if (updates.minStock !== undefined) dbUpdates.min_stock = updates.minStock;
     const { error } = await supabase.from("products").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar produto"); return; }
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));

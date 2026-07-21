@@ -1,90 +1,67 @@
 ## Objetivo
 
-Simplificar a página **Distribuição** para responder três perguntas objetivas por período:
-1. Quanto sobrou de lucro?
-2. Quanto devo aos vendedores?
-3. Quanto cabe a cada sócio e quanto ainda falta pagar?
-
-Só frontend (`src/pages/CommissionsPage.tsx`). Nada de banco/ledger.
+Criar uma nova página **Insights** no ERP com 4 indicadores de negócio, todos respeitando um filtro de período único no topo (mês atual · mês anterior · personalizado), no mesmo padrão visual das demais páginas.
 
 ---
 
-## Fórmulas acordadas
+## 1. Banco de dados
 
-**Período:** mês atual · mês anterior · personalizado (removemos "trimestre").
+Adicionar coluna `min_stock` (integer, default 0) na tabela `products`.
 
-**Lucro bruto do período** — espelha a fórmula do Dashboard:
-```
-Receita (totalPrice das vendas type=venda no período)
-  − CPV (product.purchasePrice × quantity)
-  = Lucro bruto
-```
-
-**Lucro líquido do período:**
-```
-Lucro bruto − Despesas do período − Pagamentos a investidores no período
-```
-(Pagamentos a investidores = tabela `dividends` filtrada por data.)
-
-**A pagar a vendedores** (dois números explícitos):
-- `Saldo anterior` = soma do saldo devido de cada vendedor **até o dia anterior ao início do período** (mesma fórmula já usada no `SellerReportDrawer`: comissão acumulada − consumo + pagamentos de dívida − comissões pagas, respeitando cutoff 01/06/2026 e faixas por mês).
-- `Gerado no período` = mesmo cálculo restrito ao período.
-- `Total a pagar` = anterior + período (só a parte positiva por vendedor, conforme regra atual de `Math.max(0, balance)`).
-
-**Lucro a distribuir aos sócios:**
-```
-Lucro líquido do período − Total a pagar a vendedores
-```
-Se negativo, mostra 0 e exibe aviso ("período no vermelho").
-
-**Divisão entre sócios** — usa `partners.percentage` (não hardcoded). Para cada sócio:
-- `alvo = distribuivel × (percentage/100)`
-- `retirado_no_periodo = soma de proLaborePayments do sócio no período`
-- `falta_pagar = max(0, alvo − retirado_no_periodo)`
-- `excedente = max(0, retirado_no_periodo − alvo)` (informativo)
+Ajustes no frontend:
+- `Product` type ganha `minStock: number`.
+- `StoreContext.mapProduct` lê `min_stock`.
+- `addProduct` / `updateProduct` gravam `min_stock`.
+- `AddProductDialog` e o edit inline em `ProductsPage` ganham um campo "Estoque mínimo" (opcional, default 0).
 
 ---
 
-## UI
+## 2. Nova rota `/insights`
 
-**Filtro de período** (topo): três botões — Mês atual · Mês anterior · Personalizado (com dois date inputs quando ativo). Remove "Trimestre".
+Criar `src/pages/InsightsPage.tsx` e adicionar item "Insights" no menu (sidebar + mobile) em `AppLayout.tsx`, entre "Distribuição" e "Financeiro".
 
-**3 cards principais** substituem os 4 atuais:
-1. **Lucro líquido no período** (verde/vermelho conforme sinal) — mostra também: receita, CPV, despesas, investidores como sub-linhas discretas.
-2. **A pagar a vendedores** — mostra `Saldo anterior + Gerado no período = Total`. Ao lado, badge com nº de vendedores com saldo positivo.
-3. **Lucro a distribuir aos sócios** — valor grande + linha "= Lucro líquido − A pagar a vendedores".
-
-**Cards por sócio** (substituem o retângulo "Distribuição do Lucro" que sai): um card por sócio com:
-- Nome + % configurada
-- `Alvo do período`
-- `Retirado no período`
-- **`Falta pagar` (destacado)** ou **`Excedente`** se já passou do alvo
-- Botão "Registrar retirada" (fluxo atual mantido)
-
-**Mantém sem mudança:**
-- Cards de vendedores abaixo (comissão/consumo/saldo), com o mesmo fluxo de pagar comissão.
-- Seção de atribuição de estoque, transferências, timeline, drawers.
-- Fluxo de "Extrato do funcionário".
-
-**Remove:**
-- Retângulo "Distribuição do Lucro" (ledger visual antigo).
-- Filtro "Trimestre".
-- Card "Saldo Disponível" no formato atual (substituído pelo "Lucro a distribuir").
-- Métricas "reinvestido em estoque" / "caixa livre" da seção principal (permanecem no Financeiro).
+Filtro de período no topo (mesmo componente já usado em CommissionsPage): Mês atual · Mês anterior · Personalizado (2 date inputs).
 
 ---
 
-## Detalhes técnicos
+## 3. Cards
 
-- Cálculo de `Saldo anterior` por vendedor: extrair para função `computePriorSellerBalance(sellerId, beforeDate)` dentro do próprio `CommissionsPage.tsx` (ou reutilizar de `SellerReportDrawer` se já expõe). Precisa agrupar vendas por mês para aplicar a faixa correta (mesmo padrão do drawer que já valida a lógica).
-- `periodMetrics` no arquivo será reescrito: sai `accumulatedProfit/retainedEarnings/available` como base e entra `grossProfit/netProfit/sellerPayable/distribuivel/perPartnerTargets`.
-- Filtro "Mês atual" já é o default — apenas remover o case `quarter` do `Period` type e do switch.
-- Nada muda no `StoreContext`, no ledger (`financial_events`) nem na página Financeiro.
+Todos clicáveis, abrem um `Sheet` (drawer) com o detalhamento — segue o padrão dos drawers já existentes.
+
+### Card 1 — Estoque Baixo
+- KPI: nº de produtos com `stock < minStock` (minStock > 0). Não depende do período.
+- Drawer: lista com Marca · Modelo · Sabor · Estoque atual · Estoque mínimo, ordenada por maior déficit primeiro.
+
+### Card 2 — Modelo mais vendido (período)
+- Base: vendas `type = "venda"` no período, agrupadas por `${brand} ${model}`.
+- KPI: modelo campeão + unidades + % das vendas do período.
+- Drawer: gráfico de barras (recharts) com todos os modelos ordenados desc por unidades.
+
+### Card 3 — Modelos mais lucrativos (período)
+- Fórmula por venda: `(unitPrice − product.purchasePrice) × quantity`, agrupado por modelo.
+- Margem média = lucro total / receita total do modelo.
+- Toggle "Maior lucro" ↔ "Maior margem" (botões).
+- Drawer: lista compacta com lucro absoluto, margem, unidades.
+
+### Card 4 — Giro de estoque (período)
+- Para cada modelo: `Entraram` = soma de `stock_entries.quantity` no período; `Vendidos` = soma vendas no período. `Giro% = Vendidos / max(Entraram, 1)`.
+- Se `Entraram = 0` mas houve vendas, marcar como "sem reposição" e usar estoque inicial estimado como base.
+- KPI no card: modelo com melhor giro + %.
+- Drawer: lista com Entraram · Vendidos · Giro%.
 
 ---
 
-## Escopo do que NÃO muda
+## 4. Padrão visual
 
-- Página Financeiro continua com a visão contábil all-time (Ativo/Passivo/PL).
-- Ledger, tabelas e migrations: intocados.
-- Regras de comissão (10%/12,5%/15% pós-01/06/2026, 10% legado antes): intocadas.
+- Grid `md:grid-cols-2 lg:grid-cols-4` para os 4 cards.
+- Cada card: título pequeno em uppercase + valor grande + linha secundária, cursor-pointer, hover sutil.
+- Drawers via `Sheet` (side="right"), header com título + descrição, corpo com scroll.
+- Cores: mesmos tokens semânticos (`text-income`, `text-warning`, `text-destructive`, `text-primary`) já em uso.
+
+---
+
+## 5. Escopo excluído
+
+- Sem novas migrations além de `min_stock`.
+- Sem alterar Distribuição, Financeiro, Vendas.
+- Gráfico apenas no drawer do Card 2 (barras horizontais simples), mantendo cards limpos.

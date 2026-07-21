@@ -16,6 +16,7 @@ import FinancePage from "@/pages/FinancePage";
 
 import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
+import InsightsPage from "@/pages/InsightsPage";
 
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
@@ -56,6 +57,7 @@ function ProtectedRoutes() {
           {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}
           {!isSeller && <Route path="/losses" element={<LossesPage />} />}
           {!isSeller && <Route path="/commissions" element={<CommissionsPage />} />}
+          {!isSeller && <Route path="/insights" element={<InsightsPage />} />}
 
           <Route path="*" element={<Navigate to={isSeller ? "/sales" : "/dashboard"} replace />} />
         </Routes>

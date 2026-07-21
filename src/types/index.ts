@@ -7,6 +7,7 @@ export interface Product {
   purchasePrice: number;
   salePrice: number;
   stock: number;
+  minStock: number;
   createdAt: string;
 }
 

@@ -423,6 +423,7 @@ export type Database = {
           created_at: string
           flavor: string
           id: string
+          min_stock: number
           model: string
           name: string
           purchase_price: number
@@ -434,6 +435,7 @@ export type Database = {
           created_at?: string
           flavor?: string
           id?: string
+          min_stock?: number
           model?: string
           name: string
           purchase_price?: number
@@ -445,6 +447,7 @@ export type Database = {
           created_at?: string
           flavor?: string
           id?: string
+          min_stock?: number
           model?: string
           name?: string
           purchase_price?: number
