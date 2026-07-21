@@ -108,7 +108,7 @@ export default function AddProductDialog() {
       try {
         await addProduct({
           name: model.trim(), brand, model: model.trim(), flavor: p.flavor,
-          purchasePrice: pPrice, salePrice: sPrice,
+          purchasePrice: pPrice, salePrice: sPrice, minStock: 0,
         });
         created++;
       } catch { toast.error(`Erro ao criar: ${p.flavor}`); }
