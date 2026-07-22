@@ -238,6 +238,55 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Bulk min-stock dialog */}
+      <Dialog open={bulkMinOpen} onOpenChange={setBulkMinOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Estoque Mínimo por Modelo</DialogTitle>
+            <DialogDescription>Defina o estoque mínimo de um modelo. O valor será aplicado a todos os sabores desse modelo.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBulkMinUpdate} className="space-y-4">
+            <div>
+              <Label className="text-xs">Modelo</Label>
+              <Select value={bulkMinForm.model} onValueChange={v => setBulkMinForm(f => ({ ...f, model: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione um modelo" /></SelectTrigger>
+                <SelectContent>
+                  {availableModels.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo cadastrado</div>
+                  ) : availableModels.map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Marca (opcional)</Label>
+              <Select value={bulkMinForm.brand} onValueChange={v => setBulkMinForm(f => ({ ...f, brand: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as marcas</SelectItem>
+                  {availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Estoque mínimo (unidades)</Label>
+              <Input type="number" min="0" placeholder="Ex: 10" value={bulkMinForm.minStock} onChange={e => setBulkMinForm(f => ({ ...f, minStock: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground mt-1">Alerta será exibido quando o estoque total do modelo ficar abaixo desse valor.</p>
+            </div>
+            {bulkMinForm.model && (
+              <div className="rounded-xl border border-border bg-secondary/30 p-3 text-xs">
+                <p className="text-muted-foreground">
+                  Produtos afetados: <span className="text-foreground font-medium mono">{bulkMinAffected.length}</span>
+                </p>
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={bulkMinAffected.length === 0}>
+              Aplicar {bulkMinAffected.length > 0 && `(${bulkMinAffected.length})`}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+
       {/* Edit dialog */}
       <Dialog open={!!editId} onOpenChange={v => { if (!v) setEditId(null); }}>
         <DialogContent>
