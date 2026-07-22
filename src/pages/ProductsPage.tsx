@@ -26,6 +26,8 @@ export default function ProductsPage() {
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
+  const [bulkMinOpen, setBulkMinOpen] = useState(false);
+  const [bulkMinForm, setBulkMinForm] = useState({ model: "", brand: "all", minStock: "" });
 
   const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
 
@@ -135,6 +137,27 @@ export default function ProductsPage() {
     setBulkForm({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
   };
 
+  const bulkMinAffected = useMemo(() => {
+    if (!bulkMinForm.model) return [];
+    return products.filter(p =>
+      p.model.trim().toLowerCase() === bulkMinForm.model.trim().toLowerCase() &&
+      (bulkMinForm.brand === "all" || p.brand.trim().toLowerCase() === bulkMinForm.brand.trim().toLowerCase())
+    );
+  }, [products, bulkMinForm.model, bulkMinForm.brand]);
+
+  const handleBulkMinUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkMinForm.model) { toast.error("Selecione um modelo"); return; }
+    if (bulkMinForm.minStock.trim() === "") { toast.error("Informe o estoque mínimo"); return; }
+    const min = Number(bulkMinForm.minStock);
+    if (isNaN(min) || min < 0) { toast.error("Valor inválido"); return; }
+    if (bulkMinAffected.length === 0) { toast.error("Nenhum produto encontrado para esse modelo"); return; }
+    await Promise.all(bulkMinAffected.map(p => updateProduct(p.id, { minStock: min })));
+    toast.success(`Mínimo aplicado a ${bulkMinAffected.length} produto(s)`);
+    setBulkMinOpen(false);
+    setBulkMinForm({ model: "", brand: "all", minStock: "" });
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -145,7 +168,10 @@ export default function ProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="h-9 gap-1.5">
-            <Tag size={14} /> <span className="hidden sm:inline">Preço por Modelo</span><span className="sm:hidden">Modelo</span>
+            <Tag size={14} /> <span className="hidden sm:inline">Preço por Modelo</span><span className="sm:hidden">Preço</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setBulkMinOpen(true)} className="h-9 gap-1.5">
+            <Package size={14} /> <span className="hidden sm:inline">Mínimo por Modelo</span><span className="sm:hidden">Mínimo</span>
           </Button>
           <AddProductDialog />
         </div>
@@ -211,6 +237,55 @@ export default function ProductsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk min-stock dialog */}
+      <Dialog open={bulkMinOpen} onOpenChange={setBulkMinOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Estoque Mínimo por Modelo</DialogTitle>
+            <DialogDescription>Defina o estoque mínimo de um modelo. O valor será aplicado a todos os sabores desse modelo.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBulkMinUpdate} className="space-y-4">
+            <div>
+              <Label className="text-xs">Modelo</Label>
+              <Select value={bulkMinForm.model} onValueChange={v => setBulkMinForm(f => ({ ...f, model: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione um modelo" /></SelectTrigger>
+                <SelectContent>
+                  {availableModels.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo cadastrado</div>
+                  ) : availableModels.map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Marca (opcional)</Label>
+              <Select value={bulkMinForm.brand} onValueChange={v => setBulkMinForm(f => ({ ...f, brand: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as marcas</SelectItem>
+                  {availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Estoque mínimo (unidades)</Label>
+              <Input type="number" min="0" placeholder="Ex: 10" value={bulkMinForm.minStock} onChange={e => setBulkMinForm(f => ({ ...f, minStock: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground mt-1">Alerta será exibido quando o estoque total do modelo ficar abaixo desse valor.</p>
+            </div>
+            {bulkMinForm.model && (
+              <div className="rounded-xl border border-border bg-secondary/30 p-3 text-xs">
+                <p className="text-muted-foreground">
+                  Produtos afetados: <span className="text-foreground font-medium mono">{bulkMinAffected.length}</span>
+                </p>
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={bulkMinAffected.length === 0}>
+              Aplicar {bulkMinAffected.length > 0 && `(${bulkMinAffected.length})`}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Edit dialog */}
       <Dialog open={!!editId} onOpenChange={v => { if (!v) setEditId(null); }}>
