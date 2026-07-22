@@ -168,7 +168,10 @@ export default function ProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="h-9 gap-1.5">
-            <Tag size={14} /> <span className="hidden sm:inline">Preço por Modelo</span><span className="sm:hidden">Modelo</span>
+            <Tag size={14} /> <span className="hidden sm:inline">Preço por Modelo</span><span className="sm:hidden">Preço</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setBulkMinOpen(true)} className="h-9 gap-1.5">
+            <Package size={14} /> <span className="hidden sm:inline">Mínimo por Modelo</span><span className="sm:hidden">Mínimo</span>
           </Button>
           <AddProductDialog />
         </div>
