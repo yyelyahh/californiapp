@@ -26,6 +26,8 @@ export default function ProductsPage() {
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
+  const [bulkMinOpen, setBulkMinOpen] = useState(false);
+  const [bulkMinForm, setBulkMinForm] = useState({ model: "", brand: "all", minStock: "" });
 
   const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
 
