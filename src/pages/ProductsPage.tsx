@@ -137,6 +137,27 @@ export default function ProductsPage() {
     setBulkForm({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
   };
 
+  const bulkMinAffected = useMemo(() => {
+    if (!bulkMinForm.model) return [];
+    return products.filter(p =>
+      p.model.trim().toLowerCase() === bulkMinForm.model.trim().toLowerCase() &&
+      (bulkMinForm.brand === "all" || p.brand.trim().toLowerCase() === bulkMinForm.brand.trim().toLowerCase())
+    );
+  }, [products, bulkMinForm.model, bulkMinForm.brand]);
+
+  const handleBulkMinUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkMinForm.model) { toast.error("Selecione um modelo"); return; }
+    if (bulkMinForm.minStock.trim() === "") { toast.error("Informe o estoque mínimo"); return; }
+    const min = Number(bulkMinForm.minStock);
+    if (isNaN(min) || min < 0) { toast.error("Valor inválido"); return; }
+    if (bulkMinAffected.length === 0) { toast.error("Nenhum produto encontrado para esse modelo"); return; }
+    await Promise.all(bulkMinAffected.map(p => updateProduct(p.id, { minStock: min })));
+    toast.success(`Mínimo aplicado a ${bulkMinAffected.length} produto(s)`);
+    setBulkMinOpen(false);
+    setBulkMinForm({ model: "", brand: "all", minStock: "" });
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
