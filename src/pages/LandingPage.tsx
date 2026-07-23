@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Package, Sparkles, LogIn, LayoutDashboard, Boxes, Tags, ChevronDown } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Search, Package, Sparkles, LogIn, LayoutDashboard, Boxes, Tags, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CatalogItem {
