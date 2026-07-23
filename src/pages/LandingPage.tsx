@@ -24,6 +24,7 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [brandFilter, setBrandFilter] = useState<string>("all");
+  const [openModelKey, setOpenModelKey] = useState<string | null>(null);
   const { user, role } = useAuth();
   const navigate = useNavigate();
 
