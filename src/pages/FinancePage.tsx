@@ -1,12 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useStore } from "@/context/StoreContext";
 import { cn } from "@/lib/utils";
-import {
-  Wallet, Boxes, HandCoins, Users, Landmark, TrendingUp, ArrowDownRight, ArrowUpRight,
-  Plus, Trash2, ArrowRightLeft, Package, Receipt, Sparkles, AlertTriangle, CheckCircle2,
-} from "lucide-react";
+import { Users, Landmark, Plus, Trash2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,61 +10,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { todayDateString } from "@/lib/date-utils";
-import type { FinancialEventKind } from "@/types";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 
-const kindMeta: Record<FinancialEventKind, { label: string; icon: any; tone: string }> = {
-  partner_contribution: { label: "Aporte", icon: Users, tone: "text-primary" },
-  loan_received: { label: "Empréstimo recebido", icon: Landmark, tone: "text-primary" },
-  loan_payment: { label: "Pagamento de empréstimo", icon: ArrowDownRight, tone: "text-warning" },
-  stock_purchase: { label: "Compra de estoque", icon: Package, tone: "text-muted-foreground" },
-  sale: { label: "Venda", icon: TrendingUp, tone: "text-income" },
-  sale_cogs: { label: "CPV", icon: ArrowDownRight, tone: "text-muted-foreground" },
-  expense: { label: "Despesa", icon: Receipt, tone: "text-destructive" },
-  withdrawal: { label: "Retirada de sócio", icon: HandCoins, tone: "text-warning" },
-  commission_paid: { label: "Comissão paga", icon: Sparkles, tone: "text-warning" },
-  stock_loss: { label: "Perda de estoque", icon: AlertTriangle, tone: "text-destructive" },
-};
-
 export default function FinancePage() {
   const store = useStore();
   const confirm = useConfirm();
   const {
-    partners, partnerContributions, loans, loanPayments, financialEvents,
+    partners, partnerContributions, loans,
     addPartnerContribution, deletePartnerContribution,
     addLoan, addLoanPayment,
-    getCash, getInventoryCostValue, getReceivables,
     getPartnerCapital, getLoansOutstanding,
-    getAccumulatedProfit, getDistributedProfit, getRetainedEarnings,
     getLoanPaid, getLoanRemaining,
   } = store;
 
-  const [filterKind, setFilterKind] = useState<"all" | FinancialEventKind>("all");
-
-  const cash = getCash();
-  const inventory = getInventoryCostValue();
-  const receivables = getReceivables();
-  const totalAssets = cash + inventory + receivables;
-
   const partnerCapital = getPartnerCapital();
   const loansOutstanding = getLoansOutstanding();
-  const accumulated = getAccumulatedProfit();
-  const distributed = getDistributedProfit();
-  const retained = getRetainedEarnings();
-  const totalEquityAndLiabilities = partnerCapital + loansOutstanding + retained;
-
-  const bookDiff = totalAssets - totalEquityAndLiabilities;
-  const bookMatches = Math.abs(bookDiff) < 0.01;
-
-  const events = useMemo(() => {
-    const list = filterKind === "all"
-      ? financialEvents
-      : financialEvents.filter(e => e.kind === filterKind);
-    return [...list].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [financialEvents, filterKind]);
 
   // ---- Contribution dialog ----
   const [contribOpen, setContribOpen] = useState(false);
@@ -109,7 +68,7 @@ export default function FinancePage() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Financeiro</h1>
-          <p className="text-xs text-muted-foreground">Patrimônio, capital e lucro — contabilidade simplificada</p>
+          <p className="text-xs text-muted-foreground">Aportes de sócios e empréstimos</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={contribOpen} onOpenChange={setContribOpen}>
@@ -157,76 +116,13 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* Balanço: Ativo vs Passivo + PL */}
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">Patrimônio (Ativo)</h2>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">o que temos</span>
-          </div>
-          <PatrimonyRow icon={Wallet} label="Caixa" value={cash} tone="text-income" />
-          <PatrimonyRow icon={Boxes} label="Estoque (a custo)" value={inventory} tone="text-primary" />
-          <PatrimonyRow icon={ArrowUpRight} label="A receber" value={receivables} tone={receivables > 0 ? "text-warning" : "text-muted-foreground"} />
-          <div className="pt-2 border-t border-border flex items-center justify-between">
-            <span className="text-xs font-semibold">Patrimônio total</span>
-            <span className="mono text-base font-semibold">{formatCurrency(totalAssets)}</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">Capital + Passivo</h2>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">de onde veio</span>
-          </div>
-          <PatrimonyRow icon={Users} label="Capital dos sócios" value={partnerCapital} tone="text-primary" />
-          <PatrimonyRow icon={Landmark} label="Empréstimos pendentes" value={loansOutstanding} tone={loansOutstanding > 0 ? "text-warning" : "text-muted-foreground"} />
-          <PatrimonyRow icon={TrendingUp} label="Lucros acumulados (retidos)" value={retained} tone={retained >= 0 ? "text-income" : "text-destructive"} />
-          <div className="pt-2 border-t border-border flex items-center justify-between">
-            <span className="text-xs font-semibold">Total</span>
-            <span className="mono text-base font-semibold">{formatCurrency(totalEquityAndLiabilities)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Book match badge */}
-      <div className={cn(
-        "rounded-lg border px-3 py-2 flex items-center justify-between text-xs",
-        bookMatches ? "border-income/30 bg-income/5" : "border-destructive/30 bg-destructive/5"
-      )}>
-        <div className="flex items-center gap-2">
-          {bookMatches
-            ? <CheckCircle2 size={14} className="text-income" />
-            : <AlertTriangle size={14} className="text-destructive" />}
-          <span className="font-medium">
-            {bookMatches ? "Livro bate" : "Livro não bate"}
-          </span>
-          <span className="text-muted-foreground">
-            Ativo {formatCurrency(totalAssets)} = Passivo+PL {formatCurrency(totalEquityAndLiabilities)}
-          </span>
-        </div>
-        {!bookMatches && (
-          <span className="mono text-destructive">Δ {formatCurrency(bookDiff)}</span>
-        )}
-      </div>
-
-      {/* Distribuição de lucro */}
-      <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-        <h2 className="text-sm font-semibold tracking-tight">Distribuição de lucro</h2>
-        <LedgerLine label="Lucro operacional acumulado" value={accumulated} bold />
-        <LedgerLine label="(−) Já distribuído aos sócios" value={-distributed} />
-        <div className="border-t border-border pt-2 flex items-center justify-between">
-          <span className="text-xs font-semibold">Lucros retidos (disponível)</span>
-          <span className={cn("mono text-base font-semibold", retained >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(retained)}</span>
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          Compras de estoque e aportes de sócios não afetam o lucro — são apenas trocas de patrimônio.
-        </p>
-      </div>
-
       {/* Aportes dos sócios */}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold tracking-tight">Aportes dos sócios</h2>
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-primary" />
+            <h2 className="text-sm font-semibold tracking-tight">Aportes dos sócios</h2>
+          </div>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Total: {formatCurrency(partnerCapital)}</span>
         </div>
         {partnerContributions.length === 0 ? (
@@ -257,7 +153,10 @@ export default function FinancePage() {
       {/* Empréstimos */}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold tracking-tight">Empréstimos</h2>
+          <div className="flex items-center gap-2">
+            <Landmark size={14} className="text-primary" />
+            <h2 className="text-sm font-semibold tracking-tight">Empréstimos</h2>
+          </div>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Pendente: {formatCurrency(loansOutstanding)}</span>
         </div>
         {loans.length === 0 ? (
@@ -290,80 +189,6 @@ export default function FinancePage() {
           </div>
         )}
       </div>
-
-      {/* Histórico de movimentações */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold tracking-tight">Histórico de movimentações</h2>
-          <Select value={filterKind} onValueChange={v => setFilterKind(v as any)}>
-            <SelectTrigger className="h-8 w-52 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {Object.entries(kindMeta).map(([k, m]) => <SelectItem key={k} value={k}>{m.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        {events.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic py-2">Sem eventos.</p>
-        ) : (
-          <div className="divide-y divide-border/60">
-            {events.slice(0, 100).map(ev => {
-              const meta = kindMeta[ev.kind];
-              const Icon = meta?.icon ?? ArrowRightLeft;
-              const impact = describeImpact(ev);
-              return (
-                <div key={`${ev.kind}-${ev.id}`} className="flex items-start justify-between gap-3 py-2">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <Icon size={14} className={cn("mt-0.5 shrink-0", meta?.tone)} />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium truncate">{ev.description}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {format(parseISO(ev.date), "dd 'de' MMM yyyy", { locale: ptBR })} · {impact}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={cn("mono text-sm font-semibold shrink-0", ev.cashDelta > 0 ? "text-income" : ev.cashDelta < 0 ? "text-destructive" : "text-muted-foreground")}>
-                    {ev.cashDelta !== 0 ? (ev.cashDelta > 0 ? "+" : "") + formatCurrency(ev.cashDelta) : formatCurrency(ev.amount)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function describeImpact(ev: any): string {
-  const parts: string[] = [];
-  if (ev.cashDelta) parts.push(`Caixa ${ev.cashDelta > 0 ? "+" : ""}${formatCurrency(ev.cashDelta)}`);
-  if (ev.inventoryDelta) parts.push(`Estoque ${ev.inventoryDelta > 0 ? "+" : ""}${formatCurrency(ev.inventoryDelta)}`);
-  if (ev.receivableDelta) parts.push(`A receber ${ev.receivableDelta > 0 ? "+" : ""}${formatCurrency(ev.receivableDelta)}`);
-  if (ev.loanDelta) parts.push(`Empréstimo ${ev.loanDelta > 0 ? "+" : ""}${formatCurrency(ev.loanDelta)}`);
-  if (ev.partnerCapitalDelta) parts.push(`Capital ${ev.partnerCapitalDelta > 0 ? "+" : ""}${formatCurrency(ev.partnerCapitalDelta)}`);
-  if (ev.accumulatedProfitDelta) parts.push(`Lucro ${ev.accumulatedProfitDelta > 0 ? "+" : ""}${formatCurrency(ev.accumulatedProfitDelta)}`);
-  if (ev.distributedProfitDelta) parts.push(`Distribuído ${ev.distributedProfitDelta > 0 ? "+" : ""}${formatCurrency(ev.distributedProfitDelta)}`);
-  return parts.join(" · ") || "sem impacto";
-}
-
-function PatrimonyRow({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Icon size={13} className={tone} />
-        <span className="text-xs">{label}</span>
-      </div>
-      <span className={cn("mono text-sm font-semibold", tone)}>{formatCurrency(value)}</span>
-    </div>
-  );
-}
-
-function LedgerLine({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className={cn("text-xs", bold ? "font-semibold" : "text-muted-foreground")}>{label}</span>
-      <span className={cn("mono text-sm", bold && "font-semibold", value < 0 && "text-destructive")}>{formatCurrency(value)}</span>
     </div>
   );
 }
