@@ -216,7 +216,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Catálogo</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Apenas sabores com estoque disponível.
+              Modelos com estoque disponível. Clique para ver os sabores.
             </p>
           </div>
           <div className="relative">
