@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Package, Sparkles, LogIn, LayoutDashboard, Boxes, Tags, ChevronDown } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Search, Package, Sparkles, LogIn, LayoutDashboard, Boxes, Tags, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CatalogItem {
@@ -23,6 +24,7 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [brandFilter, setBrandFilter] = useState<string>("all");
+  const [openModelKey, setOpenModelKey] = useState<string | null>(null);
   const { user, role } = useAuth();
   const navigate = useNavigate();
 
@@ -214,7 +216,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Catálogo</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Apenas sabores com estoque disponível.
+              Modelos com estoque disponível. Clique para ver os sabores.
             </p>
           </div>
           <div className="relative">
@@ -253,38 +255,96 @@ export default function LandingPage() {
 
         {loading ? (
           <div className="text-center py-20 text-muted-foreground text-sm">Carregando catálogo...</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground text-sm">
-            Nenhum produto encontrado.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-            {filtered.map((p) => (
-              <Card
-                key={p.id}
-                className="group border-border/60 hover:border-primary/40 transition-all hover:-translate-y-0.5"
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
-                      {p.brand}
-                    </Badge>
-                    <div className="text-right">
-                      <div className="text-lg font-bold leading-none">{p.stock}</div>
-                      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mt-1">
-                        em estoque
+        ) : (() => {
+          // Group filtered items by brand + model
+          const groups = new Map<string, { brand: string; model: string; stock: number; flavors: CatalogItem[] }>();
+          filtered.forEach((i) => {
+            const key = `${i.brand}||${i.model || "—"}`;
+            const g = groups.get(key) ?? { brand: i.brand, model: i.model || "—", stock: 0, flavors: [] };
+            g.stock += i.stock;
+            g.flavors.push(i);
+            groups.set(key, g);
+          });
+          const models = Array.from(groups.entries())
+            .map(([key, g]) => ({ key, ...g }))
+            .sort((a, b) => b.stock - a.stock);
+
+          if (models.length === 0) {
+            return (
+              <div className="text-center py-20 text-muted-foreground text-sm">
+                Nenhum produto encontrado.
+              </div>
+            );
+          }
+
+          const active = openModelKey ? groups.get(openModelKey) : null;
+
+          return (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                {models.map((m) => (
+                  <button
+                    key={m.key}
+                    onClick={() => setOpenModelKey(m.key)}
+                    className="text-left"
+                  >
+                    <Card className="group border-border/60 hover:border-primary/40 transition-all hover:-translate-y-0.5 h-full">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
+                            {m.brand}
+                          </Badge>
+                          <div className="text-right">
+                            <div className="text-lg font-bold leading-none">{m.stock}</div>
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground mt-1">
+                              em estoque
+                            </div>
+                          </div>
+                        </div>
+                        <h3 className="text-base font-semibold leading-tight mb-2">{m.model}</h3>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Layers size={12} />
+                          {m.flavors.length} {m.flavors.length === 1 ? "sabor" : "sabores"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+
+              <Sheet open={!!openModelKey} onOpenChange={(o) => !o && setOpenModelKey(null)}>
+                <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                  {active && (
+                    <>
+                      <SheetHeader className="text-left">
+                        <Badge variant="secondary" className="w-fit text-[10px] uppercase tracking-wider mb-1">
+                          {active.brand}
+                        </Badge>
+                        <SheetTitle className="text-2xl">{active.model}</SheetTitle>
+                        <SheetDescription>
+                          {active.flavors.length} {active.flavors.length === 1 ? "sabor disponível" : "sabores disponíveis"} · {active.stock} un. em estoque
+                        </SheetDescription>
+                      </SheetHeader>
+                      <div className="mt-6 divide-y divide-border/60">
+                        {[...active.flavors]
+                          .sort((a, b) => b.stock - a.stock)
+                          .map((f) => (
+                            <div key={f.id} className="flex items-center justify-between py-3">
+                              <span className="text-sm font-medium">{f.flavor}</span>
+                              <div className="text-right">
+                                <div className="text-sm font-bold">{f.stock}</div>
+                                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">un.</div>
+                              </div>
+                            </div>
+                          ))}
                       </div>
-                    </div>
-                  </div>
-                  <h3 className="text-base font-semibold leading-tight mb-1">{p.flavor}</h3>
-                  {p.model && (
-                    <p className="text-xs text-muted-foreground">{p.model}</p>
+                    </>
                   )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                </SheetContent>
+              </Sheet>
+            </>
+          );
+        })()}
       </section>
 
       <footer className="border-t border-border">
