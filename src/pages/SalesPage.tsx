@@ -560,15 +560,27 @@ export default function SalesPage() {
                   >Retiradas <span className="ml-1.5 text-[11px] text-muted-foreground">{sortedRetiradas.length}</span></TabsTrigger>
                 </TabsList>
               </div>
-              <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
-                <DialogTrigger asChild>
+              <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
+                <SheetTrigger asChild>
                   <Button onClick={openNew} size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Venda</Button>
-                </DialogTrigger>
-                <DialogContent className="max-h-[90vh] overflow-y-auto">
-                  <DialogHeader><DialogTitle>{editingSale ? "Editar Venda" : "Registrar Venda"}</DialogTitle></DialogHeader>
-                  {saleForm}
-                </DialogContent>
-              </Dialog>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                  <SheetHeader className="mb-4">
+                    <SheetTitle>{editingSale ? "Editar registro" : "Novo registro"}</SheetTitle>
+                    <SheetDescription>{editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}</SheetDescription>
+                  </SheetHeader>
+                  {editingSale ? saleForm : (
+                    <Tabs defaultValue="unica" className="space-y-4">
+                      <TabsList className="grid grid-cols-2 w-full">
+                        <TabsTrigger value="unica">Registro único</TabsTrigger>
+                        <TabsTrigger value="lote">Em lote</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="unica" className="mt-0">{saleForm}</TabsContent>
+                      <TabsContent value="lote" className="mt-0"><BatchSaleForm onDone={() => setOpen(false)} /></TabsContent>
+                    </Tabs>
+                  )}
+                </SheetContent>
+              </Sheet>
             </div>
 
             <TabsContent value="vendas" className="mt-0 space-y-4">
