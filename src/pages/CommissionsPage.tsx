@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight, AlertTriangle,
+  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight, AlertTriangle, Share2,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfYear,
@@ -429,6 +429,29 @@ export default function CommissionsPage() {
   const debtSellerRow = debtPayDrawer ? periodMetrics.perSeller.find(r => r.seller.id === debtPayDrawer.sellerId) : null;
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
 
+  const [consultOpen, setConsultOpen] = useState(false);
+  const [consultSellerId, setConsultSellerId] = useState<string | null>(null);
+  const consultRow = consultSellerId ? periodMetrics.perSeller.find(r => r.seller.id === consultSellerId) : null;
+
+  const shareSellerWhatsApp = (r: typeof periodMetrics.perSeller[number]) => {
+    const lines = [
+      `*${r.seller.name}* — ${label}`,
+      ``,
+      `Unidades: ${r.units}`,
+      `Vendas: ${formatCurrency(r.vendasTotal)}`,
+      `Faixa: ${r.tier.label}`,
+      `Saldo anterior: ${formatCurrency(r.priorBalance)}`,
+      `Comissão: ${formatCurrency(r.accrued)}`,
+      `Consumo: -${formatCurrency(r.retiradasTotal)}`,
+      `Dívidas: -${formatCurrency(r.manualDebtsTotal)}`,
+      `Pago: -${formatCurrency(r.commPaid)}`,
+      ...(r.debtPaymentsTotal > 0 ? [`Pgto. dívida: +${formatCurrency(r.debtPaymentsTotal)}`] : []),
+      ``,
+      `*Saldo: ${formatCurrency(r.balance)}*`,
+    ];
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+  };
+
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
 
   return (
@@ -486,14 +509,17 @@ export default function CommissionsPage() {
 
 
 
-      {/* Vendedores */}
+      {/* Vendedores — resumo enxuto */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border pb-2">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Vendedores</h2>
-            <p className="text-[11px] text-muted-foreground">Comissão do período + consumo + dívidas − pagamentos</p>
+            <p className="text-[11px] text-muted-foreground">{periodMetrics.perSeller.length} cadastrados · saldo a pagar {formatCurrency(periodMetrics.totalSellerBalance)}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" className="h-8 text-[11px]" onClick={() => { setConsultSellerId(periodMetrics.perSeller[0]?.seller.id ?? null); setConsultOpen(true); }}>
+              <Users size={12} className="mr-1" />Consultar vendedor
+            </Button>
             <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => setAssignOpen(true)}>
               <Package size={12} className="mr-1" />Atribuir Estoque
             </Button>
@@ -503,7 +529,6 @@ export default function CommissionsPage() {
             <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
               <HandCoins size={12} className="mr-1" />Dívida Manual
             </Button>
-            <Badge variant="secondary" className="text-[11px]">{periodMetrics.perSeller.length}</Badge>
           </div>
         </div>
 
@@ -512,79 +537,120 @@ export default function CommissionsPage() {
             Nenhum vendedor cadastrado.
           </div>
         ) : (
-          <div className="grid gap-2 grid-cols-1 lg:grid-cols-2">
-            {periodMetrics.perSeller.map((r, idx) => {
-              const next = getNextTier(r.tier);
-              const remaining = unitsUntilNextTier(r.units);
-              const isLeader = periodMetrics.leader?.seller.id === r.seller.id;
-              const positive = r.balance > 0.01;
-              return (
-                <div key={r.seller.id} className="rounded-xl border border-border bg-card px-3.5 py-3 group/seller">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
-                    <button onClick={() => setExtractFor(r.seller.id)} className="flex items-center gap-2 min-w-0 text-left hover:opacity-80 transition-opacity">
-                      <span className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold mono shrink-0",
-                        isLeader ? "bg-gradient-to-br from-warning to-warning/60 text-warning-foreground" : "bg-secondary text-muted-foreground"
-                      )}>{idx + 1}</span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-semibold truncate">{r.seller.name}</p>
-                          {isLeader && <Crown size={12} className="text-warning shrink-0" />}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          <span className="mono">{r.units}</span> un. · <span className="mono">{formatCurrency(r.vendasTotal)}</span> · faixa <span className="mono">{r.tier.label}</span>
-                        </p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={async () => { if (await confirm({ title: "Remover vendedor", description: `Remover ${r.seller.name}?` })) deleteSeller(r.seller.id); }}
-                      className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 opacity-0 group-hover/seller:opacity-100 shrink-0"
-                      aria-label="Remover vendedor"
-                    ><X size={13} /></button>
-                  </div>
-
-                  {/* Linhas compactas */}
-                  <div className="text-[12px] space-y-1 mb-2.5">
-                    <Line label="Comissão" value={formatCurrency(r.accrued)} tone="income" />
-                    <Line label="Consumo" value={`−${formatCurrency(r.retiradasTotal)}`} tone={r.retiradasTotal > 0 ? "warning" : "muted"} />
-                    <Line label="Dívidas" value={`−${formatCurrency(r.manualDebtsTotal)}`} tone={r.manualDebtsTotal > 0 ? "warning" : "muted"} />
-                    <Line label="Pago" value={`−${formatCurrency(r.commPaid)}`} tone={r.commPaid > 0 ? "warning" : "muted"} />
-                    {r.debtPaymentsTotal > 0 && (
-                      <Line label="(+) Pgto. dívida" value={`+${formatCurrency(r.debtPaymentsTotal)}`} tone="income" />
-                    )}
-                    <div className="flex items-center justify-between border-t border-border/40 pt-1.5">
-                      <span className="font-semibold">Saldo</span>
-                      <span className={cn("mono font-bold text-sm", positive ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
-                        {formatCurrency(r.balance)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Próxima faixa compacta */}
-                  {next && (
-                    <p className="text-[11px] text-muted-foreground mb-2.5">
-                      Próxima faixa <span className="text-foreground font-semibold">{next.label}</span> · faltam <span className="mono text-foreground font-semibold">{remaining}</span> un.
+          <div className="rounded-xl border border-border bg-card divide-y divide-border/50">
+            {periodMetrics.perSeller.map((r, idx) => (
+              <button
+                key={r.seller.id}
+                onClick={() => { setConsultSellerId(r.seller.id); setConsultOpen(true); }}
+                className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-secondary/40 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold mono shrink-0",
+                    periodMetrics.leader?.seller.id === r.seller.id ? "bg-gradient-to-br from-warning to-warning/60 text-warning-foreground" : "bg-secondary text-muted-foreground"
+                  )}>{idx + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{r.seller.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      <span className="mono">{r.units}</span> un. · <span className="mono">{formatCurrency(r.vendasTotal)}</span>
                     </p>
-                  )}
-
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setExtractFor(r.seller.id)}>
-                      Extrato <ArrowRight size={11} className="ml-1" />
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setDebtPayDrawer({ sellerId: r.seller.id }); setDebtPayForm({ amount: r.saldoConsumo > 0 ? r.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
-                      <Receipt size={11} className="mr-1" />Pagar Dívida
-                    </Button>
-                    <Button size="sm" variant={positive ? "default" : "secondary"} className="h-7 text-[11px]" onClick={() => openPay(r.seller.id, Math.max(0, r.balance))}>
-                      <Plus size={11} className="mr-1" />Pagar
-                    </Button>
                   </div>
                 </div>
-              );
-            })}
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={cn("mono text-sm font-bold", r.balance > 0.01 ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
+                    {formatCurrency(r.balance)}
+                  </span>
+                  <ArrowRight size={13} className="text-muted-foreground" />
+                </div>
+              </button>
+            ))}
           </div>
         )}
       </div>
+
+      {/* Sidebar: Consultar vendedor */}
+      <Sheet open={consultOpen} onOpenChange={setConsultOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Consultar vendedor</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-1.5">
+              <Label className="text-[11px]">Vendedor</Label>
+              <Select value={consultSellerId ?? ""} onValueChange={v => setConsultSellerId(v)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Escolha um vendedor" /></SelectTrigger>
+                <SelectContent>
+                  {periodMetrics.perSeller.map(r => (
+                    <SelectItem key={r.seller.id} value={r.seller.id}>{r.seller.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {consultRow && (
+              <>
+                <div className="rounded-xl border border-border bg-card p-3.5">
+                  <p className="text-[11px] text-muted-foreground mb-2">{label}</p>
+                  <div className="text-[12px] space-y-1">
+                    <Line label="Unidades" value={String(consultRow.units)} tone="muted" />
+                    <Line label="Vendas" value={formatCurrency(consultRow.vendasTotal)} tone="muted" />
+                    <Line label="Faixa" value={consultRow.tier.label} tone="muted" />
+                    <Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0 ? "warning" : "muted"} />
+                    <Line label="Comissão" value={formatCurrency(consultRow.accrued)} tone="income" />
+                    <Line label="Consumo" value={`−${formatCurrency(consultRow.retiradasTotal)}`} tone={consultRow.retiradasTotal > 0 ? "warning" : "muted"} />
+                    <Line label="Dívidas" value={`−${formatCurrency(consultRow.manualDebtsTotal)}`} tone={consultRow.manualDebtsTotal > 0 ? "warning" : "muted"} />
+                    <Line label="Pago" value={`−${formatCurrency(consultRow.commPaid)}`} tone={consultRow.commPaid > 0 ? "warning" : "muted"} />
+                    {consultRow.debtPaymentsTotal > 0 && (
+                      <Line label="(+) Pgto. dívida" value={`+${formatCurrency(consultRow.debtPaymentsTotal)}`} tone="income" />
+                    )}
+                    <div className="flex items-center justify-between border-t border-border/40 pt-1.5">
+                      <span className="font-semibold">Saldo</span>
+                      <span className={cn("mono font-bold text-sm", consultRow.balance > 0.01 ? "text-warning" : consultRow.balance < -0.01 ? "text-income" : "text-foreground")}>
+                        {formatCurrency(consultRow.balance)}
+                      </span>
+                    </div>
+                  </div>
+                  {getNextTier(consultRow.tier) && (
+                    <p className="text-[11px] text-muted-foreground mt-2.5">
+                      Próxima faixa <span className="text-foreground font-semibold">{getNextTier(consultRow.tier)!.label}</span> · faltam <span className="mono text-foreground font-semibold">{unitsUntilNextTier(consultRow.units)}</span> un.
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" className="h-9 text-[11px]" onClick={() => { setConsultOpen(false); setExtractFor(consultRow.seller.id); }}>
+                    Extrato <ArrowRight size={11} className="ml-1" />
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-9 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setConsultOpen(false); setDebtPayDrawer({ sellerId: consultRow.seller.id }); setDebtPayForm({ amount: consultRow.saldoConsumo > 0 ? consultRow.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
+                    <Receipt size={11} className="mr-1" />Pagar Dívida
+                  </Button>
+                  <Button size="sm" className="h-9 text-[11px]" onClick={() => { setConsultOpen(false); openPay(consultRow.seller.id, Math.max(0, consultRow.balance)); }}>
+                    <Plus size={11} className="mr-1" />Pagar
+                  </Button>
+                  <Button size="sm" variant="secondary" className="h-9 text-[11px]" onClick={() => shareSellerWhatsApp(consultRow)}>
+                    <Share2 size={11} className="mr-1" />WhatsApp
+                  </Button>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full h-8 text-[11px] text-muted-foreground hover:text-destructive"
+                  onClick={async () => {
+                    if (await confirm({ title: "Remover vendedor", description: `Remover ${consultRow.seller.name}?` })) {
+                      deleteSeller(consultRow.seller.id);
+                      setConsultOpen(false);
+                    }
+                  }}
+                >
+                  <X size={12} className="mr-1" />Remover vendedor
+                </Button>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
 
       {/* Retiradas dos Sócios — cards individuais */}
       <div className="space-y-3">
