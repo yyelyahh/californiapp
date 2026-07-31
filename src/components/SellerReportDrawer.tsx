@@ -99,8 +99,8 @@ export default function SellerReportDrawer({
     const open = Math.max(0, revenue - received);
 
     // === Consumo / dívidas / pagamentos — APENAS no período ===
-    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date));
-    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date));
+    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date) && !isLegacy(d.date));
+    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date));
 
     const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
     const manualDebtsTotal = allManualDebts.reduce((a, d) => a + d.amount, 0);
