@@ -1080,6 +1080,9 @@ export default function CommissionsPage() {
         sellerId={extractFor}
         open={!!extractFor}
         onClose={() => setExtractFor(null)}
+        initialPeriod={period}
+        initialCustomStart={customStart}
+        initialCustomEnd={customEnd}
       />
     </div>
   );

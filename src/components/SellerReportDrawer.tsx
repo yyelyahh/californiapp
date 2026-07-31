@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,15 +42,25 @@ function computeAccrualAdjustments(sales: Sale[]) {
 }
 
 export default function SellerReportDrawer({
-  sellerId, open, onClose,
-}: { sellerId: string | null; open: boolean; onClose: () => void }) {
+  sellerId, open, onClose, initialPeriod, initialCustomStart, initialCustomEnd,
+}: {
+  sellerId: string | null; open: boolean; onClose: () => void;
+  initialPeriod?: PeriodKey; initialCustomStart?: string; initialCustomEnd?: string;
+}) {
   const { sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, productAssignments, products, getProductName, deleteSellerManualDebt, deleteSellerDebtPayment, deleteCommissionPayment } = useStore();
   const confirm = useConfirm();
   const LEGACY_CUTOFF = new Date(2026, 5, 1);
   const isLegacy = (iso: string) => { try { return parseISO(iso) < LEGACY_CUTOFF; } catch { return false; } };
-  const [periodKey, setPeriodKey] = useState<PeriodKey>("month");
-  const [customStart, setCustomStart] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
-  const [customEnd, setCustomEnd] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [periodKey, setPeriodKey] = useState<PeriodKey>(initialPeriod ?? "month");
+  const [customStart, setCustomStart] = useState(initialCustomStart ?? format(startOfMonth(new Date()), "yyyy-MM-dd"));
+  const [customEnd, setCustomEnd] = useState(initialCustomEnd ?? format(new Date(), "yyyy-MM-dd"));
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialPeriod) setPeriodKey(initialPeriod);
+    if (initialCustomStart) setCustomStart(initialCustomStart);
+    if (initialCustomEnd) setCustomEnd(initialCustomEnd);
+  }, [open, initialPeriod, initialCustomStart, initialCustomEnd]);
 
   const seller = sellers.find(s => s.id === sellerId);
 
@@ -90,7 +100,7 @@ export default function SellerReportDrawer({
 
   const report = useMemo(() => {
     if (!seller) return null;
-    const sellerSalesPeriod = sales.filter(s => s.sellerId === seller.id && inPeriod(s.date));
+    const sellerSalesPeriod = sales.filter(s => s.sellerId === seller.id && inPeriod(s.date) && !isLegacy(s.date));
     const vendas = sellerSalesPeriod.filter(s => s.type === "venda");
     const retiradas = sellerSalesPeriod.filter(s => s.type === "retirada_funcionario");
     const units = vendas.reduce((a, s) => a + s.quantity, 0);
@@ -99,8 +109,8 @@ export default function SellerReportDrawer({
     const open = Math.max(0, revenue - received);
 
     // === Consumo / dívidas / pagamentos — APENAS no período ===
-    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date));
-    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date));
+    const allManualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date) && !isLegacy(d.date));
+    const allDebtPayments = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date));
 
     const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
     const manualDebtsTotal = allManualDebts.reduce((a, d) => a + d.amount, 0);
@@ -184,13 +194,16 @@ export default function SellerReportDrawer({
     };
     const adjustments = computeAccrualAdjustments(modernVendas);
     const commPaidPeriod = commissionPayments
-      .filter(p => p.sellerId === seller.id && inPeriod(p.date))
+      .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))
       .reduce((a, p) => a + p.amount, 0);
 
-    // === Saldo trazido de períodos anteriores (antes de `start`) ===
-    // Mesma fórmula, agrupando vendas modernas por mês para aplicar a faixa correta.
+    // === Saldo trazido de períodos anteriores (de 01/06/2026 até antes de `start`) ===
+    // Mesma fórmula da página de Distribuição: nada anterior ao cutoff entra na conta.
     const beforeStart = (iso: string) => {
-      try { return parseISO(iso).getTime() < start.getTime(); } catch { return false; }
+      try {
+        const t = parseISO(iso);
+        return t.getTime() < start.getTime() && !isLegacy(iso);
+      } catch { return false; }
     };
     const priorSales = sales.filter(s => s.sellerId === seller.id && beforeStart(s.date));
     const priorVendas = priorSales.filter(s => s.type === "venda");
