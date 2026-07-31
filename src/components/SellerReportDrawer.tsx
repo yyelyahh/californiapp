@@ -90,7 +90,7 @@ export default function SellerReportDrawer({
 
   const report = useMemo(() => {
     if (!seller) return null;
-    const sellerSalesPeriod = sales.filter(s => s.sellerId === seller.id && inPeriod(s.date));
+    const sellerSalesPeriod = sales.filter(s => s.sellerId === seller.id && inPeriod(s.date) && !isLegacy(s.date));
     const vendas = sellerSalesPeriod.filter(s => s.type === "venda");
     const retiradas = sellerSalesPeriod.filter(s => s.type === "retirada_funcionario");
     const units = vendas.reduce((a, s) => a + s.quantity, 0);
