@@ -184,13 +184,16 @@ export default function SellerReportDrawer({
     };
     const adjustments = computeAccrualAdjustments(modernVendas);
     const commPaidPeriod = commissionPayments
-      .filter(p => p.sellerId === seller.id && inPeriod(p.date))
+      .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))
       .reduce((a, p) => a + p.amount, 0);
 
-    // === Saldo trazido de períodos anteriores (antes de `start`) ===
-    // Mesma fórmula, agrupando vendas modernas por mês para aplicar a faixa correta.
+    // === Saldo trazido de períodos anteriores (de 01/06/2026 até antes de `start`) ===
+    // Mesma fórmula da página de Distribuição: nada anterior ao cutoff entra na conta.
     const beforeStart = (iso: string) => {
-      try { return parseISO(iso).getTime() < start.getTime(); } catch { return false; }
+      try {
+        const t = parseISO(iso);
+        return t.getTime() < start.getTime() && !isLegacy(iso);
+      } catch { return false; }
     };
     const priorSales = sales.filter(s => s.sellerId === seller.id && beforeStart(s.date));
     const priorVendas = priorSales.filter(s => s.type === "venda");
