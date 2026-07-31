@@ -429,6 +429,29 @@ export default function CommissionsPage() {
   const debtSellerRow = debtPayDrawer ? periodMetrics.perSeller.find(r => r.seller.id === debtPayDrawer.sellerId) : null;
   const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
 
+  const [consultOpen, setConsultOpen] = useState(false);
+  const [consultSellerId, setConsultSellerId] = useState<string | null>(null);
+  const consultRow = consultSellerId ? periodMetrics.perSeller.find(r => r.seller.id === consultSellerId) : null;
+
+  const shareSellerWhatsApp = (r: typeof periodMetrics.perSeller[number]) => {
+    const lines = [
+      `*${r.seller.name}* — ${label}`,
+      ``,
+      `Unidades: ${r.units}`,
+      `Vendas: ${formatCurrency(r.vendasTotal)}`,
+      `Faixa: ${r.tier.label}`,
+      `Saldo anterior: ${formatCurrency(r.priorBalance)}`,
+      `Comissão: ${formatCurrency(r.accrued)}`,
+      `Consumo: -${formatCurrency(r.retiradasTotal)}`,
+      `Dívidas: -${formatCurrency(r.manualDebtsTotal)}`,
+      `Pago: -${formatCurrency(r.commPaid)}`,
+      ...(r.debtPaymentsTotal > 0 ? [`Pgto. dívida: +${formatCurrency(r.debtPaymentsTotal)}`] : []),
+      ``,
+      `*Saldo: ${formatCurrency(r.balance)}*`,
+    ];
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+  };
+
   const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
 
   return (
