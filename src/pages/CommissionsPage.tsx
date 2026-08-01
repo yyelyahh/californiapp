@@ -224,8 +224,8 @@ export default function CommissionsPage() {
       const retiradasCount = retiradas.length + manualDebts.length;
 
       const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
-      const priorBalance = priorBalanceFor(seller.id);
-      const balance = periodBalance + priorBalance;
+      const priorBalance = 0;
+      const balance = periodBalance;
 
       return {
         seller, units, vendasTotal, commPaid,
