@@ -154,47 +154,15 @@ export default function CommissionsPage() {
     const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
     const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
-    // === Balanço por vendedor — período + saldo anterior (cumulativo desde 01/06/2026) ===
+    // === Balanço por vendedor — somente o período selecionado (sem saldo anterior) ===
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
 
-    // Saldo anterior: agrupa por mês para aplicar corretamente a faixa de comissão
-    const priorEnd = new Date(start.getTime() - 1);
-    const inPriorRange = (iso: string) => {
-      try {
-        const d = parseISO(iso);
-        return d >= PROJECT_START && d <= priorEnd;
-      } catch { return false; }
-    };
-    const priorBalanceFor = (sellerId: string) => {
-      const paidSales = sales.filter(s =>
-        s.sellerId === sellerId && s.type === "venda" &&
-        inPriorRange(s.date) &&
-        (s.paidAmount || 0) >= s.totalPrice - 0.01
-      );
-      // agrupa por mês → aplica faixa por mês
-      const byMonth = new Map<string, typeof paidSales>();
-      paidSales.forEach(s => {
-        const key = s.date.slice(0, 7);
-        (byMonth.get(key) || byMonth.set(key, []).get(key)!).push(s);
-      });
-      let accrued = 0;
-      byMonth.forEach(list => { accrued += computeSellerCommission(list).accrued; });
-      const retiradas = sales
-        .filter(s => s.sellerId === sellerId && s.type === "retirada_funcionario" && inPriorRange(s.date))
-        .reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts
-        .filter(d => d.sellerId === sellerId && inPriorRange(d.date))
-        .reduce((a, d) => a + d.amount, 0);
-      const debtPay = sellerDebtPayments
-        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
-        .reduce((a, p) => a + p.amount, 0);
-      const commPaid = commissionPayments
-        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
-        .reduce((a, p) => a + p.amount, 0);
-      return accrued - retiradas - manualDebts + debtPay - commPaid;
-    };
 
-    const perSeller = sellers.map(seller => {
+
+    const HIDDEN_SELLERS = ["gab", "leo", "luis"];
+    const commissionSellers = sellers.filter(s => !HIDDEN_SELLERS.includes((s.name || "").trim().toLowerCase()));
+
+    const perSeller = commissionSellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
       const vendasPagas = vendas.filter(s => (s.paidAmount || 0) >= s.totalPrice - 0.01);
@@ -221,8 +189,8 @@ export default function CommissionsPage() {
       const retiradasCount = retiradas.length + manualDebts.length;
 
       const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
-      const priorBalance = priorBalanceFor(seller.id);
-      const balance = periodBalance + priorBalance;
+      const priorBalance = 0;
+      const balance = periodBalance;
 
       return {
         seller, units, vendasTotal, commPaid,
@@ -440,7 +408,6 @@ export default function CommissionsPage() {
       `Unidades: ${r.units}`,
       `Vendas: ${formatCurrency(r.vendasTotal)}`,
       `Faixa: ${r.tier.label}`,
-      `Saldo anterior: ${formatCurrency(r.priorBalance)}`,
       `Comissão: ${formatCurrency(r.accrued)}`,
       `Consumo: -${formatCurrency(r.retiradasTotal)}`,
       `Dívidas: -${formatCurrency(r.manualDebtsTotal)}`,
@@ -495,7 +462,7 @@ export default function CommissionsPage() {
           label="A pagar a vendedores"
           value={formatCurrency(periodMetrics.totalSellerBalance)}
           tone="warning"
-          sub={`Anterior ${formatCurrency(periodMetrics.priorPayableSum)} + no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
+          sub={`Comissão gerada no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
         />
         <KPI
           icon={<Crown size={14} />}
@@ -595,7 +562,6 @@ export default function CommissionsPage() {
                     <Line label="Unidades" value={String(consultRow.units)} tone="muted" />
                     <Line label="Vendas" value={formatCurrency(consultRow.vendasTotal)} tone="muted" />
                     <Line label="Faixa" value={consultRow.tier.label} tone="muted" />
-                    <Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0 ? "warning" : "muted"} />
                     <Line label="Comissão" value={formatCurrency(consultRow.accrued)} tone="income" />
                     <Line label="Consumo" value={`−${formatCurrency(consultRow.retiradasTotal)}`} tone={consultRow.retiradasTotal > 0 ? "warning" : "muted"} />
                     <Line label="Dívidas" value={`−${formatCurrency(consultRow.manualDebtsTotal)}`} tone={consultRow.manualDebtsTotal > 0 ? "warning" : "muted"} />
@@ -811,7 +777,7 @@ export default function CommissionsPage() {
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
-            <span className="text-muted-foreground">A pagar a vendedores (incl. saldo anterior):</span>
+            <span className="text-muted-foreground">A pagar a vendedores:</span>
             <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span>
           </li>
           <li className="flex items-center gap-2">
