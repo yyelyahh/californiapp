@@ -194,7 +194,10 @@ export default function CommissionsPage() {
       return accrued - retiradas - manualDebts + debtPay - commPaid;
     };
 
-    const perSeller = sellers.map(seller => {
+    const HIDDEN_SELLERS = ["gab", "leo", "luis"];
+    const commissionSellers = sellers.filter(s => !HIDDEN_SELLERS.includes((s.name || "").trim().toLowerCase()));
+
+    const perSeller = commissionSellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
       const vendasPagas = vendas.filter(s => (s.paidAmount || 0) >= s.totalPrice - 0.01);
