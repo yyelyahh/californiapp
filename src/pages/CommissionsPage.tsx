@@ -154,45 +154,10 @@ export default function CommissionsPage() {
     const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
     const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
-    // === Balanço por vendedor — período + saldo anterior (cumulativo desde 01/06/2026) ===
+    // === Balanço por vendedor — somente o período selecionado (sem saldo anterior) ===
     const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
 
-    // Saldo anterior: agrupa por mês para aplicar corretamente a faixa de comissão
-    const priorEnd = new Date(start.getTime() - 1);
-    const inPriorRange = (iso: string) => {
-      try {
-        const d = parseISO(iso);
-        return d >= PROJECT_START && d <= priorEnd;
-      } catch { return false; }
-    };
-    const priorBalanceFor = (sellerId: string) => {
-      const paidSales = sales.filter(s =>
-        s.sellerId === sellerId && s.type === "venda" &&
-        inPriorRange(s.date) &&
-        (s.paidAmount || 0) >= s.totalPrice - 0.01
-      );
-      // agrupa por mês → aplica faixa por mês
-      const byMonth = new Map<string, typeof paidSales>();
-      paidSales.forEach(s => {
-        const key = s.date.slice(0, 7);
-        (byMonth.get(key) || byMonth.set(key, []).get(key)!).push(s);
-      });
-      let accrued = 0;
-      byMonth.forEach(list => { accrued += computeSellerCommission(list).accrued; });
-      const retiradas = sales
-        .filter(s => s.sellerId === sellerId && s.type === "retirada_funcionario" && inPriorRange(s.date))
-        .reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts
-        .filter(d => d.sellerId === sellerId && inPriorRange(d.date))
-        .reduce((a, d) => a + d.amount, 0);
-      const debtPay = sellerDebtPayments
-        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
-        .reduce((a, p) => a + p.amount, 0);
-      const commPaid = commissionPayments
-        .filter(p => p.sellerId === sellerId && inPriorRange(p.date))
-        .reduce((a, p) => a + p.amount, 0);
-      return accrued - retiradas - manualDebts + debtPay - commPaid;
-    };
+
 
     const HIDDEN_SELLERS = ["gab", "leo", "luis"];
     const commissionSellers = sellers.filter(s => !HIDDEN_SELLERS.includes((s.name || "").trim().toLowerCase()));
