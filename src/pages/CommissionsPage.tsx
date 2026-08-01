@@ -443,7 +443,6 @@ export default function CommissionsPage() {
       `Unidades: ${r.units}`,
       `Vendas: ${formatCurrency(r.vendasTotal)}`,
       `Faixa: ${r.tier.label}`,
-      `Saldo anterior: ${formatCurrency(r.priorBalance)}`,
       `Comissão: ${formatCurrency(r.accrued)}`,
       `Consumo: -${formatCurrency(r.retiradasTotal)}`,
       `Dívidas: -${formatCurrency(r.manualDebtsTotal)}`,
@@ -498,7 +497,7 @@ export default function CommissionsPage() {
           label="A pagar a vendedores"
           value={formatCurrency(periodMetrics.totalSellerBalance)}
           tone="warning"
-          sub={`Anterior ${formatCurrency(periodMetrics.priorPayableSum)} + no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
+          sub={`Comissão gerada no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
         />
         <KPI
           icon={<Crown size={14} />}
@@ -598,7 +597,6 @@ export default function CommissionsPage() {
                     <Line label="Unidades" value={String(consultRow.units)} tone="muted" />
                     <Line label="Vendas" value={formatCurrency(consultRow.vendasTotal)} tone="muted" />
                     <Line label="Faixa" value={consultRow.tier.label} tone="muted" />
-                    <Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0 ? "warning" : "muted"} />
                     <Line label="Comissão" value={formatCurrency(consultRow.accrued)} tone="income" />
                     <Line label="Consumo" value={`−${formatCurrency(consultRow.retiradasTotal)}`} tone={consultRow.retiradasTotal > 0 ? "warning" : "muted"} />
                     <Line label="Dívidas" value={`−${formatCurrency(consultRow.manualDebtsTotal)}`} tone={consultRow.manualDebtsTotal > 0 ? "warning" : "muted"} />
@@ -814,7 +812,7 @@ export default function CommissionsPage() {
           </li>
           <li className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
-            <span className="text-muted-foreground">A pagar a vendedores (incl. saldo anterior):</span>
+            <span className="text-muted-foreground">A pagar a vendedores:</span>
             <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span>
           </li>
           <li className="flex items-center gap-2">
