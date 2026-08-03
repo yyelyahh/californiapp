@@ -315,6 +315,19 @@ export default function SalesPage() {
           </div>
         );
       })()}
+      {!isRetirada && (() => {
+        const total = Number(form.quantity) * Number(form.unitPrice);
+        const paid = Number(form.paidAmount) || 0;
+        const fullyPaid = total > 0 && paid >= total - 0.01;
+        if (!fullyPaid) return null;
+        return (
+          <div>
+            <Label>Data do recebimento</Label>
+            <Input type="date" value={form.paidDate} onChange={e => setForm(f => ({ ...f, paidDate: e.target.value }))} />
+            <p className="text-[11px] text-muted-foreground mt-1">A comissão entra no mês em que o valor foi recebido.</p>
+          </div>
+        );
+      })()}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
         <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-warning/10" : "bg-secondary/50")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
