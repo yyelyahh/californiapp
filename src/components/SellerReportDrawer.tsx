@@ -189,14 +189,7 @@ export default function SellerReportDrawer({
       .sort((a, b) => a.name.localeCompare(b.name));
     const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
-    const cModern = computeSellerCommission(modernVendas);
-    const legacyAccruedInPeriod = legacyVendasInPeriod.reduce((a, s) => a + s.totalPrice * 0.10, 0);
-    const c = {
-      units: cModern.units + legacyVendasInPeriod.reduce((a, s) => a + s.quantity, 0),
-      revenue: cModern.revenue + legacyVendasInPeriod.reduce((a, s) => a + s.totalPrice, 0),
-      tier: cModern.tier,
-      accrued: cModern.accrued + legacyAccruedInPeriod,
-    };
+    const c = computeSellerCommission(modernVendas);
     const adjustments = computeAccrualAdjustments(modernVendas);
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))
