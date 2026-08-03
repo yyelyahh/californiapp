@@ -262,6 +262,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     unitPrice: Number(r.unit_price), totalPrice: Number(r.total_price),
     date: r.date, notes: r.notes,
     installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
+    paidAt: r.paid_at || undefined,
     sellerId: r.seller_id || undefined,
     type: (r.type === "retirada_funcionario" ? "retirada_funcionario" : "venda"),
     paymentMethod: (["pix","dinheiro","pix_pendente","dinheiro_pendente","dinheiro_com_vendedor","pendente"].includes(r.payment_method)) ? r.payment_method : undefined,
