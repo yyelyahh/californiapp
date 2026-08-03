@@ -130,8 +130,11 @@ export default function SalesPage() {
 
     setSubmitting(true);
     try {
+      const totalPriceForm = Number(form.quantity) * Number(form.unitPrice);
+      const fullyPaid = form.type === "venda" && (Number(form.paidAmount) || 0) >= totalPriceForm - 0.01;
+      const paidAtISO = fullyPaid ? localDateToISO(form.paidDate || form.date) : undefined;
       if (editingSale) {
-        const totalPrice = Number(form.quantity) * Number(form.unitPrice);
+        const totalPrice = totalPriceForm;
         await updateSale(editingSale, {
           quantity: Number(form.quantity),
           unitPrice: Number(form.unitPrice) || 0,
@@ -140,6 +143,7 @@ export default function SalesPage() {
           notes: form.notes || undefined,
           installments: Number(form.installments) || 1,
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
+          paidAt: paidAtISO,
           sellerId: form.sellerId || undefined,
           type: form.type,
           paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
@@ -154,6 +158,7 @@ export default function SalesPage() {
           notes: form.notes || undefined,
           installments: Number(form.installments) || 1,
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
+          paidAt: paidAtISO,
           sellerId: effectiveSellerId,
           type: form.type,
           paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
