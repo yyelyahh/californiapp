@@ -26,7 +26,7 @@ type PaymentMethodValue =
   | "dinheiro_com_vendedor"
   | "pendente";
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue };
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
   const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
@@ -112,6 +112,7 @@ export default function SalesPage() {
       sellerId: s.sellerId || "",
       type: s.type || "venda",
       paymentMethod: s.paymentMethod || "pix",
+      paidDate: (s.paidAt || s.date)?.split("T")[0] || todayDateString(),
     });
     setOpen(true);
   };
