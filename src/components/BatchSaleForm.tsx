@@ -118,6 +118,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
           notes: notes || undefined,
           installments: 1,
           paidAmount: type === "retirada_funcionario" ? 0 : (l.paid ? qty * unit : 0),
+          paidAt: type === "venda" && l.paid ? localDateToISO(date) : undefined,
           sellerId: effectiveSellerId || undefined,
           type,
           paymentMethod: type === "venda" ? (l.paid ? paymentMethod : pendingMethod) : undefined,
