@@ -26,7 +26,7 @@ type PaymentMethodValue =
   | "dinheiro_com_vendedor"
   | "pendente";
 
-const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue };
+const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
   const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
@@ -112,6 +112,7 @@ export default function SalesPage() {
       sellerId: s.sellerId || "",
       type: s.type || "venda",
       paymentMethod: s.paymentMethod || "pix",
+      paidDate: (s.paidAt || s.date)?.split("T")[0] || todayDateString(),
     });
     setOpen(true);
   };
@@ -129,8 +130,11 @@ export default function SalesPage() {
 
     setSubmitting(true);
     try {
+      const totalPriceForm = Number(form.quantity) * Number(form.unitPrice);
+      const fullyPaid = form.type === "venda" && (Number(form.paidAmount) || 0) >= totalPriceForm - 0.01;
+      const paidAtISO = fullyPaid ? localDateToISO(form.paidDate || form.date) : undefined;
       if (editingSale) {
-        const totalPrice = Number(form.quantity) * Number(form.unitPrice);
+        const totalPrice = totalPriceForm;
         await updateSale(editingSale, {
           quantity: Number(form.quantity),
           unitPrice: Number(form.unitPrice) || 0,
@@ -139,6 +143,7 @@ export default function SalesPage() {
           notes: form.notes || undefined,
           installments: Number(form.installments) || 1,
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
+          paidAt: paidAtISO,
           sellerId: form.sellerId || undefined,
           type: form.type,
           paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
@@ -153,6 +158,7 @@ export default function SalesPage() {
           notes: form.notes || undefined,
           installments: Number(form.installments) || 1,
           paidAmount: form.type === "retirada_funcionario" ? 0 : (Number(form.paidAmount) || 0),
+          paidAt: paidAtISO,
           sellerId: effectiveSellerId,
           type: form.type,
           paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
@@ -306,6 +312,19 @@ export default function SalesPage() {
                 >{opt.label}</button>
               ))}
             </div>
+          </div>
+        );
+      })()}
+      {!isRetirada && (() => {
+        const total = Number(form.quantity) * Number(form.unitPrice);
+        const paid = Number(form.paidAmount) || 0;
+        const fullyPaid = total > 0 && paid >= total - 0.01;
+        if (!fullyPaid) return null;
+        return (
+          <div>
+            <Label>Data do recebimento</Label>
+            <Input type="date" value={form.paidDate} onChange={e => setForm(f => ({ ...f, paidDate: e.target.value }))} />
+            <p className="text-[11px] text-muted-foreground mt-1">A comissão entra no mês em que o valor foi recebido.</p>
           </div>
         );
       })()}

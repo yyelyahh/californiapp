@@ -262,6 +262,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     unitPrice: Number(r.unit_price), totalPrice: Number(r.total_price),
     date: r.date, notes: r.notes,
     installments: r.installments ?? 1, paidAmount: Number(r.paid_amount ?? 0),
+    paidAt: r.paid_at || undefined,
     sellerId: r.seller_id || undefined,
     type: (r.type === "retirada_funcionario" ? "retirada_funcionario" : "venda"),
     paymentMethod: (["pix","dinheiro","pix_pendente","dinheiro_pendente","dinheiro_com_vendedor","pendente"].includes(r.payment_method)) ? r.payment_method : undefined,
@@ -527,6 +528,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       paid_amount: saleType === "retirada_funcionario" ? 0 : (s.paidAmount || 0),
       type: saleType,
     };
+    const paidNow = saleType === "venda" && (s.paidAmount || 0) >= totalPrice - 0.01;
+    insertData.paid_at = paidNow ? (s.paidAt || s.date) : null;
     if (s.sellerId) insertData.seller_id = s.sellerId;
     if (saleType === "venda" && s.paymentMethod) insertData.payment_method = s.paymentMethod;
     const { data, error } = await supabase.from("sales").insert(insertData).select().single();
@@ -565,6 +568,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [products, productAssignments, sellers, sellerDebtPayments, sales]);
 
   const updateSale = useCallback(async (id: string, updates: Partial<Sale>) => {
+    const existing = sales.find(s => s.id === id);
     const dbUpdates: any = {};
     if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity;
     if (updates.unitPrice !== undefined) dbUpdates.unit_price = updates.unitPrice;
@@ -576,10 +580,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.sellerId !== undefined) dbUpdates.seller_id = updates.sellerId || null;
     if (updates.type !== undefined) dbUpdates.type = updates.type;
     if (updates.paymentMethod !== undefined) dbUpdates.payment_method = updates.paymentMethod || null;
+
+    // Data de recebimento: setada quando a venda passa a estar quitada, limpa quando volta a ficar em aberto.
+    let nextPaidAt: string | null | undefined;
+    if (updates.paidAmount !== undefined || updates.paidAt !== undefined || updates.totalPrice !== undefined) {
+      const total = updates.totalPrice ?? existing?.totalPrice ?? 0;
+      const paid = updates.paidAmount ?? existing?.paidAmount ?? 0;
+      const type = updates.type ?? existing?.type ?? "venda";
+      const isPaid = type === "venda" && paid >= total - 0.01;
+      nextPaidAt = isPaid
+        ? (updates.paidAt || existing?.paidAt || new Date().toISOString())
+        : null;
+      dbUpdates.paid_at = nextPaidAt;
+    }
+
     const { error } = await supabase.from("sales").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar venda"); return; }
-    setSales(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-  }, []);
+    setSales(prev => prev.map(s => s.id === id
+      ? { ...s, ...updates, ...(nextPaidAt !== undefined ? { paidAt: nextPaidAt || undefined } : {}) }
+      : s));
+  }, [sales]);
 
   const deleteSale = useCallback(async (id: string) => {
     const sale = sales.find(s => s.id === id);

@@ -132,29 +132,34 @@ export default function SellerReportDrawer({
     });
     const consumoBreakdown = Array.from(consumoMap.values()).sort((a, b) => b.total - a.total);
 
-    // Sales detail (chronological) + marginal commission per sale.
-    // Legacy sales (pre-jun/2026) sempre rendem 10% flat; modernas usam faixas.
-    // IMPORTANTE: comissão só é creditada em vendas QUITADAS (em aberto = 0).
-    const isPaid = (s: typeof vendas[number]) => (s.paidAmount || 0) >= s.totalPrice - 0.01;
+    // Comissão é atribuída pelo período de RECEBIMENTO (paidAt), não pela data da venda.
+    // Uma venda de julho recebida em agosto gera comissão em agosto.
+    const isPaid = (s: (typeof sales)[number]) => (s.paidAmount || 0) >= s.totalPrice - 0.01;
+    const vendasRecebidasPeriodo = sales
+      .filter(s => s.sellerId === seller.id && s.type === "venda" && isPaid(s)
+        && !!s.paidAt && inPeriod(s.paidAt) && !isLegacy(s.paidAt))
+      .sort((a, b) => new Date(a.paidAt!).getTime() - new Date(b.paidAt!).getTime());
+
     const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const vendasPagasChrono = vendasChrono.filter(isPaid);
-    const modernVendas = vendasPagasChrono.filter(s => !isLegacy(s.date));
-    const legacyVendasInPeriod = vendasPagasChrono.filter(s => isLegacy(s.date));
-    // Faixa final calculada apenas com vendas pagas no período
+    const modernVendas = vendasRecebidasPeriodo;
+    // Faixa final calculada com as vendas recebidas no período
     const modernUnitsTotal = modernVendas.reduce((a, s) => a + s.quantity, 0);
     const finalTier = getTierForUnits(modernUnitsTotal);
     const saleCommission = new Map<string, number>();
-    vendasChrono.forEach(s => {
-      if (!isPaid(s)) { saleCommission.set(s.id, 0); return; }
-      const rate = isLegacy(s.date) ? 0.10 : finalTier.rate;
-      saleCommission.set(s.id, s.totalPrice * rate);
+    vendasRecebidasPeriodo.forEach(s => {
+      saleCommission.set(s.id, s.totalPrice * finalTier.rate);
     });
-    const salesDetail = vendasChrono.map(s => {
+    // Detalhe: vendas do período + vendas de outros períodos recebidas neste período
+    const detailSales = [...vendasChrono];
+    vendasRecebidasPeriodo.forEach(s => { if (!detailSales.some(d => d.id === s.id)) detailSales.push(s); });
+    detailSales.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const salesDetail = detailSales.map(s => {
       const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
       return {
         id: s.id, when: s.date, qty: s.quantity, total: s.totalPrice,
         name: getProductName(s.productId), open: op, paid: op < 0.01,
         commission: saleCommission.get(s.id) || 0,
+        paidAt: s.paidAt,
       };
     });
 
@@ -184,14 +189,7 @@ export default function SellerReportDrawer({
       .sort((a, b) => a.name.localeCompare(b.name));
     const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
-    const cModern = computeSellerCommission(modernVendas);
-    const legacyAccruedInPeriod = legacyVendasInPeriod.reduce((a, s) => a + s.totalPrice * 0.10, 0);
-    const c = {
-      units: cModern.units + legacyVendasInPeriod.reduce((a, s) => a + s.quantity, 0),
-      revenue: cModern.revenue + legacyVendasInPeriod.reduce((a, s) => a + s.totalPrice, 0),
-      tier: cModern.tier,
-      accrued: cModern.accrued + legacyAccruedInPeriod,
-    };
+    const c = computeSellerCommission(modernVendas);
     const adjustments = computeAccrualAdjustments(modernVendas);
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))

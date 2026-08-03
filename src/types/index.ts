@@ -50,6 +50,8 @@ export interface Sale {
   notes?: string;
   installments: number;
   paidAmount: number;
+  /** Data em que a venda foi efetivamente recebida (quitada). */
+  paidAt?: string;
   sellerId?: string;
   type: SaleType;
   paymentMethod?: PaymentMethod;
