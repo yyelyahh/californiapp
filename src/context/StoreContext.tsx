@@ -528,6 +528,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       paid_amount: saleType === "retirada_funcionario" ? 0 : (s.paidAmount || 0),
       type: saleType,
     };
+    const paidNow = saleType === "venda" && (s.paidAmount || 0) >= totalPrice - 0.01;
+    insertData.paid_at = paidNow ? (s.paidAt || s.date) : null;
     if (s.sellerId) insertData.seller_id = s.sellerId;
     if (saleType === "venda" && s.paymentMethod) insertData.payment_method = s.paymentMethod;
     const { data, error } = await supabase.from("sales").insert(insertData).select().single();
