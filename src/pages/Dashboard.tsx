@@ -61,7 +61,7 @@ export default function Dashboard() {
 
     // CPV: custo dos produtos efetivamente vendidos
     const cogs = salesInPeriod.reduce((sum, s) => {
-      const product = store.products.find(p => p.id === s.productId);
+      const product = productMap.get(s.productId);
       const cost = product?.purchasePrice ?? 0;
       return sum + cost * s.quantity;
     }, 0);
