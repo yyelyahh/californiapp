@@ -90,7 +90,7 @@ export default function Dashboard() {
       const salesInMonth = store.sales.filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval));
       const receita = salesInMonth.reduce((sum, s) => sum + s.totalPrice, 0);
       const cogs = salesInMonth.reduce((sum, s) => {
-        const p = store.products.find(p => p.id === s.productId);
+        const p = productMap.get(s.productId);
         return sum + (p?.purchasePrice ?? 0) * s.quantity;
       }, 0);
       const desp = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
