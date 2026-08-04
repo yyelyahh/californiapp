@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import * as XLSX from "xlsx";
+// xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
 
 function formatCurrency(value: number) {
@@ -119,8 +119,9 @@ export default function Dashboard() {
   const netPositive = periodStats.netProfit >= 0;
   const grossPositive = periodStats.grossProfit >= 0;
 
-  function handleExport() {
+  async function handleExport() {
     try {
+      const XLSX = await import("xlsx");
       let filterFn: (dateISO: string) => boolean;
       if (isGeral) filterFn = () => true;
       else {
@@ -132,6 +133,7 @@ export default function Dashboard() {
 
       const fmt = (n: number) => Number(n.toFixed(2));
       const wb = XLSX.utils.book_new();
+
 
       // Resumo
       const resumo = [
