@@ -21,6 +21,12 @@ export default function Dashboard() {
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
   const inventoryAtCost = store.getInventoryCostValue();
 
+  // Índice de produtos: evita varreduras O(n*m) dentro dos loops de vendas/entradas.
+  const productMap = useMemo(
+    () => new Map(store.products.map(p => [p.id, p])),
+    [store.products],
+  );
+
   const monthOptions = useMemo(() => {
     const set = new Set<string>();
     set.add(format(new Date(), "yyyy-MM"));
