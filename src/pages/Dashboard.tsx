@@ -168,7 +168,7 @@ export default function Dashboard() {
 
       // Vendas do período
       const vendas = store.sales.filter(s => s.type === "venda" && filterFn(s.date)).map(s => {
-        const p = store.products.find(p => p.id === s.productId);
+        const p = productMap.get(s.productId);
         const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
         const cost = (p?.purchasePrice ?? 0) * s.quantity;
         return {
