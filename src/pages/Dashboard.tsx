@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import * as XLSX from "xlsx";
+// xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
 
 function formatCurrency(value: number) {
@@ -20,6 +20,12 @@ export default function Dashboard() {
   const store = useStore();
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
   const inventoryAtCost = store.getInventoryCostValue();
+
+  // Índice de produtos: evita varreduras O(n*m) dentro dos loops de vendas/entradas.
+  const productMap = useMemo(
+    () => new Map(store.products.map(p => [p.id, p])),
+    [store.products],
+  );
 
   const monthOptions = useMemo(() => {
     const set = new Set<string>();
@@ -61,7 +67,7 @@ export default function Dashboard() {
 
     // CPV: custo dos produtos efetivamente vendidos
     const cogs = salesInPeriod.reduce((sum, s) => {
-      const product = store.products.find(p => p.id === s.productId);
+      const product = productMap.get(s.productId);
       const cost = product?.purchasePrice ?? 0;
       return sum + cost * s.quantity;
     }, 0);
@@ -90,7 +96,7 @@ export default function Dashboard() {
       const salesInMonth = store.sales.filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval));
       const receita = salesInMonth.reduce((sum, s) => sum + s.totalPrice, 0);
       const cogs = salesInMonth.reduce((sum, s) => {
-        const p = store.products.find(p => p.id === s.productId);
+        const p = productMap.get(s.productId);
         return sum + (p?.purchasePrice ?? 0) * s.quantity;
       }, 0);
       const desp = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
@@ -119,8 +125,9 @@ export default function Dashboard() {
   const netPositive = periodStats.netProfit >= 0;
   const grossPositive = periodStats.grossProfit >= 0;
 
-  function handleExport() {
+  async function handleExport() {
     try {
+      const XLSX = await import("xlsx");
       let filterFn: (dateISO: string) => boolean;
       if (isGeral) filterFn = () => true;
       else {
@@ -132,6 +139,7 @@ export default function Dashboard() {
 
       const fmt = (n: number) => Number(n.toFixed(2));
       const wb = XLSX.utils.book_new();
+
 
       // Resumo
       const resumo = [
@@ -166,7 +174,7 @@ export default function Dashboard() {
 
       // Vendas do período
       const vendas = store.sales.filter(s => s.type === "venda" && filterFn(s.date)).map(s => {
-        const p = store.products.find(p => p.id === s.productId);
+        const p = productMap.get(s.productId);
         const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
         const cost = (p?.purchasePrice ?? 0) * s.quantity;
         return {
@@ -196,7 +204,7 @@ export default function Dashboard() {
 
       // Reposição de estoque
       const entradas = store.stockEntries.filter(e => filterFn(e.date)).map(e => {
-        const p = store.products.find(p => p.id === e.productId);
+        const p = productMap.get(e.productId);
         const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(e.productId);
         return {
           Data: format(parseISO(e.date), "dd/MM/yyyy"),
@@ -357,7 +365,7 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-0">
               {store.sales.filter(s => s.type === "venda").slice(-6).reverse().map(s => {
-                const product = store.products.find(p => p.id === s.productId);
+                const product = productMap.get(s.productId);
                 const productLabel = product ? `${product.flavor} · ${product.model}` : store.getProductName(s.productId);
                 return (
                   <div key={s.id} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">

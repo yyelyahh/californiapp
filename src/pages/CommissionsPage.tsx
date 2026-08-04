@@ -140,14 +140,17 @@ export default function CommissionsPage() {
 
 
   const periodMetrics = useMemo(() => {
+    // Índice de produtos para lookups O(1) dentro dos loops.
+    const productById = new Map(products.map(p => [p.id, p]));
     // === LUCRO DO PERÍODO — espelha a fórmula do Dashboard ===
     // Lucro bruto = receita (totalPrice) − CPV (product.purchasePrice × qty), vendas type=venda no período
     const vendasNoPeriodo = sales.filter(s => s.type === "venda" && inPeriod(s.date));
     const revenue = vendasNoPeriodo.reduce((a, s) => a + s.totalPrice, 0);
     const cogs = vendasNoPeriodo.reduce((a, s) => {
-      const p = products.find(x => x.id === s.productId);
+      const p = productById.get(s.productId);
       return a + (p?.purchasePrice ?? 0) * s.quantity;
     }, 0);
+
     const grossProfit = revenue - cogs;
 
     const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
@@ -318,13 +321,15 @@ export default function CommissionsPage() {
   // Transfer logic
   const transferFromAssignments = useMemo(() => {
     if (!transferForm.fromSellerId) return [];
+    const productById = new Map(products.map(p => [p.id, p]));
     return productAssignments
       .filter(a => a.sellerId === transferForm.fromSellerId && a.quantity > 0)
       .map(a => {
-        const p = products.find(x => x.id === a.productId);
+        const p = productById.get(a.productId);
         return { ...a, productLabel: p ? `${p.flavor} · ${p.model}` : "—" };
       });
   }, [productAssignments, products, transferForm.fromSellerId]);
+
   const transferSelected = transferFromAssignments.find(a => a.id === transferForm.assignmentId);
   const transferMaxQty = transferSelected?.quantity ?? 0;
 
