@@ -198,7 +198,7 @@ export default function Dashboard() {
 
       // Reposição de estoque
       const entradas = store.stockEntries.filter(e => filterFn(e.date)).map(e => {
-        const p = store.products.find(p => p.id === e.productId);
+        const p = productMap.get(e.productId);
         const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(e.productId);
         return {
           Data: format(parseISO(e.date), "dd/MM/yyyy"),
