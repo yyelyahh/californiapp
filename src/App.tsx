@@ -51,23 +51,25 @@ function ProtectedRoutes() {
   return (
     <StoreProvider>
       <AppLayout>
-        <Routes>
-          {!isSeller && <Route path="/dashboard" element={<Dashboard />} />}
-          {!isSeller && <Route path="/products" element={<ProductsPage />} />}
-          {!isSeller && <Route path="/stock" element={<StockEntryPage />} />}
-          <Route path="/sales" element={<SalesPage />} />
-          {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
-          {!isSeller && <Route path="/investors" element={<Navigate to="/finance" replace />} />}
-          {!isSeller && <Route path="/finance" element={<FinancePage />} />}
-          {!isSeller && <Route path="/revenue" element={<Navigate to="/commissions" replace />} />}
-          {!isSeller && <Route path="/sellers" element={<Navigate to="/commissions" replace />} />}
-          {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}
-          {!isSeller && <Route path="/losses" element={<LossesPage />} />}
-          {!isSeller && <Route path="/commissions" element={<CommissionsPage />} />}
-          {!isSeller && <Route path="/insights" element={<InsightsPage />} />}
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            {!isSeller && <Route path="/dashboard" element={<Dashboard />} />}
+            {!isSeller && <Route path="/products" element={<ProductsPage />} />}
+            {!isSeller && <Route path="/stock" element={<StockEntryPage />} />}
+            <Route path="/sales" element={<SalesPage />} />
+            {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
+            {!isSeller && <Route path="/investors" element={<Navigate to="/finance" replace />} />}
+            {!isSeller && <Route path="/finance" element={<FinancePage />} />}
+            {!isSeller && <Route path="/revenue" element={<Navigate to="/commissions" replace />} />}
+            {!isSeller && <Route path="/sellers" element={<Navigate to="/commissions" replace />} />}
+            {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}
+            {!isSeller && <Route path="/losses" element={<LossesPage />} />}
+            {!isSeller && <Route path="/commissions" element={<CommissionsPage />} />}
+            {!isSeller && <Route path="/insights" element={<InsightsPage />} />}
 
-          <Route path="*" element={<Navigate to={isSeller ? "/sales" : "/dashboard"} replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to={isSeller ? "/sales" : "/dashboard"} replace />} />
+          </Routes>
+        </Suspense>
       </AppLayout>
     </StoreProvider>
   );
@@ -85,13 +87,16 @@ function AuthGate() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route path="/*" element={<ProtectedRoutes />} />
-    </Routes>
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        <Route path="/*" element={<ProtectedRoutes />} />
+      </Routes>
+    </Suspense>
   );
 }
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
