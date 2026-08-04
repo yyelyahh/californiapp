@@ -1107,52 +1107,95 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [loans, getLoanPaid]);
 
   // ---- Selectors do razão (derivados de financial_events) ----
-  const sumDelta = (field: keyof FinancialEvent) =>
-    financialEvents.reduce((s, e) => s + (Number(e[field] as number) || 0), 0);
+  // Totais calculados uma única vez por atualização do razão, em vez de a cada chamada.
+  const ledgerTotals = useMemo(() => {
+    const t = {
+      cash: 0, inventory: 0, receivable: 0, partnerCapital: 0,
+      loan: 0, accumulatedProfit: 0, distributedProfit: 0,
+    };
+    for (const e of financialEvents) {
+      t.cash += Number(e.cashDelta) || 0;
+      t.inventory += Number(e.inventoryDelta) || 0;
+      t.receivable += Number(e.receivableDelta) || 0;
+      t.partnerCapital += Number(e.partnerCapitalDelta) || 0;
+      t.loan += Number(e.loanDelta) || 0;
+      t.accumulatedProfit += Number(e.accumulatedProfitDelta) || 0;
+      t.distributedProfit += Number(e.distributedProfitDelta) || 0;
+    }
+    return t;
+  }, [financialEvents]);
 
-  const getCash = useCallback(() => sumDelta("cashDelta"), [financialEvents]);
-  const getInventoryCostValue = useCallback(() => sumDelta("inventoryDelta"), [financialEvents]);
-  const getReceivables = useCallback(() => sumDelta("receivableDelta"), [financialEvents]);
-  const getPartnerCapital = useCallback(() => sumDelta("partnerCapitalDelta"), [financialEvents]);
-  const getLoansOutstanding = useCallback(() => sumDelta("loanDelta"), [financialEvents]);
-  const getAccumulatedProfit = useCallback(() => sumDelta("accumulatedProfitDelta"), [financialEvents]);
-  const getDistributedProfit = useCallback(() => sumDelta("distributedProfitDelta"), [financialEvents]);
-  const getRetainedEarnings = useCallback(() => getAccumulatedProfit() - getDistributedProfit(), [getAccumulatedProfit, getDistributedProfit]);
+  const getCash = useCallback(() => ledgerTotals.cash, [ledgerTotals]);
+  const getInventoryCostValue = useCallback(() => ledgerTotals.inventory, [ledgerTotals]);
+  const getReceivables = useCallback(() => ledgerTotals.receivable, [ledgerTotals]);
+  const getPartnerCapital = useCallback(() => ledgerTotals.partnerCapital, [ledgerTotals]);
+  const getLoansOutstanding = useCallback(() => ledgerTotals.loan, [ledgerTotals]);
+  const getAccumulatedProfit = useCallback(() => ledgerTotals.accumulatedProfit, [ledgerTotals]);
+  const getDistributedProfit = useCallback(() => ledgerTotals.distributedProfit, [ledgerTotals]);
+  const getRetainedEarnings = useCallback(() => ledgerTotals.accumulatedProfit - ledgerTotals.distributedProfit, [ledgerTotals]);
   const getDistributableProfit = useCallback((pendingCommissions: number = 0) => {
     return getRetainedEarnings() - pendingCommissions;
   }, [getRetainedEarnings]);
 
+  const ctxValue = useMemo<StoreContextType>(() => ({
+    products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
+    addProduct, updateProduct, deleteProduct,
+    addStockEntry, deleteStockEntry, addStockLoss, deleteStockLoss, getTotalLossValue, addSale, updateSale, deleteSale,
+    addExpense, deleteExpense,
+    addInvestor, updateInvestor, deleteInvestor,
+    addDividend, deleteDividend,
+    addPartner, updatePartner, deletePartner,
+    addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth, getTotalPartnerPayments,
+    addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment,
+    addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt,
+    addCommissionPayment, deleteCommissionPayment, addProLaborePayment, deleteProLaborePayment,
+    getSellerName,
+    getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
+    getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
+    getSellerDebt, getSellerPaid, getSellerBalance,
+    partnerContributions, loans, loanPayments, financialEvents,
+    addPartnerContribution, deletePartnerContribution,
+    addLoan, updateLoan, deleteLoan,
+    addLoanPayment, deleteLoanPayment,
+    refreshFinancialEvents,
+    getCash, getInventoryCostValue, getReceivables,
+    getPartnerCapital, getLoansOutstanding,
+    getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
+    getLoanPaid, getLoanRemaining,
+  }), [
+    products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
+    addProduct, updateProduct, deleteProduct,
+    addStockEntry, deleteStockEntry, addStockLoss, deleteStockLoss, getTotalLossValue, addSale, updateSale, deleteSale,
+    addExpense, deleteExpense,
+    addInvestor, updateInvestor, deleteInvestor,
+    addDividend, deleteDividend,
+    addPartner, updatePartner, deletePartner,
+    addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth, getTotalPartnerPayments,
+    addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment,
+    addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt,
+    addCommissionPayment, deleteCommissionPayment, addProLaborePayment, deleteProLaborePayment,
+    getSellerName,
+    getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
+    getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
+    getSellerDebt, getSellerPaid, getSellerBalance,
+    partnerContributions, loans, loanPayments, financialEvents,
+    addPartnerContribution, deletePartnerContribution,
+    addLoan, updateLoan, deleteLoan,
+    addLoanPayment, deleteLoanPayment,
+    refreshFinancialEvents,
+    getCash, getInventoryCostValue, getReceivables,
+    getPartnerCapital, getLoansOutstanding,
+    getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
+    getLoanPaid, getLoanRemaining,
+  ]);
+
   return (
-    <StoreContext.Provider value={{
-      products, stockEntries, sales, expenses, investors, dividends, partners, sellers, productAssignments, sellerDebtPayments, partnerPayments, sellerManualDebts, stockLosses, commissionPayments, proLaborePayments, loading,
-      addProduct, updateProduct, deleteProduct,
-      addStockEntry, deleteStockEntry, addStockLoss, deleteStockLoss, getTotalLossValue, addSale, updateSale, deleteSale,
-      addExpense, deleteExpense,
-      addInvestor, updateInvestor, deleteInvestor,
-      addDividend, deleteDividend,
-      addPartner, updatePartner, deletePartner,
-      addPartnerPayment, deletePartnerPayment, getPartnerPaidForMonth, getTotalPartnerPayments,
-      addSeller, updateSeller, deleteSeller, addProductAssignment, deleteProductAssignment, transferProductAssignment,
-      addSellerDebtPayment, deleteSellerDebtPayment, addSellerManualDebt, deleteSellerManualDebt,
-      addCommissionPayment, deleteCommissionPayment, addProLaborePayment, deleteProLaborePayment,
-      getSellerName,
-      getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
-      getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
-      getSellerDebt, getSellerPaid, getSellerBalance,
-      partnerContributions, loans, loanPayments, financialEvents,
-      addPartnerContribution, deletePartnerContribution,
-      addLoan, updateLoan, deleteLoan,
-      addLoanPayment, deleteLoanPayment,
-      refreshFinancialEvents,
-      getCash, getInventoryCostValue, getReceivables,
-      getPartnerCapital, getLoansOutstanding,
-      getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
-      getLoanPaid, getLoanRemaining,
-    }}>
+    <StoreContext.Provider value={ctxValue}>
       {children}
     </StoreContext.Provider>
   );
 }
+
 
 export function useStore() {
   const ctx = useContext(StoreContext);
