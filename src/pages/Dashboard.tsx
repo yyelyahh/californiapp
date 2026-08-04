@@ -359,7 +359,7 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-0">
               {store.sales.filter(s => s.type === "venda").slice(-6).reverse().map(s => {
-                const product = store.products.find(p => p.id === s.productId);
+                const product = productMap.get(s.productId);
                 const productLabel = product ? `${product.flavor} · ${product.model}` : store.getProductName(s.productId);
                 return (
                   <div key={s.id} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
