@@ -321,13 +321,15 @@ export default function CommissionsPage() {
   // Transfer logic
   const transferFromAssignments = useMemo(() => {
     if (!transferForm.fromSellerId) return [];
+    const productById = new Map(products.map(p => [p.id, p]));
     return productAssignments
       .filter(a => a.sellerId === transferForm.fromSellerId && a.quantity > 0)
       .map(a => {
-        const p = products.find(x => x.id === a.productId);
+        const p = productById.get(a.productId);
         return { ...a, productLabel: p ? `${p.flavor} · ${p.model}` : "—" };
       });
   }, [productAssignments, products, transferForm.fromSellerId]);
+
   const transferSelected = transferFromAssignments.find(a => a.id === transferForm.assignmentId);
   const transferMaxQty = transferSelected?.quantity ?? 0;
 
