@@ -145,91 +145,134 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [isAdmin]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Wave 1: dados essenciais para as telas de operação (produtos, vendas, estoque, vendedores).
+    const fetchCore = async () => {
+      const [prodList, stockRes, salesRes, selRes, paRes, slRes] = await Promise.all([
+        fetchProductsList(),
+        supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
+        supabase.from("sales").select("*").order("created_at", { ascending: true }),
+        supabase.from("sellers" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
+      ]) as any;
+      if (cancelled) return;
+      setProducts(prodList);
+      if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
+      if (salesRes.data) setSales(salesRes.data.map(mapSale));
+      if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
+      if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
+      if (slRes?.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
+    };
+
+    // Wave 2: dados financeiros/administrativos, carregados logo em seguida sem travar a tela.
+    const fetchSecondary = async () => {
+      const [expRes, invRes, divRes, partRes, sdpRes, ppRes, smdRes, cpRes, plRes, pcRes, loanRes, lpRes, feRes] = await Promise.all([
+        supabase.from("expenses").select("*").order("created_at", { ascending: true }),
+        supabase.from("investors").select("*").order("created_at", { ascending: true }),
+        supabase.from("dividends").select("*").order("created_at", { ascending: true }),
+        supabase.from("partners").select("*").order("created_at", { ascending: true }),
+        supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("seller_manual_debts" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("commission_payments" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("pro_labore_payments" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("partner_contributions" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("loans" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("loan_payments" as any).select("*").order("created_at", { ascending: true }),
+        supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true }),
+      ]) as any;
+      if (cancelled) return;
+      if (expRes.data) setExpenses(expRes.data.map(mapExpense));
+      if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
+      if (divRes.data) setDividends(divRes.data.map(mapDividend));
+      if (partRes.data) setPartners(partRes.data.map(mapPartner));
+      if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
+      if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
+      if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
+      if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
+      if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
+      if (pcRes?.data) setPartnerContributions((pcRes.data as any[]).map(mapPartnerContribution));
+      if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
+      if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
+      if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
+    };
+
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [prodList, stockRes, salesRes, expRes, invRes, divRes, partRes, selRes, paRes, sdpRes, ppRes, smdRes, slRes, cpRes, plRes, pcRes, loanRes, lpRes, feRes] = await Promise.all([
-          fetchProductsList(),
-          supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
-          supabase.from("sales").select("*").order("created_at", { ascending: true }),
-          supabase.from("expenses").select("*").order("created_at", { ascending: true }),
-          supabase.from("investors").select("*").order("created_at", { ascending: true }),
-          supabase.from("dividends").select("*").order("created_at", { ascending: true }),
-          supabase.from("partners").select("*").order("created_at", { ascending: true }),
-          supabase.from("sellers" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("seller_debt_payments" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("partner_payments" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("seller_manual_debts" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("commission_payments" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("pro_labore_payments" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("partner_contributions" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("loans" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("loan_payments" as any).select("*").order("created_at", { ascending: true }),
-          supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true }),
-        ]) as any;
-
-        setProducts(prodList);
-        if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
-        if (salesRes.data) setSales(salesRes.data.map(mapSale));
-        if (expRes.data) setExpenses(expRes.data.map(mapExpense));
-        if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
-        if (divRes.data) setDividends(divRes.data.map(mapDividend));
-        if (partRes.data) setPartners(partRes.data.map(mapPartner));
-        if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
-        if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
-        if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
-        if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
-        if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
-        if (slRes.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
-        if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
-        if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
-        if (pcRes?.data) setPartnerContributions((pcRes.data as any[]).map(mapPartnerContribution));
-        if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
-        if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
-        if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
+        await fetchCore();
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
+      }
+      try {
+        await fetchSecondary();
+      } catch (err) {
+        console.error("Error fetching financial data:", err);
       }
     };
     fetchAll();
 
     // ---- Realtime sync: any change in shared tables refreshes the affected slice ----
-    const refetchFinancialEvents = async () => {
-      const { data } = await supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true });
-      if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+    let feTimer: ReturnType<typeof setTimeout> | null = null;
+    const refetchFinancialEvents = () => {
+      if (feTimer) clearTimeout(feTimer);
+      feTimer = setTimeout(async () => {
+        const { data } = await supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true });
+        if (data && !cancelled) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+      }, 400);
     };
+
+    // Aplica a linha recebida no evento em vez de recarregar a tabela inteira.
+    const patch = <T extends { id: string }>(
+      setter: React.Dispatch<React.SetStateAction<T[]>>,
+      payload: any,
+      mapper: (r: any) => T,
+    ) => {
+      const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+      if (!row?.id) return;
+      if (payload.eventType === "DELETE") {
+        setter(prev => prev.filter(x => x.id !== row.id));
+        return;
+      }
+      const mapped = mapper(row);
+      setter(prev => (prev.some(x => x.id === mapped.id)
+        ? prev.map(x => (x.id === mapped.id ? { ...x, ...mapped } : x))
+        : [...prev, mapped]));
+    };
+
     const channel = supabase
       .channel("store-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async () => {
-        setProducts(await fetchProductsList());
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async (payload: any) => {
+        // Produtos precisam do custo (RPC de admin), então recarregamos a lista completa.
+        if (payload.eventType === "DELETE") {
+          setProducts(prev => prev.filter(p => p.id !== payload.old?.id));
+        } else {
+          const list = await fetchProductsList();
+          if (!cancelled) setProducts(list);
+        }
         refetchFinancialEvents();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, async () => {
-        const { data } = await supabase.from("sales").select("*").order("created_at", { ascending: true });
-        if (data) setSales(data.map(mapSale));
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, (payload: any) => {
+        patch(setSales, payload, mapSale);
         refetchFinancialEvents();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "stock_entries" }, async () => {
-        const { data } = await supabase.from("stock_entries").select("*").order("created_at", { ascending: true });
-        if (data) setStockEntries(data.map(mapStockEntry));
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_entries" }, (payload: any) => {
+        patch(setStockEntries, payload, mapStockEntry);
         refetchFinancialEvents();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "product_assignments" }, async () => {
-        const { data } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
-        if (data) setProductAssignments((data as any[]).map(mapProductAssignment));
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_assignments" }, (payload: any) => {
+        patch(setProductAssignments, payload, mapProductAssignment);
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "sellers" }, async () => {
-        const { data } = await supabase.from("sellers" as any).select("*").order("created_at", { ascending: true });
-        if (data) setSellers((data as any[]).map(mapSeller));
+      .on("postgres_changes", { event: "*", schema: "public", table: "sellers" }, (payload: any) => {
+        patch(setSellers, payload, mapSeller);
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, async () => {
-        const { data } = await supabase.from("stock_losses" as any).select("*").order("created_at", { ascending: true });
-        if (data) setStockLosses((data as any[]).map(mapStockLoss));
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, (payload: any) => {
+        patch(setStockLosses, payload, mapStockLoss);
         refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, refetchFinancialEvents)
@@ -242,8 +285,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_debt_payments" }, refetchFinancialEvents)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (feTimer) clearTimeout(feTimer);
+      supabase.removeChannel(channel);
+    };
   }, [fetchProductsList]);
+
 
   const mapProduct = (r: any): Product => ({
     id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
