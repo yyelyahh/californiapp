@@ -168,12 +168,13 @@ export default function CommissionsPage() {
     const perSeller = commissionSellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
-      // Comissão é atribuída pelo período de RECEBIMENTO (paidAt), não pela data da venda.
+      // Comissão é atribuída pelo período da VENDA. Uma venda de julho paga em agosto
+      // gera comissão em julho (na faixa acumulada de julho).
       const vendasPagas = sales.filter(s =>
         s.sellerId === seller.id &&
         s.type === "venda" &&
         (s.paidAmount || 0) >= s.totalPrice - 0.01 &&
-        !!s.paidAt && inPeriod(s.paidAt) && !isLegacy(s.paidAt)
+        inPeriod(s.date) && !isLegacy(s.date)
       );
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
