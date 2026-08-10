@@ -23,7 +23,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
-  progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
+  progressToNextTier, computeSellerCommission, computeClosedCommission, COMMISSION_TIERS,
 } from "@/lib/commissions";
 import type { Sale } from "@/types";
 
@@ -168,24 +168,27 @@ export default function CommissionsPage() {
     const perSeller = commissionSellers.map(seller => {
       const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
       const vendas = sellerSales.filter(s => s.type === "venda");
-      // Comissão é atribuída pelo período da VENDA. Uma venda de julho paga em agosto
-      // gera comissão em julho (na faixa acumulada de julho).
-      const vendasPagas = sales.filter(s =>
+      // Comissão fecha no último dia do mês: a faixa acumula do dia 1 ao dia 30/31.
+      // Num período personalizado, mostramos o valor FECHADO dos meses tocados.
+      const vendasPagasTodas = sales.filter(s =>
         s.sellerId === seller.id &&
         s.type === "venda" &&
         (s.paidAmount || 0) >= s.totalPrice - 0.01 &&
-        inPeriod(s.date) && !isLegacy(s.date)
+        !isLegacy(s.date)
       );
+      const closed = computeClosedCommission(vendasPagasTodas, start, end);
+      const vendasPagas = closed.sales;
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
       const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
-      const c = computeSellerCommission(vendasPagas);
-      const accrued = c.accrued;
-      const units = c.units;
+      const c = { tier: closed.tier };
+      const accrued = closed.accrued;
+      const units = closed.units;
 
-      const accrualItems = computeAccrualHistory(vendasPagas);
+      const accrualItems = closed.groups.flatMap(g => computeAccrualHistory(g.sales));
       const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
       const baseAccrued = accrued - adjustmentsTotal;
+
 
       const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
       const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);

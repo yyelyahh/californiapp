@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
-import { computeSellerCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
+import { computeSellerCommission, computeClosedCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
 import { formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import {
@@ -132,23 +132,23 @@ export default function SellerReportDrawer({
     });
     const consumoBreakdown = Array.from(consumoMap.values()).sort((a, b) => b.total - a.total);
 
-    // Comissão é atribuída pelo período da VENDA (não do recebimento).
-    // Uma venda de julho paga em agosto gera comissão em julho, na faixa acumulada de julho.
+    // Comissão fecha no último dia do mês: a faixa acumula do dia 1 ao dia 30/31.
+    // Em período personalizado, o valor exibido é o FECHADO dos meses tocados.
     const isPaid = (s: (typeof sales)[number]) => (s.paidAmount || 0) >= s.totalPrice - 0.01;
-    const vendasRecebidasPeriodo = sales
-      .filter(s => s.sellerId === seller.id && s.type === "venda" && isPaid(s)
-        && inPeriod(s.date) && !isLegacy(s.date))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const vendasPagasTodas = sales
+      .filter(s => s.sellerId === seller.id && s.type === "venda" && isPaid(s) && !isLegacy(s.date));
+    const closed = computeClosedCommission(vendasPagasTodas, start, end);
+    const vendasRecebidasPeriodo = closed.sales;
 
     const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const modernVendas = vendasRecebidasPeriodo;
-    // Faixa final calculada com as vendas pagas do período
-    const modernUnitsTotal = modernVendas.reduce((a, s) => a + s.quantity, 0);
-    const finalTier = getTierForUnits(modernUnitsTotal);
+    const modernUnitsTotal = closed.units;
+    const finalTier = closed.tier;
     const saleCommission = new Map<string, number>();
-    vendasRecebidasPeriodo.forEach(s => {
-      saleCommission.set(s.id, s.totalPrice * finalTier.rate);
+    closed.groups.forEach(g => {
+      g.sales.forEach(s => saleCommission.set(s.id, s.totalPrice * g.tier.rate));
     });
+
     const detailSales = [...vendasChrono];
     vendasRecebidasPeriodo.forEach(s => { if (!detailSales.some(d => d.id === s.id)) detailSales.push(s); });
     detailSales.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -188,8 +188,9 @@ export default function SellerReportDrawer({
       .sort((a, b) => a.name.localeCompare(b.name));
     const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
-    const c = computeSellerCommission(modernVendas);
-    const adjustments = computeAccrualAdjustments(modernVendas);
+    const c = { units: closed.units, revenue: closed.revenue, tier: closed.tier, accrued: closed.accrued };
+    const adjustments = closed.groups.flatMap(g => computeAccrualAdjustments(g.sales));
+
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))
       .reduce((a, p) => a + p.amount, 0);
