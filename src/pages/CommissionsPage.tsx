@@ -203,10 +203,10 @@ export default function CommissionsPage() {
 
       const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
       const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date) && !isLegacy(d.date));
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inClosedPeriod(d.date) && !isLegacy(d.date));
       const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
       const consumoTotal = retiradasTotal + manualDebtsTotal;
-      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inClosedPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
       const saldoConsumo = consumoTotal;
