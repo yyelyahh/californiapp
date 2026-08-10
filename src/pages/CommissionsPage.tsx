@@ -23,7 +23,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
-  progressToNextTier, computeSellerCommission, COMMISSION_TIERS,
+  progressToNextTier, computeSellerCommission, computeClosedCommission, COMMISSION_TIERS,
 } from "@/lib/commissions";
 import type { Sale } from "@/types";
 
