@@ -94,9 +94,17 @@ export default function SellerReportDrawer({
     return { start: s, end: e, label: l };
   }, [periodKey, customStart, customEnd]);
 
+  // O extrato considera os meses FECHADOS tocados pelo período (dia 1 do mês inicial
+  // até o último dia do mês final), pois a comissão fecha por mês.
+  const closedStart = useMemo(() => new Date(start.getFullYear(), start.getMonth(), 1), [start]);
+  const closedEnd = useMemo(() => new Date(end.getFullYear(), end.getMonth() + 1, 0, 23, 59, 59, 999), [end]);
   const inPeriod = (iso: string) => {
-    try { return isWithinInterval(parseISO(iso), { start, end }); } catch { return false; }
+    try {
+      const d = parseISO(iso);
+      return d >= closedStart && d <= closedEnd;
+    } catch { return false; }
   };
+
 
   const report = useMemo(() => {
     if (!seller) return null;

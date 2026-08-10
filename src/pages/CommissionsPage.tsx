@@ -137,6 +137,16 @@ export default function CommissionsPage() {
   const inYear = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start: PROJECT_START, end: endOfYear(new Date()) }); } catch { return false; }
   };
+  // Meses FECHADOS tocados pelo período (dia 1 do mês inicial até o último dia do mês final)
+  const closedStart = useMemo(() => new Date(start.getFullYear(), start.getMonth(), 1), [start]);
+  const closedEnd = useMemo(() => new Date(end.getFullYear(), end.getMonth() + 1, 0, 23, 59, 59, 999), [end]);
+  const inClosedPeriod = (iso: string) => {
+    try {
+      const d = parseISO(iso);
+      return d >= closedStart && d <= closedEnd;
+    } catch { return false; }
+  };
+
 
 
   const periodMetrics = useMemo(() => {
@@ -157,8 +167,9 @@ export default function CommissionsPage() {
     const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
     const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
-    // === Balanço por vendedor — somente o período selecionado (sem saldo anterior) ===
-    const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
+    // === Balanço por vendedor — meses FECHADOS tocados pelo período ===
+    const salesPeriod = sales.filter(s => inClosedPeriod(s.date) && !isLegacy(s.date));
+
 
 
 
@@ -179,7 +190,7 @@ export default function CommissionsPage() {
       const closed = computeClosedCommission(vendasPagasTodas, start, end);
       const vendasPagas = closed.sales;
       const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
-      const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
+      const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inClosedPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const c = { tier: closed.tier };
       const accrued = closed.accrued;
@@ -192,10 +203,10 @@ export default function CommissionsPage() {
 
       const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
       const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
-      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inPeriod(d.date) && !isLegacy(d.date));
+      const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inClosedPeriod(d.date) && !isLegacy(d.date));
       const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
       const consumoTotal = retiradasTotal + manualDebtsTotal;
-      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
+      const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inClosedPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
       const legacyCredit = 0;
       const saldoConsumo = consumoTotal;
@@ -247,7 +258,7 @@ export default function CommissionsPage() {
       perPartner, totalWithdrawalsPeriod, distribuivel,
       available,
     };
-  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, PROJECT_START]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, closedStart, closedEnd, PROJECT_START]);
 
 
 
