@@ -258,7 +258,7 @@ export default function CommissionsPage() {
       perPartner, totalWithdrawalsPeriod, distribuivel,
       available,
     };
-  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, PROJECT_START]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, closedStart, closedEnd, PROJECT_START]);
 
 
 
