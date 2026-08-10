@@ -49,3 +49,84 @@ export function computeSellerCommission(salesInPeriod: Sale[]) {
   const accrued = revenue * tier.rate;
   return { units, revenue, tier, accrued };
 }
+
+/**
+ * Fechamento mensal da comissão.
+ * A faixa (tier) é apurada por MÊS FECHADO: as unidades acumulam do dia 1 ao
+ * último dia do mês. Quando um período personalizado é selecionado, o valor
+ * retornado é o valor FECHADO dos meses tocados pelo período — e não apenas o
+ * das vendas que caem dentro do recorte de dias escolhido.
+ */
+export type CommissionMonthGroup = {
+  key: string; // YYYY-MM
+  start: Date;
+  end: Date;
+  sales: Sale[];
+  units: number;
+  revenue: number;
+  tier: CommissionTier;
+  accrued: number;
+};
+
+function monthKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function computeClosedCommission(
+  paidSales: Sale[],
+  start: Date,
+  end: Date,
+  getDate: (s: Sale) => string = (s) => s.date,
+) {
+  const wanted = new Set<string>();
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= last) {
+    wanted.add(monthKey(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  const byMonth = new Map<string, Sale[]>();
+  for (const s of paidSales) {
+    const raw = getDate(s);
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) continue;
+    const k = monthKey(d);
+    if (!wanted.has(k)) continue;
+    const arr = byMonth.get(k) || [];
+    arr.push(s);
+    byMonth.set(k, arr);
+  }
+
+  const groups: CommissionMonthGroup[] = Array.from(wanted)
+    .sort()
+    .map((k) => {
+      const [y, m] = k.split("-").map(Number);
+      const sales = (byMonth.get(k) || []).sort(
+        (a, b) => new Date(getDate(a)).getTime() - new Date(getDate(b)).getTime(),
+      );
+      const units = sales.reduce((a, s) => a + s.quantity, 0);
+      const revenue = sales.reduce((a, s) => a + s.totalPrice, 0);
+      const tier = getTierForUnits(units);
+      return {
+        key: k,
+        start: new Date(y, m - 1, 1),
+        end: new Date(y, m, 0, 23, 59, 59, 999),
+        sales,
+        units,
+        revenue,
+        tier,
+        accrued: revenue * tier.rate,
+      };
+    })
+    .filter((g) => g.sales.length > 0);
+
+  const units = groups.reduce((a, g) => a + g.units, 0);
+  const revenue = groups.reduce((a, g) => a + g.revenue, 0);
+  const accrued = groups.reduce((a, g) => a + g.accrued, 0);
+  const sales = groups.flatMap((g) => g.sales);
+  const tier = groups.length ? groups[groups.length - 1].tier : getTierForUnits(0);
+
+  return { units, revenue, accrued, tier, groups, sales };
+}
