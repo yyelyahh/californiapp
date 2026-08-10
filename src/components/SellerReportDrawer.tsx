@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
-import { computeSellerCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
+import { computeSellerCommission, computeClosedCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
 import { formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import {
