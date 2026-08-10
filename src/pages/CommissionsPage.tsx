@@ -137,6 +137,16 @@ export default function CommissionsPage() {
   const inYear = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start: PROJECT_START, end: endOfYear(new Date()) }); } catch { return false; }
   };
+  // Meses FECHADOS tocados pelo período (dia 1 do mês inicial até o último dia do mês final)
+  const closedStart = useMemo(() => new Date(start.getFullYear(), start.getMonth(), 1), [start]);
+  const closedEnd = useMemo(() => new Date(end.getFullYear(), end.getMonth() + 1, 0, 23, 59, 59, 999), [end]);
+  const inClosedPeriod = (iso: string) => {
+    try {
+      const d = parseISO(iso);
+      return d >= closedStart && d <= closedEnd;
+    } catch { return false; }
+  };
+
 
 
   const periodMetrics = useMemo(() => {
