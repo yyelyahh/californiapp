@@ -188,8 +188,9 @@ export default function SellerReportDrawer({
       .sort((a, b) => a.name.localeCompare(b.name));
     const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
-    const c = computeSellerCommission(modernVendas);
-    const adjustments = computeAccrualAdjustments(modernVendas);
+    const c = { units: closed.units, revenue: closed.revenue, tier: closed.tier, accrued: closed.accrued };
+    const adjustments = closed.groups.flatMap(g => computeAccrualAdjustments(g.sales));
+
     const commPaidPeriod = commissionPayments
       .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))
       .reduce((a, p) => a + p.amount, 0);
