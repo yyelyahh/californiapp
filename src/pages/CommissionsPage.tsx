@@ -167,8 +167,9 @@ export default function CommissionsPage() {
     const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
     const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
-    // === Balanço por vendedor — somente o período selecionado (sem saldo anterior) ===
-    const salesPeriod = sales.filter(s => inPeriod(s.date) && !isLegacy(s.date));
+    // === Balanço por vendedor — meses FECHADOS tocados pelo período ===
+    const salesPeriod = sales.filter(s => inClosedPeriod(s.date) && !isLegacy(s.date));
+
 
 
 
