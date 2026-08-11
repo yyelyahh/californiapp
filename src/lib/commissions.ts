@@ -130,3 +130,71 @@ export function computeClosedCommission(
 
   return { units, revenue, accrued, tier, groups, sales };
 }
+
+/* ------------------------------------------------------------------ *
+ * Saldo acumulado de comissão do vendedor
+ * ------------------------------------------------------------------ *
+ * O saldo de um período nunca "zera": o que sobrou (ou faltou) dos
+ * meses anteriores é recalculado a partir do histórico real das
+ * movimentações (comissão gerada, consumo, comissão paga e pagamentos
+ * de dívida) desde o início válido do histórico até o instante
+ * imediatamente anterior ao início do período consultado.
+ * Como o recorte anterior termina onde o período começa, nenhuma
+ * movimentação é contada duas vezes.
+ */
+export type LedgerEntry = { sellerId?: string; amount: number; date: string };
+
+export type SellerLedgerInput = {
+  sellerId: string;
+  sales: Sale[];
+  commissionPayments: LedgerEntry[];
+  debtPayments: LedgerEntry[];
+  manualDebts: LedgerEntry[];
+  /** Início válido do histórico (ex.: 01/06/2026). */
+  historyStart: Date;
+  /** Início do período consultado (dia 1 do mês inicial). */
+  periodStart: Date;
+};
+
+function inRange(iso: string, from: Date, to: Date) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return false;
+  return d >= from && d <= to;
+}
+
+function isPaidSale(s: Sale) {
+  return (s.paidAmount || 0) >= s.totalPrice - 0.01;
+}
+
+/** Saldo de comissão acumulado ANTES do início do período consultado. */
+export function computePriorCommissionBalance(input: SellerLedgerInput): number {
+  const { sellerId, sales, commissionPayments, debtPayments, manualDebts, historyStart, periodStart } = input;
+  const priorEnd = new Date(periodStart.getTime() - 1);
+  if (priorEnd <= historyStart) return 0;
+
+  const sellerSales = sales.filter(s => s.sellerId === sellerId);
+
+  const paidSales = sellerSales.filter(
+    s => s.type === "venda" && isPaidSale(s) && new Date(s.date) >= historyStart,
+  );
+  const accrued = computeClosedCommission(paidSales, historyStart, priorEnd).accrued;
+
+  const consumo =
+    sellerSales
+      .filter(s => s.type === "retirada_funcionario" && inRange(s.date, historyStart, priorEnd))
+      .reduce((a, s) => a + s.totalPrice, 0) +
+    manualDebts
+      .filter(d => (!d.sellerId || d.sellerId === sellerId) && inRange(d.date, historyStart, priorEnd))
+      .reduce((a, d) => a + d.amount, 0);
+
+  const commPaid = commissionPayments
+    .filter(p => (!p.sellerId || p.sellerId === sellerId) && inRange(p.date, historyStart, priorEnd))
+    .reduce((a, p) => a + p.amount, 0);
+
+  const debtPaid = debtPayments
+    .filter(p => (!p.sellerId || p.sellerId === sellerId) && inRange(p.date, historyStart, priorEnd))
+    .reduce((a, p) => a + p.amount, 0);
+
+  return accrued - consumo + debtPaid - commPaid;
+}

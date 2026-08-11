@@ -23,7 +23,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
-  progressToNextTier, computeSellerCommission, computeClosedCommission, COMMISSION_TIERS,
+  progressToNextTier, computeSellerCommission, computeClosedCommission, computePriorCommissionBalance, COMMISSION_TIERS,
 } from "@/lib/commissions";
 import type { Sale } from "@/types";
 
@@ -213,8 +213,17 @@ export default function CommissionsPage() {
       const retiradasCount = retiradas.length + manualDebts.length;
 
       const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
-      const priorBalance = 0;
-      const balance = periodBalance;
+      // Saldo trazido dos meses anteriores (recalculado do histórico real).
+      const priorBalance = computePriorCommissionBalance({
+        sellerId: seller.id,
+        sales,
+        commissionPayments,
+        debtPayments: sellerDebtPayments,
+        manualDebts: sellerManualDebts,
+        historyStart: PROJECT_START,
+        periodStart: closedStart,
+      });
+      const balance = priorBalance + periodBalance;
 
       return {
         seller, units, vendasTotal, commPaid,
@@ -588,7 +597,8 @@ export default function CommissionsPage() {
                     <Line label="Unidades" value={String(consultRow.units)} tone="muted" />
                     <Line label="Vendas" value={formatCurrency(consultRow.vendasTotal)} tone="muted" />
                     <Line label="Faixa" value={consultRow.tier.label} tone="muted" />
-                    <Line label="Comissão" value={formatCurrency(consultRow.accrued)} tone="income" />
+                    <Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0.01 ? "income" : consultRow.priorBalance < -0.01 ? "warning" : "muted"} />
+                    <Line label="Comissão gerada" value={formatCurrency(consultRow.accrued)} tone="income" />
                     <Line label="Consumo" value={`−${formatCurrency(consultRow.retiradasTotal)}`} tone={consultRow.retiradasTotal > 0 ? "warning" : "muted"} />
                     <Line label="Dívidas" value={`−${formatCurrency(consultRow.manualDebtsTotal)}`} tone={consultRow.manualDebtsTotal > 0 ? "warning" : "muted"} />
                     <Line label="Pago" value={`−${formatCurrency(consultRow.commPaid)}`} tone={consultRow.commPaid > 0 ? "warning" : "muted"} />
