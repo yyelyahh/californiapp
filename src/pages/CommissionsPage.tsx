@@ -597,7 +597,8 @@ export default function CommissionsPage() {
                     <Line label="Unidades" value={String(consultRow.units)} tone="muted" />
                     <Line label="Vendas" value={formatCurrency(consultRow.vendasTotal)} tone="muted" />
                     <Line label="Faixa" value={consultRow.tier.label} tone="muted" />
-                    <Line label="Comissão" value={formatCurrency(consultRow.accrued)} tone="income" />
+                    <Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0.01 ? "income" : consultRow.priorBalance < -0.01 ? "warning" : "muted"} />
+                    <Line label="Comissão gerada" value={formatCurrency(consultRow.accrued)} tone="income" />
                     <Line label="Consumo" value={`−${formatCurrency(consultRow.retiradasTotal)}`} tone={consultRow.retiradasTotal > 0 ? "warning" : "muted"} />
                     <Line label="Dívidas" value={`−${formatCurrency(consultRow.manualDebtsTotal)}`} tone={consultRow.manualDebtsTotal > 0 ? "warning" : "muted"} />
                     <Line label="Pago" value={`−${formatCurrency(consultRow.commPaid)}`} tone={consultRow.commPaid > 0 ? "warning" : "muted"} />

@@ -282,6 +282,7 @@ export default function SellerReportDrawer({
     lines.push(``);
     lines.push(`💰 COMISSÃO — ${label}`);
     lines.push(`• Faixa: ${report.tier.label} (${report.units} un.)`);
+    lines.push(`• Saldo anterior: ${fmt(report.previousBalance)}`);
     lines.push(`• Comissão gerada: ${fmt(report.accrued)}`);
     lines.push(`• (−) Consumo no mês: ${fmt(report.saldoConsumo)}`);
     lines.push(`• (−) Comissão já paga: ${fmt(report.commPaidPeriod)}`);
@@ -415,6 +416,7 @@ export default function SellerReportDrawer({
 
           {/* Financial summary list */}
           <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-[13px] space-y-1.5">
+            <SummaryRow label="Saldo anterior" value={fmt(report.previousBalance)} tone={report.previousBalance >= 0 ? "income" : "warning"} sign="+" />
             <SummaryRow label="Comissão gerada" value={fmt(report.accrued)} tone="income" sign="+" />
             <SummaryRow label="Consumo" value={fmt(report.saldoConsumo)} tone={report.saldoConsumo > 0 ? "warning" : "muted"} sign="−" />
             {report.debtPaymentsTotal > 0 && (
