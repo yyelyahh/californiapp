@@ -23,7 +23,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import {
   getTierForUnits, getNextTier, unitsUntilNextTier,
-  progressToNextTier, computeSellerCommission, computeClosedCommission, COMMISSION_TIERS,
+  progressToNextTier, computeSellerCommission, computeClosedCommission, computePriorCommissionBalance, COMMISSION_TIERS,
 } from "@/lib/commissions";
 import type { Sale } from "@/types";
 
@@ -213,8 +213,17 @@ export default function CommissionsPage() {
       const retiradasCount = retiradas.length + manualDebts.length;
 
       const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
-      const priorBalance = 0;
-      const balance = periodBalance;
+      // Saldo trazido dos meses anteriores (recalculado do histórico real).
+      const priorBalance = computePriorCommissionBalance({
+        sellerId: seller.id,
+        sales,
+        commissionPayments,
+        debtPayments: sellerDebtPayments,
+        manualDebts: sellerManualDebts,
+        historyStart: PROJECT_START,
+        periodStart: closedStart,
+      });
+      const balance = priorBalance + periodBalance;
 
       return {
         seller, units, vendasTotal, commPaid,

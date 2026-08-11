@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
-import { computeSellerCommission, computeClosedCommission, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
+import { computeSellerCommission, computeClosedCommission, computePriorCommissionBalance, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
 import { formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import {
@@ -203,11 +203,19 @@ export default function SellerReportDrawer({
       .filter(p => p.sellerId === seller.id && inPeriod(p.date) && !isLegacy(p.date))
       .reduce((a, p) => a + p.amount, 0);
 
-    const previousBalance = 0;
+    const previousBalance = computePriorCommissionBalance({
+      sellerId: seller.id,
+      sales,
+      commissionPayments,
+      debtPayments: sellerDebtPayments,
+      manualDebts: sellerManualDebts,
+      historyStart: LEGACY_CUTOFF,
+      periodStart: closedStart,
+    });
 
     // Saldo do período + saldo trazido
     const periodBalance = c.accrued - saldoConsumo + debtPaymentsTotal - commPaidPeriod;
-    const commBalance = periodBalance;
+    const commBalance = previousBalance + periodBalance;
 
     type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
