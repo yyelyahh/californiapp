@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
-import { Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss, CommissionPayment, ProLaborePayment, PartnerContribution, Loan, LoanPayment, FinancialEvent, FinancialEventKind } from "@/types";
+import { PurchaseOrder, PurchaseOrderItem, PurchaseReceiptItemInput, Product, StockEntry, Sale, Expense, Investor, Dividend, Partner, PartnerPayment, Seller, ProductAssignment, SellerDebtPayment, SellerManualDebt, StockLoss, CommissionPayment, ProLaborePayment, PartnerContribution, Loan, LoanPayment, FinancialEvent, FinancialEventKind } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -19,6 +19,10 @@ interface StoreContextType {
   productAssignments: ProductAssignment[];
   sellerDebtPayments: SellerDebtPayment[];
   partnerPayments: PartnerPayment[];
+  purchaseOrders: PurchaseOrder[];
+  addPurchaseOrder: (o: { date: string; notes?: string; items: { brand: string; model: string; expectedQuantity: number }[] }) => Promise<void>;
+  deletePurchaseOrder: (id: string) => Promise<void>;
+  receivePurchaseOrder: (id: string, items: PurchaseReceiptItemInput[], date: string) => Promise<boolean>;
   loading: boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
@@ -124,6 +128,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [partnerContributions, setPartnerContributions] = useState<PartnerContribution[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
@@ -168,7 +173,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // Wave 2: dados financeiros/administrativos, carregados logo em seguida sem travar a tela.
     const fetchSecondary = async () => {
-      const [expRes, invRes, divRes, partRes, sdpRes, ppRes, smdRes, cpRes, plRes, pcRes, loanRes, lpRes, feRes] = await Promise.all([
+      const [expRes, invRes, divRes, partRes, sdpRes, ppRes, smdRes, cpRes, plRes, pcRes, loanRes, lpRes, feRes, poRes] = await Promise.all([
         supabase.from("expenses").select("*").order("created_at", { ascending: true }),
         supabase.from("investors").select("*").order("created_at", { ascending: true }),
         supabase.from("dividends").select("*").order("created_at", { ascending: true }),
@@ -182,6 +187,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         supabase.from("loans" as any).select("*").order("created_at", { ascending: true }),
         supabase.from("loan_payments" as any).select("*").order("created_at", { ascending: true }),
         supabase.from("financial_events" as any).select("*").order("event_date", { ascending: true }),
+        supabase.from("purchase_orders" as any).select("*, purchase_order_items(*)").order("created_at", { ascending: false }),
       ]) as any;
       if (cancelled) return;
       if (expRes.data) setExpenses(expRes.data.map(mapExpense));
@@ -197,6 +203,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
       if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
       if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
+      if (poRes?.data) setPurchaseOrders((poRes.data as any[]).map(mapPurchaseOrder));
     };
 
     const fetchAll = async () => {
@@ -408,6 +415,147 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     distributedProfitDelta: Number(r.distributed_profit_delta),
     refTable: r.ref_table, refId: r.ref_id, notes: r.notes ?? undefined,
   });
+
+  const mapPurchaseOrder = (r: any): PurchaseOrder => ({
+    id: r.id,
+    number: Number(r.number),
+    status: r.status === "received" ? "received" : "pending",
+    date: r.date,
+    notes: r.notes ?? undefined,
+    receivedAt: r.received_at ?? undefined,
+    createdAt: r.created_at,
+    items: ((r.purchase_order_items ?? []) as any[]).map((i): PurchaseOrderItem => ({
+      id: i.id,
+      purchaseOrderId: i.purchase_order_id,
+      brand: i.brand ?? "",
+      model: i.model ?? "",
+      expectedQuantity: Number(i.expected_quantity ?? 0),
+      receivedFlavors: Array.isArray(i.received_flavors)
+        ? (i.received_flavors as any[]).map(f => ({ flavor: String(f.flavor ?? ""), quantity: Number(f.quantity ?? 0) }))
+        : [],
+    })),
+  });
+
+  // ---- Compras aguardando recebimento ----
+  const addPurchaseOrder = useCallback(async (o: { date: string; notes?: string; items: { brand: string; model: string; expectedQuantity: number }[] }) => {
+    const items = o.items.filter(i => i.brand.trim() && i.model.trim() && i.expectedQuantity > 0);
+    if (items.length === 0) { toast.error("Informe ao menos um item com quantidade maior que zero"); return; }
+    const { data, error } = await supabase.from("purchase_orders" as any).insert({
+      date: o.date, notes: o.notes ?? null, status: "pending",
+    } as any).select("*").single();
+    if (error || !data) { toast.error("Erro ao criar compra"); return; }
+    const orderId = (data as any).id;
+    const { data: itemRows, error: itemErr } = await supabase.from("purchase_order_items" as any).insert(
+      items.map(i => ({
+        purchase_order_id: orderId, brand: i.brand.trim(), model: i.model.trim(),
+        expected_quantity: i.expectedQuantity, received_flavors: [],
+      })) as any,
+    ).select("*");
+    if (itemErr) {
+      await supabase.from("purchase_orders" as any).delete().eq("id", orderId);
+      toast.error("Erro ao salvar itens da compra");
+      return;
+    }
+    setPurchaseOrders(prev => [mapPurchaseOrder({ ...(data as any), purchase_order_items: itemRows ?? [] }), ...prev]);
+    toast.success("Compra registrada (aguardando recebimento)");
+  }, []);
+
+  const deletePurchaseOrder = useCallback(async (id: string) => {
+    const { error } = await supabase.from("purchase_orders" as any).delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir compra"); return; }
+    setPurchaseOrders(prev => prev.filter(o => o.id !== id));
+    toast.success("Compra excluída");
+  }, []);
+
+  // Recebimento: só aqui o estoque é movimentado. A troca de status é atômica
+  // (só ocorre se a compra ainda estiver "pending"), impedindo entrada duplicada.
+  const receivePurchaseOrder = useCallback(async (id: string, receiptItems: PurchaseReceiptItemInput[], date: string): Promise<boolean> => {
+    const order = purchaseOrders.find(o => o.id === id);
+    if (!order) { toast.error("Compra não encontrada"); return false; }
+    if (order.status === "received") { toast.error("Esta compra já foi recebida"); return false; }
+
+    for (const item of order.items) {
+      const input = receiptItems.find(r => r.itemId === item.id);
+      const total = (input?.flavors ?? []).reduce((s, f) => s + (Number(f.quantity) || 0), 0);
+      if ((input?.flavors ?? []).some(f => !f.flavor.trim() || Number(f.quantity) < 0)) {
+        toast.error("Verifique os sabores e quantidades informados"); return false;
+      }
+      if (total !== item.expectedQuantity) {
+        toast.error(`${item.brand} ${item.model}: recebido ${total} de ${item.expectedQuantity}`);
+        return false;
+      }
+    }
+
+    // Claim atômico do recebimento
+    const { data: claimed, error: claimErr } = await supabase
+      .from("purchase_orders" as any)
+      .update({ status: "received", received_at: new Date().toISOString() } as any)
+      .eq("id", id).eq("status", "pending").select("*");
+    if (claimErr || !claimed || (claimed as any[]).length === 0) {
+      toast.error("Esta compra já foi recebida");
+      return false;
+    }
+
+    let productList = [...products];
+    const newEntries: StockEntry[] = [];
+
+    for (const item of order.items) {
+      const input = receiptItems.find(r => r.itemId === item.id);
+      if (!input) continue;
+      const unitCost = Number(input.unitCost) || 0;
+      for (const f of input.flavors) {
+        const flavor = f.flavor.trim();
+        const qty = Number(f.quantity) || 0;
+        if (!flavor || qty <= 0) continue;
+        let product = productList.find(p =>
+          p.brand.toLowerCase() === item.brand.toLowerCase() &&
+          (p.model || "").toLowerCase() === item.model.toLowerCase() &&
+          p.flavor.toLowerCase() === flavor.toLowerCase());
+        if (!product) {
+          const reference = productList.find(p =>
+            p.brand.toLowerCase() === item.brand.toLowerCase() &&
+            (p.model || "").toLowerCase() === item.model.toLowerCase());
+          const salePrice = input.salePrice ?? reference?.salePrice ?? 0;
+          const { data: created, error: prodErr } = await supabase.from("products").insert({
+            name: item.model, brand: item.brand, model: item.model, flavor,
+            purchase_price: unitCost, sale_price: salePrice, stock: 0,
+            min_stock: reference?.minStock ?? 0,
+          }).select(PRODUCT_COLS).single();
+          if (prodErr || !created) { toast.error(`Erro ao criar produto ${item.model} · ${flavor}`); continue; }
+          product = mapProduct({ ...(created as any), purchase_price: unitCost });
+          productList = [...productList, product];
+        }
+        const totalCost = qty * unitCost;
+        const { data: entry, error: entryErr } = await supabase.from("stock_entries").insert({
+          product_id: product.id, quantity: qty, unit_cost: unitCost, total_cost: totalCost,
+          date, notes: `Compra #${order.number}`,
+        }).select().single();
+        if (entryErr || !entry) { toast.error(`Erro ao registrar entrada de ${flavor}`); continue; }
+        newEntries.push(mapStockEntry(entry));
+        const newStock = product.stock + qty;
+        await supabase.from("products").update({ stock: newStock, purchase_price: unitCost }).eq("id", product.id);
+        const updated = { ...product, stock: newStock, purchasePrice: unitCost };
+        productList = productList.map(p => p.id === product!.id ? updated : p);
+      }
+      await supabase.from("purchase_order_items" as any)
+        .update({ received_flavors: input.flavors.filter(f => f.flavor.trim()) } as any)
+        .eq("id", item.id);
+    }
+
+    setProducts(productList);
+    setStockEntries(prev => [...prev, ...newEntries]);
+    setPurchaseOrders(prev => prev.map(o => o.id === id
+      ? {
+          ...o, status: "received", receivedAt: new Date().toISOString(),
+          items: o.items.map(it => ({
+            ...it,
+            receivedFlavors: (receiptItems.find(r => r.itemId === it.id)?.flavors ?? []).filter(f => f.flavor.trim()),
+          })),
+        }
+      : o));
+    toast.success(`Compra #${order.number} recebida e estoque atualizado`);
+    return true;
+  }, [purchaseOrders, products]);
 
   // ---- Products ----
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
@@ -1153,6 +1301,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
     getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
     getSellerDebt, getSellerPaid, getSellerBalance,
+    purchaseOrders, addPurchaseOrder, deletePurchaseOrder, receivePurchaseOrder,
     partnerContributions, loans, loanPayments, financialEvents,
     addPartnerContribution, deletePartnerContribution,
     addLoan, updateLoan, deleteLoan,
@@ -1178,6 +1327,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalInvested, getNetProfit,
     getProductName, getInvestorName, getPaidToInvestor, getRemainingForInvestor,
     getSellerDebt, getSellerPaid, getSellerBalance,
+    purchaseOrders, addPurchaseOrder, deletePurchaseOrder, receivePurchaseOrder,
     partnerContributions, loans, loanPayments, financialEvents,
     addPartnerContribution, deletePartnerContribution,
     addLoan, updateLoan, deleteLoan,
