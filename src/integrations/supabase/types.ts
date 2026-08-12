@@ -456,6 +456,80 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_order_items: {
+        Row: {
+          brand: string
+          created_at: string
+          expected_quantity: number
+          id: string
+          model: string
+          purchase_order_id: string
+          received_flavors: Json
+          updated_at: string
+        }
+        Insert: {
+          brand?: string
+          created_at?: string
+          expected_quantity?: number
+          id?: string
+          model?: string
+          purchase_order_id: string
+          received_flavors?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          expected_quantity?: number
+          id?: string
+          model?: string
+          purchase_order_id?: string
+          received_flavors?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          number: number
+          received_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          number?: number
+          received_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          number?: number
+          received_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sales: {
         Row: {
           created_at: string
