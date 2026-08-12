@@ -209,3 +209,38 @@ export interface FinancialEvent {
   refId: string;
   notes?: string;
 }
+
+// ---- Compras aguardando recebimento (registro logístico, sem impacto em estoque) ----
+export type PurchaseOrderStatus = "pending" | "received";
+
+export interface ReceivedFlavor {
+  flavor: string;
+  quantity: number;
+}
+
+export interface PurchaseOrderItem {
+  id: string;
+  purchaseOrderId: string;
+  brand: string;
+  model: string;
+  expectedQuantity: number;
+  receivedFlavors: ReceivedFlavor[];
+}
+
+export interface PurchaseOrder {
+  id: string;
+  number: number;
+  status: PurchaseOrderStatus;
+  date: string;
+  notes?: string;
+  receivedAt?: string;
+  createdAt: string;
+  items: PurchaseOrderItem[];
+}
+
+export interface PurchaseReceiptItemInput {
+  itemId: string;
+  unitCost: number;
+  salePrice?: number;
+  flavors: ReceivedFlavor[];
+}
