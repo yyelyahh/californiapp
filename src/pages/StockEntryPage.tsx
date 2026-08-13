@@ -11,6 +11,7 @@ import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils"
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmProvider";
+import PurchaseOrdersSection from "@/components/PurchaseOrdersSection";
 
 const BRAND_PRESETS: Record<string, number> = {
   Ignite: 68.5,
@@ -347,6 +348,8 @@ export default function StockEntryPage() {
           </SheetContent>
         </Sheet>
       </div>
+
+      <PurchaseOrdersSection />
 
       {/* KPIs */}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
