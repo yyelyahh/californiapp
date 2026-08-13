@@ -233,6 +233,8 @@ export interface PurchaseOrder {
   status: PurchaseOrderStatus;
   date: string;
   notes?: string;
+  paidAmount: number;
+  freightCost: number;
   receivedAt?: string;
   createdAt: string;
   items: PurchaseOrderItem[];

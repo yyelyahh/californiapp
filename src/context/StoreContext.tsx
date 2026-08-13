@@ -422,6 +422,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     status: r.status === "received" ? "received" : "pending",
     date: r.date,
     notes: r.notes ?? undefined,
+    paidAmount: Number(r.paid_amount ?? 0),
+    freightCost: Number(r.freight_cost ?? 0),
     receivedAt: r.received_at ?? undefined,
     createdAt: r.created_at,
     items: ((r.purchase_order_items ?? []) as any[]).map((i): PurchaseOrderItem => ({
@@ -437,11 +439,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   });
 
   // ---- Compras aguardando recebimento ----
-  const addPurchaseOrder = useCallback(async (o: { date: string; notes?: string; items: { brand: string; model: string; expectedQuantity: number }[] }) => {
+  const addPurchaseOrder = useCallback(async (o: { date: string; notes?: string; paidAmount?: number; freightCost?: number; items: { brand: string; model: string; expectedQuantity: number }[] }) => {
     const items = o.items.filter(i => i.brand.trim() && i.model.trim() && i.expectedQuantity > 0);
     if (items.length === 0) { toast.error("Informe ao menos um item com quantidade maior que zero"); return; }
     const { data, error } = await supabase.from("purchase_orders" as any).insert({
       date: o.date, notes: o.notes ?? null, status: "pending",
+      paid_amount: o.paidAmount ?? 0, freight_cost: o.freightCost ?? 0,
     } as any).select("*").single();
     if (error || !data) { toast.error("Erro ao criar compra"); return; }
     const orderId = (data as any).id;

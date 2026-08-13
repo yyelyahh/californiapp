@@ -501,9 +501,11 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          freight_cost: number
           id: string
           notes: string | null
           number: number
+          paid_amount: number
           received_at: string | null
           status: string
           updated_at: string
@@ -511,9 +513,11 @@ export type Database = {
         Insert: {
           created_at?: string
           date?: string
+          freight_cost?: number
           id?: string
           notes?: string | null
           number?: number
+          paid_amount?: number
           received_at?: string | null
           status?: string
           updated_at?: string
@@ -521,9 +525,11 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          freight_cost?: number
           id?: string
           notes?: string | null
           number?: number
+          paid_amount?: number
           received_at?: string | null
           status?: string
           updated_at?: string
