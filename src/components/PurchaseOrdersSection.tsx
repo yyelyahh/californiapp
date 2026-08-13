@@ -31,6 +31,7 @@ export default function PurchaseOrdersSection() {
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
   const [receiptDate, setReceiptDate] = useState(todayDateString());
   const [costs, setCosts] = useState<Record<string, string>>({});
+  const [freight, setFreight] = useState("");
   const [flavors, setFlavors] = useState<Record<string, FlavorRow[]>>({});
   const [confirming, setConfirming] = useState(false);
 
@@ -80,6 +81,7 @@ export default function PurchaseOrdersSection() {
     });
     setCosts(c);
     setFlavors(f);
+    setFreight("");
   };
 
   const setRow = (itemId: string, idx: number, patch: Partial<FlavorRow>) => {
@@ -90,6 +92,10 @@ export default function PurchaseOrdersSection() {
     setFlavors(prev => ({ ...prev, [itemId]: prev[itemId].filter((_, i) => i !== idx) }));
 
   const totalFor = (itemId: string) => (flavors[itemId] ?? []).reduce((s, r) => s + (parseInt(r.quantity, 10) || 0), 0);
+
+  const receiptUnits = receiving ? receiving.items.reduce((s, it) => s + totalFor(it.id), 0) : 0;
+  const freightValue = Number(freight.replace(",", ".")) || 0;
+  const freightPerUnit = receiptUnits > 0 ? freightValue / receiptUnits : 0;
 
   const allMatch = receiving
     ? receiving.items.every(it => totalFor(it.id) === it.expectedQuantity)
@@ -102,7 +108,7 @@ export default function PurchaseOrdersSection() {
       receiving.id,
       receiving.items.map(it => ({
         itemId: it.id,
-        unitCost: Number(costs[it.id]) || 0,
+        unitCost: (Number(costs[it.id]) || 0) + freightPerUnit,
         flavors: (flavors[it.id] ?? [])
           .filter(r => r.flavor.trim())
           .map(r => ({ flavor: r.flavor.trim(), quantity: parseInt(r.quantity, 10) || 0 })),
@@ -268,10 +274,21 @@ export default function PurchaseOrdersSection() {
             <p className="text-xs text-muted-foreground">Informe os sabores recebidos</p>
           </SheetHeader>
           <div className="flex-1 px-6 py-5 space-y-5">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Data do recebimento</Label>
-              <Input type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} className="h-9" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Data do recebimento</Label>
+                <Input type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Frete total (R$)</Label>
+                <Input type="number" step="0.01" min={0} value={freight} onChange={e => setFreight(e.target.value)} placeholder="0,00" className="h-9 mono" />
+              </div>
             </div>
+            {freightValue > 0 && (
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                Frete rateado: +{freightPerUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por unidade ({receiptUnits} un.)
+              </p>
+            )}
             {receiving?.items.map(it => {
               const total = totalFor(it.id);
               const ok = total === it.expectedQuantity;
@@ -294,6 +311,11 @@ export default function PurchaseOrdersSection() {
                     <Label className="text-xs">Custo unitário (R$)</Label>
                     <Input type="number" step="0.01" className="h-9 mono" value={costs[it.id] ?? ""}
                       onChange={e => setCosts(prev => ({ ...prev, [it.id]: e.target.value }))} placeholder="0,00" />
+                    {freightPerUnit > 0 && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Com frete: {(((Number(costs[it.id]) || 0) + freightPerUnit)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     {(flavors[it.id] ?? []).map((row, i) => (
