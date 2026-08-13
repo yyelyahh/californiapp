@@ -422,6 +422,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     status: r.status === "received" ? "received" : "pending",
     date: r.date,
     notes: r.notes ?? undefined,
+    paidAmount: Number(r.paid_amount ?? 0),
+    freightCost: Number(r.freight_cost ?? 0),
     receivedAt: r.received_at ?? undefined,
     createdAt: r.created_at,
     items: ((r.purchase_order_items ?? []) as any[]).map((i): PurchaseOrderItem => ({
