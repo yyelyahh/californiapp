@@ -224,6 +224,7 @@ export interface PurchaseOrderItem {
   brand: string;
   model: string;
   expectedQuantity: number;
+  unitPrice: number;
   receivedFlavors: ReceivedFlavor[];
 }
 

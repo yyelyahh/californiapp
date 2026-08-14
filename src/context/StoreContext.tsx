@@ -20,7 +20,7 @@ interface StoreContextType {
   sellerDebtPayments: SellerDebtPayment[];
   partnerPayments: PartnerPayment[];
   purchaseOrders: PurchaseOrder[];
-  addPurchaseOrder: (o: { date: string; notes?: string; paidAmount?: number; freightCost?: number; items: { brand: string; model: string; expectedQuantity: number }[] }) => Promise<void>;
+  addPurchaseOrder: (o: { date: string; notes?: string; freightCost?: number; items: { brand: string; model: string; expectedQuantity: number; unitPrice?: number }[] }) => Promise<void>;
   deletePurchaseOrder: (id: string) => Promise<void>;
   receivePurchaseOrder: (id: string, items: PurchaseReceiptItemInput[], date: string) => Promise<boolean>;
   loading: boolean;
@@ -432,6 +432,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       brand: i.brand ?? "",
       model: i.model ?? "",
       expectedQuantity: Number(i.expected_quantity ?? 0),
+      unitPrice: Number(i.unit_price ?? 0),
       receivedFlavors: Array.isArray(i.received_flavors)
         ? (i.received_flavors as any[]).map(f => ({ flavor: String(f.flavor ?? ""), quantity: Number(f.quantity ?? 0) }))
         : [],
@@ -439,19 +440,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   });
 
   // ---- Compras aguardando recebimento ----
-  const addPurchaseOrder = useCallback(async (o: { date: string; notes?: string; paidAmount?: number; freightCost?: number; items: { brand: string; model: string; expectedQuantity: number }[] }) => {
+  const addPurchaseOrder = useCallback(async (o: { date: string; notes?: string; freightCost?: number; items: { brand: string; model: string; expectedQuantity: number; unitPrice?: number }[] }) => {
     const items = o.items.filter(i => i.brand.trim() && i.model.trim() && i.expectedQuantity > 0);
     if (items.length === 0) { toast.error("Informe ao menos um item com quantidade maior que zero"); return; }
     const { data, error } = await supabase.from("purchase_orders" as any).insert({
       date: o.date, notes: o.notes ?? null, status: "pending",
-      paid_amount: o.paidAmount ?? 0, freight_cost: o.freightCost ?? 0,
+      paid_amount: items.reduce((s, i) => s + (i.unitPrice ?? 0) * i.expectedQuantity, 0),
+      freight_cost: o.freightCost ?? 0,
     } as any).select("*").single();
     if (error || !data) { toast.error("Erro ao criar compra"); return; }
     const orderId = (data as any).id;
     const { data: itemRows, error: itemErr } = await supabase.from("purchase_order_items" as any).insert(
       items.map(i => ({
         purchase_order_id: orderId, brand: i.brand.trim(), model: i.model.trim(),
-        expected_quantity: i.expectedQuantity, received_flavors: [],
+        expected_quantity: i.expectedQuantity, unit_price: i.unitPrice ?? 0, received_flavors: [],
       })) as any,
     ).select("*");
     if (itemErr) {
