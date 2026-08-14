@@ -465,6 +465,7 @@ export type Database = {
           model: string
           purchase_order_id: string
           received_flavors: Json
+          unit_price: number
           updated_at: string
         }
         Insert: {
@@ -475,6 +476,7 @@ export type Database = {
           model?: string
           purchase_order_id: string
           received_flavors?: Json
+          unit_price?: number
           updated_at?: string
         }
         Update: {
@@ -485,6 +487,7 @@ export type Database = {
           model?: string
           purchase_order_id?: string
           received_flavors?: Json
+          unit_price?: number
           updated_at?: string
         }
         Relationships: [

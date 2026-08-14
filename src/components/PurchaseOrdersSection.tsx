@@ -13,10 +13,12 @@ import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { PurchaseOrder } from "@/types";
 
-type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string };
+type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string; unitPrice: string };
 type FlavorRow = { flavor: string; quantity: string };
 
-const emptyItem = (): DraftItem => ({ brand: "", brandNew: "", model: "", modelNew: "", quantity: "" });
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const emptyItem = (): DraftItem => ({ brand: "", brandNew: "", model: "", modelNew: "", quantity: "", unitPrice: "" });
 
 export default function PurchaseOrdersSection() {
   const { products, purchaseOrders, addPurchaseOrder, deletePurchaseOrder, receivePurchaseOrder } = useStore();
@@ -25,7 +27,6 @@ export default function PurchaseOrdersSection() {
   const [newOpen, setNewOpen] = useState(false);
   const [date, setDate] = useState(todayDateString());
   const [notes, setNotes] = useState("");
-  const [paid, setPaid] = useState("");
   const [freightNew, setFreightNew] = useState("");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
@@ -52,14 +53,22 @@ export default function PurchaseOrdersSection() {
   const pending = purchaseOrders.filter(o => o.status === "pending");
   const received = purchaseOrders.filter(o => o.status === "received");
 
+  const draftItemsTotal = items.reduce((s, i) => s + (Number(i.unitPrice.replace(",", ".")) || 0) * (parseInt(i.quantity, 10) || 0), 0);
+  const draftFreight = Number(freightNew.replace(",", ".")) || 0;
+
   const resolveBrand = (i: DraftItem) => (i.brand === "__new__" ? i.brandNew : i.brand).trim();
   const resolveModel = (i: DraftItem) => (i.model === "__new__" ? i.modelNew : i.model).trim();
 
-  const resetNew = () => { setDate(todayDateString()); setNotes(""); setPaid(""); setFreightNew(""); setItems([emptyItem()]); };
+  const resetNew = () => { setDate(todayDateString()); setNotes(""); setFreightNew(""); setItems([emptyItem()]); };
 
   const handleCreate = async () => {
     const payload = items
-      .map(i => ({ brand: resolveBrand(i), model: resolveModel(i), expectedQuantity: parseInt(i.quantity, 10) || 0 }))
+      .map(i => ({
+        brand: resolveBrand(i),
+        model: resolveModel(i),
+        expectedQuantity: parseInt(i.quantity, 10) || 0,
+        unitPrice: Number(i.unitPrice.replace(",", ".")) || 0,
+      }))
       .filter(i => i.brand && i.model);
     if (payload.length === 0) { toast.error("Informe marca e modelo"); return; }
     if (payload.some(i => i.expectedQuantity <= 0)) { toast.error("Quantidade esperada deve ser maior que zero"); return; }
@@ -67,7 +76,6 @@ export default function PurchaseOrdersSection() {
     await addPurchaseOrder({
       date,
       notes: notes || undefined,
-      paidAmount: Number(paid.replace(",", ".")) || 0,
       freightCost: Number(freightNew.replace(",", ".")) || 0,
       items: payload,
     });
@@ -82,11 +90,9 @@ export default function PurchaseOrdersSection() {
     setReceiptDate(todayDateString());
     const c: Record<string, string> = {};
     const f: Record<string, FlavorRow[]> = {};
-    const totalUnits = order.items.reduce((s, it) => s + it.expectedQuantity, 0);
-    const unitFromPaid = order.paidAmount > 0 && totalUnits > 0 ? order.paidAmount / totalUnits : 0;
     order.items.forEach(it => {
       const ref = products.find(p => p.brand.toLowerCase() === it.brand.toLowerCase() && (p.model || "").toLowerCase() === it.model.toLowerCase());
-      c[it.id] = unitFromPaid > 0 ? unitFromPaid.toFixed(2) : (ref?.purchasePrice ? String(ref.purchasePrice) : "");
+      c[it.id] = it.unitPrice > 0 ? String(it.unitPrice) : (ref?.purchasePrice ? String(ref.purchasePrice) : "");
       f[it.id] = [{ flavor: "", quantity: "" }];
     });
     setCosts(c);
@@ -183,7 +189,9 @@ export default function PurchaseOrdersSection() {
                   <div key={it.id} className="text-xs">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{it.brand} {it.model}</span>
-                      <span className="mono text-muted-foreground">{it.expectedQuantity} un.</span>
+                      <span className="mono text-muted-foreground">
+                        {it.expectedQuantity} un.{it.unitPrice > 0 ? ` · ${brl(it.unitPrice)}` : ""}
+                      </span>
                     </div>
                     {it.receivedFlavors.length > 0 && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -222,10 +230,6 @@ export default function PurchaseOrdersSection() {
               <div className="space-y-1.5">
                 <Label className="text-xs">Observações</Label>
                 <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" className="h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Valor pago (R$)</Label>
-                <Input type="number" step="0.01" min={0} value={paid} onChange={e => setPaid(e.target.value)} placeholder="0,00" className="h-9 mono" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Frete (R$)</Label>
@@ -269,13 +273,22 @@ export default function PurchaseOrdersSection() {
                     <Input value={item.modelNew} placeholder="Nome do novo modelo" className="h-9"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, modelNew: e.target.value } : it))} />
                   )}
-                  <Input type="number" min={1} value={item.quantity} placeholder="Quantidade esperada" className="h-9 mono"
-                    onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input type="number" min={1} value={item.quantity} placeholder="Qtd esperada" className="h-9 mono"
+                      onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))} />
+                    <Input type="number" step="0.01" min={0} value={item.unitPrice} placeholder="Valor unitário" className="h-9 mono"
+                      onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, unitPrice: e.target.value } : it))} />
+                  </div>
                 </div>
               ))}
               <Button variant="outline" size="sm" className="w-full h-9" onClick={() => setItems(prev => [...prev, emptyItem()])}>
                 <Plus size={14} className="mr-1.5" />Adicionar produto
               </Button>
+              <div className="rounded-lg border border-border px-3 py-2 space-y-1 text-xs">
+                <div className="flex justify-between"><span className="text-muted-foreground">Produtos</span><span className="mono">{brl(draftItemsTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Frete</span><span className="mono">{brl(draftFreight)}</span></div>
+                <div className="flex justify-between font-semibold"><span>Total pago</span><span className="mono">{brl(draftItemsTotal + draftFreight)}</span></div>
+              </div>
             </div>
           </div>
           <SheetFooter className="px-6 py-4 border-t border-border bg-card sticky bottom-0">
