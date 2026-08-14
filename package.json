@@ -91,9 +91,11 @@
     "vitest": "^3.2.4"
   },
   "overrides": {
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "dompurify": "^3.4.13"
   },
   "resolutions": {
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "dompurify": "^3.4.13"
   }
 }
