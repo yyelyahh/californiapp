@@ -1,0 +1,127 @@
+name: Fix commission carryover
+
+on:
+  push:
+    branches:
+      - fix/commission-carryover
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch commission carryover
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          def replace_once(path, pattern, replacement):
+              p = Path(path)
+              text = p.read_text()
+              new, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"Pattern not found exactly once in {path}: {pattern}")
+              p.write_text(new)
+
+          commissions = "src/pages/CommissionsPage.tsx"
+          replace_once(
+              commissions,
+              r'      const periodBalance = accrued - saldoConsumo \+ debtPaymentsTotal - commPaid;\n      const priorBalance = 0;\n      const balance = periodBalance;',
+              '''      // Saldo anterior: tudo que ficou pendente antes do primeiro mês exibido.
+              const priorBalance = closedStart > PROJECT_START ? (() => {
+                const priorEnd = new Date(closedStart.getTime() - 1);
+                const priorClosed = computeClosedCommission(vendasPagasTodas, PROJECT_START, priorEnd);
+                const priorConsumption = sellerManualDebts
+                  .filter(d => d.sellerId === seller.id && d.date >= PROJECT_START.toISOString() && d.date < closedStart.toISOString() && !isLegacy(d.date))
+                  .reduce((a, d) => a + d.amount, 0)
+                  + sales
+                    .filter(s => s.sellerId === seller.id && s.type === "retirada_funcionario" && s.date >= PROJECT_START.toISOString() && s.date < closedStart.toISOString() && !isLegacy(s.date))
+                    .reduce((a, s) => a + s.totalPrice, 0);
+                const priorDebtPayments = sellerDebtPayments
+                  .filter(p => p.sellerId === seller.id && p.date >= PROJECT_START.toISOString() && p.date < closedStart.toISOString() && !isLegacy(p.date))
+                  .reduce((a, p) => a + p.amount, 0);
+                const priorCommissionPaid = commissionPayments
+                  .filter(p => p.sellerId === seller.id && p.date >= PROJECT_START.toISOString() && p.date < closedStart.toISOString() && !isLegacy(p.date))
+                  .reduce((a, p) => a + p.amount, 0);
+                return priorClosed.accrued - priorConsumption + priorDebtPayments - priorCommissionPaid;
+              })() : 0;
+
+              const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
+              const balance = priorBalance + periodBalance;'''
+          )
+
+          replace_once(
+              commissions,
+              r'      `Comissão: \$\{formatCurrency\(r\.accrued\)\}`,\n          `Consumo: -\$\{formatCurrency\(r\.retiradasTotal\)\}`,',
+              '''      `Saldo anterior: ${formatCurrency(r.priorBalance)}`,
+          `Comissão: ${formatCurrency(r.accrued)}`,
+          `Consumo: -${formatCurrency(r.retiradasTotal)}`,'''
+          )
+
+          replace_once(
+              commissions,
+              r'(<Line label="Faixa" value=\{consultRow\.tier\.label\} tone="muted" />\n\s*)<Line label="Comissão" value=\{formatCurrency\(consultRow\.accrued\)\} tone="income" />',
+              r'\1<Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0.01 ? "warning" : "muted"} />\n                    <Line label="Comissão" value={formatCurrency(consultRow.accrued)} tone="income" />'
+          )
+
+          replace_once(
+              commissions,
+              r'(<div className="flex justify-between"><span className="text-muted-foreground">Faturamento</span><span className="mono">\{formatCurrency\(sellerRow\.vendasTotal\)\}</span></div>\n\s*)<div className="flex justify-between"><span className="text-muted-foreground">Comissão acumulada \(\{sellerRow\.tier\.label\}\)</span><span className="mono text-income">\{formatCurrency\(sellerRow\.accrued\)\}</span></div>',
+              r'\1<div className="flex justify-between"><span className="text-muted-foreground">Saldo anterior</span><span className="mono">{formatCurrency(sellerRow.priorBalance)}</span></div>\n                <div className="flex justify-between"><span className="text-muted-foreground">Comissão acumulada ({sellerRow.tier.label})</span><span className="mono text-income">{formatCurrency(sellerRow.accrued)}</span></div>'
+          )
+
+          report = "src/components/SellerReportDrawer.tsx"
+          replace_once(
+              report,
+              r'    const previousBalance = 0;\n\n    // Saldo do período \+ saldo trazido\n    const periodBalance = c\.accrued - saldoConsumo \+ debtPaymentsTotal - commPaidPeriod;\n    const commBalance = periodBalance;',
+              '''    // Saldo anterior: tudo que ficou pendente antes do primeiro mês exibido.
+    const previousBalance = closedStart > LEGACY_CUTOFF ? (() => {
+      const priorEnd = new Date(closedStart.getTime() - 1);
+      const priorClosed = computeClosedCommission(vendasPagasTodas, LEGACY_CUTOFF, priorEnd);
+      const priorConsumption = sellerManualDebts
+        .filter(d => d.sellerId === seller.id && d.date >= LEGACY_CUTOFF.toISOString() && d.date < closedStart.toISOString() && !isLegacy(d.date))
+        .reduce((a, d) => a + d.amount, 0)
+        + sales
+          .filter(s => s.sellerId === seller.id && s.type === "retirada_funcionario" && s.date >= LEGACY_CUTOFF.toISOString() && s.date < closedStart.toISOString() && !isLegacy(s.date))
+          .reduce((a, s) => a + s.totalPrice, 0);
+      const priorDebtPayments = sellerDebtPayments
+        .filter(p => p.sellerId === seller.id && p.date >= LEGACY_CUTOFF.toISOString() && p.date < closedStart.toISOString() && !isLegacy(p.date))
+        .reduce((a, p) => a + p.amount, 0);
+      const priorCommissionPaid = commissionPayments
+        .filter(p => p.sellerId === seller.id && p.date >= LEGACY_CUTOFF.toISOString() && p.date < closedStart.toISOString() && !isLegacy(p.date))
+        .reduce((a, p) => a + p.amount, 0);
+      return priorClosed.accrued - priorConsumption + priorDebtPayments - priorCommissionPaid;
+    })() : 0;
+
+    // Saldo do período + saldo trazido
+    const periodBalance = c.accrued - saldoConsumo + debtPaymentsTotal - commPaidPeriod;
+    const commBalance = previousBalance + periodBalance;'''
+          )
+
+          replace_once(
+              report,
+              r'    lines\.push\(`• Comissão gerada: \$\{fmt\(report\.accrued\)\}`\);\n    lines\.push\(`• \(−\) Consumo no mês: \$\{fmt\(report\.saldoConsumo\)\}`\);',
+              '''    lines.push(`• Saldo anterior: ${fmt(report.previousBalance)}`);
+    lines.push(`• Comissão gerada: ${fmt(report.accrued)}`);
+    lines.push(`• (−) Consumo no mês: ${fmt(report.saldoConsumo)}`);'''
+          )
+
+          replace_once(
+              report,
+              r'(<SummaryRow label="Comissão gerada" value=\{fmt\(report\.accrued\)\} tone="income" sign="\+" />\n\s*)<SummaryRow label="Consumo" value=\{fmt\(report\.saldoConsumo\)}',
+              r'<SummaryRow label="Saldo anterior" value={fmt(report.previousBalance)} tone={report.previousBalance > 0.01 ? "warning" : "muted"} sign="+" />\n            \1<SummaryRow label="Consumo" value={fmt(report.saldoConsumo)}'
+          )
+
+      - name: Commit patch and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-commission-carryover.yml
+          git add src/pages/CommissionsPage.tsx src/components/SellerReportDrawer.tsx
+          git commit -m "fix: carry seller commission balance across months"
+          git push
