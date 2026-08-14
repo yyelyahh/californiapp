@@ -25,6 +25,8 @@ export default function PurchaseOrdersSection() {
   const [newOpen, setNewOpen] = useState(false);
   const [date, setDate] = useState(todayDateString());
   const [notes, setNotes] = useState("");
+  const [paid, setPaid] = useState("");
+  const [freightNew, setFreightNew] = useState("");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
 
