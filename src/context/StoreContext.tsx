@@ -20,7 +20,7 @@ interface StoreContextType {
   sellerDebtPayments: SellerDebtPayment[];
   partnerPayments: PartnerPayment[];
   purchaseOrders: PurchaseOrder[];
-  addPurchaseOrder: (o: { date: string; notes?: string; items: { brand: string; model: string; expectedQuantity: number }[] }) => Promise<void>;
+  addPurchaseOrder: (o: { date: string; notes?: string; paidAmount?: number; freightCost?: number; items: { brand: string; model: string; expectedQuantity: number }[] }) => Promise<void>;
   deletePurchaseOrder: (id: string) => Promise<void>;
   receivePurchaseOrder: (id: string, items: PurchaseReceiptItemInput[], date: string) => Promise<boolean>;
   loading: boolean;
