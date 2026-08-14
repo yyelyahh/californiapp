@@ -25,6 +25,8 @@ export default function PurchaseOrdersSection() {
   const [newOpen, setNewOpen] = useState(false);
   const [date, setDate] = useState(todayDateString());
   const [notes, setNotes] = useState("");
+  const [paid, setPaid] = useState("");
+  const [freightNew, setFreightNew] = useState("");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
 
@@ -53,7 +55,7 @@ export default function PurchaseOrdersSection() {
   const resolveBrand = (i: DraftItem) => (i.brand === "__new__" ? i.brandNew : i.brand).trim();
   const resolveModel = (i: DraftItem) => (i.model === "__new__" ? i.modelNew : i.model).trim();
 
-  const resetNew = () => { setDate(todayDateString()); setNotes(""); setItems([emptyItem()]); };
+  const resetNew = () => { setDate(todayDateString()); setNotes(""); setPaid(""); setFreightNew(""); setItems([emptyItem()]); };
 
   const handleCreate = async () => {
     const payload = items
@@ -62,7 +64,13 @@ export default function PurchaseOrdersSection() {
     if (payload.length === 0) { toast.error("Informe marca e modelo"); return; }
     if (payload.some(i => i.expectedQuantity <= 0)) { toast.error("Quantidade esperada deve ser maior que zero"); return; }
     setSaving(true);
-    await addPurchaseOrder({ date, notes: notes || undefined, items: payload });
+    await addPurchaseOrder({
+      date,
+      notes: notes || undefined,
+      paidAmount: Number(paid.replace(",", ".")) || 0,
+      freightCost: Number(freightNew.replace(",", ".")) || 0,
+      items: payload,
+    });
     setSaving(false);
     resetNew();
     setNewOpen(false);
@@ -74,14 +82,16 @@ export default function PurchaseOrdersSection() {
     setReceiptDate(todayDateString());
     const c: Record<string, string> = {};
     const f: Record<string, FlavorRow[]> = {};
+    const totalUnits = order.items.reduce((s, it) => s + it.expectedQuantity, 0);
+    const unitFromPaid = order.paidAmount > 0 && totalUnits > 0 ? order.paidAmount / totalUnits : 0;
     order.items.forEach(it => {
       const ref = products.find(p => p.brand.toLowerCase() === it.brand.toLowerCase() && (p.model || "").toLowerCase() === it.model.toLowerCase());
-      c[it.id] = ref?.purchasePrice ? String(ref.purchasePrice) : "";
+      c[it.id] = unitFromPaid > 0 ? unitFromPaid.toFixed(2) : (ref?.purchasePrice ? String(ref.purchasePrice) : "");
       f[it.id] = [{ flavor: "", quantity: "" }];
     });
     setCosts(c);
     setFlavors(f);
-    setFreight("");
+    setFreight(order.freightCost > 0 ? String(order.freightCost) : "");
   };
 
   const setRow = (itemId: string, idx: number, patch: Partial<FlavorRow>) => {
@@ -182,6 +192,13 @@ export default function PurchaseOrdersSection() {
                     )}
                   </div>
                 ))}
+                {(order.paidAmount > 0 || order.freightCost > 0) && (
+                  <p className="text-[11px] text-muted-foreground pt-1 mono">
+                    {order.paidAmount > 0 && `Pago ${order.paidAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+                    {order.paidAmount > 0 && order.freightCost > 0 && " · "}
+                    {order.freightCost > 0 && `Frete ${order.freightCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+                  </p>
+                )}
                 {order.notes && <p className="text-[11px] text-muted-foreground pt-1">{order.notes}</p>}
               </div>
             </div>
@@ -205,6 +222,14 @@ export default function PurchaseOrdersSection() {
               <div className="space-y-1.5">
                 <Label className="text-xs">Observações</Label>
                 <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Valor pago (R$)</Label>
+                <Input type="number" step="0.01" min={0} value={paid} onChange={e => setPaid(e.target.value)} placeholder="0,00" className="h-9 mono" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Frete (R$)</Label>
+                <Input type="number" step="0.01" min={0} value={freightNew} onChange={e => setFreightNew(e.target.value)} placeholder="0,00" className="h-9 mono" />
               </div>
             </div>
 
