@@ -252,8 +252,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         : [...prev, mapped]));
     };
 
-    const channel = supabase
-      .channel("store-sync")
+    let channel = supabase
+      .channel(isAdmin ? "admin:store-sync" : "store-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async (payload: any) => {
         // Produtos precisam do custo (RPC de admin), então recarregamos a lista completa.
         if (payload.eventType === "DELETE") {
@@ -281,23 +281,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, (payload: any) => {
         patch(setStockLosses, payload, mapStockLoss);
         refetchFinancialEvents();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "partner_contributions" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "loan_payments" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_manual_debts" }, refetchFinancialEvents)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_debt_payments" }, refetchFinancialEvents)
-      .subscribe();
+      });
+
+    // Tabelas financeiras são restritas a administradores: só assinamos quando o usuário é admin.
+    if (isAdmin) {
+      channel = channel
+        .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "partner_contributions" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "loan_payments" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "seller_manual_debts" }, refetchFinancialEvents)
+        .on("postgres_changes", { event: "*", schema: "public", table: "seller_debt_payments" }, refetchFinancialEvents);
+    }
+
+    channel.subscribe();
 
     return () => {
       cancelled = true;
       if (feTimer) clearTimeout(feTimer);
       supabase.removeChannel(channel);
     };
-  }, [fetchProductsList]);
+  }, [fetchProductsList, isAdmin]);
+
 
 
   const mapProduct = (r: any): Product => ({
