@@ -18,6 +18,71 @@ type FlavorRow = { flavor: string; quantity: string };
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+function OrderCard({ order, onReceive, onDelete }: {
+  order: PurchaseOrder;
+  onReceive?: (o: PurchaseOrder) => void;
+  onDelete?: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm font-semibold mono">Compra #{order.number}</span>
+          <span className="text-[11px] text-muted-foreground">{formatDateBR(order.date)}</span>
+          <Badge variant={order.status === "pending" ? "secondary" : "outline"} className={cn("text-[10px]", order.status === "received" && "text-income border-income/40")}>
+            {order.status === "pending" ? "Aguardando recebimento" : "Recebida"}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {order.status === "pending" && onReceive && onDelete ? (
+            <>
+              <Button size="sm" className="h-8" onClick={() => onReceive(order)}>
+                <Truck size={14} className="mr-1.5" />Receber
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => onDelete(order.id)}
+              >
+                <Trash2 size={13} />
+              </Button>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] text-income">
+              <PackageCheck size={13} />
+              {order.receivedAt ? `Recebida em ${formatDateBR(order.receivedAt)}` : "Recebida"}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="mt-2 space-y-1">
+        {order.items.map(it => (
+          <div key={it.id} className="text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{it.brand} {it.model}</span>
+              <span className="mono text-muted-foreground">
+                {it.expectedQuantity} un.{it.unitPrice > 0 ? ` · ${brl(it.unitPrice)}` : ""}
+              </span>
+            </div>
+            {it.receivedFlavors.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {it.receivedFlavors.map(f => `${f.flavor} ${f.quantity}`).join(" · ")}
+              </p>
+            )}
+          </div>
+        ))}
+        {(order.paidAmount > 0 || order.freightCost > 0) && (
+          <p className="text-[11px] text-muted-foreground pt-1 mono">
+            {order.paidAmount > 0 && `Pago ${order.paidAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+            {order.paidAmount > 0 && order.freightCost > 0 && " · "}
+            {order.freightCost > 0 && `Frete ${order.freightCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+          </p>
+        )}
+        {order.notes && <p className="text-[11px] text-muted-foreground pt-1">{order.notes}</p>}
+      </div>
+    </div>
+  );
+}
+
 const emptyItem = (): DraftItem => ({ brand: "", brandNew: "", model: "", modelNew: "", quantity: "", unitPrice: "" });
 
 export default function PurchaseOrdersSection() {
