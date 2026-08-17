@@ -30,6 +30,7 @@ export default function PurchaseOrdersSection() {
   const [freightNew, setFreightNew] = useState("");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
   const [receiptDate, setReceiptDate] = useState(todayDateString());
