@@ -52,15 +52,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
                   isActive
-                    ? item.to === "/dashboard"
-                      ? "bg-[#EAF3DE] text-[#173404] font-medium"
-                      : "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                     : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                 )}
               >
                 <item.icon
                   size={18}
-                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                  style={!isActive ? { color: item.color } : undefined}
                 />
                 {!collapsed && <span>{item.label}</span>}
               </NavLink>
