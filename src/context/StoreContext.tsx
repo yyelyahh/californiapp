@@ -540,7 +540,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const totalCost = qty * unitCost;
         const { data: entry, error: entryErr } = await supabase.from("stock_entries").insert({
           product_id: product.id, quantity: qty, unit_cost: unitCost, total_cost: totalCost,
-          date, notes: `Compra #${order.number}`,
+          date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? localDateToISO(date) : date,
+          notes: `Compra #${order.number}`,
         }).select().single();
         if (entryErr || !entry) { toast.error(`Erro ao registrar entrada de ${flavor}`); continue; }
         newEntries.push(mapStockEntry(entry));
