@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
 const allNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#173404" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
   { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
   { to: "/stock", icon: Inbox, label: "Entrada", adminOnly: true, color: "#85B7EB" },
   { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
@@ -52,15 +52,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
                   isActive
-                    ? item.to === "/dashboard"
-                      ? "bg-[#EAF3DE] text-[#173404] font-medium"
-                      : "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                     : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                 )}
               >
                 <item.icon
                   size={18}
-                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                  style={!isActive ? { color: item.color } : undefined}
                 />
                 {!collapsed && <span>{item.label}</span>}
               </NavLink>
@@ -112,15 +110,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
                       isActive
-                        ? item.to === "/dashboard"
-                          ? "bg-[#EAF3DE] text-[#173404] font-medium"
-                          : "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                         : "text-sidebar-foreground hover:bg-sidebar-accent/50"
                     )}
                   >
                     <item.icon
                       size={18}
-                      style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                      style={!isActive ? { color: item.color } : undefined}
                     />
                     <span>{item.label}</span>
                   </NavLink>
@@ -155,15 +151,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
                   isActive
-                    ? item.to === "/dashboard"
-                      ? "bg-[#EAF3DE] text-[#173404]"
-                      : "text-primary"
+                    ? "text-primary"
                     : "text-muted-foreground"
                 )}
               >
                 <item.icon
                   size={20}
-                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                  style={!isActive ? { color: item.color } : undefined}
                 />
                 <span>{item.label}</span>
               </NavLink>
