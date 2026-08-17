@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
-import { Plus, Trash2, Truck, PackageCheck } from "lucide-react";
+import { Plus, Trash2, Truck, PackageCheck, History } from "lucide-react";
 import { todayDateString, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -17,6 +17,71 @@ type DraftItem = { brand: string; brandNew: string; model: string; modelNew: str
 type FlavorRow = { flavor: string; quantity: string };
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function OrderCard({ order, onReceive, onDelete }: {
+  order: PurchaseOrder;
+  onReceive?: (o: PurchaseOrder) => void;
+  onDelete?: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm font-semibold mono">Compra #{order.number}</span>
+          <span className="text-[11px] text-muted-foreground">{formatDateBR(order.date)}</span>
+          <Badge variant={order.status === "pending" ? "secondary" : "outline"} className={cn("text-[10px]", order.status === "received" && "text-income border-income/40")}>
+            {order.status === "pending" ? "Aguardando recebimento" : "Recebida"}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {order.status === "pending" && onReceive && onDelete ? (
+            <>
+              <Button size="sm" className="h-8" onClick={() => onReceive(order)}>
+                <Truck size={14} className="mr-1.5" />Receber
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => onDelete(order.id)}
+              >
+                <Trash2 size={13} />
+              </Button>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] text-income">
+              <PackageCheck size={13} />
+              {order.receivedAt ? `Recebida em ${formatDateBR(order.receivedAt)}` : "Recebida"}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="mt-2 space-y-1">
+        {order.items.map(it => (
+          <div key={it.id} className="text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{it.brand} {it.model}</span>
+              <span className="mono text-muted-foreground">
+                {it.expectedQuantity} un.{it.unitPrice > 0 ? ` · ${brl(it.unitPrice)}` : ""}
+              </span>
+            </div>
+            {it.receivedFlavors.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {it.receivedFlavors.map(f => `${f.flavor} ${f.quantity}`).join(" · ")}
+              </p>
+            )}
+          </div>
+        ))}
+        {(order.paidAmount > 0 || order.freightCost > 0) && (
+          <p className="text-[11px] text-muted-foreground pt-1 mono">
+            {order.paidAmount > 0 && `Pago ${order.paidAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+            {order.paidAmount > 0 && order.freightCost > 0 && " · "}
+            {order.freightCost > 0 && `Frete ${order.freightCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+          </p>
+        )}
+        {order.notes && <p className="text-[11px] text-muted-foreground pt-1">{order.notes}</p>}
+      </div>
+    </div>
+  );
+}
 
 const emptyItem = (): DraftItem => ({ brand: "", brandNew: "", model: "", modelNew: "", quantity: "", unitPrice: "" });
 
@@ -30,6 +95,7 @@ export default function PurchaseOrdersSection() {
   const [freightNew, setFreightNew] = useState("");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
   const [receiptDate, setReceiptDate] = useState(todayDateString());
@@ -142,77 +208,53 @@ export default function PurchaseOrdersSection() {
           <h2 className="text-sm font-semibold">Compras aguardando recebimento</h2>
           <p className="text-[11px] text-muted-foreground">Registro do que está previsto para chegar — não altera o estoque</p>
         </div>
-        <Button size="sm" variant="outline" className="h-9" onClick={() => setNewOpen(true)}>
-          <Plus size={15} className="mr-1.5" />Nova compra
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {received.length > 0 && (
+            <Button size="sm" variant="ghost" className="h-9 text-muted-foreground" onClick={() => setHistoryOpen(true)}>
+              <History size={15} className="mr-1.5" />Histórico
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-9" onClick={() => setNewOpen(true)}>
+            <Plus size={15} className="mr-1.5" />Nova compra
+          </Button>
+        </div>
       </div>
 
-      {pending.length === 0 && received.length === 0 ? (
+      {pending.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center">
-          <p className="text-xs text-muted-foreground">Nenhuma compra registrada.</p>
+          <p className="text-xs text-muted-foreground">Nenhuma compra aguardando recebimento.</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {[...pending, ...received].map(order => (
-            <div key={order.id} className="rounded-xl border border-border bg-card px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-sm font-semibold mono">Compra #{order.number}</span>
-                  <span className="text-[11px] text-muted-foreground">{formatDateBR(order.date)}</span>
-                  <Badge variant={order.status === "pending" ? "secondary" : "outline"} className={cn("text-[10px]", order.status === "received" && "text-income border-income/40")}>
-                    {order.status === "pending" ? "Aguardando recebimento" : "Recebida"}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {order.status === "pending" ? (
-                    <>
-                      <Button size="sm" className="h-8" onClick={() => openReceive(order)}>
-                        <Truck size={14} className="mr-1.5" />Receber
-                      </Button>
-                      <Button
-                        variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={async () => { if (await confirm({ title: "Excluir compra", description: "Excluir esta compra aguardando recebimento?" })) deletePurchaseOrder(order.id); }}
-                      >
-                        <Trash2 size={13} />
-                      </Button>
-                    </>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-[11px] text-income">
-                      <PackageCheck size={13} />
-                      {order.receivedAt ? `Recebida em ${formatDateBR(order.receivedAt)}` : "Recebida"}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="mt-2 space-y-1">
-                {order.items.map(it => (
-                  <div key={it.id} className="text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{it.brand} {it.model}</span>
-                      <span className="mono text-muted-foreground">
-                        {it.expectedQuantity} un.{it.unitPrice > 0 ? ` · ${brl(it.unitPrice)}` : ""}
-                      </span>
-                    </div>
-                    {it.receivedFlavors.length > 0 && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {it.receivedFlavors.map(f => `${f.flavor} ${f.quantity}`).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                ))}
-                {(order.paidAmount > 0 || order.freightCost > 0) && (
-                  <p className="text-[11px] text-muted-foreground pt-1 mono">
-                    {order.paidAmount > 0 && `Pago ${order.paidAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
-                    {order.paidAmount > 0 && order.freightCost > 0 && " · "}
-                    {order.freightCost > 0 && `Frete ${order.freightCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
-                  </p>
-                )}
-                {order.notes && <p className="text-[11px] text-muted-foreground pt-1">{order.notes}</p>}
-              </div>
-            </div>
+          {pending.map(order => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              onReceive={openReceive}
+              onDelete={async (id) => { if (await confirm({ title: "Excluir compra", description: "Excluir esta compra aguardando recebimento?" })) deletePurchaseOrder(id); }}
+            />
           ))}
         </div>
       )}
+
+      {/* Histórico de compras recebidas */}
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+          <SheetHeader className="px-6 py-4 border-b border-border">
+            <SheetTitle className="text-base font-semibold">Histórico de recebimentos</SheetTitle>
+            <p className="text-xs text-muted-foreground">Compras já recebidas e lançadas no estoque</p>
+          </SheetHeader>
+          <div className="flex-1 px-6 py-5 space-y-2">
+            {received.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center">
+                <p className="text-xs text-muted-foreground">Nenhuma compra recebida ainda.</p>
+              </div>
+            ) : (
+              received.map(order => <OrderCard key={order.id} order={order} />)
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Nova compra */}
       <Sheet open={newOpen} onOpenChange={(v) => { setNewOpen(v); if (!v) resetNew(); }}>
