@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
 const allNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#173404" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
   { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
   { to: "/stock", icon: Inbox, label: "Entrada", adminOnly: true, color: "#85B7EB" },
   { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
