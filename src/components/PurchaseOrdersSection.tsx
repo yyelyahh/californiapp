@@ -143,9 +143,16 @@ export default function PurchaseOrdersSection() {
           <h2 className="text-sm font-semibold">Compras aguardando recebimento</h2>
           <p className="text-[11px] text-muted-foreground">Registro do que está previsto para chegar — não altera o estoque</p>
         </div>
-        <Button size="sm" variant="outline" className="h-9" onClick={() => setNewOpen(true)}>
-          <Plus size={15} className="mr-1.5" />Nova compra
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {received.length > 0 && (
+            <Button size="sm" variant="ghost" className="h-9 text-muted-foreground" onClick={() => setHistoryOpen(true)}>
+              <History size={15} className="mr-1.5" />Histórico
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-9" onClick={() => setNewOpen(true)}>
+            <Plus size={15} className="mr-1.5" />Nova compra
+          </Button>
+        </div>
       </div>
 
       {pending.length === 0 && received.length === 0 ? (
