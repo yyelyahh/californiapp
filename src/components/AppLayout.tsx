@@ -146,21 +146,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-sidebar border-t border-border flex items-center justify-around py-1.5 safe-area-bottom">
-          {mobileNavItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
-                location.pathname === item.to
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              )}
-            >
-              <item.icon size={20} />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {mobileNavItems.map(item => {
+            const isActive = location.pathname === item.to;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
+                  isActive
+                    ? item.to === "/dashboard"
+                      ? "bg-[#EAF3DE] text-[#173404]"
+                      : "text-primary"
+                    : "text-muted-foreground"
+                )}
+              >
+                <item.icon
+                  size={20}
+                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
       </div>
     </div>
