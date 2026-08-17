@@ -18,6 +18,8 @@ export function localDateToISO(dateStr: string): string {
  * Formats a date string (ISO or similar) to dd/MM/yyyy in local timezone.
  */
 export function formatDateBR(dateStr: string): string {
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (plain) return `${plain[3]}/${plain[2]}/${plain[1]}`;
   const d = new Date(dateStr);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
