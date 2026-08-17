@@ -1,20 +1,20 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, ChevronLeft, ChevronRight, LogOut, Menu, X, AlertTriangle, Sparkles, Boxes, Landmark, Wallet, Lightbulb } from "lucide-react";
+import { LayoutDashboard, Tag, Inbox, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
 const allNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true },
-  { to: "/products", icon: Package, label: "Produtos", adminOnly: true },
-  { to: "/stock", icon: ArrowDownToLine, label: "Entrada", adminOnly: true },
-  { to: "/losses", icon: AlertTriangle, label: "Perdas", adminOnly: true },
-  { to: "/sales", icon: ShoppingCart, label: "Vendas", adminOnly: false },
-  { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
-  { to: "/commissions", icon: Sparkles, label: "Distribuição", adminOnly: true },
-  { to: "/insights", icon: Lightbulb, label: "Insights", adminOnly: true },
-  { to: "/finance", icon: Wallet, label: "Financeiro", adminOnly: true },
-  { to: "/", icon: Boxes, label: "Catálogo", adminOnly: false },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#173404" },
+  { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
+  { to: "/stock", icon: Inbox, label: "Entrada", adminOnly: true, color: "#85B7EB" },
+  { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
+  { to: "/sales", icon: Receipt, label: "Vendas", adminOnly: false, color: "#5DCAA5" },
+  { to: "/expenses", icon: FileText, label: "Despesas", adminOnly: true, color: "#EF9F27" },
+  { to: "/commissions", icon: HandCoins, label: "Distribuição", adminOnly: true, color: "#85B7EB" },
+  { to: "/insights", icon: LineChart, label: "Insights", adminOnly: true, color: "#7F77DD" },
+  { to: "/finance", icon: Coins, label: "Financeiro", adminOnly: true, color: "#EF9F27" },
+  { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: false, color: "#D4537E" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
