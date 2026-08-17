@@ -3,6 +3,7 @@ import { PurchaseOrder, PurchaseOrderItem, PurchaseReceiptItemInput, Product, St
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { localDateToISO } from "@/lib/date-utils";
 
 // Columns readable by every authenticated user (purchase_price is admin-only via RPC)
 const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,created_at";
@@ -540,7 +541,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const totalCost = qty * unitCost;
         const { data: entry, error: entryErr } = await supabase.from("stock_entries").insert({
           product_id: product.id, quantity: qty, unit_cost: unitCost, total_cost: totalCost,
-          date, notes: `Compra #${order.number}`,
+          date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? localDateToISO(date) : date,
+          notes: `Compra #${order.number}`,
         }).select().single();
         if (entryErr || !entry) { toast.error(`Erro ao registrar entrada de ${flavor}`); continue; }
         newEntries.push(mapStockEntry(entry));
