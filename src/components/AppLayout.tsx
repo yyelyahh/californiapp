@@ -1,20 +1,20 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowDownToLine, ShoppingCart, Receipt, Users, ChevronLeft, ChevronRight, LogOut, Menu, X, AlertTriangle, Sparkles, Boxes, Landmark, Wallet, Lightbulb } from "lucide-react";
+import { LayoutDashboard, Tag, Inbox, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
 const allNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true },
-  { to: "/products", icon: Package, label: "Produtos", adminOnly: true },
-  { to: "/stock", icon: ArrowDownToLine, label: "Entrada", adminOnly: true },
-  { to: "/losses", icon: AlertTriangle, label: "Perdas", adminOnly: true },
-  { to: "/sales", icon: ShoppingCart, label: "Vendas", adminOnly: false },
-  { to: "/expenses", icon: Receipt, label: "Despesas", adminOnly: true },
-  { to: "/commissions", icon: Sparkles, label: "Distribuição", adminOnly: true },
-  { to: "/insights", icon: Lightbulb, label: "Insights", adminOnly: true },
-  { to: "/finance", icon: Wallet, label: "Financeiro", adminOnly: true },
-  { to: "/", icon: Boxes, label: "Catálogo", adminOnly: false },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#173404" },
+  { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
+  { to: "/stock", icon: Inbox, label: "Entrada", adminOnly: true, color: "#85B7EB" },
+  { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
+  { to: "/sales", icon: Receipt, label: "Vendas", adminOnly: false, color: "#5DCAA5" },
+  { to: "/expenses", icon: FileText, label: "Despesas", adminOnly: true, color: "#EF9F27" },
+  { to: "/commissions", icon: HandCoins, label: "Distribuição", adminOnly: true, color: "#85B7EB" },
+  { to: "/insights", icon: LineChart, label: "Insights", adminOnly: true, color: "#7F77DD" },
+  { to: "/finance", icon: Coins, label: "Financeiro", adminOnly: true, color: "#EF9F27" },
+  { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: false, color: "#D4537E" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -43,21 +43,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <nav className="flex-1 py-3 space-y-1 px-2">
-          {navItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
-                location.pathname === item.to
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <item.icon size={18} />
-              {!collapsed && <span>{item.label}</span>}
-            </NavLink>
-          ))}
+          {navItems.map(item => {
+            const isActive = location.pathname === item.to;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
+                  isActive
+                    ? item.to === "/dashboard"
+                      ? "bg-[#EAF3DE] text-[#173404] font-medium"
+                      : "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <item.icon
+                  size={18}
+                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                />
+                {!collapsed && <span>{item.label}</span>}
+              </NavLink>
+            );
+          })}
         </nav>
         {!collapsed && (
           <div className="p-4 border-t border-sidebar-border">
@@ -94,22 +102,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {mobileMenuOpen && (
           <div className="md:hidden absolute top-[49px] left-0 right-0 z-50 bg-sidebar border-b border-border shadow-lg animate-fade-in">
             <nav className="py-2 px-3 space-y-1">
-              {navItems.map(item => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
-                    location.pathname === item.to
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-                  )}
-                >
-                  <item.icon size={18} />
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
+              {navItems.map(item => {
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
+                      isActive
+                        ? item.to === "/dashboard"
+                          ? "bg-[#EAF3DE] text-[#173404] font-medium"
+                          : "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                    )}
+                  >
+                    <item.icon
+                      size={18}
+                      style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                    />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
               <button
                 onClick={() => { signOut(); setMobileMenuOpen(false); }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-destructive transition-colors w-full"
@@ -130,21 +146,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-sidebar border-t border-border flex items-center justify-around py-1.5 safe-area-bottom">
-          {mobileNavItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
-                location.pathname === item.to
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              )}
-            >
-              <item.icon size={20} />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {mobileNavItems.map(item => {
+            const isActive = location.pathname === item.to;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
+                  isActive
+                    ? item.to === "/dashboard"
+                      ? "bg-[#EAF3DE] text-[#173404]"
+                      : "text-primary"
+                    : "text-muted-foreground"
+                )}
+              >
+                <item.icon
+                  size={20}
+                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
       </div>
     </div>
