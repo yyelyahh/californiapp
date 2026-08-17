@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
-import { Plus, Trash2, Truck, PackageCheck } from "lucide-react";
+import { Plus, Trash2, Truck, PackageCheck, History } from "lucide-react";
 import { todayDateString, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
