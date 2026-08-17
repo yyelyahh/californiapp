@@ -43,21 +43,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <nav className="flex-1 py-3 space-y-1 px-2">
-          {navItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
-                location.pathname === item.to
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <item.icon size={18} />
-              {!collapsed && <span>{item.label}</span>}
-            </NavLink>
-          ))}
+          {navItems.map(item => {
+            const isActive = location.pathname === item.to;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
+                  isActive
+                    ? item.to === "/dashboard"
+                      ? "bg-[#EAF3DE] text-[#173404] font-medium"
+                      : "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <item.icon
+                  size={18}
+                  style={isActive ? (item.to === "/dashboard" ? { color: "#173404" } : undefined) : { color: item.color }}
+                />
+                {!collapsed && <span>{item.label}</span>}
+              </NavLink>
+            );
+          })}
         </nav>
         {!collapsed && (
           <div className="p-4 border-t border-sidebar-border">
