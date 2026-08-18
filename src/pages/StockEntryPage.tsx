@@ -408,7 +408,7 @@ export default function StockEntryPage() {
         </div>
       ) : (
         <Stagger className="space-y-2">
-          {dateGroups.map((group, gi) => {
+          {dateGroups.map(group => {
             const isCollapsed = collapsedDates.has(group.dateKey);
             return (
               <StaggerItem key={group.dateKey} className="rounded-xl border border-border bg-card overflow-hidden">
