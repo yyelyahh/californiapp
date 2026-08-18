@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { AnimatePresence, motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import { listItem } from "@/lib/motion";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -150,9 +153,10 @@ export default function LossesPage() {
                   <Trash2 size={14} />
                 </Button>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+          </AnimatePresence>
+        </Stagger>
       )}
     </div>
   );

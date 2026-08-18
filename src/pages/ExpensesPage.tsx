@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { StaggerAuto } from "@/components/motion/Stagger";
+import { AnimatePresence, motion } from "motion/react";
+import { listItem, stagger } from "@/lib/motion";
 import { useConfirm } from "@/components/ConfirmProvider";
 
 const categories = ["Frete", "Embalagem", "Marketing", "Aluguel", "Outros"];
@@ -193,9 +195,16 @@ export default function ExpensesPage() {
                 <th className="w-10"></th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map(e => (
-                <tr key={e.id} className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group">
+            <motion.tbody variants={stagger()} initial="hidden" animate="visible">
+              <AnimatePresence initial={false}>
+              {filtered.map((e, i) => (
+                <motion.tr
+                  key={e.id}
+                  layout
+                  variants={i < 20 ? listItem : undefined}
+                  exit={{ opacity: 0 }}
+                  className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group"
+                >
                   <td className="py-2.5 px-4">
                     <div className="font-medium leading-tight">{e.description}</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(e.date)}</div>
@@ -211,8 +220,9 @@ export default function ExpensesPage() {
                       </Button>
                     </div>
                   </td>
-                </tr>
+                </motion.tr>
               ))}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
