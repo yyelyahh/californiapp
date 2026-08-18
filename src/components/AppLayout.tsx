@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import PageTransition from "@/components/motion/PageTransition";
+import NavIconBurst, { type NavBurst } from "@/components/motion/NavIconBurst";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
 
 const allNavItems = [
@@ -20,9 +21,12 @@ const allNavItems = [
   { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: false, color: "#D4537E" },
 ];
 
+type NavItem = (typeof allNavItems)[number];
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [burst, setBurst] = useState<NavBurst | null>(null);
   const location = useLocation();
   const { signOut, role } = useAuth();
   const reduce = useReducedMotion();
@@ -30,6 +34,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navItems = allNavItems.filter(item => role === "admin" || !item.adminOnly);
   const bottomBarRoutes = ["/dashboard", "/products", "/sales", "/commissions"];
   const mobileNavItems = navItems.filter(item => bottomBarRoutes.includes(item.to));
+
+  const triggerBurst = (item: NavItem) => {
+    if (reduce || location.pathname === item.to) return;
+    setBurst({ id: Date.now(), icon: item.icon, label: item.label, color: item.color });
+  };
+
 
   return (
     <div className="flex h-screen">
