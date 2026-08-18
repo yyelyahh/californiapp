@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useStore } from "@/context/StoreContext";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import { listItem } from "@/lib/motion";
 import { Users, Landmark, Plus, Trash2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -128,11 +131,12 @@ export default function FinancePage() {
         {partnerContributions.length === 0 ? (
           <p className="text-xs text-muted-foreground italic py-2">Nenhum aporte registrado.</p>
         ) : (
-          <div className="divide-y divide-border/60">
-            {[...partnerContributions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(c => {
+          <Stagger className="divide-y divide-border/60">
+            <AnimatePresence initial={false}>
+            {[...partnerContributions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((c, i) => {
               const partner = partners.find(p => p.id === c.partnerId);
               return (
-                <div key={c.id} className="flex items-center justify-between py-2 group">
+                <motion.div key={c.id} layout variants={i < 20 ? listItem : undefined} exit={{ opacity: 0, height: 0 }} className="flex items-center justify-between py-2 group overflow-hidden">
                   <div className="min-w-0">
                     <p className="text-xs font-medium">{partner?.name ?? "—"}</p>
                     <p className="text-[10px] text-muted-foreground">{format(parseISO(c.date), "dd/MM/yyyy")}{c.notes ? ` · ${c.notes}` : ""}</p>
@@ -143,10 +147,11 @@ export default function FinancePage() {
                       <Trash2 size={11} />
                     </Button>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+            </AnimatePresence>
+          </Stagger>
         )}
       </div>
 
@@ -162,14 +167,14 @@ export default function FinancePage() {
         {loans.length === 0 ? (
           <p className="text-xs text-muted-foreground italic py-2">Nenhum empréstimo registrado.</p>
         ) : (
-          <div className="grid gap-2 md:grid-cols-2">
-            {loans.map(l => {
+          <Stagger className="grid gap-2 md:grid-cols-2">
+            {loans.map((l, i) => {
               const total = l.principal + l.interestAmount;
               const paid = getLoanPaid(l.id);
               const remaining = getLoanRemaining(l.id);
               const quitado = remaining <= 0.01;
               return (
-                <div key={l.id} className="rounded-lg border border-border/70 p-3 space-y-2">
+                <motion.div key={l.id} variants={i < 20 ? listItem : undefined} className="rounded-lg border border-border/70 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold truncate">{l.lenderName}</p>
                     {quitado && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-income/10 text-income font-medium">Quitado</span>}
