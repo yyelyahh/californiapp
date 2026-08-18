@@ -12,6 +12,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PurchaseOrdersSection from "@/components/PurchaseOrdersSection";
+import { AnimatePresence, motion } from "motion/react";
+import { Stagger, StaggerItem } from "@/components/motion/Stagger";
+import { transitionBase } from "@/lib/motion";
 
 const BRAND_PRESETS: Record<string, number> = {
   Ignite: 68.5,
@@ -404,11 +407,11 @@ export default function StockEntryPage() {
           <p className="text-sm text-muted-foreground">{stockEntries.length === 0 ? "Nenhuma entrada registrada." : "Nenhuma entrada encontrada."}</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {dateGroups.map(group => {
+        <Stagger className="space-y-2">
+          {dateGroups.map((group, gi) => {
             const isCollapsed = collapsedDates.has(group.dateKey);
             return (
-              <div key={group.dateKey} className="rounded-xl border border-border bg-card overflow-hidden">
+              <StaggerItem key={group.dateKey} className="rounded-xl border border-border bg-card overflow-hidden">
                 <button
                   onClick={() => toggleDate(group.dateKey)}
                   className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-secondary/40 transition-colors text-left"
@@ -432,8 +435,16 @@ export default function StockEntryPage() {
                   </div>
                 </button>
 
+                <AnimatePresence initial={false}>
                 {!isCollapsed && (
-                  <div className="border-t border-border/60">
+                  <motion.div
+                    key="body"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={transitionBase}
+                    className="border-t border-border/60 overflow-hidden"
+                  >
                     <table className="w-full text-sm">
                       <tbody>
                         {group.entries.map(e => {
@@ -464,12 +475,13 @@ export default function StockEntryPage() {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  </motion.div>
                 )}
-              </div>
+                </AnimatePresence>
+              </StaggerItem>
             );
           })}
-        </div>
+        </Stagger>
       )}
     </div>
   );
