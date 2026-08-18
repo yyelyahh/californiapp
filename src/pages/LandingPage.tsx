@@ -9,6 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Search, Package, Sparkles, LogIn, LayoutDashboard, Boxes, Tags, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import { listItem } from "@/lib/motion";
 
 interface CatalogItem {
   id: string;
@@ -281,14 +284,18 @@ export default function LandingPage() {
 
           return (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-                {models.map((m) => (
-                  <button
+              <Stagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                {models.map((m, idx) => (
+                  <motion.button
                     key={m.key}
+                    variants={idx < 20 ? listItem : undefined}
+                    whileHover={{ y: -3 }}
+                    whileTap={{ scale: 0.99 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => setOpenModelKey(m.key)}
                     className="text-left"
                   >
-                    <Card className="group border-border/60 hover:border-primary/40 transition-all hover:-translate-y-0.5 h-full">
+                    <Card className="group border-border/60 hover:border-primary/40 transition-colors h-full">
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between gap-3 mb-4">
                           <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
@@ -308,9 +315,9 @@ export default function LandingPage() {
                         </div>
                       </CardContent>
                     </Card>
-                  </button>
+                  </motion.button>
                 ))}
-              </div>
+              </Stagger>
 
               <Sheet open={!!openModelKey} onOpenChange={(o) => !o && setOpenModelKey(null)}>
                 <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
@@ -325,19 +332,19 @@ export default function LandingPage() {
                           {active.flavors.length} {active.flavors.length === 1 ? "sabor disponível" : "sabores disponíveis"} · {active.stock} un. em estoque
                         </SheetDescription>
                       </SheetHeader>
-                      <div className="mt-6 divide-y divide-border/60">
+                      <Stagger className="mt-6 divide-y divide-border/60" gap={0.035}>
                         {[...active.flavors]
                           .sort((a, b) => b.stock - a.stock)
-                          .map((f) => (
-                            <div key={f.id} className="flex items-center justify-between py-3">
+                          .map((f, i) => (
+                            <motion.div key={f.id} variants={i < 20 ? listItem : undefined} className="flex items-center justify-between py-3">
                               <span className="text-sm font-medium">{f.flavor}</span>
                               <div className="text-right">
                                 <div className="text-sm font-bold">{f.stock}</div>
                                 <div className="text-[9px] uppercase tracking-wider text-muted-foreground">un.</div>
                               </div>
-                            </div>
+                            </motion.div>
                           ))}
-                      </div>
+                      </Stagger>
                     </>
                   )}
                 </SheetContent>

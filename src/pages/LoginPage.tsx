@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Mail } from "lucide-react";
+import { motion } from "motion/react";
+import { scaleIn, fadeUp } from "@/lib/motion";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -27,13 +29,13 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 overflow-x-hidden">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+      <motion.div className="w-full max-w-sm" initial="hidden" animate="visible" variants={scaleIn}>
+        <motion.div className="text-center mb-8" variants={fadeUp}>
           <h1 className="text-4xl font-bold tracking-tight mb-1 text-rgb-cascade">
             California
           </h1>
           <p className="text-xs text-muted-foreground uppercase tracking-widest">Contabilidade · Acesso restrito</p>
-        </div>
+        </motion.div>
 
         <Card className="glass-card">
           <CardHeader className="pb-4">
@@ -72,7 +74,13 @@ export default function LoginPage() {
                 />
               </div>
               {error && (
-                <p className="text-sm text-destructive">{error}</p>
+                <motion.p
+                  className="text-sm text-destructive"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  {error}
+                </motion.p>
               )}
               <Button type="submit" className="w-full h-10" disabled={loading}>
                 {loading ? "Entrando..." : "Entrar"}
@@ -84,7 +92,7 @@ export default function LoginPage() {
         <p className="text-center text-[10px] text-muted-foreground mt-6 uppercase tracking-widest">
           California Contabilidade
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }
