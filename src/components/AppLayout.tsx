@@ -216,6 +216,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </div>
+
+      <NavIconBurst burst={burst} onDone={() => setBurst(null)} />
     </div>
   );
 }
