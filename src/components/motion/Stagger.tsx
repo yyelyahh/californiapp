@@ -1,5 +1,6 @@
 import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
-import { listItem, stagger } from "@/lib/motion";
+import { Children } from "react";
+import { listItem, stagger, MAX_STAGGER_ITEMS } from "@/lib/motion";
 
 interface StaggerProps extends HTMLMotionProps<"div"> {
   children: React.ReactNode;
@@ -27,6 +28,35 @@ export function StaggerItem({ children, ...props }: HTMLMotionProps<"div">) {
   return (
     <motion.div variants={listItem} {...props}>
       {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Container em cascata que embrulha automaticamente cada filho direto.
+ * Útil quando os filhos são elementos simples (divs/cards) já existentes.
+ * Só os primeiros `max` filhos animam, para não pesar em listas longas.
+ */
+export function StaggerAuto({
+  children,
+  gap = 0.045,
+  max = MAX_STAGGER_ITEMS,
+  ...props
+}: StaggerProps & { max?: number }) {
+  const reduce = useReducedMotion();
+  if (reduce) return <div {...(props as React.HTMLAttributes<HTMLDivElement>)}>{children}</div>;
+
+  return (
+    <motion.div variants={stagger(gap)} initial="hidden" animate="visible" {...props}>
+      {Children.toArray(children).map((child, i) =>
+        i < max ? (
+          <motion.div key={i} variants={listItem} className="contents">
+            {child}
+          </motion.div>
+        ) : (
+          child
+        ),
+      )}
     </motion.div>
   );
 }
