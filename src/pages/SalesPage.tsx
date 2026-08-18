@@ -486,7 +486,7 @@ export default function SalesPage() {
         const sumOpen = sortedSales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
         const paidPct = sumTotal > 0 ? Math.round((sumPaid / sumTotal) * 100) : 0;
 
-        const renderRow = (s: typeof sales[number]) => {
+        const renderRow = (s: typeof sales[number], rowIndex = 0) => {
           const remaining = Math.max(0, s.totalPrice - s.paidAmount);
           const isRet = s.type === "retirada_funcionario";
           const sellerName = s.sellerId ? getSellerName(s.sellerId) : "Sem funcionário";
@@ -500,7 +500,13 @@ export default function SalesPage() {
             )
           );
           return (
-            <tr key={s.id} className={cn("border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group", isRet && "bg-warning/[0.04]")}>
+            <motion.tr
+              key={s.id}
+              layout
+              variants={rowIndex < 20 ? listItem : undefined}
+              exit={{ opacity: 0 }}
+              className={cn("border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group", isRet && "bg-warning/[0.04]")}
+            >
               <td className="py-2.5 px-3">
                 <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
                 <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
