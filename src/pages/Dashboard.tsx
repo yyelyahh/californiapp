@@ -7,6 +7,9 @@ import { ptBR } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import { listItem, hoverLift } from "@/lib/motion";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
 
@@ -252,7 +255,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPIs principais — linha 1 */}
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+      <Stagger className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <PrimaryKPI
           label="Receita"
           value={formatCurrency(periodStats.revenue)}
@@ -284,15 +287,15 @@ export default function Dashboard() {
           iconTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
           valueTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
         />
-      </div>
+      </Stagger>
 
       {/* KPIs secundários — linha 2 */}
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+      <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-4">
         <SecondaryStat icon={Percent} label="Margem bruta" value={`${periodStats.grossMargin.toFixed(1)}%`} />
         <SecondaryStat icon={Receipt} label="Despesas" value={formatCurrency(periodStats.expenses)} />
         <SecondaryStat icon={Boxes} label="Reposição de estoque" value={formatCurrency(periodStats.restock)} hint="investimento em ativos" />
         <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(inventoryAtCost)} />
-      </div>
+      </Stagger>
 
 
       {/* Gráfico + atividades lado a lado */}
@@ -363,21 +366,21 @@ export default function Dashboard() {
           {store.sales.filter(s => s.type === "venda").length === 0 ? (
             <p className="text-xs text-muted-foreground py-8 text-center">Nenhuma venda registrada.</p>
           ) : (
-            <div className="space-y-0">
+            <Stagger className="space-y-0">
               {store.sales.filter(s => s.type === "venda").slice(-6).reverse().map(s => {
                 const product = productMap.get(s.productId);
                 const productLabel = product ? `${product.flavor} · ${product.model}` : store.getProductName(s.productId);
                 return (
-                  <div key={s.id} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
+                  <motion.div key={s.id} variants={listItem} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
                     <div className="min-w-0 flex-1 pr-2">
                       <p className="text-xs font-medium truncate">{productLabel}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5 mono">{format(parseISO(s.date), "dd/MM")} · {s.quantity} un.</p>
                     </div>
                     <span className="text-xs font-semibold mono text-income shrink-0">{formatCurrency(s.totalPrice)}</span>
-                  </div>
+                  </motion.div>
                 );
               })}
-            </div>
+            </Stagger>
           )}
         </div>
       </div>
@@ -388,26 +391,26 @@ export default function Dashboard() {
 function SecondaryStat({ icon: Icon, label, value, tone, hint }: { icon: any; label: string; value: string; tone?: "destructive" | "warning"; hint?: string }) {
   const toneClass = tone === "destructive" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-foreground";
   return (
-    <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+    <motion.div variants={listItem} className="rounded-xl border border-border bg-card px-3.5 py-2.5">
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <Icon size={11} />
         <p className="text-[11px] uppercase tracking-wider font-medium">{label}</p>
       </div>
       <p className={cn("mt-0.5 text-base font-semibold mono", toneClass)}>{value}</p>
       {hint && <p className="text-xs text-muted-foreground mono mt-0.5">{hint}</p>}
-    </div>
+    </motion.div>
   );
 }
 
 function PrimaryKPI({ icon: Icon, label, value, hint, iconTone, valueTone }: { icon: any; label: string; value: string; hint?: string; iconTone?: string; valueTone?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
+    <motion.div variants={listItem} {...hoverLift} className="rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
         <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
       </div>
       <p className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")}>{value}</p>
       {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
-    </div>
+    </motion.div>
   );
 }
