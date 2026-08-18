@@ -187,6 +187,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onClick={() => triggerBurst(item)}
                 className={cn(
                   "relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
                   isActive ? "text-primary" : "text-muted-foreground"
