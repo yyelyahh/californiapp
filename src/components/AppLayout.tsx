@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import PageTransition from "@/components/motion/PageTransition";
+import NavIconBurst, { type NavBurst } from "@/components/motion/NavIconBurst";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
 
 const allNavItems = [
@@ -20,9 +21,12 @@ const allNavItems = [
   { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: false, color: "#D4537E" },
 ];
 
+type NavItem = (typeof allNavItems)[number];
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [burst, setBurst] = useState<NavBurst | null>(null);
   const location = useLocation();
   const { signOut, role } = useAuth();
   const reduce = useReducedMotion();
@@ -30,6 +34,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navItems = allNavItems.filter(item => role === "admin" || !item.adminOnly);
   const bottomBarRoutes = ["/dashboard", "/products", "/sales", "/commissions"];
   const mobileNavItems = navItems.filter(item => bottomBarRoutes.includes(item.to));
+
+  const triggerBurst = (item: NavItem) => {
+    if (reduce || location.pathname === item.to) return;
+    setBurst({ id: Date.now(), icon: item.icon, label: item.label, color: item.color });
+  };
+
 
   return (
     <div className="flex h-screen">
@@ -55,6 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onClick={() => triggerBurst(item)}
                 className={cn(
                   "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
                   isActive
@@ -133,7 +144,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      onClick={() => setMobileMenuOpen(false)}
+                      onClick={() => { triggerBurst(item); setMobileMenuOpen(false); }}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
                         isActive
@@ -176,6 +187,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onClick={() => triggerBurst(item)}
                 className={cn(
                   "relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
                   isActive ? "text-primary" : "text-muted-foreground"
@@ -204,6 +216,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </div>
+
+      <NavIconBurst burst={burst} onDone={() => setBurst(null)} />
     </div>
   );
 }
