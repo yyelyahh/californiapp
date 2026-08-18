@@ -159,7 +159,7 @@ export default function LossesPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{getProductName(l.productId)}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {formatDateBR(l.date)}{l.reason ? ` · ${l.reason}` : ""}
+                  {formatDateBR(l.date)}{l.sellerId ? ` · ${sellers.find(s => s.id === l.sellerId)?.name ?? "Vendedor"}` : " · Estoque interno"}{l.reason ? ` · ${l.reason}` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-5 text-sm shrink-0">
