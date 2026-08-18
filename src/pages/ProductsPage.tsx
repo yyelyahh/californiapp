@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import AddProductDialog from "@/components/AddProductDialog";
 import { cn } from "@/lib/utils";
+import { StaggerAuto } from "@/components/motion/Stagger";
+import { AnimatePresence, motion } from "motion/react";
+import { transitionBase } from "@/lib/motion";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -310,12 +313,12 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* KPIs */}
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+      <StaggerAuto className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <Kpi icon={DollarSign} label="Investido" value={formatCurrency(totals.invested)} />
         <Kpi icon={TrendingUp} label="Potencial" value={formatCurrency(totals.saleValue)} />
         <Kpi icon={TrendingUp} label="Lucro previsto" value={formatCurrency(totals.profit)} tone={totals.profit >= 0 ? "income" : "destructive"} />
         <Kpi icon={Package} label="Estoque" value={`${totals.stock} un.`} />
-      </div>
+      </StaggerAuto>
 
       {/* Toolbar */}
       <div className="rounded-xl border border-border bg-card/40 px-3 py-2.5">
@@ -389,8 +392,16 @@ export default function ProductsPage() {
                   </div>
                 </button>
 
+                <AnimatePresence initial={false}>
                 {!isCollapsed && (
-                  <div className="border-t border-border overflow-x-auto">
+                  <motion.div
+                    key="body"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={transitionBase}
+                    className="border-t border-border overflow-x-auto"
+                  >
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
@@ -431,8 +442,9 @@ export default function ProductsPage() {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
             );
           })}

@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { AnimatePresence, motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import { listItem } from "@/lib/motion";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -127,9 +130,10 @@ export default function LossesPage() {
       {sortedLosses.length === 0 ? (
         <div className="glass-card p-12 text-center"><p className="text-muted-foreground">Nenhuma perda registrada.</p></div>
       ) : (
-        <div className="glass-card overflow-hidden">
-          {sortedLosses.map(l => (
-            <div key={l.id} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors">
+        <Stagger className="glass-card overflow-hidden">
+          <AnimatePresence initial={false}>
+          {sortedLosses.map((l, i) => (
+            <motion.div key={l.id} layout variants={i < 20 ? listItem : undefined} exit={{ opacity: 0, height: 0 }} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-secondary/30 transition-colors overflow-hidden">
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{getProductName(l.productId)}</p>
                 <p className="text-xs text-muted-foreground truncate">
@@ -149,9 +153,10 @@ export default function LossesPage() {
                   <Trash2 size={14} />
                 </Button>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+          </AnimatePresence>
+        </Stagger>
       )}
     </div>
   );

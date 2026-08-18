@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { StaggerAuto } from "@/components/motion/Stagger";
+import { AnimatePresence, motion } from "motion/react";
+import { listItem, stagger } from "@/lib/motion";
 import { useConfirm } from "@/components/ConfirmProvider";
 
 const categories = ["Frete", "Embalagem", "Marketing", "Aluguel", "Outros"];
@@ -132,7 +135,7 @@ export default function ExpensesPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+      <StaggerAuto className="grid gap-2 grid-cols-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><Receipt size={11} /> Lançamentos</div>
           <p className="mt-0.5 text-lg font-semibold mono">{totals.count}</p>
@@ -147,7 +150,7 @@ export default function ExpensesPage() {
             {totals.topCat ? <>{totals.topCat[0]} <span className="text-muted-foreground mono text-xs ml-1">{formatCurrency(totals.topCat[1])}</span></> : <span className="text-muted-foreground">—</span>}
           </p>
         </div>
-      </div>
+      </StaggerAuto>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -192,9 +195,16 @@ export default function ExpensesPage() {
                 <th className="w-10"></th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map(e => (
-                <tr key={e.id} className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group">
+            <motion.tbody variants={stagger()} initial="hidden" animate="visible">
+              <AnimatePresence initial={false}>
+              {filtered.map((e, i) => (
+                <motion.tr
+                  key={e.id}
+                  layout
+                  variants={i < 20 ? listItem : undefined}
+                  exit={{ opacity: 0 }}
+                  className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group"
+                >
                   <td className="py-2.5 px-4">
                     <div className="font-medium leading-tight">{e.description}</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(e.date)}</div>
@@ -210,9 +220,10 @@ export default function ExpensesPage() {
                       </Button>
                     </div>
                   </td>
-                </tr>
+                </motion.tr>
               ))}
-            </tbody>
+              </AnimatePresence>
+            </motion.tbody>
           </table>
         </div>
       )}
