@@ -11,31 +11,25 @@ Adicionar animações consistentes e leves em todo o sistema, sem alterar nenhum
 ## O que ganha animação
 
 1. **Transição entre páginas**
-   Ao trocar de rota, o conteúdo faz um fade + leve subida. Substitui o `animate-fade-in` atual do layout.
-
+  Ao trocar de rota, o conteúdo faz um fade + leve subida. Substitui o `animate-fade-in` atual do layout.
 2. **Sidebar / navegação**
-   - Indicador do item ativo desliza suavemente entre os itens (efeito de "pílula" que acompanha a seleção).
-   - Menu mobile abre/fecha com slide + fade em vez de aparecer seco.
-   - Recolher/expandir a sidebar fica com largura animada.
-
+  - Indicador do item ativo desliza suavemente entre os itens (efeito de "pílula" que acompanha a seleção).
+  - Menu mobile abre/fecha com slide + fade em vez de aparecer seco.
+  - Recolher/expandir a sidebar fica com largura animada.
 3. **Cards e KPIs (Dashboard, Distribuição, Insights, Financeiro)**
-   - Entrada em cascata (cada card entra com um pequeno atraso em sequência).
-   - Hover com leve elevação nos cards clicáveis.
-   - Números dos KPIs com contagem animada até o valor final.
-
+  - Entrada em cascata (cada card entra com um pequeno atraso em sequência).
+  - Hover com leve elevação nos cards clicáveis.
+  - Números dos KPIs com contagem animada até o valor final.
 4. **Listas e tabelas (Vendas, Produtos, Entrada, Perdas, Despesas)**
-   - Linhas/cards entram em cascata (limitada aos primeiros itens visíveis).
-   - Ao excluir/adicionar um item, ele sai/entra com animação em vez de sumir instantaneamente.
-
+  - Linhas/cards entram em cascata (limitada aos primeiros itens visíveis).
+  - Ao excluir/adicionar um item, ele sai/entra com animação em vez de sumir instantaneamente.
 5. **Drawers, sheets e diálogos**
-   Manter os componentes atuais, apenas suavizando as curvas de abertura/fechamento para o mesmo padrão.
-
+  Manter os componentes atuais, apenas suavizando as curvas de abertura/fechamento para o mesmo padrão.
 6. **Login e catálogo**
-   - Login: card entra com fade + escala sutil.
-   - Catálogo: cards de modelo com hover elevado e o painel lateral de sabores com entrada em cascata.
-
+  - Login: card entra com fade + escala sutil.
+  - Catálogo: cards de modelo com hover elevado e o painel lateral de sabores com entrada em cascata.
 7. **Feedback de ações**
-   Botões com micro-reação ao clique (leve compressão) e estados de carregamento mais suaves.
+  Botões com micro-reação ao clique (leve compressão) e estados de carregamento mais suaves.
 
 ## Detalhes técnicos
 
