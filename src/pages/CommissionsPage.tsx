@@ -507,7 +507,8 @@ export default function CommissionsPage() {
           tone={periodMetrics.distribuivel > 0 ? "income" : "fixed"}
           sub="Lucro líquido − a pagar a vendedores"
         />
-      </div>
+      </StaggerAuto>
+
 
 
 
