@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { StaggerAuto } from "@/components/motion/Stagger";
+import { AnimatePresence, motion } from "motion/react";
+import { listItem, stagger } from "@/lib/motion";
 import { useConfirm } from "@/components/ConfirmProvider";
 import BatchSaleForm from "@/components/BatchSaleForm";
 
@@ -549,7 +551,7 @@ export default function SalesPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 size={13} /></Button>
                 </div>
               </td>
-            </tr>
+            </motion.tr>
           );
         };
 
@@ -710,7 +712,7 @@ export default function SalesPage() {
                         <th className="py-2 px-3 w-[70px]"></th>
                       </tr>
                     </thead>
-                    <tbody>{sortedSales.map(renderRow)}</tbody>
+                    <motion.tbody variants={stagger()} initial="hidden" animate="visible"><AnimatePresence initial={false}>{sortedSales.map(renderRow)}</AnimatePresence></motion.tbody>
                   </table>
                 </div>
               )}
@@ -732,7 +734,7 @@ export default function SalesPage() {
                         <th className="py-2 px-3 w-[80px]"></th>
                       </tr>
                     </thead>
-                    <tbody>{sortedRetiradas.map(renderRow)}</tbody>
+                    <motion.tbody variants={stagger()} initial="hidden" animate="visible"><AnimatePresence initial={false}>{sortedRetiradas.map(renderRow)}</AnimatePresence></motion.tbody>
                   </table>
                 </div>
               )}
