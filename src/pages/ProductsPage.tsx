@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import AddProductDialog from "@/components/AddProductDialog";
 import { cn } from "@/lib/utils";
 import { StaggerAuto } from "@/components/motion/Stagger";
+import { AnimatePresence, motion } from "motion/react";
+import { transitionBase } from "@/lib/motion";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -390,8 +392,16 @@ export default function ProductsPage() {
                   </div>
                 </button>
 
+                <AnimatePresence initial={false}>
                 {!isCollapsed && (
-                  <div className="border-t border-border overflow-x-auto">
+                  <motion.div
+                    key="body"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={transitionBase}
+                    className="border-t border-border overflow-x-auto"
+                  >
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
@@ -432,8 +442,9 @@ export default function ProductsPage() {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
             );
           })}
