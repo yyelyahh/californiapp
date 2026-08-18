@@ -2,16 +2,16 @@ import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
 import { Children } from "react";
 import { listItem, stagger, MAX_STAGGER_ITEMS } from "@/lib/motion";
 
-interface StaggerProps extends HTMLMotionProps<"div"> {
-  children: React.ReactNode;
+type StaggerProps = HTMLMotionProps<"div"> & {
+  children?: React.ReactNode;
   /** intervalo entre filhos, em segundos */
   gap?: number;
-}
+};
 
 /** Container que faz os filhos entrarem em cascata. */
 export function Stagger({ children, gap = 0.045, ...props }: StaggerProps) {
   const reduce = useReducedMotion();
-  if (reduce) return <div {...(props as React.HTMLAttributes<HTMLDivElement>)}>{children}</div>;
+  if (reduce) return <motion.div {...props}>{children}</motion.div>;
 
   return (
     <motion.div variants={stagger(gap)} initial="hidden" animate="visible" {...props}>
@@ -21,9 +21,9 @@ export function Stagger({ children, gap = 0.045, ...props }: StaggerProps) {
 }
 
 /** Item de uma cascata. Deve estar dentro de <Stagger>. */
-export function StaggerItem({ children, ...props }: HTMLMotionProps<"div">) {
+export function StaggerItem({ children, ...props }: HTMLMotionProps<"div"> & { children?: React.ReactNode }) {
   const reduce = useReducedMotion();
-  if (reduce) return <div {...(props as React.HTMLAttributes<HTMLDivElement>)}>{children}</div>;
+  if (reduce) return <motion.div {...props}>{children}</motion.div>;
 
   return (
     <motion.div variants={listItem} {...props}>
@@ -44,7 +44,7 @@ export function StaggerAuto({
   ...props
 }: StaggerProps & { max?: number }) {
   const reduce = useReducedMotion();
-  if (reduce) return <div {...(props as React.HTMLAttributes<HTMLDivElement>)}>{children}</div>;
+  if (reduce) return <motion.div {...props}>{children}</motion.div>;
 
   return (
     <motion.div variants={stagger(gap)} initial="hidden" animate="visible" {...props}>
