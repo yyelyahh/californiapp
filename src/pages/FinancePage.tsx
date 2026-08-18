@@ -185,13 +185,18 @@ export default function FinancePage() {
                     <div><p className="text-muted-foreground text-[10px] uppercase">Restante</p><p className={cn("mono font-semibold", remaining > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(remaining)}</p></div>
                   </div>
                   <div className="h-1 rounded-full bg-secondary overflow-hidden">
-                    <div className="h-full bg-primary transition-all" style={{ width: `${total > 0 ? Math.min(100, (paid / total) * 100) : 0}%` }} />
+                    <motion.div
+                      className="h-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${total > 0 ? Math.min(100, (paid / total) * 100) : 0}%` }}
+                      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                    />
                   </div>
                   <LoanPayButton loanId={l.id} suggested={remaining} onSubmit={addLoanPayment} />
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </Stagger>
         )}
       </div>
     </div>
