@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Tag, Inbox, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Tag, PackagePlus, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
 const allNavItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
   { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
-  { to: "/stock", icon: Inbox, label: "Entrada", adminOnly: true, color: "#85B7EB" },
+  { to: "/stock", icon: PackagePlus, label: "Entrada", adminOnly: true, color: "#85B7EB" },
   { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
   { to: "/sales", icon: Receipt, label: "Vendas", adminOnly: false, color: "#5DCAA5" },
   { to: "/expenses", icon: FileText, label: "Despesas", adminOnly: true, color: "#EF9F27" },
@@ -88,7 +88,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon
                     size={18}
-                    style={!isActive ? { color: item.color } : undefined}
+                    className={cn(isActive ? "" : "text-foreground")}
+                    style={isActive ? { color: item.color } : undefined}
                   />
                   {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
                 </motion.span>
@@ -154,7 +155,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     >
                       <item.icon
                         size={18}
-                        style={!isActive ? { color: item.color } : undefined}
+                        className={cn(isActive ? "" : "text-foreground")}
+                        style={isActive ? { color: item.color } : undefined}
                       />
                       <span>{item.label}</span>
                     </NavLink>
@@ -207,7 +209,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon
                     size={20}
-                    style={!isActive ? { color: item.color } : undefined}
+                    className={cn(isActive ? "" : "text-foreground")}
+                    style={isActive ? { color: item.color } : undefined}
                   />
                   <span>{item.label}</span>
                 </motion.span>
