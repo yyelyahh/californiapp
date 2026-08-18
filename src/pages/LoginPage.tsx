@@ -34,7 +34,6 @@ export default function LoginPage() {
           <h1 className="text-4xl font-bold tracking-tight mb-1 text-rgb-cascade">
             California
           </h1>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest">Contabilidade · Acesso restrito</p>
         </motion.div>
 
         <Card className="glass-card">
@@ -89,9 +88,6 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-[10px] text-muted-foreground mt-6 uppercase tracking-widest">
-          California Contabilidade
-        </p>
       </motion.div>
     </div>
   );
