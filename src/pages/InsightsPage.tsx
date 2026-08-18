@@ -16,6 +16,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import { listItem } from "@/lib/motion";
 
 type Period = "month" | "lastMonth" | "custom";
 type OpenCard = null | "lowStock" | "topSold" | "topProfit" | "turnover";
@@ -256,7 +259,7 @@ export default function InsightsPage() {
       </div>
 
       {/* Cards */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <Stagger className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <InsightCard
           icon={<AlertTriangle size={16} />}
           tone={lowStockModels.length > 0 ? "destructive" : "muted"}
@@ -289,7 +292,7 @@ export default function InsightsPage() {
           hint={bestTurn ? `giro ${fmtRatio(bestTurn.ratio)} · ${bestTurn.sold} un vendidas` : "Sem giro no período"}
           onClick={() => setOpenCard("turnover")}
         />
-      </div>
+      </Stagger>
 
       {/* Tendências */}
       <div className="rounded-xl border border-border bg-card/40 p-4">
@@ -548,7 +551,11 @@ function InsightCard({
     destructive: "text-destructive",
   }[tone];
   return (
-    <button
+    <motion.button
+      variants={listItem}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       onClick={onClick}
       className="text-left rounded-xl border border-border bg-card/60 px-4 py-3.5 hover:bg-card hover:border-border/80 transition-colors group"
     >
@@ -558,6 +565,6 @@ function InsightCard({
       </div>
       <p className={cn("mt-2 text-xl font-bold tracking-tight truncate", toneClass)}>{value}</p>
       <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2">{hint}</p>
-    </button>
+    </motion.button>
   );
 }
