@@ -223,7 +223,7 @@ export default function ExpensesPage() {
                 </motion.tr>
               ))}
               </AnimatePresence>
-            </tbody>
+            </motion.tbody>
           </table>
         </div>
       )}
