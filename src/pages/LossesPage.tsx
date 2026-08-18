@@ -17,13 +17,14 @@ function formatCurrency(v: number) {
 }
 
 export default function LossesPage() {
-  const { products, stockLosses, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue } = useStore();
+  const { products, stockLosses, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue, sellers, productAssignments } = useStore();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [reason, setReason] = useState("");
   const [date, setDate] = useState(todayDateString());
+  const [sellerId, setSellerId] = useState("estoque");
   const [submitting, setSubmitting] = useState(false);
 
   const selectedProduct = products.find(p => p.id === productId);
@@ -37,7 +38,7 @@ export default function LossesPage() {
   const sortedLosses = useMemo(() => [...stockLosses].sort((a, b) => b.date.localeCompare(a.date)), [stockLosses]);
 
   const reset = () => {
-    setProductId(""); setQuantity("1"); setReason(""); setDate(todayDateString());
+    setProductId(""); setQuantity("1"); setReason(""); setDate(todayDateString()); setSellerId("estoque");
   };
 
   const handleSubmit = async () => {
@@ -47,6 +48,7 @@ export default function LossesPage() {
       productId,
       quantity: Number(quantity),
       reason: reason || undefined,
+      sellerId: sellerId === "estoque" ? undefined : sellerId,
       date: localDateToISO(date),
     });
     setSubmitting(false);
@@ -94,6 +96,26 @@ export default function LossesPage() {
               </div>
 
               <div className="space-y-1.5">
+                <Label>Origem da perda</Label>
+                <Select value={sellerId} onValueChange={setSellerId}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="estoque">Estoque interno</SelectItem>
+                    {sellers.map(s => {
+                      const held = productAssignments
+                        .filter(a => a.sellerId === s.id && a.productId === productId)
+                        .reduce((sum, a) => sum + a.quantity, 0);
+                      return (
+                        <SelectItem key={s.id} value={s.id} disabled={!!productId && held <= 0}>
+                          {s.name}{productId ? ` (${held} un.)` : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
                 <Label>Motivo</Label>
                 <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: quebrado, vencido, extraviado" />
               </div>
@@ -137,7 +159,7 @@ export default function LossesPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{getProductName(l.productId)}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {formatDateBR(l.date)}{l.reason ? ` · ${l.reason}` : ""}
+                  {formatDateBR(l.date)}{l.sellerId ? ` · ${sellers.find(s => s.id === l.sellerId)?.name ?? "Vendedor"}` : " · Estoque interno"}{l.reason ? ` · ${l.reason}` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-5 text-sm shrink-0">

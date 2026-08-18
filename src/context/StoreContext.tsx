@@ -355,6 +355,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     id: r.id, productId: r.product_id, quantity: r.quantity,
     unitCost: Number(r.unit_cost), totalCost: Number(r.total_cost),
     reason: r.reason || undefined, date: r.date,
+    sellerId: r.seller_id || undefined,
   });
 
   const mapExpense = (r: any): Expense => ({
@@ -659,18 +660,56 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const product = products.find(p => p.id === l.productId);
     if (!product) { toast.error("Produto não encontrado"); return; }
     if (product.stock < l.quantity) { toast.error("Quantidade maior que o estoque disponível"); return; }
+
+    // Se a perda ocorreu com um vendedor, valida e baixa também da atribuição dele
+    let sellerAssignmentRows: any[] = [];
+    if (l.sellerId) {
+      const { data: assignmentRows, error: assignmentError } = await supabase
+        .from("product_assignments")
+        .select("*")
+        .eq("seller_id", l.sellerId)
+        .eq("product_id", l.productId)
+        .order("created_at", { ascending: true });
+      if (assignmentError) { toast.error("Erro ao verificar estoque do vendedor"); return; }
+      sellerAssignmentRows = assignmentRows ?? [];
+      const available = sellerAssignmentRows.reduce((sum, a) => sum + Number(a.quantity || 0), 0);
+      if (available < l.quantity) {
+        toast.error(`Vendedor possui apenas ${available} unidade(s) deste produto`);
+        return;
+      }
+    }
+
     const unitCost = l.unitCost ?? product.purchasePrice;
     const totalCost = unitCost * l.quantity;
     const { data, error } = await supabase.from("stock_losses" as any).insert({
       product_id: l.productId, quantity: l.quantity,
       unit_cost: unitCost, total_cost: totalCost,
       reason: l.reason, date: l.date,
+      seller_id: l.sellerId ?? null,
     }).select().single();
     if (error) { toast.error("Erro ao registrar perda"); return; }
     setStockLosses(prev => [...prev, mapStockLoss(data)]);
     const newStock = Math.max(0, product.stock - l.quantity);
     await supabase.from("products").update({ stock: newStock }).eq("id", l.productId);
     setProducts(prev => prev.map(p => p.id === l.productId ? { ...p, stock: newStock } : p));
+
+    if (l.sellerId) {
+      let remaining = l.quantity;
+      for (const assignment of sellerAssignmentRows) {
+        if (remaining <= 0) break;
+        const currentQty = Number(assignment.quantity || 0);
+        if (currentQty <= remaining) {
+          await supabase.from("product_assignments").delete().eq("id", assignment.id);
+          remaining -= currentQty;
+        } else {
+          await supabase.from("product_assignments").update({ quantity: currentQty - remaining }).eq("id", assignment.id);
+          remaining = 0;
+        }
+      }
+      const { data: refreshed } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
+      if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
+    }
+
     toast.success("Perda registrada");
   }, [products]);
 
@@ -685,6 +724,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const newStock = product.stock + loss.quantity;
         await supabase.from("products").update({ stock: newStock }).eq("id", loss.productId);
         setProducts(prev => prev.map(p => p.id === loss.productId ? { ...p, stock: newStock } : p));
+      }
+      // Devolve a unidade para o vendedor, se a perda estava vinculada a ele
+      if (loss.sellerId) {
+        const { data: existing } = await supabase
+          .from("product_assignments")
+          .select("*")
+          .eq("seller_id", loss.sellerId)
+          .eq("product_id", loss.productId)
+          .order("created_at", { ascending: true });
+        if (existing && existing.length > 0) {
+          await supabase.from("product_assignments")
+            .update({ quantity: Number(existing[0].quantity || 0) + loss.quantity })
+            .eq("id", existing[0].id);
+        } else {
+          await supabase.from("product_assignments").insert({
+            seller_id: loss.sellerId, product_id: loss.productId, quantity: loss.quantity,
+          });
+        }
+        const { data: refreshed } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
+        if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
       }
     }
   }, [stockLosses, products]);

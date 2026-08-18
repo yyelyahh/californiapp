@@ -735,6 +735,7 @@ export type Database = {
           product_id: string
           quantity: number
           reason: string | null
+          seller_id: string | null
           total_cost: number
           unit_cost: number
         }
@@ -745,6 +746,7 @@ export type Database = {
           product_id: string
           quantity: number
           reason?: string | null
+          seller_id?: string | null
           total_cost?: number
           unit_cost?: number
         }
@@ -755,6 +757,7 @@ export type Database = {
           product_id?: string
           quantity?: number
           reason?: string | null
+          seller_id?: string | null
           total_cost?: number
           unit_cost?: number
         }
@@ -764,6 +767,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_losses_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
             referencedColumns: ["id"]
           },
         ]
