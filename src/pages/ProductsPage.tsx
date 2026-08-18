@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import AddProductDialog from "@/components/AddProductDialog";
 import { cn } from "@/lib/utils";
+import { StaggerAuto } from "@/components/motion/Stagger";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -310,12 +311,12 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* KPIs */}
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+      <StaggerAuto className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <Kpi icon={DollarSign} label="Investido" value={formatCurrency(totals.invested)} />
         <Kpi icon={TrendingUp} label="Potencial" value={formatCurrency(totals.saleValue)} />
         <Kpi icon={TrendingUp} label="Lucro previsto" value={formatCurrency(totals.profit)} tone={totals.profit >= 0 ? "income" : "destructive"} />
         <Kpi icon={Package} label="Estoque" value={`${totals.stock} un.`} />
-      </div>
+      </StaggerAuto>
 
       {/* Toolbar */}
       <div className="rounded-xl border border-border bg-card/40 px-3 py-2.5">

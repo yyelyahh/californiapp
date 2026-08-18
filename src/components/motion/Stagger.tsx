@@ -50,7 +50,7 @@ export function StaggerAuto({
     <motion.div variants={stagger(gap)} initial="hidden" animate="visible" {...props}>
       {Children.toArray(children).map((child, i) =>
         i < max ? (
-          <motion.div key={i} variants={listItem} className="contents">
+          <motion.div key={i} variants={listItem}>
             {child}
           </motion.div>
         ) : (

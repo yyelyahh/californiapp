@@ -19,6 +19,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { StaggerAuto } from "@/components/motion/Stagger";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import {
@@ -484,7 +485,7 @@ export default function CommissionsPage() {
       </div>
 
       {/* KPIs — 3 métricas principais */}
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
+      <StaggerAuto className="grid gap-2 grid-cols-1 sm:grid-cols-3">
         <KPI
           icon={<TrendingUp size={14} />}
           label="Lucro líquido no período"

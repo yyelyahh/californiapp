@@ -11,6 +11,7 @@ import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils"
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { StaggerAuto } from "@/components/motion/Stagger";
 import { useConfirm } from "@/components/ConfirmProvider";
 import BatchSaleForm from "@/components/BatchSaleForm";
 
@@ -604,7 +605,7 @@ export default function SalesPage() {
 
             <TabsContent value="vendas" className="mt-0 space-y-4">
               {/* Métricas compactas */}
-              <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+              <StaggerAuto className="grid gap-2 grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
                   <p className="mt-0.5 text-lg font-semibold mono">{sortedSales.length}</p>
@@ -622,7 +623,7 @@ export default function SalesPage() {
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
                   <p className={cn("mt-0.5 text-lg font-semibold mono", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
                 </div>
-              </div>
+              </StaggerAuto>
 
               {/* Toolbar de filtros */}
               <div className="rounded-xl border border-border bg-card/40 px-3 py-2.5 space-y-2">

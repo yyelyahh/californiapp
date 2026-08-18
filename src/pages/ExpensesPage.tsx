@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { StaggerAuto } from "@/components/motion/Stagger";
 import { useConfirm } from "@/components/ConfirmProvider";
 
 const categories = ["Frete", "Embalagem", "Marketing", "Aluguel", "Outros"];
@@ -132,7 +133,7 @@ export default function ExpensesPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+      <StaggerAuto className="grid gap-2 grid-cols-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium"><Receipt size={11} /> Lançamentos</div>
           <p className="mt-0.5 text-lg font-semibold mono">{totals.count}</p>
@@ -147,7 +148,7 @@ export default function ExpensesPage() {
             {totals.topCat ? <>{totals.topCat[0]} <span className="text-muted-foreground mono text-xs ml-1">{formatCurrency(totals.topCat[1])}</span></> : <span className="text-muted-foreground">—</span>}
           </p>
         </div>
-      </div>
+      </StaggerAuto>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
