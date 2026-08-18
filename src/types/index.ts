@@ -37,7 +37,9 @@ export interface StockLoss {
   unitCost: number;
   totalCost: number;
   reason?: string;
+  sellerId?: string;
   date: string;
+
 }
 
 export interface Sale {
