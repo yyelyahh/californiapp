@@ -660,7 +660,6 @@ export default function CommissionsPage() {
         <div className="flex items-end justify-between gap-2 border-b border-border pb-2">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">Retiradas dos Sócios</h2>
-            <p className="text-[11px] text-muted-foreground">Registre a retirada de cada sócio no período</p>
           </div>
         </div>
         {periodMetrics.perPartner.length === 0 ? (
@@ -928,7 +927,6 @@ export default function CommissionsPage() {
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Atribuir Estoque</SheetTitle>
-            <p className="text-xs text-muted-foreground">Selecione vendedor e produtos a consignar</p>
           </SheetHeader>
           <form onSubmit={handleAssign} className="flex-1 px-6 py-5 space-y-5">
             <div className="space-y-1.5">
@@ -1011,7 +1009,6 @@ export default function CommissionsPage() {
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle className="text-base font-semibold">Transferir Estoque</SheetTitle>
-            <p className="text-xs text-muted-foreground">Mova itens consignados de um vendedor para outro</p>
           </SheetHeader>
           <div className="mt-4 space-y-4">
             <div className="space-y-1.5">
@@ -1125,7 +1122,6 @@ function ProfitDistribution({ operatingProfit, stockReinvestment, freeCash, pend
       <div className="flex items-center justify-between mb-4 gap-2">
         <div>
           <h2 className="text-sm font-semibold tracking-tight">Distribuição do Lucro</h2>
-          <p className="text-[11px] text-muted-foreground">Do lucro operacional ao caixa disponível</p>
         </div>
       </div>
       <div className="space-y-1.5 text-[13px] max-w-xl">

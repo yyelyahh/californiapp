@@ -335,7 +335,6 @@ export default function InsightsPage() {
         <div className="flex items-center gap-2 mb-3">
           <BarChart3 size={14} className="text-muted-foreground" />
           <h2 className="text-sm font-semibold tracking-tight">Participação nas vendas</h2>
-          <span className="text-[11px] text-muted-foreground">por modelo · top 10</span>
         </div>
         {participation.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sem vendas no período.</p>

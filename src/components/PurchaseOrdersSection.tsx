@@ -259,7 +259,6 @@ export default function PurchaseOrdersSection() {
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Nova compra</SheetTitle>
-            <p className="text-xs text-muted-foreground">Somente marca, modelo e quantidade esperada</p>
           </SheetHeader>
           <div className="flex-1 px-6 py-5 space-y-4">
             <div className="grid grid-cols-2 gap-3">
