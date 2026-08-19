@@ -191,28 +191,15 @@ export default function SalesPage() {
       {!isSeller && (
         <div>
           <Label className="mb-2 block">Tipo de Registro</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, type: "venda" }))}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium border transition",
-                form.type === "venda"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-              )}
-            >Venda Normal</button>
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, type: "retirada_funcionario" }))}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium border transition",
-                form.type === "retirada_funcionario"
-                  ? "bg-warning/20 text-warning border-warning/50"
-                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-              )}
-            >Retirada Funcionário</button>
-          </div>
+          <SegmentedToggle
+            value={form.type}
+            onChange={(v) => setForm(f => ({ ...f, type: v }))}
+            options={[
+              { id: "venda" as const, label: "Venda Normal" },
+              { id: "retirada_funcionario" as const, label: "Retirada Funcionário" },
+            ]}
+          />
+
           {isRetirada && (
             <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning">
               <AlertCircle size={14} className="mt-0.5 shrink-0" />
