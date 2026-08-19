@@ -463,7 +463,6 @@ export default function CommissionsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Distribuição</h1>
-          <p className="text-xs text-muted-foreground">Comissões, consumos, pagamentos e retiradas dos sócios · {label}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>

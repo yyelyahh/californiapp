@@ -206,7 +206,6 @@ export default function PurchaseOrdersSection() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold">Compras aguardando recebimento</h2>
-          <p className="text-[11px] text-muted-foreground">Registro do que está previsto para chegar — não altera o estoque</p>
         </div>
         <div className="flex items-center gap-1.5">
           {received.length > 0 && (
@@ -242,7 +241,6 @@ export default function PurchaseOrdersSection() {
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Histórico de recebimentos</SheetTitle>
-            <p className="text-xs text-muted-foreground">Compras já recebidas e lançadas no estoque</p>
           </SheetHeader>
           <div className="flex-1 px-6 py-5 space-y-2">
             {received.length === 0 ? (
@@ -351,7 +349,6 @@ export default function PurchaseOrdersSection() {
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Receber compra #{receiving?.number}</SheetTitle>
-            <p className="text-xs text-muted-foreground">Informe os sabores recebidos</p>
           </SheetHeader>
           <div className="flex-1 px-6 py-5 space-y-5">
             <div className="grid grid-cols-2 gap-3">

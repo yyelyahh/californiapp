@@ -235,9 +235,6 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-xs text-muted-foreground">
-            {isGeral ? "Visão geral consolidada" : `Visão de ${filterLabel}`}
-          </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="outline" size="sm" onClick={handleExport} className="h-9 gap-1.5 text-xs">

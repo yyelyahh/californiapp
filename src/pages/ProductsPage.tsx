@@ -167,7 +167,6 @@ export default function ProductsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Produtos</h1>
-          <p className="text-xs text-muted-foreground">Catálogo de pods descartáveis · {products.length} itens</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="h-9 gap-1.5">

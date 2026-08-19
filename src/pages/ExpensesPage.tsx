@@ -98,7 +98,6 @@ export default function ExpensesPage() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Despesas</h1>
-          <p className="text-xs text-muted-foreground">Registre custos operacionais</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>

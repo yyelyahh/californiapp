@@ -61,7 +61,6 @@ export default function LossesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Perdas de Estoque</h1>
-          <p className="text-muted-foreground text-sm">Registrar produtos quebrados, vencidos ou extraviados</p>
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
           <DialogTrigger asChild>

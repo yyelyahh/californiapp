@@ -219,7 +219,6 @@ export default function StockEntryPage() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Entrada de Estoque</h1>
-          <p className="text-xs text-muted-foreground">Registrar compras e reposição de pods</p>
         </div>
         <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
           <SheetTrigger asChild>
@@ -228,7 +227,6 @@ export default function StockEntryPage() {
           <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
             <SheetHeader className="px-6 py-4 border-b border-border">
               <SheetTitle className="text-base font-semibold">Nova Entrada de Estoque</SheetTitle>
-              <p className="text-xs text-muted-foreground">Registre múltiplos sabores de uma vez</p>
             </SheetHeader>
 
             <div className="flex-1 px-6 py-5 space-y-5">

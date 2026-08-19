@@ -235,7 +235,6 @@ export default function InsightsPage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
-          <p className="text-xs text-muted-foreground">Indicadores do negócio · {label}</p>
         </div>
       </header>
 
