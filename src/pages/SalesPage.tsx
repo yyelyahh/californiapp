@@ -250,7 +250,8 @@ export default function SalesPage() {
             })}
           </SelectContent>
         </Select>
-      </div>
+      </motion.div>
+
       {selectedProduct && !editingSale && (
         <p className="text-xs text-muted-foreground">Disponível: <span className="mono font-semibold text-foreground">{effectiveSellerId ? getAssignedQuantity(selectedProduct.id) : selectedProduct.stock}</span></p>
       )}
