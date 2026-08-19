@@ -284,24 +284,18 @@ export default function SalesPage() {
         return (
           <div>
             <Label className="mb-2 block">Forma de Pagamento</Label>
-            <div className={cn("grid gap-2", isPending ? "grid-cols-2" : "grid-cols-2")}>
-              {opts.map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={opt.disabled}
-                  onClick={() => !opt.disabled && setForm(f => ({ ...f, paymentMethod: opt.id }))}
-                  className={cn(
-                    "px-3 py-2 rounded-md text-sm font-medium border transition text-left",
-                    form.paymentMethod === opt.id
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-secondary text-muted-foreground border-border hover:text-foreground",
-                    opt.disabled && "opacity-40 cursor-not-allowed hover:text-muted-foreground"
-                  )}
-                  title={opt.disabled ? "Selecione um vendedor para usar esta opção" : undefined}
-                >{opt.label}</button>
-              ))}
-            </div>
+            <SegmentedToggle
+              value={form.paymentMethod}
+              onChange={(v) => setForm(f => ({ ...f, paymentMethod: v }))}
+              align="left"
+              options={opts.map(o => ({
+                id: o.id,
+                label: o.label,
+                disabled: o.disabled,
+                title: o.disabled ? "Selecione um vendedor para usar esta opção" : undefined,
+              }))}
+            />
+
           </div>
         );
       })()}
