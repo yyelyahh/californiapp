@@ -365,7 +365,6 @@ export default function SalesPage() {
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
-            <p className="text-xs text-muted-foreground">Registre suas vendas e acompanhe o histórico</p>
           </div>
           <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
             <SheetTrigger asChild>
@@ -575,7 +574,6 @@ export default function SalesPage() {
               <div className="flex flex-col gap-3">
                 <div>
                   <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
-                  <p className="text-xs text-muted-foreground">Registrar saídas, vendas e retiradas</p>
                 </div>
                 <TabsList className="bg-transparent p-0 h-auto gap-4 border-0">
                   <TabsTrigger

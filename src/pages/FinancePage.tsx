@@ -71,7 +71,6 @@ export default function FinancePage() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Financeiro</h1>
-          <p className="text-xs text-muted-foreground">Aportes de sócios e empréstimos</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={contribOpen} onOpenChange={setContribOpen}>

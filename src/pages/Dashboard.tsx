@@ -235,9 +235,6 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-xs text-muted-foreground">
-            {isGeral ? "Visão geral consolidada" : `Visão de ${filterLabel}`}
-          </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="outline" size="sm" onClick={handleExport} className="h-9 gap-1.5 text-xs">
@@ -304,7 +301,6 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
             <div className="min-w-0">
               <h2 className="text-sm font-semibold tracking-tight">Desempenho Financeiro</h2>
-              <p className="text-[11px] text-muted-foreground">Receita vs Lucro Líquido · últimos 6 meses</p>
             </div>
             <div className="flex items-center gap-4 text-[11px]">
               <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-income" /> Receita</span>
