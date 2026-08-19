@@ -321,7 +321,7 @@ export default function SalesPage() {
       })()}
       {Number(form.quantity) > 0 && Number(form.unitPrice) > 0 && (
         <div className={cn("rounded-md p-3 space-y-1 text-sm", isRetirada ? "bg-warning/10" : "bg-secondary/50")}>
-          <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><span className="font-semibold">{formatCurrency(Number(form.quantity) * Number(form.unitPrice))}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Total:</span><AnimatedNumber className="font-semibold" value={Number(form.quantity) * Number(form.unitPrice)} format={formatCurrency} duration={0.25} /></div>
           {!isRetirada && Number(form.installments) > 1 && (
             <div className="flex justify-between"><span className="text-muted-foreground">Valor por parcela:</span><span>{formatCurrency((Number(form.quantity) * Number(form.unitPrice)) / Number(form.installments))}</span></div>
           )}
