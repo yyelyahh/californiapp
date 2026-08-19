@@ -224,8 +224,14 @@ export default function SalesPage() {
         </div>
       )}
 
-      <div>
+      <motion.div
+        key={!isSeller && !form.sellerId ? "produto-off" : "produto-on"}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      >
         <Label>Produto</Label>
+
         <Select value={form.productId} onValueChange={v => {
           const prod = products.find(p => p.id === v);
           setForm(f => ({ ...f, productId: v, unitPrice: prod?.salePrice?.toString() || f.unitPrice }));
