@@ -55,7 +55,7 @@ export default function ProductsPage() {
     return Array.from(groups.entries())
       .map(([brand, prods]) => ({
         brand,
-        products: prods,
+        products: prods.sort((a, b) => a.salePrice - b.salePrice),
         totalInvested: prods.reduce((s, p) => s + p.purchasePrice * p.stock, 0),
         totalSaleValue: prods.reduce((s, p) => s + p.salePrice * p.stock, 0),
         totalProfit: prods.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
