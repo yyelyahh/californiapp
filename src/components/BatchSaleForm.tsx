@@ -314,19 +314,20 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       </div>
 
       {validLines.length > 0 && (
-        <div className={cn("rounded-xl p-3 space-y-1 text-sm border", type === "retirada_funcionario" ? "bg-warning/10 border-warning/20" : "bg-secondary/50 border-border")}>
+        <div className={cn("rounded-xl p-3 space-y-1 text-sm border", type === "retirada_funcionario" ? "bg-warning/10 border-warning/20" : "bg-secondary/50 border-border/60")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Itens</span><span className="mono">{validLines.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold mono">{formatCurrency(total)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Total</span><AnimatedNumber className="font-semibold mono" value={total} format={formatCurrency} duration={0.25} /></div>
           {type === "venda" && (
             <>
-              <div className="flex justify-between"><span className="text-muted-foreground">Recebido</span><span className="mono text-income">{formatCurrency(received)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Falta receber</span><span className="mono text-warning">{formatCurrency(Math.max(0, total - received))}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Recebido</span><AnimatedNumber className="mono text-income" value={received} format={formatCurrency} duration={0.25} /></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Falta receber</span><AnimatedNumber className="mono text-warning" value={Math.max(0, total - received)} format={formatCurrency} duration={0.25} /></div>
             </>
           )}
           {type === "retirada_funcionario" && (
-            <div className="flex justify-between"><span className="text-warning">Saldo devedor do funcionário</span><span className="font-semibold mono text-warning">{formatCurrency(total)}</span></div>
+            <div className="flex justify-between"><span className="text-warning">Saldo devedor do funcionário</span><AnimatedNumber className="font-semibold mono text-warning" value={total} format={formatCurrency} duration={0.25} /></div>
           )}
         </div>
+
       )}
 
       {error && (
