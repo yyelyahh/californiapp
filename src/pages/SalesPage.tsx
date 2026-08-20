@@ -16,6 +16,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { listItem, stagger } from "@/lib/motion";
 import { useConfirm } from "@/components/ConfirmProvider";
 import BatchSaleForm from "@/components/BatchSaleForm";
+import SegmentedToggle from "@/components/motion/SegmentedToggle";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -38,6 +40,7 @@ export default function SalesPage() {
   const isSeller = role === "seller";
 
   const [open, setOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<"unica" | "lote">("unica");
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -364,11 +367,16 @@ export default function SalesPage() {
                 <SheetDescription>{editingSale ? "Ajuste os dados da venda." : "Registre uma venda ou várias de uma vez."}</SheetDescription>
               </SheetHeader>
               {editingSale ? saleForm : (
-                <Tabs defaultValue="unica" className="space-y-4">
-                  <TabsList className="grid grid-cols-2 w-full">
-                    <TabsTrigger value="unica">Venda única</TabsTrigger>
-                    <TabsTrigger value="lote">Em lote</TabsTrigger>
-                  </TabsList>
+                <Tabs value={modalTab} onValueChange={(v) => setModalTab(v as "unica" | "lote")} className="space-y-4">
+                  <SegmentedToggle
+                    value={modalTab}
+                    onChange={(v) => setModalTab(v)}
+                    options={[
+                      { id: "unica" as const, label: "Venda única" },
+                      { id: "lote" as const, label: "Em lote" },
+                    ]}
+                  />
+
                   <TabsContent value="unica" className="mt-0">{saleForm}</TabsContent>
                   <TabsContent value="lote" className="mt-0"><BatchSaleForm onDone={() => setOpen(false)} /></TabsContent>
                 </Tabs>
@@ -584,11 +592,16 @@ export default function SalesPage() {
                     <SheetDescription>{editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}</SheetDescription>
                   </SheetHeader>
                   {editingSale ? saleForm : (
-                    <Tabs defaultValue="unica" className="space-y-4">
-                      <TabsList className="grid grid-cols-2 w-full">
-                        <TabsTrigger value="unica">Registro único</TabsTrigger>
-                        <TabsTrigger value="lote">Em lote</TabsTrigger>
-                      </TabsList>
+                    <Tabs value={modalTab} onValueChange={(v) => setModalTab(v as "unica" | "lote")} className="space-y-4">
+                      <SegmentedToggle
+                        value={modalTab}
+                        onChange={(v) => setModalTab(v)}
+                        options={[
+                          { id: "unica" as const, label: "Registro único" },
+                          { id: "lote" as const, label: "Em lote" },
+                        ]}
+                      />
+
                       <TabsContent value="unica" className="mt-0">{saleForm}</TabsContent>
                       <TabsContent value="lote" className="mt-0"><BatchSaleForm onDone={() => setOpen(false)} /></TabsContent>
                     </Tabs>

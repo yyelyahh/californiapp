@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, AlertCircle, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayDateString, localDateToISO } from "@/lib/date-utils";
+import { AnimatePresence, motion } from "motion/react";
+import SegmentedToggle from "@/components/motion/SegmentedToggle";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
 
 type PaymentMethodValue =
   | "pix"
@@ -151,25 +154,16 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {!isSeller && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setType("venda")}
-            className={cn(
-              "px-3 py-2 rounded-lg text-sm font-medium border transition",
-              type === "venda" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-            )}
-          >Vendas</button>
-          <button
-            type="button"
-            onClick={() => setType("retirada_funcionario")}
-            className={cn(
-              "px-3 py-2 rounded-lg text-sm font-medium border transition",
-              type === "retirada_funcionario" ? "bg-warning/20 text-warning border-warning/50" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-            )}
-          >Retiradas</button>
-        </div>
+        <SegmentedToggle
+          value={type}
+          onChange={(v) => setType(v)}
+          options={[
+            { id: "venda" as const, label: "Vendas" },
+            { id: "retirada_funcionario" as const, label: "Retiradas" },
+          ]}
+        />
       )}
+
 
       <div className="grid sm:grid-cols-2 gap-3">
         {!isSeller && (
@@ -202,11 +196,21 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
         </div>
 
         <div className="space-y-2">
+          <AnimatePresence initial={false}>
           {lines.map((l, idx) => {
             const disponivel = l.productId ? availableQty(l.productId) : null;
             const excede = l.productId && Number(l.quantity) > (disponivel ?? 0);
             return (
-              <div key={l.key} className="rounded-xl border border-border bg-card/40 p-2.5 space-y-2">
+              <motion.div
+                key={l.key}
+                layout
+                initial={{ opacity: 0, y: 8, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="overflow-hidden"
+              >
+              <div className="rounded-xl border border-border/60 bg-card/40 p-2.5 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-semibold text-muted-foreground w-4 shrink-0 mono">{idx + 1}</span>
                   <Select
@@ -231,6 +235,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    aria-label="Remover item"
                     className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={() => setLines(ls => (ls.length === 1 ? [newLine()] : ls.filter(x => x.key !== l.key)))}
                   ><Trash2 size={14} /></Button>
@@ -259,65 +264,50 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     />
                   </div>
                   {type === "venda" && (
-                    <button
+                    <motion.button
                       type="button"
+                      key={l.paid ? "paid" : "unpaid"}
+                      initial={{ scale: 0.85, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                       onClick={() => setLine(l.key, { paid: !l.paid })}
                       className={cn(
                         "px-2 py-1 rounded-full text-[10px] font-medium border transition",
                         l.paid ? "bg-income/10 text-income border-income/30" : "bg-warning/10 text-warning border-warning/30"
                       )}
-                    >{l.paid ? "Recebido" : "A receber"}</button>
+                    >{l.paid ? "Recebido" : "A receber"}</motion.button>
                   )}
-                  <span className="ml-auto text-xs font-semibold mono">
-                    {formatCurrency(Number(l.quantity) * (Number(l.unitPrice) || 0))}
-                  </span>
+                  <AnimatedNumber
+                    className="ml-auto text-xs font-semibold mono"
+                    value={Number(l.quantity) * (Number(l.unitPrice) || 0)}
+                    format={formatCurrency}
+                    duration={0.25}
+                  />
                 </div>
                 {excede && (
                   <p className="pl-6 text-[11px] text-destructive">Disponível: {disponivel}</p>
                 )}
               </div>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
+
       </div>
 
       {type === "venda" && hasPaid && (
         <div>
           <Label className="mb-2 block text-xs">Forma de pagamento (itens recebidos)</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {paidOpts.map(o => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => setPaymentMethod(o.id)}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-sm font-medium border transition",
-                  paymentMethod === o.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-                )}
-              >{o.label}</button>
-            ))}
-          </div>
+          <SegmentedToggle value={paymentMethod} onChange={(v) => setPaymentMethod(v as PaymentMethodValue)} options={paidOpts} />
         </div>
       )}
 
       {type === "venda" && hasPending && (
         <div>
           <Label className="mb-2 block text-xs">Situação dos itens a receber</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {pendingOpts.map(o => (
-              <button
-                key={o.id}
-                type="button"
-                disabled={o.disabled}
-                onClick={() => setPendingMethod(o.id)}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-xs font-medium border transition text-left",
-                  pendingMethod === o.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground",
-                  o.disabled && "opacity-40 cursor-not-allowed"
-                )}
-              >{o.label}</button>
-            ))}
-          </div>
+          <SegmentedToggle value={pendingMethod} onChange={(v) => setPendingMethod(v as PaymentMethodValue)} align="left" options={pendingOpts} />
+
         </div>
       )}
 
@@ -327,19 +317,20 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       </div>
 
       {validLines.length > 0 && (
-        <div className={cn("rounded-xl p-3 space-y-1 text-sm border", type === "retirada_funcionario" ? "bg-warning/10 border-warning/20" : "bg-secondary/50 border-border")}>
+        <div className={cn("rounded-xl p-3 space-y-1 text-sm border", type === "retirada_funcionario" ? "bg-warning/10 border-warning/20" : "bg-secondary/50 border-border/60")}>
           <div className="flex justify-between"><span className="text-muted-foreground">Itens</span><span className="mono">{validLines.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold mono">{formatCurrency(total)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Total</span><AnimatedNumber className="font-semibold mono" value={total} format={formatCurrency} duration={0.25} /></div>
           {type === "venda" && (
             <>
-              <div className="flex justify-between"><span className="text-muted-foreground">Recebido</span><span className="mono text-income">{formatCurrency(received)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Falta receber</span><span className="mono text-warning">{formatCurrency(Math.max(0, total - received))}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Recebido</span><AnimatedNumber className="mono text-income" value={received} format={formatCurrency} duration={0.25} /></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Falta receber</span><AnimatedNumber className="mono text-warning" value={Math.max(0, total - received)} format={formatCurrency} duration={0.25} /></div>
             </>
           )}
           {type === "retirada_funcionario" && (
-            <div className="flex justify-between"><span className="text-warning">Saldo devedor do funcionário</span><span className="font-semibold mono text-warning">{formatCurrency(total)}</span></div>
+            <div className="flex justify-between"><span className="text-warning">Saldo devedor do funcionário</span><AnimatedNumber className="font-semibold mono text-warning" value={total} format={formatCurrency} duration={0.25} /></div>
           )}
         </div>
+
       )}
 
       {error && (
