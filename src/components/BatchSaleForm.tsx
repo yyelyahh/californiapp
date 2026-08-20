@@ -296,40 +296,15 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       {type === "venda" && hasPaid && (
         <div>
           <Label className="mb-2 block text-xs">Forma de pagamento (itens recebidos)</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {paidOpts.map(o => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => setPaymentMethod(o.id)}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-sm font-medium border transition",
-                  paymentMethod === o.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-                )}
-              >{o.label}</button>
-            ))}
-          </div>
+          <SegmentedToggle value={paymentMethod} onChange={setPaymentMethod} options={paidOpts} />
         </div>
       )}
 
       {type === "venda" && hasPending && (
         <div>
           <Label className="mb-2 block text-xs">Situação dos itens a receber</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {pendingOpts.map(o => (
-              <button
-                key={o.id}
-                type="button"
-                disabled={o.disabled}
-                onClick={() => setPendingMethod(o.id)}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-xs font-medium border transition text-left",
-                  pendingMethod === o.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground",
-                  o.disabled && "opacity-40 cursor-not-allowed"
-                )}
-              >{o.label}</button>
-            ))}
-          </div>
+          <SegmentedToggle value={pendingMethod} onChange={setPendingMethod} align="left" options={pendingOpts} />
+
         </div>
       )}
 
