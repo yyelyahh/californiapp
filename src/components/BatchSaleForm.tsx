@@ -299,14 +299,14 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       {type === "venda" && hasPaid && (
         <div>
           <Label className="mb-2 block text-xs">Forma de pagamento (itens recebidos)</Label>
-          <SegmentedToggle value={paymentMethod} onChange={setPaymentMethod} options={paidOpts} />
+          <SegmentedToggle value={paymentMethod} onChange={(v) => setPaymentMethod(v as PaymentMethodValue)} options={paidOpts} />
         </div>
       )}
 
       {type === "venda" && hasPending && (
         <div>
           <Label className="mb-2 block text-xs">Situação dos itens a receber</Label>
-          <SegmentedToggle value={pendingMethod} onChange={setPendingMethod} align="left" options={pendingOpts} />
+          <SegmentedToggle value={pendingMethod} onChange={(v) => setPendingMethod(v as PaymentMethodValue)} align="left" options={pendingOpts} />
 
         </div>
       )}
