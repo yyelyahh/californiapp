@@ -193,11 +193,21 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
         </div>
 
         <div className="space-y-2">
+          <AnimatePresence initial={false}>
           {lines.map((l, idx) => {
             const disponivel = l.productId ? availableQty(l.productId) : null;
             const excede = l.productId && Number(l.quantity) > (disponivel ?? 0);
             return (
-              <div key={l.key} className="rounded-xl border border-border bg-card/40 p-2.5 space-y-2">
+              <motion.div
+                key={l.key}
+                layout
+                initial={{ opacity: 0, y: 8, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="overflow-hidden"
+              >
+              <div className="rounded-xl border border-border/60 bg-card/40 p-2.5 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-semibold text-muted-foreground w-4 shrink-0 mono">{idx + 1}</span>
                   <Select
@@ -222,6 +232,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    aria-label="Remover item"
                     className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={() => setLines(ls => (ls.length === 1 ? [newLine()] : ls.filter(x => x.key !== l.key)))}
                   ><Trash2 size={14} /></Button>
@@ -250,26 +261,36 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     />
                   </div>
                   {type === "venda" && (
-                    <button
+                    <motion.button
                       type="button"
+                      key={l.paid ? "paid" : "unpaid"}
+                      initial={{ scale: 0.85, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                       onClick={() => setLine(l.key, { paid: !l.paid })}
                       className={cn(
                         "px-2 py-1 rounded-full text-[10px] font-medium border transition",
                         l.paid ? "bg-income/10 text-income border-income/30" : "bg-warning/10 text-warning border-warning/30"
                       )}
-                    >{l.paid ? "Recebido" : "A receber"}</button>
+                    >{l.paid ? "Recebido" : "A receber"}</motion.button>
                   )}
-                  <span className="ml-auto text-xs font-semibold mono">
-                    {formatCurrency(Number(l.quantity) * (Number(l.unitPrice) || 0))}
-                  </span>
+                  <AnimatedNumber
+                    className="ml-auto text-xs font-semibold mono"
+                    value={Number(l.quantity) * (Number(l.unitPrice) || 0)}
+                    format={formatCurrency}
+                    duration={0.25}
+                  />
                 </div>
                 {excede && (
                   <p className="pl-6 text-[11px] text-destructive">Disponível: {disponivel}</p>
                 )}
               </div>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
+
       </div>
 
       {type === "venda" && hasPaid && (
