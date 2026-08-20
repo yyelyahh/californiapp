@@ -40,6 +40,7 @@ export default function SalesPage() {
   const isSeller = role === "seller";
 
   const [open, setOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<"unica" | "lote">("unica");
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
