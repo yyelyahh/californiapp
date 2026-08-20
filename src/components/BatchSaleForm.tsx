@@ -151,25 +151,16 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {!isSeller && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setType("venda")}
-            className={cn(
-              "px-3 py-2 rounded-lg text-sm font-medium border transition",
-              type === "venda" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-            )}
-          >Vendas</button>
-          <button
-            type="button"
-            onClick={() => setType("retirada_funcionario")}
-            className={cn(
-              "px-3 py-2 rounded-lg text-sm font-medium border transition",
-              type === "retirada_funcionario" ? "bg-warning/20 text-warning border-warning/50" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-            )}
-          >Retiradas</button>
-        </div>
+        <SegmentedToggle
+          value={type}
+          onChange={(v) => setType(v)}
+          options={[
+            { id: "venda" as const, label: "Vendas" },
+            { id: "retirada_funcionario" as const, label: "Retiradas" },
+          ]}
+        />
       )}
+
 
       <div className="grid sm:grid-cols-2 gap-3">
         {!isSeller && (
