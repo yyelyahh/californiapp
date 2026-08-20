@@ -16,6 +16,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { listItem, stagger } from "@/lib/motion";
 import { useConfirm } from "@/components/ConfirmProvider";
 import BatchSaleForm from "@/components/BatchSaleForm";
+import SegmentedToggle from "@/components/motion/SegmentedToggle";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
