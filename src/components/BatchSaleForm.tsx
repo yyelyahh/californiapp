@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, AlertCircle, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayDateString, localDateToISO } from "@/lib/date-utils";
+import { AnimatePresence, motion } from "motion/react";
+import SegmentedToggle from "@/components/motion/SegmentedToggle";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
 
 type PaymentMethodValue =
   | "pix"
