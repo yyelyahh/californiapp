@@ -1,8 +1,8 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, Package, Clock, Wallet, Percent, Boxes, Receipt, Download } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, Clock, Percent, Boxes, Receipt, Download, AlertTriangle, Sparkles, Trophy, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, subDays, startOfDay, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import { listItem, hoverLift } from "@/lib/motion";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
 
@@ -18,11 +19,16 @@ function formatCurrency(value: number) {
 }
 
 const GERAL = "geral";
+const LOW_STOCK_FALLBACK = 5;
 
 export default function Dashboard() {
   const store = useStore();
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
-  const inventoryAtCost = store.getInventoryCostValue();
+  // Valor do estoque a custo: soma do custo unitário × quantidade de cada produto.
+  const inventoryAtCost = useMemo(
+    () => store.products.reduce((s, p) => s + (p.purchasePrice || 0) * p.stock, 0),
+    [store.products],
+  );
 
   // Índice de produtos: evita varreduras O(n*m) dentro dos loops de vendas/entradas.
   const productMap = useMemo(
@@ -51,42 +57,124 @@ export default function Dashboard() {
 
   const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
 
+  const computeStats = useMemo(() => {
+    return (filterFn: (dateISO: string) => boolean) => {
+      const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
+      const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
+      const received = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+      const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
+
+      // CPV: custo dos produtos efetivamente vendidos
+      const cogs = salesInPeriod.reduce((sum, s) => {
+        const product = productMap.get(s.productId);
+        const cost = product?.purchasePrice ?? 0;
+        return sum + cost * s.quantity;
+      }, 0);
+
+      const grossProfit = revenue - cogs;
+      const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
+      const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
+      const netProfit = grossProfit - expenses;
+      const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+      // Reposição de estoque (investimento — exibido separadamente, NÃO reduz lucro)
+      const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
+
+      const ticket = salesInPeriod.length > 0 ? received / salesInPeriod.length : 0;
+
+      return { revenue, received, receivable, cogs, grossProfit, grossMargin, expenses, netProfit, netMargin, restock, ticket, salesCount: salesInPeriod.length, sales: salesInPeriod };
+    };
+  }, [store.sales, store.expenses, store.stockEntries, productMap]);
+
+  const intervalFor = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    const ref = new Date(y, m - 1, 15);
+    return { start: startOfMonth(ref), end: endOfMonth(ref) };
+  };
+
+  const isGeral = filter === GERAL;
+
   const periodStats = useMemo(() => {
-    let filterFn: (dateISO: string) => boolean;
-    if (filter === GERAL) {
-      filterFn = () => true;
-    } else {
-      const [y, m] = filter.split("-").map(Number);
-      const ref = new Date(y, m - 1, 15);
-      const start = startOfMonth(ref);
-      const end = endOfMonth(ref);
-      filterFn = (dateISO: string) => isWithinInterval(parseISO(dateISO), { start, end });
+    if (isGeral) return computeStats(() => true);
+    const interval = intervalFor(filter);
+    return computeStats((d) => isWithinInterval(parseISO(d), interval));
+  }, [filter, isGeral, computeStats]);
+
+  const prevStats = useMemo(() => {
+    if (isGeral) return null;
+    const [y, m] = filter.split("-").map(Number);
+    const prev = subMonths(new Date(y, m - 1, 15), 1);
+    const interval = { start: startOfMonth(prev), end: endOfMonth(prev) };
+    return { stats: computeStats((d) => isWithinInterval(parseISO(d), interval)), label: format(prev, "MMM", { locale: ptBR }) };
+  }, [filter, isGeral, computeStats]);
+
+  // Série diária dos últimos 14 dias (sparklines)
+  const dailySeries = useMemo(() => {
+    const days = Array.from({ length: 14 }, (_, i) => startOfDay(subDays(new Date(), 13 - i)));
+    return days.map(day => {
+      const daySales = store.sales.filter(s => s.type === "venda" && isSameDay(parseISO(s.date), day));
+      const revenue = daySales.reduce((sum, s) => sum + s.totalPrice, 0);
+      const received = daySales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+      const cogs = daySales.reduce((sum, s) => sum + (productMap.get(s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
+      const expenses = store.expenses.filter(e => isSameDay(parseISO(e.date), day)).reduce((sum, e) => sum + e.amount, 0);
+      return {
+        day,
+        revenue,
+        netProfit: revenue - cogs - expenses,
+        ticket: daySales.length ? received / daySales.length : 0,
+      };
+    });
+  }, [store.sales, store.expenses, productMap]);
+
+  // Top 5 produtos do período (por valor vendido)
+  const topProducts = useMemo(() => {
+    const map = new Map<string, { label: string; total: number; qty: number }>();
+    periodStats.sales.forEach(s => {
+      const p = productMap.get(s.productId);
+      const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
+      const cur = map.get(s.productId) ?? { label, total: 0, qty: 0 };
+      cur.total += s.totalPrice;
+      cur.qty += s.quantity;
+      map.set(s.productId, cur);
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [periodStats, productMap, store]);
+
+  // Insights automáticos
+  const insights = useMemo(() => {
+    const out: { icon: any; tone: string; text: string }[] = [];
+
+    const lowStock = store.products.filter(p => p.stock > 0 || true).filter(p => p.stock < (p.minStock && p.minStock > 0 ? p.minStock : LOW_STOCK_FALLBACK));
+    if (lowStock.length > 0) {
+      out.push({ icon: AlertTriangle, tone: "text-warning", text: `${lowStock.length} produto${lowStock.length > 1 ? "s" : ""} com estoque baixo` });
     }
 
-    const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
-    const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
-    const received = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
-    const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
+    const last7 = dailySeries.slice(7);
+    const prev7 = dailySeries.slice(0, 7);
+    const avg = (arr: typeof dailySeries) => {
+      const withSales = arr.filter(d => d.ticket > 0);
+      return withSales.length ? withSales.reduce((s, d) => s + d.ticket, 0) / withSales.length : 0;
+    };
+    const t1 = avg(last7);
+    const t0 = avg(prev7);
+    if (t0 > 0 && t1 > 0 && t1 < t0) {
+      const drop = ((t0 - t1) / t0) * 100;
+      if (drop >= 1) out.push({ icon: TrendingDown, tone: "text-destructive", text: `Ticket médio caiu ${drop.toFixed(0)}% na última semana` });
+    }
 
-    // CPV: custo dos produtos efetivamente vendidos
-    const cogs = salesInPeriod.reduce((sum, s) => {
-      const product = productMap.get(s.productId);
-      const cost = product?.purchasePrice ?? 0;
-      return sum + cost * s.quantity;
-    }, 0);
+    if (periodStats.sales.length > 0) {
+      const byWeekday = new Array(7).fill(0);
+      periodStats.sales.forEach(s => { byWeekday[parseISO(s.date).getDay()] += s.totalPrice; });
+      const best = byWeekday.indexOf(Math.max(...byWeekday));
+      if (byWeekday[best] > 0) {
+        const name = format(new Date(2024, 0, 7 + best), "EEEE", { locale: ptBR });
+        out.push({ icon: Trophy, tone: "text-income", text: `${name.replace(/^./, c => c.toUpperCase())} é o dia com mais vendas do período` });
+      }
+    }
 
-    const grossProfit = revenue - cogs;
-    const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
-
-    const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
-    const netProfit = grossProfit - expenses;
-    const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
-
-    // Reposição de estoque (investimento — exibido separadamente, NÃO reduz lucro)
-    const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
-
-    return { revenue, received, receivable, cogs, grossProfit, grossMargin, expenses, netProfit, netMargin, restock };
-  }, [filter, store.sales, store.stockEntries, store.expenses, store.products]);
+    return out;
+  }, [store.products, dailySeries, periodStats]);
 
   const monthlyData = useMemo(() => {
     const months = [];
@@ -115,7 +203,7 @@ export default function Dashboard() {
       });
     }
     return months;
-  }, [store.sales, store.expenses, store.products]);
+  }, [store.sales, store.expenses, productMap]);
 
   const avgMargin = useMemo(() => {
     const withRevenue = monthlyData.filter(m => m.receita > 0);
@@ -124,9 +212,14 @@ export default function Dashboard() {
   }, [monthlyData]);
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
-  const isGeral = filter === GERAL;
   const netPositive = periodStats.netProfit >= 0;
   const grossPositive = periodStats.grossProfit >= 0;
+
+  const delta = (current: number, previous: number | undefined) => {
+    if (prevStats == null || previous === undefined) return undefined;
+    if (previous === 0) return undefined;
+    return { pct: ((current - previous) / Math.abs(previous)) * 100, label: prevStats.label };
+  };
 
   async function handleExport() {
     try {
@@ -160,6 +253,7 @@ export default function Dashboard() {
         ["Despesas", fmt(periodStats.expenses)],
         ["Lucro líquido", fmt(periodStats.netProfit)],
         ["Margem líquida (%)", fmt(periodStats.netMargin)],
+        ["Ticket médio", fmt(periodStats.ticket)],
         ["Reposição de estoque (investimento)", fmt(periodStats.restock)],
         ["Estoque atual (unidades)", totalStock],
         ["Estoque a custo (razão)", fmt(inventoryAtCost)],
@@ -229,6 +323,8 @@ export default function Dashboard() {
     }
   }
 
+  const maxTop = topProducts.length ? topProducts[0].total : 0;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -255,30 +351,39 @@ export default function Dashboard() {
       <Stagger className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <PrimaryKPI
           label="Receita"
-          value={formatCurrency(periodStats.revenue)}
+          value={periodStats.revenue}
+          format={formatCurrency}
           hint={`recebido ${formatCurrency(periodStats.received)}`}
           icon={TrendingUp}
           iconTone="text-income"
+          delta={delta(periodStats.revenue, prevStats?.stats.revenue)}
+          spark={dailySeries.map(d => d.revenue)}
         />
         <PrimaryKPI
           label="Lucro bruto"
-          value={formatCurrency(periodStats.grossProfit)}
+          value={periodStats.grossProfit}
+          format={formatCurrency}
           hint={`CPV ${formatCurrency(periodStats.cogs)}`}
           icon={grossPositive ? TrendingUp : TrendingDown}
           iconTone={grossPositive ? "text-income" : "text-destructive"}
           valueTone={grossPositive ? "text-income" : "text-destructive"}
+          delta={delta(periodStats.grossProfit, prevStats?.stats.grossProfit)}
         />
         <PrimaryKPI
           label="Lucro líquido"
-          value={formatCurrency(periodStats.netProfit)}
+          value={periodStats.netProfit}
+          format={formatCurrency}
           hint={`margem ${periodStats.netMargin.toFixed(1)}%`}
           icon={netPositive ? TrendingUp : TrendingDown}
           iconTone={netPositive ? "text-income" : "text-destructive"}
           valueTone={netPositive ? "text-income" : "text-destructive"}
+          delta={delta(periodStats.netProfit, prevStats?.stats.netProfit)}
+          spark={dailySeries.map(d => d.netProfit)}
         />
         <PrimaryKPI
           label="A receber"
-          value={formatCurrency(periodStats.receivable)}
+          value={periodStats.receivable}
+          format={formatCurrency}
           hint="vendas em aberto"
           icon={Clock}
           iconTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
@@ -288,12 +393,82 @@ export default function Dashboard() {
 
       {/* KPIs secundários — linha 2 */}
       <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-4">
-        <SecondaryStat icon={Percent} label="Margem bruta" value={`${periodStats.grossMargin.toFixed(1)}%`} />
-        <SecondaryStat icon={Receipt} label="Despesas" value={formatCurrency(periodStats.expenses)} />
-        <SecondaryStat icon={Boxes} label="Reposição de estoque" value={formatCurrency(periodStats.restock)} hint="investimento em ativos" />
-        <SecondaryStat icon={Package} label="Estoque atual" value={`${totalStock} un.`} hint={formatCurrency(inventoryAtCost)} />
+        <SecondaryStat
+          icon={Percent}
+          label="Margem bruta"
+          value={periodStats.grossMargin}
+          format={(v) => `${v.toFixed(1)}%`}
+          delta={delta(periodStats.grossMargin, prevStats?.stats.grossMargin)}
+        />
+        <SecondaryStat
+          icon={Receipt}
+          label="Despesas"
+          value={periodStats.expenses}
+          format={formatCurrency}
+          delta={delta(periodStats.expenses, prevStats?.stats.expenses)}
+          invertDelta
+        />
+        <SecondaryStat icon={Boxes} label="Reposição de estoque" value={periodStats.restock} format={formatCurrency} hint="investimento em ativos" />
+        <SecondaryStat icon={Package} label="Estoque atual" value={totalStock} format={(v) => `${Math.round(v)} un.`} hint={formatCurrency(inventoryAtCost)} />
       </Stagger>
 
+      {/* Ticket médio */}
+      <Stagger className="grid gap-2 grid-cols-1 md:grid-cols-4">
+        <PrimaryKPI
+          label="Ticket médio"
+          value={periodStats.ticket}
+          format={formatCurrency}
+          hint={`${periodStats.salesCount} venda${periodStats.salesCount === 1 ? "" : "s"} no período`}
+          icon={Sparkles}
+          iconTone="text-primary"
+          delta={delta(periodStats.ticket, prevStats?.stats.ticket)}
+          spark={dailySeries.map(d => d.ticket)}
+        />
+      </Stagger>
+
+      {/* Insights automáticos */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold tracking-tight mb-3">Insights automáticos</h2>
+        {insights.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nenhum alerta no momento.</p>
+        ) : (
+          <Stagger className="space-y-0">
+            {insights.map((i, idx) => (
+              <motion.div key={idx} variants={listItem} className="flex items-center gap-2.5 py-2 border-b border-border/40 last:border-0">
+                <i.icon size={15} className={i.tone} />
+                <p className="text-xs">{i.text}</p>
+              </motion.div>
+            ))}
+          </Stagger>
+        )}
+      </div>
+
+      {/* Top produtos do período */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold tracking-tight mb-3">Top produtos do mês</h2>
+        {topProducts.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nenhuma venda no período.</p>
+        ) : (
+          <Stagger className="space-y-3">
+            {topProducts.map((p, idx) => (
+              <motion.div key={idx} variants={listItem}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium truncate">{p.label}</p>
+                  <span className="text-xs font-semibold mono shrink-0">{formatCurrency(p.total)}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full bg-primary"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${maxTop > 0 ? (p.total / maxTop) * 100 : 0}%` }}
+                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </Stagger>
+        )}
+      </div>
 
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -384,7 +559,53 @@ export default function Dashboard() {
   );
 }
 
-function SecondaryStat({ icon: Icon, label, value, tone, hint }: { icon: any; label: string; value: string; tone?: "destructive" | "warning"; hint?: string }) {
+type Delta = { pct: number; label: string } | undefined;
+
+function DeltaBadge({ delta, invert }: { delta: Delta; invert?: boolean }) {
+  if (!delta || !isFinite(delta.pct)) return null;
+  const raw = delta.pct;
+  const good = invert ? raw <= 0 : raw >= 0;
+  const Icon = raw >= 0 ? ArrowUpRight : ArrowDownRight;
+  return (
+    <span
+      className={cn(
+        "mt-1 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium mono",
+        good ? "bg-income/10 text-income" : "bg-destructive/10 text-destructive",
+      )}
+    >
+      <Icon size={10} />
+      {raw >= 0 ? "+" : ""}{raw.toFixed(0)}% vs {delta.label}
+    </span>
+  );
+}
+
+/** Minigráfico de linha, sem eixos nem labels. */
+function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
+  if (!data.length) return null;
+  const w = 60, h = 24, pad = 2;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => {
+    const x = pad + (i / Math.max(1, data.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0 overflow-visible" aria-hidden>
+      <polyline
+        points={points}
+        fill="none"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        stroke={positive ? "hsl(var(--income))" : "hsl(var(--destructive))"}
+      />
+    </svg>
+  );
+}
+
+function SecondaryStat({ icon: Icon, label, value, format, tone, hint, delta, invertDelta }: { icon: any; label: string; value: number; format: (v: number) => string; tone?: "destructive" | "warning"; hint?: string; delta?: Delta; invertDelta?: boolean }) {
   const toneClass = tone === "destructive" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-foreground";
   return (
     <motion.div variants={listItem} className="rounded-xl border border-border bg-card px-3.5 py-2.5">
@@ -392,21 +613,26 @@ function SecondaryStat({ icon: Icon, label, value, tone, hint }: { icon: any; la
         <Icon size={11} />
         <p className="text-[11px] uppercase tracking-wider font-medium">{label}</p>
       </div>
-      <p className={cn("mt-0.5 text-base font-semibold mono", toneClass)}>{value}</p>
+      <AnimatedNumber value={value} format={format} duration={0.7} className={cn("mt-0.5 block text-base font-semibold mono", toneClass)} />
       {hint && <p className="text-xs text-muted-foreground mono mt-0.5">{hint}</p>}
+      <DeltaBadge delta={delta} invert={invertDelta} />
     </motion.div>
   );
 }
 
-function PrimaryKPI({ icon: Icon, label, value, hint, iconTone, valueTone }: { icon: any; label: string; value: string; hint?: string; iconTone?: string; valueTone?: string }) {
+function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTone, delta, spark }: { icon: any; label: string; value: number; format: (v: number) => string; hint?: string; iconTone?: string; valueTone?: string; delta?: Delta; spark?: number[] }) {
   return (
     <motion.div variants={listItem} {...hoverLift} className="rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
         <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
       </div>
-      <p className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")}>{value}</p>
+      <div className="flex items-end justify-between gap-2">
+        <AnimatedNumber value={value} format={format} duration={0.7} className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")} />
+        {spark && <Sparkline data={spark} positive={value >= 0} />}
+      </div>
       {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
+      <DeltaBadge delta={delta} />
     </motion.div>
   );
 }
