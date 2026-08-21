@@ -145,7 +145,7 @@ export default function Dashboard() {
   const insights = useMemo(() => {
     const out: { icon: any; tone: string; text: string }[] = [];
 
-    const lowStock = store.products.filter(p => p.stock > 0 || true).filter(p => p.stock < (p.minStock && p.minStock > 0 ? p.minStock : LOW_STOCK_FALLBACK));
+    const lowStock = store.products.filter(p => p.stock < (p.minStock && p.minStock > 0 ? p.minStock : LOW_STOCK_FALLBACK));
     if (lowStock.length > 0) {
       out.push({ icon: AlertTriangle, tone: "text-warning", text: `${lowStock.length} produto${lowStock.length > 1 ? "s" : ""} com estoque baixo` });
     }
@@ -358,6 +358,7 @@ export default function Dashboard() {
           iconTone="text-income"
           delta={delta(periodStats.revenue, prevStats?.stats.revenue)}
           spark={dailySeries.map(d => d.revenue)}
+          animateOnMount
         />
         <PrimaryKPI
           label="Lucro bruto"
