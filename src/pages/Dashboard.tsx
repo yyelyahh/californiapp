@@ -358,7 +358,6 @@ export default function Dashboard() {
           iconTone="text-income"
           delta={delta(periodStats.revenue, prevStats?.stats.revenue)}
           spark={dailySeries.map(d => d.revenue)}
-          animateOnMount
         />
         <PrimaryKPI
           label="Lucro bruto"
@@ -614,7 +613,7 @@ function SecondaryStat({ icon: Icon, label, value, format, tone, hint, delta, in
         <Icon size={11} />
         <p className="text-[11px] uppercase tracking-wider font-medium">{label}</p>
       </div>
-      <AnimatedNumber value={value} format={format} duration={0.7} className={cn("mt-0.5 block text-base font-semibold mono", toneClass)} />
+      <AnimatedNumber value={value} format={format} duration={0.7} animateOnMount className={cn("mt-0.5 block text-base font-semibold mono", toneClass)} />
       {hint && <p className="text-xs text-muted-foreground mono mt-0.5">{hint}</p>}
       <DeltaBadge delta={delta} invert={invertDelta} />
     </motion.div>
@@ -629,7 +628,7 @@ function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTon
         <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
       </div>
       <div className="flex items-end justify-between gap-2">
-        <AnimatedNumber value={value} format={format} duration={0.7} className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")} />
+        <AnimatedNumber value={value} format={format} duration={0.7} animateOnMount className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")} />
         {spark && <Sparkline data={spark} positive={value >= 0} />}
       </div>
       {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
