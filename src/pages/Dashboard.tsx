@@ -368,16 +368,6 @@ export default function Dashboard() {
           spark={dailySeries.map(d => d.revenue)}
         />
         <PrimaryKPI
-          label="Lucro bruto"
-          value={periodStats.grossProfit}
-          format={formatCurrency}
-          hint={`CPV ${formatCurrency(periodStats.cogs)}`}
-          icon={grossPositive ? TrendingUp : TrendingDown}
-          iconTone={grossPositive ? "text-income" : "text-destructive"}
-          valueTone={grossPositive ? "text-income" : "text-destructive"}
-          delta={delta(periodStats.grossProfit, prevStats?.stats.grossProfit)}
-        />
-        <PrimaryKPI
           label="Lucro líquido"
           value={periodStats.netProfit}
           format={formatCurrency}
@@ -386,7 +376,15 @@ export default function Dashboard() {
           iconTone={netPositive ? "text-income" : "text-destructive"}
           valueTone={netPositive ? "text-income" : "text-destructive"}
           delta={delta(periodStats.netProfit, prevStats?.stats.netProfit)}
-          spark={dailySeries.map(d => d.netProfit)}
+          plainDelta
+        />
+        <PrimaryKPI
+          label="Ticket médio"
+          value={periodStats.ticket}
+          format={formatCurrency}
+          hint={`${periodStats.salesCount} venda${periodStats.salesCount === 1 ? "" : "s"} no período`}
+          delta={delta(periodStats.ticket, prevStats?.stats.ticket)}
+          plainDelta
         />
         <PrimaryKPI
           label="A receber"
@@ -400,12 +398,13 @@ export default function Dashboard() {
       </Stagger>
 
       {/* KPIs secundários — linha 2 */}
-      <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-4">
+      <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-3">
         <SecondaryStat
           icon={Percent}
           label="Margem bruta"
           value={periodStats.grossMargin}
           format={(v) => `${v.toFixed(1)}%`}
+          hint={`lucro bruto ${formatCurrency(periodStats.grossProfit)}`}
           delta={delta(periodStats.grossMargin, prevStats?.stats.grossMargin)}
         />
         <SecondaryStat
@@ -416,67 +415,60 @@ export default function Dashboard() {
           delta={delta(periodStats.expenses, prevStats?.stats.expenses)}
           invertDelta
         />
-        <SecondaryStat icon={Boxes} label="Reposição de estoque" value={periodStats.restock} format={formatCurrency} hint="investimento em ativos" />
-        <SecondaryStat icon={Package} label="Estoque atual" value={totalStock} format={(v) => `${Math.round(v)} un.`} hint={formatCurrency(inventoryAtCost)} />
-      </Stagger>
-
-      {/* Ticket médio */}
-      <Stagger className="grid gap-2 grid-cols-1 md:grid-cols-4">
-        <PrimaryKPI
-          label="Ticket médio"
-          value={periodStats.ticket}
-          format={formatCurrency}
-          hint={`${periodStats.salesCount} venda${periodStats.salesCount === 1 ? "" : "s"} no período`}
-          icon={Sparkles}
-          iconTone="text-primary"
-          delta={delta(periodStats.ticket, prevStats?.stats.ticket)}
-          spark={dailySeries.map(d => d.ticket)}
+        <SecondaryStat
+          icon={Package}
+          label="Estoque atual"
+          value={totalStock}
+          format={(v) => `${Math.round(v)} un. · ${formatCurrency(inventoryAtCost)}`}
+          hint={`${formatCurrency(periodStats.restock)} em reposição`}
         />
       </Stagger>
 
-      {/* Insights automáticos */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold tracking-tight mb-3">Insights automáticos</h2>
-        {insights.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhum alerta no momento.</p>
-        ) : (
-          <Stagger className="space-y-0">
-            {insights.map((i, idx) => (
-              <motion.div key={idx} variants={listItem} className="flex items-center gap-2.5 py-2 border-b border-border/40 last:border-0">
-                <i.icon size={15} className={i.tone} />
-                <p className="text-xs">{i.text}</p>
-              </motion.div>
-            ))}
-          </Stagger>
-        )}
+      {/* Insights + modelos mais vendidos lado a lado */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold tracking-tight mb-3">Insights automáticos</h2>
+          {insights.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhum alerta no momento.</p>
+          ) : (
+            <Stagger className="space-y-0">
+              {insights.map((i, idx) => (
+                <motion.div key={idx} variants={listItem} className="flex items-center gap-2.5 py-2 border-b border-border/40 last:border-0">
+                  <i.icon size={15} className={i.tone} />
+                  <p className="text-xs">{i.text}</p>
+                </motion.div>
+              ))}
+            </Stagger>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold tracking-tight mb-3">Modelos mais vendidos</h2>
+          {topModels.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma venda no período.</p>
+          ) : (
+            <Stagger className="space-y-3">
+              {topModels.map((p, idx) => (
+                <motion.div key={idx} variants={listItem}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium truncate">{p.label}</p>
+                    <span className="text-xs font-semibold mono shrink-0">{formatCurrency(p.total)}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${maxTop > 0 ? (p.total / maxTop) * 100 : 0}%` }}
+                      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </Stagger>
+          )}
+        </div>
       </div>
 
-      {/* Top produtos do período */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold tracking-tight mb-3">Top produtos do mês</h2>
-        {topProducts.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhuma venda no período.</p>
-        ) : (
-          <Stagger className="space-y-3">
-            {topProducts.map((p, idx) => (
-              <motion.div key={idx} variants={listItem}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium truncate">{p.label}</p>
-                  <span className="text-xs font-semibold mono shrink-0">{formatCurrency(p.total)}</span>
-                </div>
-                <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <motion.div
-                    className="h-full rounded-full bg-primary"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${maxTop > 0 ? (p.total / maxTop) * 100 : 0}%` }}
-                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                  />
-                </div>
-              </motion.div>
-            ))}
-          </Stagger>
-        )}
-      </div>
 
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
