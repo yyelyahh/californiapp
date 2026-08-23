@@ -621,19 +621,19 @@ function SecondaryStat({ icon: Icon, label, value, format, tone, hint, delta, in
   );
 }
 
-function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTone, delta, spark }: { icon: any; label: string; value: number; format: (v: number) => string; hint?: string; iconTone?: string; valueTone?: string; delta?: Delta; spark?: number[] }) {
+function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTone, delta, spark, plainDelta }: { icon?: any; label: string; value: number; format: (v: number) => string; hint?: string; iconTone?: string; valueTone?: string; delta?: Delta; spark?: number[]; plainDelta?: boolean }) {
   return (
     <motion.div variants={listItem} {...hoverLift} className="rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-        <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
+        {Icon && <Icon size={14} className={iconTone ?? "text-muted-foreground"} />}
       </div>
       <div className="flex items-end justify-between gap-2">
         <AnimatedNumber value={value} format={format} duration={0.7} animateOnMount className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")} />
         {spark && <Sparkline data={spark} positive={value >= 0} />}
       </div>
       {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
-      <DeltaBadge delta={delta} />
+      <DeltaBadge delta={delta} plain={plainDelta} />
     </motion.div>
   );
 }
