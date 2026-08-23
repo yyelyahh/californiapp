@@ -561,7 +561,7 @@ export default function Dashboard() {
 
 type Delta = { pct: number; label: string } | undefined;
 
-function DeltaBadge({ delta, invert }: { delta: Delta; invert?: boolean }) {
+function DeltaBadge({ delta, invert, plain }: { delta: Delta; invert?: boolean; plain?: boolean }) {
   if (!delta || !isFinite(delta.pct)) return null;
   const raw = delta.pct;
   const good = invert ? raw <= 0 : raw >= 0;
@@ -569,8 +569,9 @@ function DeltaBadge({ delta, invert }: { delta: Delta; invert?: boolean }) {
   return (
     <span
       className={cn(
-        "mt-1 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium mono",
-        good ? "bg-income/10 text-income" : "bg-destructive/10 text-destructive",
+        "mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium mono",
+        !plain && "rounded-md px-1.5 py-0.5",
+        good ? cn("text-income", !plain && "bg-income/10") : cn("text-destructive", !plain && "bg-destructive/10"),
       )}
     >
       <Icon size={10} />
