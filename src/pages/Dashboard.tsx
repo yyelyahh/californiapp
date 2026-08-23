@@ -1,5 +1,5 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, Package, Clock, Percent, Boxes, Receipt, Download, AlertTriangle, Sparkles, Trophy, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, Clock, Percent, Receipt, Download, AlertTriangle, Trophy, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, subDays, startOfDay, isSameDay } from "date-fns";
