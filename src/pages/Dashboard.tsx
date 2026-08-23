@@ -181,7 +181,7 @@ export default function Dashboard() {
       }
     }
 
-    return out;
+    return out.slice(0, 2);
   }, [store.products, dailySeries, periodStats]);
 
   const monthlyData = useMemo(() => {
