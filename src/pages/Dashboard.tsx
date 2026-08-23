@@ -145,9 +145,16 @@ export default function Dashboard() {
   const insights = useMemo(() => {
     const out: { icon: any; tone: string; text: string }[] = [];
 
-    const lowStock = store.products.filter(p => p.stock < (p.minStock && p.minStock > 0 ? p.minStock : LOW_STOCK_FALLBACK));
-    if (lowStock.length > 0) {
-      out.push({ icon: AlertTriangle, tone: "text-warning", text: `${lowStock.length} produto${lowStock.length > 1 ? "s" : ""} com estoque baixo` });
+    // Estoque baixo é por MODELO: soma o estoque de todos os sabores do modelo
+    // e conta quantos modelos distintos estão abaixo do limite.
+    const stockByModel = new Map<string, number>();
+    store.products.forEach(p => {
+      stockByModel.set(p.model, (stockByModel.get(p.model) || 0) + p.stock);
+    });
+    const lowStockModels = Array.from(stockByModel.values()).filter(total => total < LOW_STOCK_FALLBACK);
+    const lowStockCount = lowStockModels.length;
+    if (lowStockCount > 0) {
+      out.push({ icon: AlertTriangle, tone: "text-warning", text: `${lowStockCount} produto${lowStockCount > 1 ? "s" : ""} com estoque baixo` });
     }
 
     const last7 = dailySeries.slice(7);
