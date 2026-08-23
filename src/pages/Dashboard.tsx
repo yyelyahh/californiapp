@@ -221,7 +221,7 @@ export default function Dashboard() {
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const netPositive = periodStats.netProfit >= 0;
-  const grossPositive = periodStats.grossProfit >= 0;
+  
 
   const delta = (current: number, previous: number | undefined) => {
     if (prevStats == null || previous === undefined) return undefined;
