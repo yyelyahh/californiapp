@@ -331,7 +331,7 @@ export default function Dashboard() {
     }
   }
 
-  const maxTop = topProducts.length ? topProducts[0].total : 0;
+  const maxTop = topModels.length ? topModels[0].total : 0;
 
   return (
     <div className="space-y-5">
