@@ -1,5 +1,5 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, Package, Clock, Percent, Boxes, Receipt, Download, AlertTriangle, Sparkles, Trophy, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, Clock, Percent, Receipt, Download, AlertTriangle, Trophy, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, subDays, startOfDay, isSameDay } from "date-fns";
@@ -127,19 +127,20 @@ export default function Dashboard() {
     });
   }, [store.sales, store.expenses, productMap]);
 
-  // Top 5 produtos do período (por valor vendido)
-  const topProducts = useMemo(() => {
+  // Modelos mais vendidos do período (agrupado por modelo, top 3)
+  const topModels = useMemo(() => {
     const map = new Map<string, { label: string; total: number; qty: number }>();
     periodStats.sales.forEach(s => {
       const p = productMap.get(s.productId);
-      const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
-      const cur = map.get(s.productId) ?? { label, total: 0, qty: 0 };
+      const label = p?.model || store.getProductName(s.productId);
+      const cur = map.get(label) ?? { label, total: 0, qty: 0 };
       cur.total += s.totalPrice;
       cur.qty += s.quantity;
-      map.set(s.productId, cur);
+      map.set(label, cur);
     });
-    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 3);
   }, [periodStats, productMap, store]);
+
 
   // Insights automáticos
   const insights = useMemo(() => {
@@ -180,7 +181,7 @@ export default function Dashboard() {
       }
     }
 
-    return out;
+    return out.slice(0, 2);
   }, [store.products, dailySeries, periodStats]);
 
   const monthlyData = useMemo(() => {
@@ -220,7 +221,7 @@ export default function Dashboard() {
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const netPositive = periodStats.netProfit >= 0;
-  const grossPositive = periodStats.grossProfit >= 0;
+  
 
   const delta = (current: number, previous: number | undefined) => {
     if (prevStats == null || previous === undefined) return undefined;
@@ -330,7 +331,7 @@ export default function Dashboard() {
     }
   }
 
-  const maxTop = topProducts.length ? topProducts[0].total : 0;
+  const maxTop = topModels.length ? topModels[0].total : 0;
 
   return (
     <div className="space-y-5">
@@ -367,16 +368,6 @@ export default function Dashboard() {
           spark={dailySeries.map(d => d.revenue)}
         />
         <PrimaryKPI
-          label="Lucro bruto"
-          value={periodStats.grossProfit}
-          format={formatCurrency}
-          hint={`CPV ${formatCurrency(periodStats.cogs)}`}
-          icon={grossPositive ? TrendingUp : TrendingDown}
-          iconTone={grossPositive ? "text-income" : "text-destructive"}
-          valueTone={grossPositive ? "text-income" : "text-destructive"}
-          delta={delta(periodStats.grossProfit, prevStats?.stats.grossProfit)}
-        />
-        <PrimaryKPI
           label="Lucro líquido"
           value={periodStats.netProfit}
           format={formatCurrency}
@@ -385,7 +376,15 @@ export default function Dashboard() {
           iconTone={netPositive ? "text-income" : "text-destructive"}
           valueTone={netPositive ? "text-income" : "text-destructive"}
           delta={delta(periodStats.netProfit, prevStats?.stats.netProfit)}
-          spark={dailySeries.map(d => d.netProfit)}
+          plainDelta
+        />
+        <PrimaryKPI
+          label="Ticket médio"
+          value={periodStats.ticket}
+          format={formatCurrency}
+          hint={`${periodStats.salesCount} venda${periodStats.salesCount === 1 ? "" : "s"} no período`}
+          delta={delta(periodStats.ticket, prevStats?.stats.ticket)}
+          plainDelta
         />
         <PrimaryKPI
           label="A receber"
@@ -399,12 +398,13 @@ export default function Dashboard() {
       </Stagger>
 
       {/* KPIs secundários — linha 2 */}
-      <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-4">
+      <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-3">
         <SecondaryStat
           icon={Percent}
           label="Margem bruta"
           value={periodStats.grossMargin}
           format={(v) => `${v.toFixed(1)}%`}
+          hint={`lucro bruto ${formatCurrency(periodStats.grossProfit)}`}
           delta={delta(periodStats.grossMargin, prevStats?.stats.grossMargin)}
         />
         <SecondaryStat
@@ -415,67 +415,60 @@ export default function Dashboard() {
           delta={delta(periodStats.expenses, prevStats?.stats.expenses)}
           invertDelta
         />
-        <SecondaryStat icon={Boxes} label="Reposição de estoque" value={periodStats.restock} format={formatCurrency} hint="investimento em ativos" />
-        <SecondaryStat icon={Package} label="Estoque atual" value={totalStock} format={(v) => `${Math.round(v)} un.`} hint={formatCurrency(inventoryAtCost)} />
-      </Stagger>
-
-      {/* Ticket médio */}
-      <Stagger className="grid gap-2 grid-cols-1 md:grid-cols-4">
-        <PrimaryKPI
-          label="Ticket médio"
-          value={periodStats.ticket}
-          format={formatCurrency}
-          hint={`${periodStats.salesCount} venda${periodStats.salesCount === 1 ? "" : "s"} no período`}
-          icon={Sparkles}
-          iconTone="text-primary"
-          delta={delta(periodStats.ticket, prevStats?.stats.ticket)}
-          spark={dailySeries.map(d => d.ticket)}
+        <SecondaryStat
+          icon={Package}
+          label="Estoque atual"
+          value={totalStock}
+          format={(v) => `${Math.round(v)} un. · ${formatCurrency(inventoryAtCost)}`}
+          hint={`${formatCurrency(periodStats.restock)} em reposição`}
         />
       </Stagger>
 
-      {/* Insights automáticos */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold tracking-tight mb-3">Insights automáticos</h2>
-        {insights.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhum alerta no momento.</p>
-        ) : (
-          <Stagger className="space-y-0">
-            {insights.map((i, idx) => (
-              <motion.div key={idx} variants={listItem} className="flex items-center gap-2.5 py-2 border-b border-border/40 last:border-0">
-                <i.icon size={15} className={i.tone} />
-                <p className="text-xs">{i.text}</p>
-              </motion.div>
-            ))}
-          </Stagger>
-        )}
+      {/* Insights + modelos mais vendidos lado a lado */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold tracking-tight mb-3">Insights automáticos</h2>
+          {insights.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhum alerta no momento.</p>
+          ) : (
+            <Stagger className="space-y-0">
+              {insights.map((i, idx) => (
+                <motion.div key={idx} variants={listItem} className="flex items-center gap-2.5 py-2 border-b border-border/40 last:border-0">
+                  <i.icon size={15} className={i.tone} />
+                  <p className="text-xs">{i.text}</p>
+                </motion.div>
+              ))}
+            </Stagger>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold tracking-tight mb-3">Modelos mais vendidos</h2>
+          {topModels.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma venda no período.</p>
+          ) : (
+            <Stagger className="space-y-3">
+              {topModels.map((p, idx) => (
+                <motion.div key={idx} variants={listItem}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium truncate">{p.label}</p>
+                    <span className="text-xs font-semibold mono shrink-0">{formatCurrency(p.total)}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${maxTop > 0 ? (p.total / maxTop) * 100 : 0}%` }}
+                      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </Stagger>
+          )}
+        </div>
       </div>
 
-      {/* Top produtos do período */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold tracking-tight mb-3">Top produtos do mês</h2>
-        {topProducts.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhuma venda no período.</p>
-        ) : (
-          <Stagger className="space-y-3">
-            {topProducts.map((p, idx) => (
-              <motion.div key={idx} variants={listItem}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium truncate">{p.label}</p>
-                  <span className="text-xs font-semibold mono shrink-0">{formatCurrency(p.total)}</span>
-                </div>
-                <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <motion.div
-                    className="h-full rounded-full bg-primary"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${maxTop > 0 ? (p.total / maxTop) * 100 : 0}%` }}
-                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                  />
-                </div>
-              </motion.div>
-            ))}
-          </Stagger>
-        )}
-      </div>
 
       {/* Gráfico + atividades lado a lado */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -568,7 +561,7 @@ export default function Dashboard() {
 
 type Delta = { pct: number; label: string } | undefined;
 
-function DeltaBadge({ delta, invert }: { delta: Delta; invert?: boolean }) {
+function DeltaBadge({ delta, invert, plain }: { delta: Delta; invert?: boolean; plain?: boolean }) {
   if (!delta || !isFinite(delta.pct)) return null;
   const raw = delta.pct;
   const good = invert ? raw <= 0 : raw >= 0;
@@ -576,8 +569,9 @@ function DeltaBadge({ delta, invert }: { delta: Delta; invert?: boolean }) {
   return (
     <span
       className={cn(
-        "mt-1 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium mono",
-        good ? "bg-income/10 text-income" : "bg-destructive/10 text-destructive",
+        "mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium mono",
+        !plain && "rounded-md px-1.5 py-0.5",
+        good ? cn("text-income", !plain && "bg-income/10") : cn("text-destructive", !plain && "bg-destructive/10"),
       )}
     >
       <Icon size={10} />
@@ -627,19 +621,19 @@ function SecondaryStat({ icon: Icon, label, value, format, tone, hint, delta, in
   );
 }
 
-function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTone, delta, spark }: { icon: any; label: string; value: number; format: (v: number) => string; hint?: string; iconTone?: string; valueTone?: string; delta?: Delta; spark?: number[] }) {
+function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTone, delta, spark, plainDelta }: { icon?: any; label: string; value: number; format: (v: number) => string; hint?: string; iconTone?: string; valueTone?: string; delta?: Delta; spark?: number[]; plainDelta?: boolean }) {
   return (
     <motion.div variants={listItem} {...hoverLift} className="rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-        <Icon size={14} className={iconTone ?? "text-muted-foreground"} />
+        {Icon && <Icon size={14} className={iconTone ?? "text-muted-foreground"} />}
       </div>
       <div className="flex items-end justify-between gap-2">
         <AnimatedNumber value={value} format={format} duration={0.7} animateOnMount className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")} />
         {spark && <Sparkline data={spark} positive={value >= 0} />}
       </div>
       {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
-      <DeltaBadge delta={delta} />
+      <DeltaBadge delta={delta} plain={plainDelta} />
     </motion.div>
   );
 }
