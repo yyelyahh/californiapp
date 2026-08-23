@@ -127,19 +127,20 @@ export default function Dashboard() {
     });
   }, [store.sales, store.expenses, productMap]);
 
-  // Top 5 produtos do período (por valor vendido)
-  const topProducts = useMemo(() => {
+  // Modelos mais vendidos do período (agrupado por modelo, top 3)
+  const topModels = useMemo(() => {
     const map = new Map<string, { label: string; total: number; qty: number }>();
     periodStats.sales.forEach(s => {
       const p = productMap.get(s.productId);
-      const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
-      const cur = map.get(s.productId) ?? { label, total: 0, qty: 0 };
+      const label = p?.model || store.getProductName(s.productId);
+      const cur = map.get(label) ?? { label, total: 0, qty: 0 };
       cur.total += s.totalPrice;
       cur.qty += s.quantity;
-      map.set(s.productId, cur);
+      map.set(label, cur);
     });
-    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 3);
   }, [periodStats, productMap, store]);
+
 
   // Insights automáticos
   const insights = useMemo(() => {
