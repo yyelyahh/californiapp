@@ -397,7 +397,9 @@ export default function ProductsPage() {
                   className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-secondary/40 transition-colors text-left"
                 >
                   <div className="flex items-center gap-2.5">
-                    {isCollapsed ? <ChevronRight size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                    <motion.span animate={{ rotate: isCollapsed ? 0 : 90 }} transition={transitionBase} className="text-muted-foreground inline-flex">
+                      <ChevronRight size={14} />
+                    </motion.span>
                     <div>
                       <h2 className="text-sm font-semibold tracking-tight">{group.brand}</h2>
                       <p className="text-[10px] text-muted-foreground mono">{group.products.length} produto{group.products.length !== 1 ? 's' : ''} · {group.totalStock} un.</p>
@@ -429,51 +431,105 @@ export default function ProductsPage() {
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={transitionBase}
-                    className="border-t border-border overflow-x-auto"
+                    className="border-t border-border overflow-hidden"
                   >
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                          <th className="text-left py-2 px-2 sm:px-3">Sabor · Modelo</th>
-                          <th className="text-right py-2 px-2 sm:px-3 w-[60px] sm:w-[90px]">Est.</th>
-                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px] hidden sm:table-cell">Compra</th>
-                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Venda</th>
-                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Lucro</th>
-                          <th className="py-2 px-2 sm:px-3 w-[40px] sm:w-[70px]"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.products.map(p => {
-                          const profit = p.salePrice - p.purchasePrice;
-                          const lowStock = p.stock > 0 && p.stock <= 3;
-                          return (
-                            <tr key={p.id} className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group">
-                              <td className="py-2 px-2 sm:px-3">
-                                <div className="font-medium text-foreground leading-tight">{p.flavor || p.name}</div>
-                                {p.flavor && p.model && (
-                                  <div className="text-[11px] text-muted-foreground mt-0.5">{p.model}</div>
-                                )}
-                              </td>
-                              <td className="py-2 px-2 sm:px-3 text-right mono text-sm">
-                                <span className={cn("font-semibold", p.stock === 0 ? "text-muted-foreground/50" : lowStock ? "text-warning" : "text-foreground")}>{p.stock}</span>
-                              </td>
-                              <td className="py-2 px-2 sm:px-3 text-right mono text-xs text-muted-foreground hidden sm:table-cell">{formatCurrency(p.purchasePrice)}</td>
-                              <td className="py-2 px-2 sm:px-3 text-right mono text-xs text-foreground">{formatCurrency(p.salePrice)}</td>
-                              <td className={cn("py-2 px-2 sm:px-3 text-right mono text-xs font-medium", profit >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(profit)}</td>
-                              <td className="py-2 px-2 sm:px-3">
-                                <div className="flex gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(p)}><Pencil size={13} /></Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)}><Trash2 size={13} /></Button>
+                    <div className="divide-y divide-border/60">
+                      {group.models.map(m => {
+                        const modelKey = `${group.brand}|${m.model}`;
+                        const isOpen = expandedModels.has(modelKey);
+                        return (
+                          <div key={modelKey}>
+                            <button
+                              onClick={() => toggleModel(modelKey)}
+                              className="w-full flex items-center justify-between pl-6 pr-3.5 py-2 hover:bg-secondary/40 transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={transitionBase} className="text-muted-foreground inline-flex">
+                                  <ChevronRight size={13} />
+                                </motion.span>
+                                <div>
+                                  <h3 className="text-[13px] font-medium tracking-tight">{m.model}</h3>
+                                  <p className="text-[10px] text-muted-foreground mono">{m.products.length} produto{m.products.length !== 1 ? 's' : ''} · {m.totalStock} un.</p>
                                 </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                              <div className="flex items-center gap-4 text-[11px]">
+                                <div className="text-right hidden sm:block">
+                                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Investido</p>
+                                  <p className="mono font-medium text-foreground">{formatCurrency(m.totalInvested)}</p>
+                                </div>
+                                <div className="text-right hidden md:block">
+                                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Potencial</p>
+                                  <p className="mono font-medium text-foreground">{formatCurrency(m.totalSaleValue)}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Lucro</p>
+                                  <p className={cn("mono font-medium", m.totalProfit >= 0 ? "text-income" : "text-destructive")}>
+                                    {formatCurrency(m.totalProfit)}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+
+                            <AnimatePresence initial={false}>
+                              {isOpen && (
+                                <motion.div
+                                  key="model-body"
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={transitionBase}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="overflow-x-auto border-t border-border/60">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                                          <th className="text-left py-2 px-2 sm:px-3">Sabor</th>
+                                          <th className="text-right py-2 px-2 sm:px-3 w-[60px] sm:w-[90px]">Est.</th>
+                                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px] hidden sm:table-cell">Compra</th>
+                                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Venda</th>
+                                          <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Lucro</th>
+                                          <th className="py-2 px-2 sm:px-3 w-[40px] sm:w-[70px]"></th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {m.products.map(p => {
+                                          const profit = p.salePrice - p.purchasePrice;
+                                          const lowStock = p.stock > 0 && p.stock <= 3;
+                                          return (
+                                            <tr key={p.id} className="border-b border-border/40 last:border-0 hover:bg-secondary/40 transition-colors group">
+                                              <td className="py-2 px-2 sm:px-3">
+                                                <div className="font-medium text-foreground leading-tight">{p.flavor || p.name}</div>
+                                              </td>
+                                              <td className="py-2 px-2 sm:px-3 text-right mono text-sm">
+                                                <span className={cn("font-semibold", p.stock === 0 ? "text-muted-foreground/50" : lowStock ? "text-warning" : "text-foreground")}>{p.stock}</span>
+                                              </td>
+                                              <td className="py-2 px-2 sm:px-3 text-right mono text-xs text-muted-foreground hidden sm:table-cell">{formatCurrency(p.purchasePrice)}</td>
+                                              <td className="py-2 px-2 sm:px-3 text-right mono text-xs text-foreground">{formatCurrency(p.salePrice)}</td>
+                                              <td className={cn("py-2 px-2 sm:px-3 text-right mono text-xs font-medium", profit >= 0 ? "text-income" : "text-destructive")}>{formatCurrency(profit)}</td>
+                                              <td className="py-2 px-2 sm:px-3">
+                                                <div className="flex gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(p)}><Pencil size={13} /></Button>
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)}><Trash2 size={13} /></Button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </motion.div>
                 )}
                 </AnimatePresence>
+
               </div>
             );
           })}
