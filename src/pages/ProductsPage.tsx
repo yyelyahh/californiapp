@@ -53,14 +53,34 @@ export default function ProductsPage() {
       groups.get(brand)!.push(p);
     });
     return Array.from(groups.entries())
-      .map(([brand, prods]) => ({
-        brand,
-        products: prods.sort((a, b) => a.salePrice - b.salePrice),
-        totalInvested: prods.reduce((s, p) => s + p.purchasePrice * p.stock, 0),
-        totalSaleValue: prods.reduce((s, p) => s + p.salePrice * p.stock, 0),
-        totalProfit: prods.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
-        totalStock: prods.reduce((s, p) => s + p.stock, 0),
-      }))
+      .map(([brand, prods]) => {
+        const sorted = prods.sort((a, b) => a.salePrice - b.salePrice);
+        const modelMap = new Map<string, typeof filtered>();
+        sorted.forEach(p => {
+          const model = (p.model || "").trim() || "Sem Modelo";
+          if (!modelMap.has(model)) modelMap.set(model, []);
+          modelMap.get(model)!.push(p);
+        });
+        const models = Array.from(modelMap.entries())
+          .map(([model, mProds]) => ({
+            model,
+            products: mProds,
+            totalInvested: mProds.reduce((s, p) => s + p.purchasePrice * p.stock, 0),
+            totalSaleValue: mProds.reduce((s, p) => s + p.salePrice * p.stock, 0),
+            totalProfit: mProds.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
+            totalStock: mProds.reduce((s, p) => s + p.stock, 0),
+          }))
+          .sort((a, b) => (a.products[0]?.salePrice ?? 0) - (b.products[0]?.salePrice ?? 0) || a.model.localeCompare(b.model));
+        return {
+          brand,
+          products: sorted,
+          models,
+          totalInvested: prods.reduce((s, p) => s + p.purchasePrice * p.stock, 0),
+          totalSaleValue: prods.reduce((s, p) => s + p.salePrice * p.stock, 0),
+          totalProfit: prods.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
+          totalStock: prods.reduce((s, p) => s + p.stock, 0),
+        };
+      })
       .sort((a, b) => a.brand.localeCompare(b.brand));
   }, [filtered]);
 
@@ -78,6 +98,15 @@ export default function ProductsPage() {
       return next;
     });
   };
+
+  const toggleModel = (key: string) => {
+    setExpandedModels(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
 
   const startEdit = (p: typeof products[0]) => {
     setEditId(p.id);
