@@ -23,6 +23,7 @@ export default function ProductsPage() {
   const { products, updateProduct, deleteProduct } = useStore();
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
