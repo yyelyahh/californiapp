@@ -533,19 +533,32 @@ export default function SalesPage() {
                   })()}
                 </td>
               )}
-              {!isRet && <td className="py-2.5 px-3 text-right mono text-sm text-income">{s.paidAmount > 0 ? formatCurrency(s.paidAmount) : <span className="text-muted-foreground/50">—</span>}</td>}
               {!isRet && (
                 <td className="py-2.5 px-3 text-right mono text-sm">
-                  {remaining > 0 ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span> : <span className="text-muted-foreground/50">—</span>}
+                  {remaining > 0
+                    ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span>
+                    : <span className="text-income">{formatCurrency(s.paidAmount)}</span>}
                 </td>
               )}
               {!isRet && <td className="py-2.5 px-3">{statusBadge}</td>}
               <td className="py-2.5 px-3">
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {!isRet && remaining > 0 && s.paidAmount === 0 && (
+                    <MarkPaidPopover
+                      onConfirm={async (method) => {
+                        await updateSale(s.id, {
+                          paidAmount: s.totalPrice,
+                          paymentMethod: method,
+                          paidAt: new Date().toISOString(),
+                        });
+                      }}
+                    />
+                  )}
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil size={13} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 size={13} /></Button>
                 </div>
               </td>
+
             </motion.tr>
           );
         };
