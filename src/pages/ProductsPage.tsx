@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import type { Product } from "@/types";
 import { useState, useMemo } from "react";
-import { Trash2, Search, Package, TrendingUp, DollarSign, ChevronDown, ChevronRight, Pencil, Tag, X } from "lucide-react";
+import { Trash2, Search, Package, TrendingUp, DollarSign, ChevronRight, Pencil, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
