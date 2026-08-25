@@ -718,8 +718,8 @@ export default function SalesPage() {
                         <th className="text-right py-2 px-3 w-[50px]">Qtd</th>
                         <th className="text-right py-2 px-3 w-[100px]">Total</th>
                         <th className="text-center py-2 px-3 w-[90px]">Pagto</th>
-                        <th className="text-right py-2 px-3 w-[100px]">Recebido</th>
-                        <th className="text-right py-2 px-3 w-[100px]">Falta</th>
+                        <th className="text-right py-2 px-3 w-[110px]">Valor</th>
+
                         <th className="text-left py-2 px-3 w-[70px]">Status</th>
                         <th className="py-2 px-3 w-[70px]"></th>
                       </tr>
