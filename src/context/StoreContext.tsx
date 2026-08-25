@@ -755,86 +755,55 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Sales ----
   const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
-    const totalPrice = s.quantity * s.unitPrice;
     const saleType = s.type || "venda";
 
-    // ---- Integrity validations (single source of truth) ----
-    const { data: productRow, error: productError } = await supabase
-      .from("products")
-      .select(PRODUCT_COLS)
-      .eq("id", s.productId)
-      .single();
-    const product = productRow ? mapProduct(productRow) : products.find(p => p.id === s.productId);
-    if (productError || !product) { toast.error("Produto não encontrado"); throw new Error("product_not_found"); }
-    if (s.quantity <= 0) { toast.error("Quantidade inválida"); throw new Error("invalid_qty"); }
-    if (product.stock < s.quantity) {
-      toast.error(`Estoque insuficiente (disponível: ${product.stock})`);
-      throw new Error("insufficient_stock");
-    }
+    const { data, error } = await supabase.rpc("create_sale", {
+      p_product_id: s.productId,
+      p_quantity: s.quantity,
+      p_unit_price: s.unitPrice,
+      p_date: s.date,
+      p_notes: s.notes ?? null,
+      p_installments: s.installments || 1,
+      p_paid_amount: s.paidAmount || 0,
+      p_type: saleType,
+      p_seller_id: s.sellerId ?? null,
+      p_payment_method: saleType === "venda" ? (s.paymentMethod ?? null) : null,
+    });
 
-    let sellerAssignmentRows: any[] = [];
-    if (s.sellerId) {
-      // Vendedor só pode vender o que tem atribuído
-      const { data: assignmentRows, error: assignmentError } = await supabase
-        .from("product_assignments")
-        .select("*")
-        .eq("seller_id", s.sellerId)
-        .eq("product_id", s.productId)
-        .order("created_at", { ascending: true });
-      if (assignmentError) { toast.error("Erro ao verificar estoque do vendedor"); throw assignmentError; }
-      sellerAssignmentRows = assignmentRows ?? [];
-      const available = sellerAssignmentRows.reduce((sum, assignment) => sum + Number(assignment.quantity || 0), 0);
-      if (available < s.quantity) {
-        toast.error(`Vendedor possui apenas ${available} unidade(s) deste produto`);
-        throw new Error("seller_insufficient_stock");
+    if (error) {
+      if (error.message.includes("estoque_insuficiente")) {
+        toast.error(`Estoque insuficiente`);
+      } else if (error.message.includes("estoque_vendedor_insuficiente")) {
+        toast.error("Vendedor não possui estoque suficiente deste produto");
+      } else if (error.message.includes("nao_autorizado")) {
+        toast.error("Você não tem permissão para registrar essa venda");
+      } else if (error.message.includes("quantidade_invalida")) {
+        toast.error("Quantidade inválida");
+      } else {
+        toast.error("Erro ao registrar venda");
       }
+      throw error;
     }
 
-    const insertData: any = {
-      product_id: s.productId, quantity: s.quantity,
-      unit_price: s.unitPrice, total_price: totalPrice, date: s.date, notes: s.notes,
-      installments: s.installments || 1,
-      paid_amount: saleType === "retirada_funcionario" ? 0 : (s.paidAmount || 0),
-      type: saleType,
-    };
-    const paidNow = saleType === "venda" && (s.paidAmount || 0) >= totalPrice - 0.01;
-    insertData.paid_at = paidNow ? (s.paidAt || s.date) : null;
-    if (s.sellerId) insertData.seller_id = s.sellerId;
-    if (saleType === "venda" && s.paymentMethod) insertData.payment_method = s.paymentMethod;
-    const { data, error } = await supabase.from("sales").insert(insertData).select().single();
-    if (error) { toast.error("Erro ao registrar venda"); throw error; }
     const newSale = mapSale(data);
     setSales(prev => [...prev, newSale]);
 
-    // Sempre reduz estoque global do produto
-    const newStock = Math.max(0, product.stock - s.quantity);
-    await supabase.from("products").update({ stock: newStock }).eq("id", s.productId);
-    setProducts(prev => prev.map(p => p.id === s.productId ? { ...p, stock: newStock } : p));
-
-    // Atualiza/remove atribuição do vendedor
-    if (s.sellerId) {
-      let remainingToDeduct = s.quantity;
-      for (const assignment of sellerAssignmentRows) {
-        if (remainingToDeduct <= 0) break;
-        const currentQty = Number(assignment.quantity || 0);
-        if (currentQty <= remainingToDeduct) {
-          const { error: deleteAssignmentError } = await supabase.from("product_assignments").delete().eq("id", assignment.id);
-          if (deleteAssignmentError) toast.error("Venda registrada, mas houve erro ao baixar atribuição do vendedor");
-          remainingToDeduct -= currentQty;
-        } else {
-          const newQty = currentQty - remainingToDeduct;
-          const { error: updateAssignmentError } = await supabase.from("product_assignments").update({ quantity: newQty }).eq("id", assignment.id);
-          if (updateAssignmentError) toast.error("Venda registrada, mas houve erro ao baixar atribuição do vendedor");
-          remainingToDeduct = 0;
-        }
-      }
-      const { data: refreshedAssignments } = await supabase.from("product_assignments").select("*").order("created_at", { ascending: true });
-      if (refreshedAssignments) setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
-
-      // Abatimento automático legado (10%) removido — comissão atual é gerenciada via página de Distribuição.
-
+    // A function já debitou o estoque no banco; aqui só sincronizamos
+    // o estado local (products / product_assignments) com o que ficou.
+    const { data: refreshedProduct } = await supabase
+      .from("products").select(PRODUCT_COLS).eq("id", s.productId).single();
+    if (refreshedProduct) {
+      const updated = mapProduct(refreshedProduct);
+      setProducts(prev => prev.map(p => p.id === s.productId ? updated : p));
     }
-  }, [products, productAssignments, sellers, sellerDebtPayments, sales]);
+    if (s.sellerId) {
+      const { data: refreshedAssignments } = await supabase
+        .from("product_assignments").select("*").order("created_at", { ascending: true });
+      if (refreshedAssignments) {
+        setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
+      }
+    }
+  }, []);
 
   const updateSale = useCallback(async (id: string, updates: Partial<Sale>) => {
     const existing = sales.find(s => s.id === id);
@@ -872,31 +841,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSale = useCallback(async (id: string) => {
     const sale = sales.find(s => s.id === id);
-    const { error } = await supabase.from("sales").delete().eq("id", id);
+
+    const { error } = await supabase.rpc("delete_sale", { p_sale_id: id });
     if (error) { toast.error("Erro ao excluir venda"); return; }
+
     setSales(prev => prev.filter(s => s.id !== id));
+
     if (sale) {
-      const product = products.find(p => p.id === sale.productId);
-      if (product) {
-        await supabase.from("products").update({ stock: product.stock + sale.quantity }).eq("id", sale.productId);
-        setProducts(prev => prev.map(p => p.id === sale.productId ? { ...p, stock: p.stock + sale.quantity } : p));
+      const { data: refreshedProduct } = await supabase
+        .from("products").select(PRODUCT_COLS).eq("id", sale.productId).single();
+      if (refreshedProduct) {
+        const updated = mapProduct(refreshedProduct);
+        setProducts(prev => prev.map(p => p.id === sale.productId ? updated : p));
       }
-      // Restaura atribuição do vendedor (recria se foi removida ao zerar)
       if (sale.sellerId) {
-        const assignment = productAssignments.find(a => a.sellerId === sale.sellerId && a.productId === sale.productId);
-        if (assignment) {
-          const restoredQty = assignment.quantity + sale.quantity;
-          await supabase.from("product_assignments").update({ quantity: restoredQty }).eq("id", assignment.id);
-          setProductAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, quantity: restoredQty } : a));
-        } else {
-          const { data: created } = await supabase.from("product_assignments").insert({
-            seller_id: sale.sellerId, product_id: sale.productId, quantity: sale.quantity,
-          }).select().single();
-          if (created) setProductAssignments(prev => [...prev, mapProductAssignment(created)]);
+        const { data: refreshedAssignments } = await supabase
+          .from("product_assignments").select("*").order("created_at", { ascending: true });
+        if (refreshedAssignments) {
+          setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
         }
       }
     }
-  }, [sales, products, productAssignments]);
+  }, [sales]);
 
   // ---- Expenses ----
   const addExpense = useCallback(async (e: Omit<Expense, "id">) => {
