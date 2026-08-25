@@ -18,10 +18,45 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import BatchSaleForm from "@/components/BatchSaleForm";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
+
+function MarkPaidPopover({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro") => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handle = async (method: "pix" | "dinheiro") => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onConfirm(method);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-income hover:text-income">
+          Marcar como recebido
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-48 p-2.5 space-y-2">
+        <p className="text-[11px] font-medium text-muted-foreground">Forma de pagamento</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={saving} onClick={() => handle("pix")}>Pix</Button>
+          <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={saving} onClick={() => handle("dinheiro")}>Dinheiro</Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 
 type PaymentMethodValue =
   | "pix"
