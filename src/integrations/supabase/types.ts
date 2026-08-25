@@ -821,6 +821,47 @@ export type Database = {
       }
     }
     Functions: {
+      create_sale: {
+        Args: {
+          p_date: string
+          p_installments?: number
+          p_notes?: string
+          p_paid_amount?: number
+          p_payment_method?: string
+          p_product_id: string
+          p_quantity: number
+          p_seller_id?: string
+          p_type?: string
+          p_unit_price: number
+        }
+        Returns: {
+          created_at: string
+          date: string
+          id: string
+          installments: number
+          notes: string | null
+          paid_amount: number
+          paid_at: string | null
+          payment_method: string | null
+          product_id: string
+          quantity: number
+          seller_id: string | null
+          total_price: number
+          type: string
+          unit_price: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sales"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      decrement_product_stock: {
+        Args: { p_product_id: string; p_quantity: number }
+        Returns: number
+      }
+      delete_sale: { Args: { p_sale_id: string }; Returns: undefined }
       get_my_seller_id: { Args: never; Returns: string }
       get_product_costs: {
         Args: never
@@ -846,6 +887,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_product_stock: {
+        Args: { p_product_id: string; p_quantity: number }
+        Returns: number
       }
     }
     Enums: {
