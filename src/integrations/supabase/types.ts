@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -48,6 +48,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      customers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          whatsapp: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          whatsapp: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          whatsapp?: string
+        }
+        Relationships: []
       }
       deleted_products: {
         Row: {
@@ -250,6 +271,106 @@ export type Database = {
           received_date?: string
         }
         Relationships: []
+      }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          product_id: string
+          quantity: number
+          sale_id: string | null
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          product_id: string
+          quantity: number
+          sale_id?: string | null
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          product_id?: string
+          quantity?: number
+          sale_id?: string | null
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          customer_id: string
+          freight_notes: string | null
+          id: string
+          seller_id: string
+          status: string
+          total_amount: number
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          customer_id: string
+          freight_notes?: string | null
+          id?: string
+          seller_id: string
+          status?: string
+          total_amount?: number
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          freight_notes?: string | null
+          id?: string
+          seller_id?: string
+          status?: string
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       partner_contributions: {
         Row: {
@@ -669,6 +790,7 @@ export type Database = {
           id: string
           name: string
           user_id: string | null
+          whatsapp: string | null
         }
         Insert: {
           created_at?: string
@@ -676,6 +798,7 @@ export type Database = {
           id?: string
           name: string
           user_id?: string | null
+          whatsapp?: string | null
         }
         Update: {
           created_at?: string
@@ -683,6 +806,7 @@ export type Database = {
           id?: string
           name?: string
           user_id?: string | null
+          whatsapp?: string | null
         }
         Relationships: []
       }
@@ -821,6 +945,17 @@ export type Database = {
       }
     }
     Functions: {
+      confirm_order: { Args: { p_order_id: string }; Returns: undefined }
+      create_pending_order: {
+        Args: {
+          p_customer_name: string
+          p_customer_whatsapp: string
+          p_freight_notes: string
+          p_items: Json
+          p_seller_id: string
+        }
+        Returns: string
+      }
       create_sale: {
         Args: {
           p_date: string
@@ -857,6 +992,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      decline_order: { Args: { p_order_id: string }; Returns: undefined }
       decrement_product_stock: {
         Args: { p_product_id: string; p_quantity: number }
         Returns: number
@@ -879,6 +1015,19 @@ export type Database = {
           model: string
           name: string
           stock: number
+        }[]
+      }
+      get_seller_catalog: {
+        Args: { p_seller_id: string }
+        Returns: {
+          available: number
+          brand: string
+          flavor: string
+          model: string
+          name: string
+          product_id: string
+          sale_price: number
+          seller_name: string
         }[]
       }
       has_role: {
