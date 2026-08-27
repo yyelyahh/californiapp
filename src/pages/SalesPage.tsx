@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
-import { useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,6 +19,44 @@ import BatchSaleForm from "@/components/BatchSaleForm";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `há ${minutes} min`;
+  if (hours < 24) return `há ${hours}h`;
+  if (days === 1) return "há 1 dia";
+  return `há ${days} dias`;
+}
+
+type OrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  created_at: string;
+  products: { name: string; brand: string; flavor: string } | null;
+};
+
+type Order = {
+  id: string;
+  customer_id: string;
+  seller_id: string;
+  status: string;
+  freight_notes?: string;
+  total_amount: number;
+  created_at: string;
+  confirmed_at?: string;
+  customers: { name: string; whatsapp: string } | null;
+  sellers: { name: string } | null;
+  order_items: OrderItem[];
+};
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
