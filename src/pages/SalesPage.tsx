@@ -118,6 +118,63 @@ export default function SalesPage() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
 
+  // Pedidos pendentes
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
+
+  const fetchPendingOrders = async () => {
+    if (isSeller) return;
+    setLoadingOrders(true);
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, flavor))")
+      .eq("status", "pendente")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Erro ao carregar pedidos", description: error.message, variant: "destructive" });
+    } else {
+      setPendingOrders((data as Order[]) ?? []);
+    }
+    setLoadingOrders(false);
+  };
+
+  useEffect(() => {
+    fetchPendingOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConfirmOrder = async (orderId: string) => {
+    if (processingOrder) return;
+    setProcessingOrder(orderId);
+    try {
+      const { error } = await supabase.rpc("confirm_order", { p_order_id: orderId });
+      if (error) throw error;
+      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+      toast({ title: "Pedido confirmado", description: "O pedido foi confirmado e o estoque atualizado." });
+    } catch (err: any) {
+      toast({ title: "Erro ao confirmar", description: err?.message || "Tente novamente.", variant: "destructive" });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const handleDeclineOrder = async (orderId: string) => {
+    if (!(await confirm({ title: "Recusar pedido", description: "Tem certeza? Essa ação não pode ser desfeita e o pedido será cancelado." }))) return;
+    if (processingOrder) return;
+    setProcessingOrder(orderId);
+    try {
+      const { error } = await supabase.rpc("decline_order", { p_order_id: orderId });
+      if (error) throw error;
+      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+      toast({ title: "Pedido recusado", description: "O pedido foi cancelado com sucesso." });
+    } catch (err: any) {
+      toast({ title: "Erro ao recusar", description: err?.message || "Tente novamente.", variant: "destructive" });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
 
