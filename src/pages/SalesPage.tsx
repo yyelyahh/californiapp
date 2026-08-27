@@ -723,6 +723,10 @@ export default function SalesPage() {
                     value="retiradas"
                     className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
                   >Retiradas <span className="ml-1.5 text-[11px] text-muted-foreground">{sortedRetiradas.length}</span></TabsTrigger>
+                  <TabsTrigger
+                    value="pedidos"
+                    className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+                  >Pedidos pendentes <span className="ml-1.5 text-[11px] text-muted-foreground">{pendingOrders.length}</span></TabsTrigger>
                 </TabsList>
               </div>
               <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
@@ -878,6 +882,99 @@ export default function SalesPage() {
                     </thead>
                     <motion.tbody variants={stagger()} initial="hidden" animate="visible"><AnimatePresence initial={false}>{sortedRetiradas.map(renderRow)}</AnimatePresence></motion.tbody>
                   </table>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="pedidos" className="mt-0">
+              {loadingOrders ? (
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
+                </div>
+              ) : pendingOrders.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <p className="text-sm text-muted-foreground">Nenhum pedido pendente no momento.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingOrders.map(order => (
+                    <motion.div
+                      key={order.id}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="rounded-xl border border-border bg-card p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-foreground">{order.sellers?.name ?? "Sem vendedor"}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="font-medium text-foreground">{order.customers?.name ?? "Sem cliente"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+                            <span className="mono">{order.customers?.whatsapp ?? "—"}</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1"><Clock size={12} />{timeAgo(order.created_at)}</span>
+                          </div>
+                        </div>
+                        <div className="text-right min-w-[100px]">
+                          <p className="text-base font-semibold mono text-foreground">{formatCurrency(order.total_amount)}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
+                        </div>
+                      </div>
+
+                      {order.freight_notes && (
+                        <div className="mt-2 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">Frete:</span> {order.freight_notes}
+                        </div>
+                      )}
+
+                      <div className="mt-3 rounded-lg border border-border/60 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                              <th className="text-left py-1.5 px-3">Produto</th>
+                              <th className="text-left py-1.5 px-3">Sabor</th>
+                              <th className="text-right py-1.5 px-3 w-[50px]">Qtd</th>
+                              <th className="text-right py-1.5 px-3 w-[90px]">Unitário</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {order.order_items?.map(item => (
+                              <tr key={item.id} className="border-t border-border/40 text-xs">
+                                <td className="py-1.5 px-3">{item.products ? `${item.products.brand} · ${item.products.name}` : "—"}</td>
+                                <td className="py-1.5 px-3 text-muted-foreground">{item.products?.flavor ?? "—"}</td>
+                                <td className="py-1.5 px-3 text-right mono">{item.quantity}</td>
+                                <td className="py-1.5 px-3 text-right mono">{formatCurrency(item.unit_price)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={processingOrder === order.id}
+                          onClick={() => handleDeclineOrder(order.id)}
+                        >
+                          <Ban size={13} className="mr-1.5" />Recusar
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={processingOrder === order.id}
+                          onClick={() => handleConfirmOrder(order.id)}
+                        >
+                          <Check size={13} className="mr-1.5" />Confirmar
+                        </Button>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               )}
             </TabsContent>
