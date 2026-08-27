@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
-import { useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,6 +19,44 @@ import BatchSaleForm from "@/components/BatchSaleForm";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `há ${minutes} min`;
+  if (hours < 24) return `há ${hours}h`;
+  if (days === 1) return "há 1 dia";
+  return `há ${days} dias`;
+}
+
+type OrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  created_at: string;
+  products: { name: string; brand: string; flavor: string } | null;
+};
+
+type Order = {
+  id: string;
+  customer_id: string;
+  seller_id: string;
+  status: string;
+  freight_notes?: string;
+  total_amount: number;
+  created_at: string;
+  confirmed_at?: string;
+  customers: { name: string; whatsapp: string } | null;
+  sellers: { name: string } | null;
+  order_items: OrderItem[];
+};
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -79,6 +117,63 @@ export default function SalesPage() {
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+
+  // Pedidos pendentes
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
+
+  const fetchPendingOrders = async () => {
+    if (isSeller) return;
+    setLoadingOrders(true);
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, flavor))")
+      .eq("status", "pendente")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Erro ao carregar pedidos", description: error.message, variant: "destructive" });
+    } else {
+      setPendingOrders((data as Order[]) ?? []);
+    }
+    setLoadingOrders(false);
+  };
+
+  useEffect(() => {
+    fetchPendingOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConfirmOrder = async (orderId: string) => {
+    if (processingOrder) return;
+    setProcessingOrder(orderId);
+    try {
+      const { error } = await supabase.rpc("confirm_order", { p_order_id: orderId });
+      if (error) throw error;
+      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+      toast({ title: "Pedido confirmado", description: "O pedido foi confirmado e o estoque atualizado." });
+    } catch (err: any) {
+      toast({ title: "Erro ao confirmar", description: err?.message || "Tente novamente.", variant: "destructive" });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const handleDeclineOrder = async (orderId: string) => {
+    if (!(await confirm({ title: "Recusar pedido", description: "Tem certeza? Essa ação não pode ser desfeita e o pedido será cancelado." }))) return;
+    if (processingOrder) return;
+    setProcessingOrder(orderId);
+    try {
+      const { error } = await supabase.rpc("decline_order", { p_order_id: orderId });
+      if (error) throw error;
+      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+      toast({ title: "Pedido recusado", description: "O pedido foi cancelado com sucesso." });
+    } catch (err: any) {
+      toast({ title: "Erro ao recusar", description: err?.message || "Tente novamente.", variant: "destructive" });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
 
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
@@ -628,6 +723,10 @@ export default function SalesPage() {
                     value="retiradas"
                     className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
                   >Retiradas <span className="ml-1.5 text-[11px] text-muted-foreground">{sortedRetiradas.length}</span></TabsTrigger>
+                  <TabsTrigger
+                    value="pedidos"
+                    className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+                  >Pedidos pendentes <span className="ml-1.5 text-[11px] text-muted-foreground">{pendingOrders.length}</span></TabsTrigger>
                 </TabsList>
               </div>
               <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
@@ -783,6 +882,99 @@ export default function SalesPage() {
                     </thead>
                     <motion.tbody variants={stagger()} initial="hidden" animate="visible"><AnimatePresence initial={false}>{sortedRetiradas.map(renderRow)}</AnimatePresence></motion.tbody>
                   </table>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="pedidos" className="mt-0">
+              {loadingOrders ? (
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
+                </div>
+              ) : pendingOrders.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <p className="text-sm text-muted-foreground">Nenhum pedido pendente no momento.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingOrders.map(order => (
+                    <motion.div
+                      key={order.id}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="rounded-xl border border-border bg-card p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-foreground">{order.sellers?.name ?? "Sem vendedor"}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="font-medium text-foreground">{order.customers?.name ?? "Sem cliente"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+                            <span className="mono">{order.customers?.whatsapp ?? "—"}</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1"><Clock size={12} />{timeAgo(order.created_at)}</span>
+                          </div>
+                        </div>
+                        <div className="text-right min-w-[100px]">
+                          <p className="text-base font-semibold mono text-foreground">{formatCurrency(order.total_amount)}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
+                        </div>
+                      </div>
+
+                      {order.freight_notes && (
+                        <div className="mt-2 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">Frete:</span> {order.freight_notes}
+                        </div>
+                      )}
+
+                      <div className="mt-3 rounded-lg border border-border/60 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                              <th className="text-left py-1.5 px-3">Produto</th>
+                              <th className="text-left py-1.5 px-3">Sabor</th>
+                              <th className="text-right py-1.5 px-3 w-[50px]">Qtd</th>
+                              <th className="text-right py-1.5 px-3 w-[90px]">Unitário</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {order.order_items?.map(item => (
+                              <tr key={item.id} className="border-t border-border/40 text-xs">
+                                <td className="py-1.5 px-3">{item.products ? `${item.products.brand} · ${item.products.name}` : "—"}</td>
+                                <td className="py-1.5 px-3 text-muted-foreground">{item.products?.flavor ?? "—"}</td>
+                                <td className="py-1.5 px-3 text-right mono">{item.quantity}</td>
+                                <td className="py-1.5 px-3 text-right mono">{formatCurrency(item.unit_price)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={processingOrder === order.id}
+                          onClick={() => handleDeclineOrder(order.id)}
+                        >
+                          <Ban size={13} className="mr-1.5" />Recusar
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={processingOrder === order.id}
+                          onClick={() => handleConfirmOrder(order.id)}
+                        >
+                          <Check size={13} className="mr-1.5" />Confirmar
+                        </Button>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               )}
             </TabsContent>
