@@ -48,8 +48,11 @@ function friendlyError(message: string) {
   return message || "Não foi possível enviar o pedido. Tente novamente.";
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function SellerStorePage() {
   const { sellerId } = useParams<{ sellerId: string }>();
+  const validId = !!sellerId && UUID_RE.test(sellerId);
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -64,15 +67,19 @@ export default function SellerStorePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!sellerId) return;
+    if (!validId) { setLoading(false); return; }
     setLoading(true);
     const { data, error } = await supabase.rpc("get_seller_catalog", { p_seller_id: sellerId });
     if (error) toast.error("Erro ao carregar catálogo", { description: error.message });
     setRows((data as CatalogRow[]) ?? []);
     setLoading(false);
-  }, [sellerId]);
+  }, [sellerId, validId]);
 
   useEffect(() => { load(); }, [load]);
+
+
+
+
 
   const sellerName = rows[0]?.seller_name ?? "";
 
@@ -175,6 +182,19 @@ export default function SellerStorePage() {
       setSubmitting(false);
     }
   };
+
+  if (!validId) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center space-y-2 max-w-md">
+          <h1 className="text-xl font-semibold">Link inválido</h1>
+          <p className="text-sm text-muted-foreground">
+            Este endereço de loja não é válido. Peça ao vendedor o link correto do catálogo.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
