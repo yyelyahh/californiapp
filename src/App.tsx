@@ -20,6 +20,7 @@ import CommissionsPage from "@/pages/CommissionsPage";
 import InsightsPage from "@/pages/InsightsPage";
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
+import SellerStorePage from "@/pages/SellerStorePage";
 import NotFound from "./pages/NotFound";
 
 const PageFallback = () => null;
@@ -87,6 +88,7 @@ function AuthGate() {
     <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/loja/:sellerId" element={<SellerStorePage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
         <Route path="/*" element={<ProtectedRoutes />} />
       </Routes>
