@@ -20,6 +20,7 @@ import CommissionsPage from "@/pages/CommissionsPage";
 import InsightsPage from "@/pages/InsightsPage";
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
+import SellerStorePage from "@/pages/SellerStorePage";
 import NotFound from "./pages/NotFound";
 
 const PageFallback = () => null;
