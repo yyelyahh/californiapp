@@ -87,6 +87,7 @@ function AuthGate() {
     <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/loja/:sellerId" element={<SellerStorePage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
         <Route path="/*" element={<ProtectedRoutes />} />
       </Routes>
