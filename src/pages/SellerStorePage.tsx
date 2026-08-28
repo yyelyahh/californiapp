@@ -77,18 +77,8 @@ export default function SellerStorePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (!validId) {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center space-y-2 max-w-md">
-          <h1 className="text-xl font-semibold">Link inválido</h1>
-          <p className="text-sm text-muted-foreground">
-            Este endereço de loja não é válido. Peça ao vendedor o link correto do catálogo.
-          </p>
-        </div>
-      </main>
-    );
-  }
+
+
 
 
   const sellerName = rows[0]?.seller_name ?? "";
