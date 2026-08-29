@@ -261,8 +261,18 @@ export default function SellerStorePage() {
 
       </main>
 
+      {/* Barra fixa mobile */}
+      <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/95 backdrop-blur-xl">
+        <div className="px-4 py-3">
+          <Button onClick={() => setCartOpen(true)} className="w-full h-12 gap-2">
+            <ShoppingCart size={16} />
+            Ver carrinho ({cartCount} {cartCount === 1 ? "item" : "itens"}) · {fmt(total)}
+          </Button>
+        </div>
+      </div>
+
       {cartCount > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/90 backdrop-blur-xl">
+        <div className="hidden sm:block fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/90 backdrop-blur-xl">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <div className="text-sm">
               <span className="text-muted-foreground">{cartCount} item(ns) · </span>
@@ -274,6 +284,7 @@ export default function SellerStorePage() {
           </div>
         </div>
       )}
+
 
       {/* Cart */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
