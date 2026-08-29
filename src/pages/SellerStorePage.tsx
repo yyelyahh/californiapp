@@ -53,6 +53,121 @@ function friendlyError(message: string) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+interface ModelGroup {
+  key: string;
+  brand: string;
+  model: string;
+  flavors: CatalogRow[];
+}
+
+function ModelCard({
+  group,
+  onAdd,
+}: {
+  group: ModelGroup;
+  onAdd: (row: CatalogRow, qty: number) => void;
+}) {
+  const [selectedId, setSelectedId] = useState(group.flavors[0]?.product_id ?? "");
+  const [qty, setQty] = useState(1);
+
+  const selected =
+    group.flavors.find(f => f.product_id === selectedId) ?? group.flavors[0];
+  const single = group.flavors.length === 1;
+  const available = selected?.available ?? 0;
+  const out = available <= 0;
+  const clampedQty = Math.min(Math.max(1, qty), Math.max(available, 1));
+
+  const handleSelect = (id: string) => {
+    setSelectedId(id);
+    setQty(1);
+  };
+
+  if (!selected) return null;
+
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-4 flex flex-col h-full">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
+            {group.brand || "Sem marca"}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            {out ? "Esgotado" : `${available} disp.`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-14 w-14 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
+            <Package size={24} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold leading-tight truncate">
+              {group.model || "Sem modelo"}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {group.flavors.length} {group.flavors.length === 1 ? "sabor" : "sabores"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          {single ? (
+            <div className="h-10 flex items-center px-3 rounded-md border border-border bg-muted/40 text-sm truncate">
+              {selected.flavor}
+            </div>
+          ) : (
+            <Select value={selected.product_id} onValueChange={handleSelect}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Escolha o sabor" />
+              </SelectTrigger>
+              <SelectContent className="z-50 bg-popover">
+                {group.flavors.map(f => (
+                  <SelectItem key={f.product_id} value={f.product_id}>
+                    {f.flavor}{f.available <= 0 ? " · esgotado" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <div className="text-lg font-bold mb-3">{fmt(selected.sale_price)}</div>
+
+        <div className="mt-auto flex items-center gap-2">
+          <div className="flex items-center border border-border rounded-md">
+            <button
+              type="button"
+              disabled={out || clampedQty <= 1}
+              onClick={() => setQty(Math.max(1, clampedQty - 1))}
+              className="px-2 py-2 disabled:opacity-40"
+            >
+              <Minus size={13} />
+            </button>
+            <span className="w-8 text-center text-sm font-medium">{out ? 0 : clampedQty}</span>
+            <button
+              type="button"
+              disabled={out || clampedQty >= available}
+              onClick={() => setQty(Math.min(available, clampedQty + 1))}
+              className="px-2 py-2 disabled:opacity-40"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+          <Button
+            className="flex-1"
+            size="sm"
+            disabled={out}
+            onClick={() => { onAdd(selected, clampedQty); setQty(1); }}
+          >
+            {out ? "Esgotado" : "Adicionar"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
 export default function SellerStorePage() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const validId = !!sellerId && UUID_RE.test(sellerId);
