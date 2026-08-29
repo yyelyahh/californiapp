@@ -61,34 +61,50 @@ interface ModelGroup {
   flavors: CatalogRow[];
 }
 
-function ModelCard({
+interface BrandGroup {
+  key: string;
+  brand: string;
+  models: ModelGroup[];
+}
+
+function BrandCard({
   group,
   onAdd,
 }: {
-  group: ModelGroup;
+  group: BrandGroup;
   onAdd: (row: CatalogRow, qty: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [modelKey, setModelKey] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string>("");
   const [qty, setQty] = useState(1);
 
-  const inStock = group.flavors.filter(f => f.available > 0);
-  const prices = (inStock.length ? inStock : group.flavors).map(f => f.sale_price);
+  const allRows = group.models.flatMap(m => m.flavors);
+  const inStock = allRows.filter(r => r.available > 0);
+  const prices = (inStock.length ? inStock : allRows).map(r => r.sale_price);
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const samePrice = prices.every(p => p === prices[0]);
+  const flavorCount = allRows.length;
 
-  const selected = group.flavors.find(f => f.product_id === selectedId);
+  const activeModel = group.models.find(m => m.key === modelKey) ?? group.models[0];
+  const selected = activeModel?.flavors.find(f => f.product_id === selectedId);
   const available = selected?.available ?? 0;
   const clampedQty = Math.min(Math.max(1, qty), Math.max(available, 1));
 
-  const openDialog = () => {
-    const first = inStock[0] ?? group.flavors[0];
+  const pickModel = (m: ModelGroup) => {
+    setModelKey(m.key);
+    const first = m.flavors.find(f => f.available > 0) ?? m.flavors[0];
     setSelectedId(first?.product_id ?? "");
     setQty(1);
+  };
+
+  const openDialog = () => {
+    const m = group.models.find(mm => mm.flavors.some(f => f.available > 0)) ?? group.models[0];
+    if (m) pickModel(m);
     setOpen(true);
   };
 
-  if (group.flavors.length === 0) return null;
+  if (group.models.length === 0) return null;
 
   return (
     <>
@@ -115,10 +131,11 @@ function ModelCard({
             </div>
             <div className="min-w-0">
               <h3 className="text-base font-semibold leading-tight truncate">
-                {group.model || "Sem modelo"}
+                {group.brand || "Sem marca"}
               </h3>
               <p className="text-xs text-muted-foreground">
-                {group.flavors.length} {group.flavors.length === 1 ? "sabor" : "sabores"}
+                {group.models.length} {group.models.length === 1 ? "modelo" : "modelos"} ·{" "}
+                {flavorCount} {flavorCount === 1 ? "sabor" : "sabores"}
               </p>
             </div>
           </div>
@@ -140,34 +157,65 @@ function ModelCard({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md w-[calc(100%-1.5rem)] max-h-[90vh] p-0 gap-0 flex flex-col">
           <DialogHeader className="p-5 pb-3 text-left">
-            <DialogTitle className="text-lg">{group.model || "Sem modelo"}</DialogTitle>
-            <DialogDescription>{group.brand || "Sem marca"}</DialogDescription>
+            <DialogTitle className="text-lg">{group.brand || "Sem marca"}</DialogTitle>
+            <DialogDescription>Escolha o modelo e o sabor</DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2">
-            {group.flavors.map(f => {
-              const out = f.available <= 0;
-              const active = f.product_id === selectedId;
-              return (
-                <button
-                  key={f.product_id}
-                  type="button"
-                  disabled={out}
-                  onClick={() => { setSelectedId(f.product_id); setQty(1); }}
-                  className={`w-full min-h-[56px] flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors disabled:opacity-45 ${
-                    active ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{f.flavor || "Sem sabor"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {out ? "Esgotado" : `${f.available} disp.`}
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold shrink-0">{fmt(f.sale_price)}</span>
-                </button>
-              );
-            })}
+          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-4">
+            {group.models.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Modelo</p>
+                <div className="flex flex-wrap gap-2">
+                  {group.models.map(m => {
+                    const mOut = m.flavors.every(f => f.available <= 0);
+                    const mActive = m.key === activeModel?.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        disabled={mOut}
+                        onClick={() => pickModel(m)}
+                        className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-45 ${
+                          mActive ? "border-primary bg-primary/10 font-medium" : "border-border hover:bg-muted/50"
+                        }`}
+                      >
+                        {m.model || "Sem modelo"}
+                        {mOut && <span className="ml-1 text-xs text-muted-foreground">· esgotado</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Sabor {activeModel?.model ? `· ${activeModel.model}` : ""}
+              </p>
+              {activeModel?.flavors.map(f => {
+                const out = f.available <= 0;
+                const active = f.product_id === selectedId;
+                return (
+                  <button
+                    key={f.product_id}
+                    type="button"
+                    disabled={out}
+                    onClick={() => { setSelectedId(f.product_id); setQty(1); }}
+                    className={`w-full min-h-[56px] flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors disabled:opacity-45 ${
+                      active ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{f.flavor || "Sem sabor"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {out ? "Esgotado" : `${f.available} disp.`}
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold shrink-0">{fmt(f.sale_price)}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="border-t border-border p-5 space-y-3 bg-background">
@@ -215,6 +263,7 @@ function ModelCard({
     </>
   );
 }
+
 
 
 
