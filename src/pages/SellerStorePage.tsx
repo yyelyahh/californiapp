@@ -11,8 +11,9 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+
 import { toast } from "sonner";
 import { ShoppingCart, Trash2, Minus, Plus, Search, CheckCircle2, MessageCircle, Package } from "lucide-react";
 
