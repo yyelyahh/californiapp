@@ -249,63 +249,16 @@ export default function SellerStorePage() {
 
         {loading ? (
           <p className="text-center py-20 text-sm text-muted-foreground">Carregando catálogo...</p>
-        ) : filtered.length === 0 ? (
+        ) : groups.length === 0 ? (
           <p className="text-center py-20 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map(row => {
-              const out = row.available <= 0;
-              const qty = Math.min(qtys[row.product_id] ?? 1, Math.max(row.available, 1));
-              return (
-                <Card key={row.product_id} className="border-border/60">
-                  <CardContent className="p-4 flex flex-col h-full">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
-                        {row.brand}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {out ? "Esgotado" : `${row.available} disp.`}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-semibold leading-tight">{row.flavor}</h3>
-                    <p className="text-xs text-muted-foreground mb-3">{row.model}</p>
-                    <div className="text-lg font-bold mb-3">{fmt(row.sale_price)}</div>
-
-                    <div className="mt-auto flex items-center gap-2">
-                      <div className="flex items-center border border-border rounded-md">
-                        <button
-                          type="button"
-                          disabled={out || qty <= 1}
-                          onClick={() => setQtys(p => ({ ...p, [row.product_id]: Math.max(1, qty - 1) }))}
-                          className="px-2 py-2 disabled:opacity-40"
-                        >
-                          <Minus size={13} />
-                        </button>
-                        <span className="w-8 text-center text-sm font-medium">{out ? 0 : qty}</span>
-                        <button
-                          type="button"
-                          disabled={out || qty >= row.available}
-                          onClick={() => setQtys(p => ({ ...p, [row.product_id]: Math.min(row.available, qty + 1) }))}
-                          className="px-2 py-2 disabled:opacity-40"
-                        >
-                          <Plus size={13} />
-                        </button>
-                      </div>
-                      <Button
-                        className="flex-1"
-                        size="sm"
-                        disabled={out}
-                        onClick={() => addToCart(row)}
-                      >
-                        {out ? "Esgotado" : "Adicionar"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {groups.map(g => (
+              <ModelCard key={g.key} group={g} onAdd={addToCart} />
+            ))}
           </div>
         )}
+
       </main>
 
       {cartCount > 0 && (
