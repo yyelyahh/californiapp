@@ -86,13 +86,29 @@ export default function SellerStorePage() {
 
   const sellerName = rows[0]?.seller_name ?? "";
 
-  const filtered = useMemo(() => {
+  const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r =>
-      [r.brand, r.model, r.flavor, r.name].some(v => (v || "").toLowerCase().includes(q))
+    const map = new Map<string, { key: string; brand: string; model: string; flavors: CatalogRow[] }>();
+    rows.forEach((r, idx) => {
+      const hasKey = (r.brand || "").trim() !== "" || (r.model || "").trim() !== "";
+      const key = hasKey ? `${r.brand}|||${r.model}` : `__sem_modelo__${idx}`;
+      if (!map.has(key)) map.set(key, { key, brand: r.brand, model: r.model, flavors: [] });
+      map.get(key)!.flavors.push(r);
+    });
+    let list = Array.from(map.values());
+    if (q) {
+      list = list.filter(g =>
+        g.flavors.some(r =>
+          [r.brand, r.model, r.flavor, r.name].some(v => (v || "").toLowerCase().includes(q))
+        )
+      );
+    }
+    list.forEach(g => g.flavors.sort((a, b) => (a.flavor || "").localeCompare(b.flavor || "")));
+    return list.sort((a, b) =>
+      `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`)
     );
   }, [rows, query]);
+
 
   const total = useMemo(
     () => cart.reduce((a, i) => a + i.sale_price * i.quantity, 0),
