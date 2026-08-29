@@ -224,7 +224,7 @@ export default function SellerStorePage() {
               {sellerName ? `Loja de ${sellerName}` : "Loja"}
             </h1>
           </div>
-          <Button onClick={() => setCartOpen(true)} size="sm" className="gap-2 relative">
+          <Button onClick={() => setCartOpen(true)} size="sm" className="gap-2 relative hidden sm:flex">
             <ShoppingCart size={15} />
             Carrinho
             {cartCount > 0 && (
