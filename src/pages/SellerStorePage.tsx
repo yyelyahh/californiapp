@@ -67,105 +67,154 @@ function ModelCard({
   group: ModelGroup;
   onAdd: (row: CatalogRow, qty: number) => void;
 }) {
-  const [selectedId, setSelectedId] = useState(group.flavors[0]?.product_id ?? "");
+  const [open, setOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [qty, setQty] = useState(1);
 
-  const selected =
-    group.flavors.find(f => f.product_id === selectedId) ?? group.flavors[0];
-  const single = group.flavors.length === 1;
+  const inStock = group.flavors.filter(f => f.available > 0);
+  const prices = (inStock.length ? inStock : group.flavors).map(f => f.sale_price);
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const samePrice = prices.every(p => p === prices[0]);
+
+  const selected = group.flavors.find(f => f.product_id === selectedId);
   const available = selected?.available ?? 0;
-  const out = available <= 0;
   const clampedQty = Math.min(Math.max(1, qty), Math.max(available, 1));
 
-  const handleSelect = (id: string) => {
-    setSelectedId(id);
+  const openDialog = () => {
+    const first = inStock[0] ?? group.flavors[0];
+    setSelectedId(first?.product_id ?? "");
     setQty(1);
+    setOpen(true);
   };
 
-  if (!selected) return null;
+  if (group.flavors.length === 0) return null;
 
   return (
-    <Card className="border-border/60">
-      <CardContent className="p-4 flex flex-col h-full">
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
-            {group.brand || "Sem marca"}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {out ? "Esgotado" : `${available} disp.`}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 mb-3">
-          <div className="h-14 w-14 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
-            <Package size={24} />
+    <>
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={openDialog}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDialog(); } }}
+        className="border-border/60 cursor-pointer transition-colors hover:border-primary/50"
+      >
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
+              {group.brand || "Sem marca"}
+            </Badge>
+            {inStock.length === 0 && (
+              <span className="text-xs text-muted-foreground">Esgotado</span>
+            )}
           </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-semibold leading-tight truncate">
-              {group.model || "Sem modelo"}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {group.flavors.length} {group.flavors.length === 1 ? "sabor" : "sabores"}
-            </p>
-          </div>
-        </div>
 
-        <div className="mb-3">
-          {single ? (
-            <div className="h-10 flex items-center px-3 rounded-md border border-border bg-muted/40 text-sm truncate">
-              {selected.flavor}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-14 w-14 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
+              <Package size={24} />
             </div>
-          ) : (
-            <Select value={selected.product_id} onValueChange={handleSelect}>
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="Escolha o sabor" />
-              </SelectTrigger>
-              <SelectContent className="z-50 bg-popover">
-                {group.flavors.map(f => (
-                  <SelectItem key={f.product_id} value={f.product_id}>
-                    {f.flavor}{f.available <= 0 ? " · esgotado" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        <div className="text-lg font-bold mb-3">{fmt(selected.sale_price)}</div>
-
-        <div className="mt-auto flex items-center gap-2">
-          <div className="flex items-center border border-border rounded-md">
-            <button
-              type="button"
-              disabled={out || clampedQty <= 1}
-              onClick={() => setQty(Math.max(1, clampedQty - 1))}
-              className="px-2 py-2 disabled:opacity-40"
-            >
-              <Minus size={13} />
-            </button>
-            <span className="w-8 text-center text-sm font-medium">{out ? 0 : clampedQty}</span>
-            <button
-              type="button"
-              disabled={out || clampedQty >= available}
-              onClick={() => setQty(Math.min(available, clampedQty + 1))}
-              className="px-2 py-2 disabled:opacity-40"
-            >
-              <Plus size={13} />
-            </button>
+            <div className="min-w-0">
+              <h3 className="text-base font-semibold leading-tight truncate">
+                {group.model || "Sem modelo"}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {group.flavors.length} {group.flavors.length === 1 ? "sabor" : "sabores"}
+              </p>
+            </div>
           </div>
-          <Button
-            className="flex-1"
-            size="sm"
-            disabled={out}
-            onClick={() => { onAdd(selected, clampedQty); setQty(1); }}
-          >
-            {out ? "Esgotado" : "Adicionar"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {!samePrice && (
+                <span className="block text-[11px] text-muted-foreground">A partir de</span>
+              )}
+              <span className="text-lg font-bold">{fmt(minPrice)}</span>
+            </div>
+            <Button size="sm" variant="secondary" onClick={e => { e.stopPropagation(); openDialog(); }}>
+              Ver opções
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md w-[calc(100%-1.5rem)] max-h-[90vh] p-0 gap-0 flex flex-col">
+          <DialogHeader className="p-5 pb-3 text-left">
+            <DialogTitle className="text-lg">{group.model || "Sem modelo"}</DialogTitle>
+            <DialogDescription>{group.brand || "Sem marca"}</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2">
+            {group.flavors.map(f => {
+              const out = f.available <= 0;
+              const active = f.product_id === selectedId;
+              return (
+                <button
+                  key={f.product_id}
+                  type="button"
+                  disabled={out}
+                  onClick={() => { setSelectedId(f.product_id); setQty(1); }}
+                  className={`w-full min-h-[56px] flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors disabled:opacity-45 ${
+                    active ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{f.flavor || "Sem sabor"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {out ? "Esgotado" : `${f.available} disp.`}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold shrink-0">{fmt(f.sale_price)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="border-t border-border p-5 space-y-3 bg-background">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Preço</span>
+              <span className="text-xl font-bold">{fmt(selected?.sale_price ?? 0)}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border border-border rounded-md">
+                <button
+                  type="button"
+                  disabled={!selected || available <= 0 || clampedQty <= 1}
+                  onClick={() => setQty(Math.max(1, clampedQty - 1))}
+                  className="px-3 py-2.5 disabled:opacity-40"
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="w-9 text-center text-sm font-medium">
+                  {available <= 0 ? 0 : clampedQty}
+                </span>
+                <button
+                  type="button"
+                  disabled={!selected || clampedQty >= available}
+                  onClick={() => setQty(Math.min(available, clampedQty + 1))}
+                  className="px-3 py-2.5 disabled:opacity-40"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+              <Button
+                className="flex-1 h-11"
+                disabled={!selected || available <= 0}
+                onClick={() => {
+                  if (!selected) return;
+                  onAdd(selected, clampedQty);
+                  setOpen(false);
+                }}
+              >
+                {available <= 0 ? "Esgotado" : "Adicionar ao carrinho"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
 
 
 export default function SellerStorePage() {
