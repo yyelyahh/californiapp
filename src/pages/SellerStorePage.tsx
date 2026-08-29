@@ -116,8 +116,8 @@ export default function SellerStorePage() {
   );
   const cartCount = useMemo(() => cart.reduce((a, i) => a + i.quantity, 0), [cart]);
 
-  const addToCart = (row: CatalogRow) => {
-    const qty = Math.min(Math.max(1, qtys[row.product_id] ?? 1), row.available);
+  const addToCart = (row: CatalogRow, requested = 1) => {
+    const qty = Math.min(Math.max(1, requested), row.available);
     setCart(prev => {
       const existing = prev.find(i => i.product_id === row.product_id);
       if (existing) {
@@ -129,9 +129,9 @@ export default function SellerStorePage() {
       }
       return [...prev, { ...row, quantity: qty }];
     });
-    setQtys(p => ({ ...p, [row.product_id]: 1 }));
     toast.success("Adicionado ao carrinho", { description: `${row.flavor} · ${row.model}` });
   };
+
 
   const setItemQty = (productId: string, qty: number) => {
     setCart(prev =>
