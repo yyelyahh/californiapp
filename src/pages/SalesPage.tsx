@@ -107,7 +107,7 @@ type PaymentMethodValue =
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
-  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
+  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName, refreshSales } = useStore();
   const { role, sellerId } = useAuth();
   const confirm = useConfirm();
   const isSeller = role === "seller";
