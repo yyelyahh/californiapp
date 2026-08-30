@@ -94,6 +94,8 @@ interface StoreContextType {
   addLoanPayment: (p: Omit<LoanPayment, "id" | "createdAt">) => Promise<void>;
   deleteLoanPayment: (id: string) => Promise<void>;
   refreshFinancialEvents: () => Promise<void>;
+  refreshSales: () => Promise<void>;
+
   // Selectors do novo modelo (contabilidade simplificada)
   getCash: () => number;
   getInventoryCostValue: () => number;
@@ -1212,6 +1214,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
   }, []);
 
+  const refreshSales = useCallback(async () => {
+    const [salesRes, paRes, prodList] = await Promise.all([
+      supabase.from("sales").select("*").order("created_at", { ascending: true }),
+      supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
+      fetchProductsList(),
+    ]);
+    if (salesRes.data) setSales((salesRes.data as any[]).map(mapSale));
+    if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
+    if (prodList) setProducts(prodList);
+  }, [fetchProductsList]);
+
+
+
+
   const addPartnerContribution = useCallback(async (c: Omit<PartnerContribution, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("partner_contributions" as any).insert({
       partner_id: c.partnerId, amount: c.amount, date: c.date, notes: c.notes,
@@ -1346,6 +1362,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addLoan, updateLoan, deleteLoan,
     addLoanPayment, deleteLoanPayment,
     refreshFinancialEvents,
+    refreshSales,
+
     getCash, getInventoryCostValue, getReceivables,
     getPartnerCapital, getLoansOutstanding,
     getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
@@ -1371,7 +1389,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addPartnerContribution, deletePartnerContribution,
     addLoan, updateLoan, deleteLoan,
     addLoanPayment, deleteLoanPayment,
-    refreshFinancialEvents,
+    refreshFinancialEvents, refreshSales,
+
     getCash, getInventoryCostValue, getReceivables,
     getPartnerCapital, getLoansOutstanding,
     getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,

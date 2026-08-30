@@ -107,7 +107,7 @@ type PaymentMethodValue =
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
-  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName } = useStore();
+  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName, refreshSales } = useStore();
   const { role, sellerId } = useAuth();
   const confirm = useConfirm();
   const isSeller = role === "seller";
@@ -151,7 +151,9 @@ export default function SalesPage() {
       const { error } = await supabase.rpc("confirm_order", { p_order_id: orderId });
       if (error) throw error;
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+      await refreshSales();
       toast({ title: "Pedido confirmado", description: "O pedido foi confirmado e o estoque atualizado." });
+
     } catch (err: any) {
       toast({ title: "Erro ao confirmar", description: err?.message || "Tente novamente.", variant: "destructive" });
     } finally {
