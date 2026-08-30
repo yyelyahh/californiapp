@@ -151,7 +151,9 @@ export default function SalesPage() {
       const { error } = await supabase.rpc("confirm_order", { p_order_id: orderId });
       if (error) throw error;
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+      await refreshSales();
       toast({ title: "Pedido confirmado", description: "O pedido foi confirmado e o estoque atualizado." });
+
     } catch (err: any) {
       toast({ title: "Erro ao confirmar", description: err?.message || "Tente novamente.", variant: "destructive" });
     } finally {
