@@ -1223,7 +1223,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (salesRes.data) setSales((salesRes.data as any[]).map(mapSale));
     if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
     if (prodList) setProducts(prodList);
-  }, []);
+  }, [fetchProductsList]);
+
 
 
 
