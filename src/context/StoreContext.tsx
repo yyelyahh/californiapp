@@ -1389,7 +1389,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addPartnerContribution, deletePartnerContribution,
     addLoan, updateLoan, deleteLoan,
     addLoanPayment, deleteLoanPayment,
-    refreshFinancialEvents,
+    refreshFinancialEvents, refreshSales,
+
     getCash, getInventoryCostValue, getReceivables,
     getPartnerCapital, getLoansOutstanding,
     getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getDistributableProfit,
