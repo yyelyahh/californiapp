@@ -1214,6 +1214,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
   }, []);
 
+  const refreshSales = useCallback(async () => {
+    const [salesRes, paRes, prodList] = await Promise.all([
+      supabase.from("sales").select("*").order("created_at", { ascending: true }),
+      supabase.from("product_assignments" as any).select("*").order("created_at", { ascending: true }),
+      fetchProductsList(),
+    ]);
+    if (salesRes.data) setSales((salesRes.data as any[]).map(mapSale));
+    if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
+    if (prodList) setProducts(prodList);
+  }, []);
+
+
+
   const addPartnerContribution = useCallback(async (c: Omit<PartnerContribution, "id" | "createdAt">) => {
     const { data, error } = await supabase.from("partner_contributions" as any).insert({
       partner_id: c.partnerId, amount: c.amount, date: c.date, notes: c.notes,
