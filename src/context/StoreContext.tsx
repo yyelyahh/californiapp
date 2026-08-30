@@ -94,6 +94,8 @@ interface StoreContextType {
   addLoanPayment: (p: Omit<LoanPayment, "id" | "createdAt">) => Promise<void>;
   deleteLoanPayment: (id: string) => Promise<void>;
   refreshFinancialEvents: () => Promise<void>;
+  refreshSales: () => Promise<void>;
+
   // Selectors do novo modelo (contabilidade simplificada)
   getCash: () => number;
   getInventoryCostValue: () => number;
