@@ -482,7 +482,7 @@ export default function SellerStorePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {groups.map(g => (
-              <ModelCard key={g.key} group={g} onAdd={addToCart} />
+              <BrandCard key={g.key} group={g} onAdd={addToCart} />
             ))}
           </div>
         )}
