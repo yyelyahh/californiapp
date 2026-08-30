@@ -302,26 +302,40 @@ export default function SellerStorePage() {
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const map = new Map<string, { key: string; brand: string; model: string; flavors: CatalogRow[] }>();
+    const modelMap = new Map<string, ModelGroup>();
     rows.forEach((r, idx) => {
       const hasKey = (r.brand || "").trim() !== "" || (r.model || "").trim() !== "";
       const key = hasKey ? `${r.brand}|||${r.model}` : `__sem_modelo__${idx}`;
-      if (!map.has(key)) map.set(key, { key, brand: r.brand, model: r.model, flavors: [] });
-      map.get(key)!.flavors.push(r);
+      if (!modelMap.has(key)) modelMap.set(key, { key, brand: r.brand, model: r.model, flavors: [] });
+      modelMap.get(key)!.flavors.push(r);
     });
-    let list = Array.from(map.values());
+
+    let models = Array.from(modelMap.values());
     if (q) {
-      list = list.filter(g =>
-        g.flavors.some(r =>
-          [r.brand, r.model, r.flavor, r.name].some(v => (v || "").toLowerCase().includes(q))
-        )
-      );
+      models = models
+        .map(m => ({
+          ...m,
+          flavors: m.flavors.filter(r =>
+            [r.brand, r.model, r.flavor, r.name].some(v => (v || "").toLowerCase().includes(q))
+          ),
+        }))
+        .filter(m => m.flavors.length > 0);
     }
-    list.forEach(g => g.flavors.sort((a, b) => (a.flavor || "").localeCompare(b.flavor || "")));
-    return list.sort((a, b) =>
-      `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`)
+    models.forEach(m => m.flavors.sort((a, b) => (a.flavor || "").localeCompare(b.flavor || "")));
+    models.sort((a, b) => (a.model || "").localeCompare(b.model || ""));
+
+    const brandMap = new Map<string, BrandGroup>();
+    models.forEach(m => {
+      const bKey = (m.brand || "").trim() || "__sem_marca__";
+      if (!brandMap.has(bKey)) brandMap.set(bKey, { key: bKey, brand: m.brand, models: [] });
+      brandMap.get(bKey)!.models.push(m);
+    });
+
+    return Array.from(brandMap.values()).sort((a, b) =>
+      (a.brand || "").localeCompare(b.brand || "")
     );
   }, [rows, query]);
+
 
 
   const total = useMemo(
