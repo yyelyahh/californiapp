@@ -544,6 +544,7 @@ export type Database = {
           created_at: string
           flavor: string
           id: string
+          image_url: string | null
           min_stock: number
           model: string
           name: string
@@ -556,6 +557,7 @@ export type Database = {
           created_at?: string
           flavor?: string
           id?: string
+          image_url?: string | null
           min_stock?: number
           model?: string
           name: string
@@ -568,6 +570,7 @@ export type Database = {
           created_at?: string
           flavor?: string
           id?: string
+          image_url?: string | null
           min_stock?: number
           model?: string
           name?: string
@@ -1023,6 +1026,7 @@ export type Database = {
           available: number
           brand: string
           flavor: string
+          image_url: string
           model: string
           name: string
           product_id: string
