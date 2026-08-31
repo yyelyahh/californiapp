@@ -164,6 +164,10 @@ export default function AddProductDialog() {
             {modelSelect === "__new__" && (
               <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, 30K, TE 30K" autoFocus />
             )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">URL da foto (opcional)</Label>
+              <Input type="url" placeholder="https://..." value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+            </div>
           </section>
 
           {/* Preços */}
