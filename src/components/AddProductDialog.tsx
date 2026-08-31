@@ -29,6 +29,7 @@ export default function AddProductDialog() {
   const [modelSelect, setModelSelect] = useState("");
   const [model, setModel] = useState("");
   const [flavorsText, setFlavorsText] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -95,7 +96,7 @@ export default function AddProductDialog() {
 
   const handleReset = () => {
     setBrandSelect(""); setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
-    setPurchasePrice(""); setSalePrice("");
+    setImageUrl(""); setPurchasePrice(""); setSalePrice("");
   };
 
   const handleSubmit = async () => {
@@ -109,6 +110,7 @@ export default function AddProductDialog() {
         await addProduct({
           name: model.trim(), brand, model: model.trim(), flavor: p.flavor,
           purchasePrice: pPrice, salePrice: sPrice, minStock: 0,
+          imageUrl: imageUrl.trim() || undefined,
         });
         created++;
       } catch { toast.error(`Erro ao criar: ${p.flavor}`); }
@@ -162,6 +164,10 @@ export default function AddProductDialog() {
             {modelSelect === "__new__" && (
               <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, 30K, TE 30K" autoFocus />
             )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">URL da foto (opcional)</Label>
+              <Input type="url" placeholder="https://..." value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+            </div>
           </section>
 
           {/* Preços */}

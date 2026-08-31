@@ -8,6 +8,7 @@ export interface Product {
   salePrice: number;
   stock: number;
   minStock: number;
+  imageUrl?: string;
   createdAt: string;
 }
 
