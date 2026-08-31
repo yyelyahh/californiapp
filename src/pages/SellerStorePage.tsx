@@ -68,44 +68,62 @@ interface BrandGroup {
   models: ModelGroup[];
 }
 
-function BrandCard({
-  group,
+const BRAND_SWATCHES = [
+  { bg: "bg-slate-700", text: "text-slate-100" },
+  { bg: "bg-zinc-700", text: "text-zinc-100" },
+  { bg: "bg-stone-700", text: "text-stone-100" },
+  { bg: "bg-emerald-900", text: "text-emerald-100" },
+  { bg: "bg-teal-900", text: "text-teal-100" },
+  { bg: "bg-indigo-950", text: "text-indigo-100" },
+];
+
+function brandColor(brand: string) {
+  const key = (brand || "").trim().toLowerCase();
+  if (!key) return BRAND_SWATCHES[0];
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return BRAND_SWATCHES[hash % BRAND_SWATCHES.length];
+}
+
+function firstModelImage(rows: CatalogRow[]) {
+  for (const r of rows) if (r.image_url) return r.image_url;
+  return null;
+}
+
+function ModelCard({
+  model,
   onAdd,
 }: {
-  group: BrandGroup;
+  model: ModelGroup;
   onAdd: (row: CatalogRow, qty: number) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [modelKey, setModelKey] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string>("");
   const [qty, setQty] = useState(1);
 
-  const allRows = group.models.flatMap(m => m.flavors);
+  const allRows = model.flavors;
   const inStock = allRows.filter(r => r.available > 0);
   const prices = (inStock.length ? inStock : allRows).map(r => r.sale_price);
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const samePrice = prices.every(p => p === prices[0]);
   const flavorCount = allRows.length;
+  const allOut = inStock.length === 0;
 
-  const activeModel = group.models.find(m => m.key === modelKey) ?? group.models[0];
-  const selected = activeModel?.flavors.find(f => f.product_id === selectedId);
+  const selected = model.flavors.find(f => f.product_id === selectedId) ??
+    model.flavors.find(f => f.available > 0) ??
+    model.flavors[0];
   const available = selected?.available ?? 0;
   const clampedQty = Math.min(Math.max(1, qty), Math.max(available, 1));
 
-  const pickModel = (m: ModelGroup) => {
-    setModelKey(m.key);
-    const first = m.flavors.find(f => f.available > 0) ?? m.flavors[0];
-    setSelectedId(first?.product_id ?? "");
-    setQty(1);
-  };
+  const imageUrl = firstModelImage(model.flavors);
+  const color = brandColor(model.brand);
 
   const openDialog = () => {
-    const m = group.models.find(mm => mm.flavors.some(f => f.available > 0)) ?? group.models[0];
-    if (m) pickModel(m);
+    const first = model.flavors.find(f => f.available > 0) ?? model.flavors[0];
+    setSelectedId(first?.product_id ?? "");
+    setQty(1);
     setOpen(true);
   };
-
-  if (group.models.length === 0) return null;
 
   return (
     <>
@@ -114,39 +132,42 @@ function BrandCard({
         tabIndex={0}
         onClick={openDialog}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDialog(); } }}
-        className="border-border/60 cursor-pointer transition-colors hover:border-primary/50"
+        className="border-border/60 cursor-pointer overflow-hidden transition-all hover:border-primary/40 hover:shadow-md"
       >
+        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-xl">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={model.model || "Produto"}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className={`h-full w-full ${color.bg} flex items-center justify-center`}>
+              <Package size={40} className={`${color.text} opacity-70`} />
+            </div>
+          )}
+          {allOut && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+              <span className="text-xs font-medium text-muted-foreground">Esgotado</span>
+            </div>
+          )}
+        </div>
+
         <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-2 mb-3">
-            <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
-              {group.brand || "Sem marca"}
-            </Badge>
-            {inStock.length === 0 && (
-              <span className="text-xs text-muted-foreground">Esgotado</span>
-            )}
-          </div>
+          <h3 className="text-lg font-bold leading-tight truncate">
+            {model.model || "Sem modelo"}
+          </h3>
+          <p className="text-sm text-muted-foreground truncate">
+            {model.brand || "Sem marca"} · {flavorCount} {flavorCount === 1 ? "sabor" : "sabores"}
+          </p>
 
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-14 w-14 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
-              <Package size={24} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-base font-semibold leading-tight truncate">
-                {group.brand || "Sem marca"}
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                {group.models.length} {group.models.length === 1 ? "modelo" : "modelos"} ·{" "}
-                {flavorCount} {flavorCount === 1 ? "sabor" : "sabores"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-2">
+          <div className="mt-4 flex items-center justify-between gap-3">
             <div>
               {!samePrice && (
                 <span className="block text-[11px] text-muted-foreground">A partir de</span>
               )}
-              <span className="text-lg font-bold">{fmt(minPrice)}</span>
+              <span className="text-xl font-bold">{fmt(minPrice)}</span>
             </div>
             <Button size="sm" variant="secondary" onClick={e => { e.stopPropagation(); openDialog(); }}>
               Ver opções
@@ -158,42 +179,14 @@ function BrandCard({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md w-[calc(100%-1.5rem)] max-h-[90vh] p-0 gap-0 flex flex-col">
           <DialogHeader className="p-5 pb-3 text-left">
-            <DialogTitle className="text-lg">{group.brand || "Sem marca"}</DialogTitle>
-            <DialogDescription>Escolha o modelo e o sabor</DialogDescription>
+            <DialogTitle className="text-lg">{model.model || "Sem modelo"}</DialogTitle>
+            <DialogDescription>{model.brand || "Sem marca"}</DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-4">
-            {group.models.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Modelo</p>
-                <div className="flex flex-wrap gap-2">
-                  {group.models.map(m => {
-                    const mOut = m.flavors.every(f => f.available <= 0);
-                    const mActive = m.key === activeModel?.key;
-                    return (
-                      <button
-                        key={m.key}
-                        type="button"
-                        disabled={mOut}
-                        onClick={() => pickModel(m)}
-                        className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-45 ${
-                          mActive ? "border-primary bg-primary/10 font-medium" : "border-border hover:bg-muted/50"
-                        }`}
-                      >
-                        {m.model || "Sem modelo"}
-                        {mOut && <span className="ml-1 text-xs text-muted-foreground">· esgotado</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Sabor {activeModel?.model ? `· ${activeModel.model}` : ""}
-              </p>
-              {activeModel?.flavors.map(f => {
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sabor</p>
+              {model.flavors.map(f => {
                 const out = f.available <= 0;
                 const active = f.product_id === selectedId;
                 return (
