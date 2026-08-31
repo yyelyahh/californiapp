@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { localDateToISO } from "@/lib/date-utils";
 
 // Columns readable by every authenticated user (purchase_price is admin-only via RPC)
-const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,created_at";
+const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,image_url,created_at";
 
 interface StoreContextType {
   products: Product[];
@@ -148,7 +148,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return data.map((r: any) => ({
       id: r.id, name: r.name, brand: r.brand, model: r.model || '', flavor: r.flavor,
       purchasePrice: costs[r.id] ?? 0, salePrice: Number(r.sale_price),
-      stock: r.stock, minStock: Number(r.min_stock ?? 0), createdAt: r.created_at,
+      stock: r.stock, minStock: Number(r.min_stock ?? 0), imageUrl: r.image_url || undefined,
+      createdAt: r.created_at,
     }));
   }, [isAdmin]);
 

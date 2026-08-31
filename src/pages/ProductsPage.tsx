@@ -27,7 +27,7 @@ export default function ProductsPage() {
   const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "" });
+  const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "", imageUrl: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
   const [bulkMinOpen, setBulkMinOpen] = useState(false);
@@ -114,7 +114,7 @@ export default function ProductsPage() {
     setEditForm({
       name: p.name, brand: p.brand, model: p.model || '', flavor: p.flavor,
       purchasePrice: String(p.purchasePrice), salePrice: String(p.salePrice), stock: String(p.stock),
-      minStock: String(p.minStock ?? 0),
+      minStock: String(p.minStock ?? 0), imageUrl: p.imageUrl || "",
     });
   };
 
@@ -130,6 +130,7 @@ export default function ProductsPage() {
       salePrice: Number(editForm.salePrice) || 0,
       stock: Number(editForm.stock) || 0,
       minStock: Number(editForm.minStock) || 0,
+      imageUrl: editForm.imageUrl.trim() || undefined,
     });
     setEditId(null);
   };
