@@ -581,6 +581,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       name: p.name, brand: p.brand, model: p.model, flavor: p.flavor,
       purchase_price: p.purchasePrice, sale_price: p.salePrice, stock: 0,
       min_stock: p.minStock ?? 0,
+      image_url: p.imageUrl || null,
     }).select(PRODUCT_COLS).single();
     if (error) { toast.error("Erro ao adicionar produto"); return; }
     setProducts(prev => [...prev, mapProduct({ ...data, purchase_price: p.purchasePrice })]);
@@ -596,6 +597,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
     if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
     if (updates.minStock !== undefined) dbUpdates.min_stock = updates.minStock;
+    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl || null;
     const { error } = await supabase.from("products").update(dbUpdates).eq("id", id);
     if (error) { toast.error("Erro ao atualizar produto"); return; }
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
