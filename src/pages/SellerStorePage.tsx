@@ -26,6 +26,7 @@ interface CatalogRow {
   flavor: string;
   sale_price: number;
   available: number;
+  image_url?: string | null;
 }
 
 interface CartItem {
