@@ -96,6 +96,8 @@ function ModelCard({
   model: ModelGroup;
   onAdd: (row: CatalogRow, qty: number) => void;
 }) {
+  const isMobile = useIsMobile();
+  const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string>("");
   const [qty, setQty] = useState(1);
@@ -116,146 +118,208 @@ function ModelCard({
 
   const imageUrl = firstModelImage(model.flavors);
   const color = brandColor(model.brand);
+  const layoutId = `model-card-${model.key}`;
 
-  const openDialog = () => {
+  const openDetail = () => {
     const first = model.flavors.find(f => f.available > 0) ?? model.flavors[0];
     setSelectedId(first?.product_id ?? "");
     setQty(1);
     setOpen(true);
   };
 
-  return (
-    <>
-      <Card
-        role="button"
-        tabIndex={0}
-        onClick={openDialog}
-        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDialog(); } }}
-        className="border-border/60 cursor-pointer overflow-hidden transition-all hover:border-primary/40 hover:shadow-md"
+  const media = (rounded: string) =>
+    imageUrl ? (
+      <img
+        src={imageUrl}
+        alt={model.model || "Produto"}
+        className={`h-full w-full object-cover ${rounded}`}
+        loading="lazy"
+      />
+    ) : (
+      <div className={`h-full w-full ${color.bg} ${rounded} flex items-center justify-center`}>
+        <Package size={isMobile && open ? 72 : 40} className={`${color.text} opacity-70`} />
+      </div>
+    );
+
+  const flavorList = (
+    <div className="space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sabor</p>
+      {model.flavors.map(f => {
+        const out = f.available <= 0;
+        const active = f.product_id === selectedId;
+        const urgent = !out && f.available <= 2;
+        return (
+          <button
+            key={f.product_id}
+            type="button"
+            disabled={out}
+            onClick={() => { setSelectedId(f.product_id); setQty(1); }}
+            className={`w-full min-h-[56px] flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+              out ? "opacity-40" : active ? "bg-primary/10" : "hover:bg-muted/50"
+            }`}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                  active ? "bg-primary text-primary-foreground" : "border border-border"
+                }`}
+              >
+                {active && <Check size={12} />}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{f.flavor || "Sem sabor"}</p>
+                <p className={`text-xs ${urgent ? "text-destructive" : "text-muted-foreground"}`}>
+                  {out ? "Esgotado" : urgent ? `Últimas ${f.available} unidades` : `${f.available} disp.`}
+                </p>
+              </div>
+            </div>
+            <span className="text-sm font-semibold shrink-0">{fmt(f.sale_price)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const footer = (
+    <div className="flex items-center gap-3 border-t border-border bg-background p-4 safe-area-bottom">
+      <div className="flex items-center rounded-xl border border-border">
+        <button
+          type="button"
+          disabled={!selected || available <= 0 || clampedQty <= 1}
+          onClick={() => setQty(Math.max(1, clampedQty - 1))}
+          className="px-3 py-3 disabled:opacity-40"
+        >
+          <Minus size={14} />
+        </button>
+        <span className="w-9 text-center text-sm font-medium">
+          {available <= 0 ? 0 : clampedQty}
+        </span>
+        <button
+          type="button"
+          disabled={!selected || clampedQty >= available}
+          onClick={() => setQty(Math.min(available, clampedQty + 1))}
+          className="px-3 py-3 disabled:opacity-40"
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+      <Button
+        className="h-12 flex-1 text-base"
+        disabled={!selected || available <= 0}
+        onClick={() => {
+          if (!selected) return;
+          onAdd(selected, clampedQty);
+          setOpen(false);
+        }}
       >
-        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-xl">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={model.model || "Produto"}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className={`h-full w-full ${color.bg} flex items-center justify-center`}>
-              <Package size={40} className={`${color.text} opacity-70`} />
-            </div>
-          )}
-          {allOut && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-              <span className="text-xs font-medium text-muted-foreground">Esgotado</span>
-            </div>
-          )}
+        {available <= 0
+          ? "Esgotado"
+          : `Adicionar · ${fmt((selected?.sale_price ?? 0) * clampedQty)}`}
+      </Button>
+    </div>
+  );
+
+  const detail = (
+    <>
+      <motion.div
+        className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={transitionFast}
+        onClick={() => setOpen(false)}
+      />
+      <motion.div
+        layoutId={reduce ? undefined : layoutId}
+        transition={reduce ? { duration: 0 } : springSoft}
+        className={
+          isMobile
+            ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background"
+            : "fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+        }
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className={`relative w-full shrink-0 ${isMobile ? "h-[38vh]" : "h-56"}`}>
+          {media("")}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Fechar"
+            className="absolute left-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-background/85 backdrop-blur-sm shadow-md"
+          >
+            {isMobile ? <ArrowLeft size={18} /> : <X size={18} />}
+          </button>
         </div>
 
-        <CardContent className="p-4">
-          <h3 className="text-lg font-bold leading-tight truncate">
-            {model.model || "Sem modelo"}
-          </h3>
-          <p className="text-sm text-muted-foreground truncate">
-            {model.brand || "Sem marca"} · {flavorCount} {flavorCount === 1 ? "sabor" : "sabores"}
-          </p>
+        <motion.div
+          className="flex-1 overflow-y-auto p-5"
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...transitionBase, delay: reduce ? 0 : 0.08 }}
+        >
+          <p className="text-sm text-muted-foreground">{model.brand || "Sem marca"}</p>
+          <h2 className="mb-4 text-2xl font-bold leading-tight">{model.model || "Sem modelo"}</h2>
+          {flavorList}
+        </motion.div>
 
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div>
-              {!samePrice && (
-                <span className="block text-[11px] text-muted-foreground">A partir de</span>
-              )}
-              <span className="text-xl font-bold">{fmt(minPrice)}</span>
-            </div>
-            <Button size="sm" variant="secondary" onClick={e => { e.stopPropagation(); openDialog(); }}>
-              Ver opções
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        {footer}
+      </motion.div>
+    </>
+  );
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md w-[calc(100%-1.5rem)] max-h-[90vh] p-0 gap-0 flex flex-col">
-          <DialogHeader className="p-5 pb-3 text-left">
-            <DialogTitle className="text-lg">{model.model || "Sem modelo"}</DialogTitle>
-            <DialogDescription>{model.brand || "Sem marca"}</DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-4">
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sabor</p>
-              {model.flavors.map(f => {
-                const out = f.available <= 0;
-                const active = f.product_id === selectedId;
-                return (
-                  <button
-                    key={f.product_id}
-                    type="button"
-                    disabled={out}
-                    onClick={() => { setSelectedId(f.product_id); setQty(1); }}
-                    className={`w-full min-h-[56px] flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors disabled:opacity-45 ${
-                      active ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{f.flavor || "Sem sabor"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {out ? "Esgotado" : `${f.available} disp.`}
-                      </p>
-                    </div>
-                    <span className="text-sm font-semibold shrink-0">{fmt(f.sale_price)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="border-t border-border p-5 space-y-3 bg-background">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Preço</span>
-              <span className="text-xl font-bold">{fmt(selected?.sale_price ?? 0)}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center border border-border rounded-md">
-                <button
-                  type="button"
-                  disabled={!selected || available <= 0 || clampedQty <= 1}
-                  onClick={() => setQty(Math.max(1, clampedQty - 1))}
-                  className="px-3 py-2.5 disabled:opacity-40"
-                >
-                  <Minus size={14} />
-                </button>
-                <span className="w-9 text-center text-sm font-medium">
-                  {available <= 0 ? 0 : clampedQty}
-                </span>
-                <button
-                  type="button"
-                  disabled={!selected || clampedQty >= available}
-                  onClick={() => setQty(Math.min(available, clampedQty + 1))}
-                  className="px-3 py-2.5 disabled:opacity-40"
-                >
-                  <Plus size={14} />
-                </button>
+  return (
+    <>
+      <motion.div
+        layoutId={reduce ? undefined : layoutId}
+        transition={reduce ? { duration: 0 } : springSoft}
+        style={{ visibility: open ? "hidden" : "visible" }}
+      >
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={openDetail}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(); } }}
+          className="border-border/60 cursor-pointer overflow-hidden transition-all hover:border-primary/40 hover:shadow-md"
+        >
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-xl">
+            {media("")}
+            {allOut && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+                <span className="text-xs font-medium text-muted-foreground">Esgotado</span>
               </div>
-              <Button
-                className="flex-1 h-11"
-                disabled={!selected || available <= 0}
-                onClick={() => {
-                  if (!selected) return;
-                  onAdd(selected, clampedQty);
-                  setOpen(false);
-                }}
-              >
-                {available <= 0 ? "Esgotado" : "Adicionar ao carrinho"}
+            )}
+          </div>
+
+          <CardContent className="p-4">
+            <h3 className="text-lg font-bold leading-tight truncate">
+              {model.model || "Sem modelo"}
+            </h3>
+            <p className="text-sm text-muted-foreground truncate">
+              {model.brand || "Sem marca"} · {flavorCount} {flavorCount === 1 ? "sabor" : "sabores"}
+            </p>
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div>
+                {!samePrice && (
+                  <span className="block text-[11px] text-muted-foreground">A partir de</span>
+                )}
+                <span className="text-xl font-bold">{fmt(minPrice)}</span>
+              </div>
+              <Button size="sm" variant="secondary" onClick={e => { e.stopPropagation(); openDetail(); }}>
+                Ver opções
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {typeof document !== "undefined" &&
+        createPortal(<AnimatePresence>{open && detail}</AnimatePresence>, document.body)}
     </>
   );
 }
+
 
 
 
