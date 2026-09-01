@@ -244,7 +244,7 @@ function ModelCard({ model, onAdd }: { model: ModelGroup; onAdd: (row: CatalogRo
         role="dialog"
         aria-modal="true"
       >
-        <div className={`relative w-full shrink-0 ${isMobile ? "h-[38vh]" : "h-56"}`}>
+        <div className={`relative w-full shrink-0 ${isMobile ? "h-[38vh]" : "h-40"}`}>
           {media("")}
           <button
             type="button"
