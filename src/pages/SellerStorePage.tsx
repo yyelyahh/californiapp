@@ -474,9 +474,18 @@ export default function SellerStorePage() {
         ) : groups.length === 0 ? (
           <p className="text-center py-20 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="space-y-10">
             {groups.map(g => (
-              <BrandCard key={g.key} group={g} onAdd={addToCart} />
+              <section key={g.key}>
+                <h2 className="text-sm font-medium text-muted-foreground mb-4">
+                  {g.brand || "Sem marca"}
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {g.models.map(m => (
+                    <ModelCard key={m.key} model={m} onAdd={addToCart} />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
