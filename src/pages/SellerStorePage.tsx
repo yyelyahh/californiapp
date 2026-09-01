@@ -239,7 +239,7 @@ function ModelCard({ model, onAdd }: { model: ModelGroup; onAdd: (row: CatalogRo
         className={
           isMobile
             ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background"
-            : "fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+            : "fixed left-1/2 top-1/2 z-50 flex max-h-[min(95vh,calc(100vh-2rem))] w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
         }
         role="dialog"
         aria-modal="true"
