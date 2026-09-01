@@ -10,13 +10,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 import { toast } from "sonner";
-import { ShoppingCart, Trash2, Minus, Plus, Search, CheckCircle2, MessageCircle, Package, Check, ArrowLeft, X } from "lucide-react";
-
+import {
+  ShoppingCart,
+  Trash2,
+  Minus,
+  Plus,
+  Search,
+  CheckCircle2,
+  MessageCircle,
+  Package,
+  Check,
+  ArrowLeft,
+  X,
+} from "lucide-react";
 
 interface CatalogRow {
   seller_name: string;
@@ -41,8 +50,7 @@ interface CartItem {
   quantity: number;
 }
 
-const fmt = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
 function friendlyError(message: string) {
   if (message.includes("nome_invalido")) return "Informe seu nome";
@@ -91,13 +99,7 @@ function firstModelImage(rows: CatalogRow[]) {
   return null;
 }
 
-function ModelCard({
-  model,
-  onAdd,
-}: {
-  model: ModelGroup;
-  onAdd: (row: CatalogRow, qty: number) => void;
-}) {
+function ModelCard({ model, onAdd }: { model: ModelGroup; onAdd: (row: CatalogRow, qty: number) => void }) {
   const isMobile = useIsMobile();
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -105,15 +107,16 @@ function ModelCard({
   const [qty, setQty] = useState(1);
 
   const allRows = model.flavors;
-  const inStock = allRows.filter(r => r.available > 0);
-  const prices = (inStock.length ? inStock : allRows).map(r => r.sale_price);
+  const inStock = allRows.filter((r) => r.available > 0);
+  const prices = (inStock.length ? inStock : allRows).map((r) => r.sale_price);
   const minPrice = prices.length ? Math.min(...prices) : 0;
-  const samePrice = prices.every(p => p === prices[0]);
+  const samePrice = prices.every((p) => p === prices[0]);
   const flavorCount = allRows.length;
   const allOut = inStock.length === 0;
 
-  const selected = model.flavors.find(f => f.product_id === selectedId) ??
-    model.flavors.find(f => f.available > 0) ??
+  const selected =
+    model.flavors.find((f) => f.product_id === selectedId) ??
+    model.flavors.find((f) => f.available > 0) ??
     model.flavors[0];
   const available = selected?.available ?? 0;
   const clampedQty = Math.min(Math.max(1, qty), Math.max(available, 1));
@@ -123,7 +126,7 @@ function ModelCard({
   const layoutId = `model-card-${model.key}`;
 
   const openDetail = () => {
-    const first = model.flavors.find(f => f.available > 0) ?? model.flavors[0];
+    const first = model.flavors.find((f) => f.available > 0) ?? model.flavors[0];
     setSelectedId(first?.product_id ?? "");
     setQty(1);
     setOpen(true);
@@ -146,7 +149,7 @@ function ModelCard({
   const flavorList = (
     <div className="space-y-2">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sabor</p>
-      {model.flavors.map(f => {
+      {model.flavors.map((f) => {
         const out = f.available <= 0;
         const active = f.product_id === selectedId;
         const urgent = !out && f.available <= 2;
@@ -155,7 +158,10 @@ function ModelCard({
             key={f.product_id}
             type="button"
             disabled={out}
-            onClick={() => { setSelectedId(f.product_id); setQty(1); }}
+            onClick={() => {
+              setSelectedId(f.product_id);
+              setQty(1);
+            }}
             className={`w-full min-h-[56px] flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
               out ? "opacity-40" : active ? "bg-primary/10" : "hover:bg-muted/50"
             }`}
@@ -193,9 +199,7 @@ function ModelCard({
         >
           <Minus size={14} />
         </button>
-        <span className="w-9 text-center text-sm font-medium">
-          {available <= 0 ? 0 : clampedQty}
-        </span>
+        <span className="w-9 text-center text-sm font-medium">{available <= 0 ? 0 : clampedQty}</span>
         <button
           type="button"
           disabled={!selected || clampedQty >= available}
@@ -214,9 +218,7 @@ function ModelCard({
           setOpen(false);
         }}
       >
-        {available <= 0
-          ? "Esgotado"
-          : `Adicionar · ${fmt((selected?.sale_price ?? 0) * clampedQty)}`}
+        {available <= 0 ? "Esgotado" : `Adicionar · ${fmt((selected?.sale_price ?? 0) * clampedQty)}`}
       </Button>
     </div>
   );
@@ -281,7 +283,12 @@ function ModelCard({
           role="button"
           tabIndex={0}
           onClick={openDetail}
-          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openDetail();
+            }
+          }}
           className="border-border/60 cursor-pointer overflow-hidden transition-all hover:border-primary/40 hover:shadow-md"
         >
           <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-xl">
@@ -294,21 +301,24 @@ function ModelCard({
           </div>
 
           <CardContent className="p-4">
-            <h3 className="text-lg font-bold leading-tight truncate">
-              {model.model || "Sem modelo"}
-            </h3>
+            <h3 className="text-lg font-bold leading-tight truncate">{model.model || "Sem modelo"}</h3>
             <p className="text-sm text-muted-foreground truncate">
               {model.brand || "Sem marca"} · {flavorCount} {flavorCount === 1 ? "sabor" : "sabores"}
             </p>
 
             <div className="mt-4 flex items-center justify-between gap-3">
               <div>
-                {!samePrice && (
-                  <span className="block text-[11px] text-muted-foreground">A partir de</span>
-                )}
+                {!samePrice && <span className="block text-[11px] text-muted-foreground">A partir de</span>}
                 <span className="text-xl font-bold">{fmt(minPrice)}</span>
               </div>
-              <Button size="sm" variant="secondary" onClick={e => { e.stopPropagation(); openDetail(); }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDetail();
+                }}
+              >
                 Ver opções
               </Button>
             </div>
@@ -322,17 +332,13 @@ function ModelCard({
   );
 }
 
-
-
-
-
 export default function SellerStorePage() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const validId = !!sellerId && UUID_RE.test(sellerId);
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
@@ -343,7 +349,10 @@ export default function SellerStorePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!validId) { setLoading(false); return; }
+    if (!validId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const { data, error } = await supabase.rpc("get_seller_catalog", { p_seller_id: sellerId });
     if (error) toast.error("Erro ao carregar catálogo", { description: error.message });
@@ -351,11 +360,9 @@ export default function SellerStorePage() {
     setLoading(false);
   }, [sellerId, validId]);
 
-  useEffect(() => { load(); }, [load]);
-
-
-
-
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const sellerName = rows[0]?.seller_name ?? "";
 
@@ -372,46 +379,41 @@ export default function SellerStorePage() {
     let models = Array.from(modelMap.values());
     if (q) {
       models = models
-        .map(m => ({
+        .map((m) => ({
           ...m,
-          flavors: m.flavors.filter(r =>
-            [r.brand, r.model, r.flavor, r.name].some(v => (v || "").toLowerCase().includes(q))
+          flavors: m.flavors.filter((r) =>
+            [r.brand, r.model, r.flavor, r.name].some((v) => (v || "").toLowerCase().includes(q)),
           ),
         }))
-        .filter(m => m.flavors.length > 0);
+        .filter((m) => m.flavors.length > 0);
     }
-    models.forEach(m => m.flavors.sort((a, b) => (a.flavor || "").localeCompare(b.flavor || "")));
-    models.sort((a, b) => (a.model || "").localeCompare(b.model || ""));
+    models.forEach((m) =>
+      m.flavors.sort((a, b) => (a.flavor || "").localeCompare(b.flavor || "", undefined, { numeric: true })),
+    );
+    models.sort((a, b) => (a.model || "").localeCompare(b.model || "", undefined, { numeric: true }));
 
     const brandMap = new Map<string, BrandGroup>();
-    models.forEach(m => {
+    models.forEach((m) => {
       const bKey = (m.brand || "").trim() || "__sem_marca__";
       if (!brandMap.has(bKey)) brandMap.set(bKey, { key: bKey, brand: m.brand, models: [] });
       brandMap.get(bKey)!.models.push(m);
     });
 
     return Array.from(brandMap.values()).sort((a, b) =>
-      (a.brand || "").localeCompare(b.brand || "")
+      (a.brand || "").localeCompare(b.brand || "", undefined, { numeric: true }),
     );
   }, [rows, query]);
 
-
-
-  const total = useMemo(
-    () => cart.reduce((a, i) => a + i.sale_price * i.quantity, 0),
-    [cart]
-  );
+  const total = useMemo(() => cart.reduce((a, i) => a + i.sale_price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((a, i) => a + i.quantity, 0), [cart]);
 
   const addToCart = (row: CatalogRow, requested = 1) => {
     const qty = Math.min(Math.max(1, requested), row.available);
-    setCart(prev => {
-      const existing = prev.find(i => i.product_id === row.product_id);
+    setCart((prev) => {
+      const existing = prev.find((i) => i.product_id === row.product_id);
       if (existing) {
-        return prev.map(i =>
-          i.product_id === row.product_id
-            ? { ...i, quantity: Math.min(i.quantity + qty, row.available) }
-            : i
+        return prev.map((i) =>
+          i.product_id === row.product_id ? { ...i, quantity: Math.min(i.quantity + qty, row.available) } : i,
         );
       }
       return [...prev, { ...row, quantity: qty }];
@@ -419,19 +421,13 @@ export default function SellerStorePage() {
     toast.success("Adicionado ao carrinho", { description: `${row.flavor} · ${row.model}` });
   };
 
-
   const setItemQty = (productId: string, qty: number) => {
-    setCart(prev =>
-      prev.map(i =>
-        i.product_id === productId
-          ? { ...i, quantity: Math.min(Math.max(1, qty), i.available) }
-          : i
-      )
+    setCart((prev) =>
+      prev.map((i) => (i.product_id === productId ? { ...i, quantity: Math.min(Math.max(1, qty), i.available) } : i)),
     );
   };
 
-  const removeItem = (productId: string) =>
-    setCart(prev => prev.filter(i => i.product_id !== productId));
+  const removeItem = (productId: string) => setCart((prev) => prev.filter((i) => i.product_id !== productId));
 
   const buildMessage = () => {
     const lines: string[] = [];
@@ -442,8 +438,10 @@ export default function SellerStorePage() {
     lines.push(`📱 WhatsApp: ${whatsapp}`);
     lines.push(``);
     lines.push(`📦 ITENS`);
-    cart.forEach(i => {
-      lines.push(`• ${i.flavor} · ${i.model} (${i.quantity}x) • ${fmt(i.sale_price)} = ${fmt(i.sale_price * i.quantity)}`);
+    cart.forEach((i) => {
+      lines.push(
+        `• ${i.flavor} · ${i.model} (${i.quantity}x) • ${fmt(i.sale_price)} = ${fmt(i.sale_price * i.quantity)}`,
+      );
     });
     lines.push(`──────────────────────────────`);
     lines.push(`💰 Total: ${fmt(total)}`);
@@ -465,7 +463,7 @@ export default function SellerStorePage() {
         p_customer_name: name.trim(),
         p_customer_whatsapp: whatsapp.trim(),
         p_freight_notes: freight.trim() || null,
-        p_items: cart.map(item => ({
+        p_items: cart.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
           unit_price: item.sale_price,
@@ -478,7 +476,9 @@ export default function SellerStorePage() {
       setSuccessMessage(message);
       setCart([]);
       setCheckout(false);
-      setName(""); setWhatsapp(""); setFreight("");
+      setName("");
+      setWhatsapp("");
+      setFreight("");
       load();
     } catch (err: any) {
       const msg = String(err?.message ?? "");
@@ -529,7 +529,7 @@ export default function SellerStorePage() {
           <Input
             placeholder="Buscar por marca, modelo ou sabor..."
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.target.value)}
             className="pl-9 h-11"
           />
         </div>
@@ -540,13 +540,11 @@ export default function SellerStorePage() {
           <p className="text-center py-20 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
         ) : (
           <div className="space-y-10">
-            {groups.map(g => (
+            {groups.map((g) => (
               <section key={g.key}>
-                <h2 className="text-sm font-medium text-muted-foreground mb-4">
-                  {g.brand || "Sem marca"}
-                </h2>
+                <h2 className="text-sm font-medium text-muted-foreground mb-4">{g.brand || "Sem marca"}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {g.models.map(m => (
+                  {g.models.map((m) => (
                     <ModelCard key={m.key} model={m} onAdd={addToCart} />
                   ))}
                 </div>
@@ -554,7 +552,6 @@ export default function SellerStorePage() {
             ))}
           </div>
         )}
-
       </main>
 
       {/* Barra fixa mobile */}
@@ -581,7 +578,6 @@ export default function SellerStorePage() {
         </div>
       )}
 
-
       {/* Cart */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
@@ -594,14 +590,19 @@ export default function SellerStorePage() {
             <p className="mt-8 text-sm text-muted-foreground">Seu carrinho está vazio.</p>
           ) : (
             <div className="mt-5 divide-y divide-border/60">
-              {cart.map(i => (
+              {cart.map((i) => (
                 <div key={i.product_id} className="py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{i.flavor}</p>
-                      <p className="text-xs text-muted-foreground">{i.brand} · {i.model}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {i.brand} · {i.model}
+                      </p>
                     </div>
-                    <button onClick={() => removeItem(i.product_id)} className="text-muted-foreground hover:text-destructive">
+                    <button
+                      onClick={() => removeItem(i.product_id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -640,7 +641,10 @@ export default function SellerStorePage() {
             <Button
               className="w-full h-11"
               disabled={cart.length === 0}
-              onClick={() => { setCartOpen(false); setCheckout(true); }}
+              onClick={() => {
+                setCartOpen(false);
+                setCheckout(true);
+              }}
             >
               Finalizar pedido
             </Button>
@@ -658,15 +662,26 @@ export default function SellerStorePage() {
           <div className="mt-5 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="cliente-nome">Nome *</Label>
-              <Input id="cliente-nome" value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" />
+              <Input id="cliente-nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cliente-whats">WhatsApp *</Label>
-              <Input id="cliente-whats" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="(11) 90000-0000" />
+              <Input
+                id="cliente-whats"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(e.target.value)}
+                placeholder="(11) 90000-0000"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cliente-frete">Observação de frete/entrega</Label>
-              <Textarea id="cliente-frete" value={freight} onChange={e => setFreight(e.target.value)} placeholder="Opcional" rows={3} />
+              <Textarea
+                id="cliente-frete"
+                value={freight}
+                onChange={(e) => setFreight(e.target.value)}
+                placeholder="Opcional"
+                rows={3}
+              />
             </div>
             <div className="flex items-center justify-between border-t border-border pt-3">
               <span className="text-sm text-muted-foreground">Total</span>
@@ -686,16 +701,13 @@ export default function SellerStorePage() {
             <SheetTitle className="flex items-center gap-2">
               <CheckCircle2 size={18} className="text-primary" /> Pedido enviado!
             </SheetTitle>
-            <SheetDescription>
-              Confirme o envio no WhatsApp que abriu.
-            </SheetDescription>
+            <SheetDescription>Confirme o envio no WhatsApp que abriu.</SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-3">
             <Button
               className="w-full h-11 gap-2"
               onClick={() =>
-                successMessage &&
-                window.open(`https://wa.me/?text=${encodeURIComponent(successMessage)}`, "_blank")
+                successMessage && window.open(`https://wa.me/?text=${encodeURIComponent(successMessage)}`, "_blank")
               }
             >
               <MessageCircle size={16} /> Reabrir WhatsApp
