@@ -4,7 +4,9 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { formatPhoneDisplay, onlyDigits } from "@/lib/phone";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -332,6 +334,16 @@ function ModelCard({ model, onAdd }: { model: ModelGroup; onAdd: (row: CatalogRo
   );
 }
 
+interface Loyalty {
+  customer_id: string;
+  customer_name: string;
+  whatsapp: string;
+  total_purchases: number;
+  purchases_for_next_reward: number;
+  next_reward_name: string;
+  loyalty_tier: string;
+}
+
 export default function SellerStorePage() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const validId = !!sellerId && UUID_RE.test(sellerId);
@@ -347,6 +359,40 @@ export default function SellerStorePage() {
   const [freight, setFreight] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Passo 1: identificação por WhatsApp
+  const [identified, setIdentified] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [loyalty, setLoyalty] = useState<Loyalty | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupDone, setLookupDone] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const phoneDigits = onlyDigits(phoneInput);
+  const phoneComplete = phoneDigits.length >= 10 && phoneDigits.length <= 11;
+
+  useEffect(() => {
+    if (!phoneComplete) {
+      setLoyalty(null);
+      setLookupDone(false);
+      return;
+    }
+    let cancelled = false;
+    setLookupLoading(true);
+    (async () => {
+      const { data, error } = await supabase.rpc("get_customer_loyalty", { p_whatsapp: phoneDigits });
+      if (cancelled) return;
+      if (error) toast.error("Erro ao buscar cadastro", { description: error.message });
+      const row = ((data as Loyalty[] | null) ?? [])[0] ?? null;
+      setLoyalty(row);
+      setLookupDone(true);
+      setLookupLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phoneDigits, phoneComplete]);
+
 
   const load = useCallback(async () => {
     if (!validId) {
@@ -476,9 +522,8 @@ export default function SellerStorePage() {
       setSuccessMessage(message);
       setCart([]);
       setCheckout(false);
-      setName("");
-      setWhatsapp("");
       setFreight("");
+
       load();
     } catch (err: any) {
       const msg = String(err?.message ?? "");
@@ -502,6 +547,79 @@ export default function SellerStorePage() {
     );
   }
 
+  if (!identified) {
+    const needsName = lookupDone && !loyalty;
+    const canContinue = phoneComplete && !lookupLoading && (loyalty ? true : newName.trim().length > 1);
+    const continuar = () => {
+      if (!canContinue) return;
+      setName((loyalty?.customer_name ?? newName).trim());
+      setWhatsapp(phoneDigits);
+      setIdentified(true);
+    };
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="w-full max-w-sm space-y-5">
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold tracking-tight">
+              {sellerName ? `Loja de ${sellerName}` : "Loja"}
+            </h1>
+            <p className="text-sm text-muted-foreground">Informe seu WhatsApp para começar.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ident-whats">Seu WhatsApp</Label>
+            <Input
+              id="ident-whats"
+              inputMode="numeric"
+              autoFocus
+              value={formatPhoneDisplay(phoneInput)}
+              onChange={(e) => setPhoneInput(onlyDigits(e.target.value))}
+              placeholder="(11) 90000-0000"
+              className="h-12 text-base"
+            />
+          </div>
+
+          {lookupLoading && <p className="text-sm text-muted-foreground">Buscando seu cadastro...</p>}
+
+          {!lookupLoading && loyalty && (
+            <Card className="border-border/60">
+              <CardContent className="space-y-2 p-4">
+                <p className="text-base font-semibold">Oi, {loyalty.customer_name}!</p>
+                <p className="text-sm text-muted-foreground">
+                  Nível <span className="font-medium text-foreground">{loyalty.loyalty_tier}</span> ·{" "}
+                  {loyalty.total_purchases} {loyalty.total_purchases === 1 ? "compra" : "compras"}
+                </p>
+                {loyalty.next_reward_name && (
+                  <p className="text-sm text-muted-foreground">
+                    Faltam {loyalty.purchases_for_next_reward}{" "}
+                    {loyalty.purchases_for_next_reward === 1 ? "compra" : "compras"} para {loyalty.next_reward_name}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {!lookupLoading && needsName && (
+            <div className="space-y-1.5">
+              <Label htmlFor="ident-nome">Como podemos te chamar?</Label>
+              <Input
+                id="ident-nome"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Seu nome"
+                className="h-12 text-base"
+              />
+            </div>
+          )}
+
+          <Button className="h-12 w-full text-base" disabled={!canContinue} onClick={continuar}>
+            Continuar
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border">
@@ -510,7 +628,11 @@ export default function SellerStorePage() {
             <h1 className="text-lg font-bold tracking-tight truncate">
               {sellerName ? `Loja de ${sellerName}` : "Loja"}
             </h1>
+            <p className="text-xs text-muted-foreground truncate">
+              {loyalty ? `Oi, ${name}! Nível ${loyalty.loyalty_tier}` : `Oi, ${name}! Bem-vindo(a)`}
+            </p>
           </div>
+
           <Button onClick={() => setCartOpen(true)} size="sm" className="gap-2 relative hidden sm:flex">
             <ShoppingCart size={15} />
             Carrinho
@@ -657,22 +779,30 @@ export default function SellerStorePage() {
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="text-left">
             <SheetTitle>Finalizar pedido</SheetTitle>
-            <SheetDescription>Preencha seus dados para enviar o pedido.</SheetDescription>
+            <SheetDescription>Confirme seus dados e envie o pedido.</SheetDescription>
           </SheetHeader>
           <div className="mt-5 space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="cliente-nome">Nome *</Label>
-              <Input id="cliente-nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
+            <div className="rounded-xl border border-border/60 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{name}</p>
+                  <p className="text-xs text-muted-foreground">{formatPhoneDisplay(whatsapp)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCheckout(false);
+                    setPhoneInput(whatsapp);
+                    setNewName(name);
+                    setIdentified(false);
+                  }}
+                >
+                  Alterar
+                </Button>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cliente-whats">WhatsApp *</Label>
-              <Input
-                id="cliente-whats"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="(11) 90000-0000"
-              />
-            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="cliente-frete">Observação de frete/entrega</Label>
               <Textarea
