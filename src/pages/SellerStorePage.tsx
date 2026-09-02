@@ -4,7 +4,9 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { formatPhoneDisplay, onlyDigits } from "@/lib/phone";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
