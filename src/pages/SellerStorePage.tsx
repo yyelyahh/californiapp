@@ -779,22 +779,30 @@ export default function SellerStorePage() {
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="text-left">
             <SheetTitle>Finalizar pedido</SheetTitle>
-            <SheetDescription>Preencha seus dados para enviar o pedido.</SheetDescription>
+            <SheetDescription>Confirme seus dados e envie o pedido.</SheetDescription>
           </SheetHeader>
           <div className="mt-5 space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="cliente-nome">Nome *</Label>
-              <Input id="cliente-nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
+            <div className="rounded-xl border border-border/60 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{name}</p>
+                  <p className="text-xs text-muted-foreground">{formatPhoneDisplay(whatsapp)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCheckout(false);
+                    setPhoneInput(whatsapp);
+                    setNewName(name);
+                    setIdentified(false);
+                  }}
+                >
+                  Alterar
+                </Button>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cliente-whats">WhatsApp *</Label>
-              <Input
-                id="cliente-whats"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="(11) 90000-0000"
-              />
-            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="cliente-frete">Observação de frete/entrega</Label>
               <Textarea
