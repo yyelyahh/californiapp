@@ -338,9 +338,9 @@ interface Loyalty {
   customer_id: string;
   customer_name: string;
   whatsapp: string;
-  total_purchases: number;
-  purchases_for_next_reward: number;
-  next_reward_name: string;
+  total_units: number;
+  units_until_next_gift: number;
+  gifts_earned: number;
   loyalty_tier: string;
 }
 
@@ -392,7 +392,6 @@ export default function SellerStorePage() {
       cancelled = true;
     };
   }, [phoneDigits, phoneComplete]);
-
 
   const load = useCallback(async () => {
     if (!validId) {
@@ -560,9 +559,7 @@ export default function SellerStorePage() {
       <main className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="w-full max-w-sm space-y-5">
           <div className="space-y-1">
-            <h1 className="text-xl font-bold tracking-tight">
-              {sellerName ? `Loja de ${sellerName}` : "Loja"}
-            </h1>
+            <h1 className="text-xl font-bold tracking-tight">{sellerName ? `Loja de ${sellerName}` : "Loja"}</h1>
             <p className="text-sm text-muted-foreground">Informe seu WhatsApp para começar.</p>
           </div>
 
@@ -587,12 +584,16 @@ export default function SellerStorePage() {
                 <p className="text-base font-semibold">Oi, {loyalty.customer_name}!</p>
                 <p className="text-sm text-muted-foreground">
                   Nível <span className="font-medium text-foreground">{loyalty.loyalty_tier}</span> ·{" "}
-                  {loyalty.total_purchases} {loyalty.total_purchases === 1 ? "compra" : "compras"}
+                  {loyalty.total_units} {loyalty.total_units === 1 ? "unidade" : "unidades"} compradas
                 </p>
-                {loyalty.next_reward_name && (
+                {loyalty.units_until_next_gift === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Faltam {loyalty.purchases_for_next_reward}{" "}
-                    {loyalty.purchases_for_next_reward === 1 ? "compra" : "compras"} para {loyalty.next_reward_name}
+                    Você já garantiu {loyalty.gifts_earned > 1 ? `${loyalty.gifts_earned} brindes` : "um brinde"}! 🎁
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Faltam {loyalty.units_until_next_gift}{" "}
+                    {loyalty.units_until_next_gift === 1 ? "unidade" : "unidades"} para o próximo brinde
                   </p>
                 )}
               </CardContent>
