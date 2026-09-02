@@ -332,6 +332,16 @@ function ModelCard({ model, onAdd }: { model: ModelGroup; onAdd: (row: CatalogRo
   );
 }
 
+interface Loyalty {
+  customer_id: string;
+  customer_name: string;
+  whatsapp: string;
+  total_purchases: number;
+  purchases_for_next_reward: number;
+  next_reward_name: string;
+  loyalty_tier: string;
+}
+
 export default function SellerStorePage() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const validId = !!sellerId && UUID_RE.test(sellerId);
@@ -347,6 +357,40 @@ export default function SellerStorePage() {
   const [freight, setFreight] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Passo 1: identificação por WhatsApp
+  const [identified, setIdentified] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [loyalty, setLoyalty] = useState<Loyalty | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupDone, setLookupDone] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const phoneDigits = onlyDigits(phoneInput);
+  const phoneComplete = phoneDigits.length >= 10 && phoneDigits.length <= 11;
+
+  useEffect(() => {
+    if (!phoneComplete) {
+      setLoyalty(null);
+      setLookupDone(false);
+      return;
+    }
+    let cancelled = false;
+    setLookupLoading(true);
+    (async () => {
+      const { data, error } = await supabase.rpc("get_customer_loyalty", { p_whatsapp: phoneDigits });
+      if (cancelled) return;
+      if (error) toast.error("Erro ao buscar cadastro", { description: error.message });
+      const row = ((data as Loyalty[] | null) ?? [])[0] ?? null;
+      setLoyalty(row);
+      setLookupDone(true);
+      setLookupLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phoneDigits, phoneComplete]);
+
 
   const load = useCallback(async () => {
     if (!validId) {
