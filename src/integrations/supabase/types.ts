@@ -1001,6 +1001,18 @@ export type Database = {
         Returns: number
       }
       delete_sale: { Args: { p_sale_id: string }; Returns: undefined }
+      get_customer_loyalty: {
+        Args: { p_whatsapp: string }
+        Returns: {
+          customer_id: string
+          customer_name: string
+          loyalty_tier: string
+          next_reward_name: string
+          purchases_for_next_reward: number
+          total_purchases: number
+          whatsapp: string
+        }[]
+      }
       get_my_seller_id: { Args: never; Returns: string }
       get_product_costs: {
         Args: never
