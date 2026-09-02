@@ -522,9 +522,8 @@ export default function SellerStorePage() {
       setSuccessMessage(message);
       setCart([]);
       setCheckout(false);
-      setName("");
-      setWhatsapp("");
       setFreight("");
+
       load();
     } catch (err: any) {
       const msg = String(err?.message ?? "");
