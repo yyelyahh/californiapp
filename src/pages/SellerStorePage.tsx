@@ -547,6 +547,79 @@ export default function SellerStorePage() {
     );
   }
 
+  if (!identified) {
+    const needsName = lookupDone && !loyalty;
+    const canContinue = phoneComplete && !lookupLoading && (loyalty ? true : newName.trim().length > 1);
+    const continuar = () => {
+      if (!canContinue) return;
+      setName((loyalty?.customer_name ?? newName).trim());
+      setWhatsapp(phoneDigits);
+      setIdentified(true);
+    };
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="w-full max-w-sm space-y-5">
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold tracking-tight">
+              {sellerName ? `Loja de ${sellerName}` : "Loja"}
+            </h1>
+            <p className="text-sm text-muted-foreground">Informe seu WhatsApp para começar.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ident-whats">Seu WhatsApp</Label>
+            <Input
+              id="ident-whats"
+              inputMode="numeric"
+              autoFocus
+              value={formatPhoneDisplay(phoneInput)}
+              onChange={(e) => setPhoneInput(onlyDigits(e.target.value))}
+              placeholder="(11) 90000-0000"
+              className="h-12 text-base"
+            />
+          </div>
+
+          {lookupLoading && <p className="text-sm text-muted-foreground">Buscando seu cadastro...</p>}
+
+          {!lookupLoading && loyalty && (
+            <Card className="border-border/60">
+              <CardContent className="space-y-2 p-4">
+                <p className="text-base font-semibold">Oi, {loyalty.customer_name}!</p>
+                <p className="text-sm text-muted-foreground">
+                  Nível <span className="font-medium text-foreground">{loyalty.loyalty_tier}</span> ·{" "}
+                  {loyalty.total_purchases} {loyalty.total_purchases === 1 ? "compra" : "compras"}
+                </p>
+                {loyalty.next_reward_name && (
+                  <p className="text-sm text-muted-foreground">
+                    Faltam {loyalty.purchases_for_next_reward}{" "}
+                    {loyalty.purchases_for_next_reward === 1 ? "compra" : "compras"} para {loyalty.next_reward_name}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {!lookupLoading && needsName && (
+            <div className="space-y-1.5">
+              <Label htmlFor="ident-nome">Como podemos te chamar?</Label>
+              <Input
+                id="ident-nome"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Seu nome"
+                className="h-12 text-base"
+              />
+            </div>
+          )}
+
+          <Button className="h-12 w-full text-base" disabled={!canContinue} onClick={continuar}>
+            Continuar
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border">
@@ -555,7 +628,11 @@ export default function SellerStorePage() {
             <h1 className="text-lg font-bold tracking-tight truncate">
               {sellerName ? `Loja de ${sellerName}` : "Loja"}
             </h1>
+            <p className="text-xs text-muted-foreground truncate">
+              {loyalty ? `Oi, ${name}! Nível ${loyalty.loyalty_tier}` : `Oi, ${name}! Bem-vindo(a)`}
+            </p>
           </div>
+
           <Button onClick={() => setCartOpen(true)} size="sm" className="gap-2 relative hidden sm:flex">
             <ShoppingCart size={15} />
             Carrinho
