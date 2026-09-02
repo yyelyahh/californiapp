@@ -383,7 +383,7 @@ export default function SellerStorePage() {
       const { data, error } = await supabase.rpc("get_customer_loyalty", { p_whatsapp: phoneDigits });
       if (cancelled) return;
       if (error) toast.error("Erro ao buscar cadastro", { description: error.message });
-      const row = ((data as Loyalty[] | null) ?? [])[0] ?? null;
+      const row = ((data as unknown as Loyalty[] | null) ?? [])[0] ?? null;
       setLoyalty(row);
       setLookupDone(true);
       setLookupLoading(false);
