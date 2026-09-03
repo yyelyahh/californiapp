@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/nocturne-d3eb9e67-2f4c-44d5-ab84-84859fce9319/styles.css">
+<script src="_ds/nocturne-d3eb9e67-2f4c-44d5-ab84-84859fce9319/_ds_bundle.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+:root{--pos:#85B7EB;--neg:#EF9F27;--warn:#EF9F27;--info:#85B7EB;--num:"Inter",system-ui,sans-serif}
+html{background:color-mix(in srgb, var(--color-bg) 62%, #000)}
+body{margin:0;min-height:100%;background:color-mix(in srgb, var(--color-bg) 62%, #000);color:var(--color-text)}
+a{color:var(--color-accent);text-decoration:none}
+a:hover{color:var(--color-accent-300)}
+</style>
+</helmet>
+
+<section id="brief" style="--pos:{{ posColor }};--neg:{{ negColor }};padding:40px 44px 28px;border-bottom:1px solid var(--color-divider)">
+  <div style="max-width:820px;display:flex;flex-direction:column;gap:10px">
+    <span style="font:600 10px/1 'Inter',ui-monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)">Premissas</span>
+    <h4 style="font-size:20px;margin:0">Mesmo conteúdo, outra organização — desktop, só admin.</h4>
+    <p style="margin:0;font-size:13px;line-height:1.6;color:color-mix(in srgb, var(--color-text) 62%, transparent)">Mantive tudo que você marcou (KPIs, margem/despesas/estoque, modelos mais vendidos, gráfico de 6 meses, últimas vendas, filtro por mês) e tirei os <em>Insights automáticos</em> e o botão <em>Exportar Excel</em> do primeiro plano. Como as decisões que importam são <strong>o que repor</strong> e <strong>qual modelo dá mais margem</strong>, essas duas ganham peso nas opções B e C — usando dados que já existem hoje (estoque, custo, preço de venda, vendas do período). Nada de dado novo.</p>
+    <p style="margin:0;font-size:13px;line-height:1.6;color:color-mix(in srgb, var(--color-text) 62%, transparent)">A aparência vem do sistema Nocturne (Inter, fundo #161826, cartões #232532, raio 8px, réguas que apagam nas pontas, roxo #9184d9 como linha e não como preenchimento). Os sinais de valor — verde, laranja, vermelho — são <strong>as cores que já estão no seu <code>AppLayout.tsx</code></strong> (#85B7EB, #EF9F27, #F09595, #5DCAA5), então nada foi inventado. A cor principal agora é o azul #85B7EB — trocável no painel de Tweaks, e as opções da rodada 1 acompanham. Números em Inter com <em>tabular-nums</em>, no lugar do JetBrains Mono.</p>
+    <p style="margin:0;font-size:12px;line-height:1.6;color:color-mix(in srgb, var(--color-text) 42%, transparent)">Dados de exemplo: Agosto/2026. Ícones Phosphor (o Lucide do repo só roda com bundler). A tela de hoje, recriada fielmente, está em <strong>Dashboard Atual.dc.html</strong>.</p>
+  </div>
+</section>
+
+<section id="t2" style="--pos:{{ posColor }};--neg:{{ negColor }};padding:36px 44px 40px;border-bottom:1px solid var(--color-divider)">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 22px">
+    <a href="#t2" style="font:600 10px/1 'Inter',ui-monospace;letter-spacing:.06em;padding:4px 8px;background:var(--color-text);color:var(--color-bg);border-radius:4px">2</a>
+    <span style="font-size:13px;font-weight:500">Mistura de <a href="#1a">1a</a> + <a href="#1b">1b</a>, em azul</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+    <div id="2a" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">
+        <a href="#2a" style="font:600 10.5px/1 'Inter',ui-monospace;padding:4px 7px;background:color-mix(in srgb, var(--color-text) 10%, transparent);color:var(--color-text);border-radius:5px">2a</a>
+        <span><strong style="color:var(--color-text);font-weight:500">Dinheiro do mês + Repor agora + o gráfico de área</strong> — azul #85B7EB como cor principal, roxo só na linha do lucro</span>
+      </div>
+      <div style="width:1240px;border-radius:8px;overflow:hidden;background:var(--color-bg);box-shadow:var(--shadow-md);display:flex">
+        <aside style="width:56px;flex:none;background:color-mix(in srgb, var(--color-bg) 88%, #000);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:3px">
+          <span style="font-size:15px;font-weight:600;color:var(--pos);margin-bottom:12px">C</span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;border-radius:8px;background:color-mix(in srgb, var(--pos) 16%, transparent)"><span class="ph ph-squares-four" style="font-size:17px;color:var(--pos)"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-tag" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-package" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-trend-down" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-receipt" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-file-text" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-hand-coins" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-chart-line" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-coins" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-book-open" style="font-size:17px"></span></span>
+          <span style="margin-top:auto;width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 40%, transparent)"><span class="ph ph-sign-out" style="font-size:16px"></span></span>
+        </aside>
+
+        <div style="flex:1;min-width:0;display:flex">
+          <div style="flex:1;min-width:0;padding:22px 22px 26px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+              <div>
+                <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--pos)">Agosto/2026</span>
+                <h4 style="margin:3px 0 0;font-size:22px">Dashboard</h4>
+              </div>
+              <div class="seg" style="font-size:12px"><label class="seg-opt" style="padding:6px 11px;color:var(--pos);box-shadow:inset 0 0 0 1px var(--pos)">Ago</label><label class="seg-opt" style="padding:6px 11px">Jul</label><label class="seg-opt" style="padding:6px 11px">Jun</label><label class="seg-opt" style="padding:6px 11px">Geral</label></div>
+            </div>
+
+            <div class="card elev-sm" style="padding:0;gap:0;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 11px">
+                <div style="display:flex;align-items:center;gap:8px"><span class="ph ph-package" style="font-size: 16px; color: #85B7DF"></span><h5 style="margin:0;font-size:15px">Repor agora</h5></div>
+                <span class="tag tag-outline" style="border-color:var(--pos);color:var(--pos)">3 de 12 modelos</span>
+              </div>
+              <div style="padding:0 16px 14px">
+                <table class="table" style="font-size:13px">
+                  <thead><tr><th style="padding:6px 8px">Modelo</th><th style="padding:6px 8px;text-align:right">Estoque</th><th style="padding:6px 8px;text-align:right">Vende/dia</th><th style="padding:6px 8px;text-align:right">Dura</th><th style="padding:6px 8px;text-align:right">Margem</th><th style="padding:6px 8px;text-align:right">Custo p/ 30d</th></tr></thead>
+                  <tbody>
+                    <tr><td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#F09595"></span>BC10000 <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11.5px">Elfbar</span></div></td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">8 un.</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">0,87</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums;color:#F09595">9 dias</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">46,7%</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">R$ 2.024</td></tr>
+                    <tr><td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--neg)"></span>V80 <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11.5px">Ignite</span></div></td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">12 un.</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">0,97</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--neg)">12 dias</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">45,9%</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">R$ 2.484</td></tr>
+                    <tr><td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--neg)"></span>Cube 20k <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11.5px">Lost Mary</span></div></td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">31 un.</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">0,47</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">66 dias</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">43,8%</td><td style="padding:7px 8px;text-align:right;color:color-mix(in srgb, var(--color-text) 40%, transparent)">—</td></tr>
+                  </tbody>
+                </table>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:11px;background:linear-gradient(to right,transparent,var(--color-divider) 40px,var(--color-divider) calc(100% - 40px),transparent) no-repeat top / 100% 1px">
+                  <span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">2 modelos parados há mais de 60 dias travando <strong style="color:var(--color-text)">R$ 6.885</strong> em estoque</span>
+                  <span class="btn" style="font-size:12.5px;color:var(--pos);border-color:var(--pos)">Abrir entrada de estoque</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card elev-sm" style="padding:16px;gap:0;min-width:0">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">
+                <h5 style="margin:0;font-size:15px">Desempenho financeiro</h5>
+                <div style="display:flex;align-items:center;gap:14px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:var(--pos)"></span>Receita</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:var(--color-accent)"></span>Lucro líquido</span>
+                  <span style="padding-left:12px;border-left:1px solid var(--color-divider)">Margem média <strong style="color:var(--color-text);font-weight:600">34,4%</strong></span>
+                </div>
+              </div>
+              <svg width="100%" height="212" viewBox="0 0 784 240" preserveAspectRatio="none" style="display:block">
+                <defs>
+                  <linearGradient id="b2r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style="stop-color:var(--pos);stop-opacity:.28"></stop><stop offset="100%" style="stop-color:var(--pos);stop-opacity:0"></stop></linearGradient>
+                  <linearGradient id="b2l" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style="stop-color:var(--color-accent);stop-opacity:.26"></stop><stop offset="100%" style="stop-color:var(--color-accent);stop-opacity:0"></stop></linearGradient>
+                </defs>
+                <g stroke="#3f424d"><line x1="56" y1="210" x2="776" y2="210"></line><line x1="56" y1="159.5" x2="776" y2="159.5" stroke-dasharray="2 5"></line><line x1="56" y1="109" x2="776" y2="109" stroke-dasharray="2 5"></line><line x1="56" y1="58.5" x2="776" y2="58.5" stroke-dasharray="2 5"></line><line x1="56" y1="8" x2="776" y2="8" stroke-dasharray="2 5"></line></g>
+                <g fill="#75798c" font-size="11" font-family="Inter, sans-serif" text-anchor="end"><text x="46" y="214">0</text><text x="46" y="163.5">5k</text><text x="46" y="113">10k</text><text x="46" y="62.5">15k</text><text x="46" y="12">20k</text></g>
+                <path d="M56,111 C104,111 152,84.8 200,84.8 C248,84.8 296,96.9 344,96.9 C392,96.9 440,52.4 488,52.4 C536,52.4 584,39.3 632,39.3 C680,39.3 728,20.7 776,20.7 L776,210 L56,210 Z" fill="url(#b2r)"></path>
+                <path d="M56,111 C104,111 152,84.8 200,84.8 C248,84.8 296,96.9 344,96.9 C392,96.9 440,52.4 488,52.4 C536,52.4 584,39.3 632,39.3 C680,39.3 728,20.7 776,20.7" fill="none" style="stroke:var(--pos)" stroke-width="2"></path>
+                <path d="M56,180.7 C104,180.7 152,168.6 200,168.6 C248,168.6 296,176.7 344,176.7 C392,176.7 440,150.4 488,150.4 C536,150.4 584,145.4 632,145.4 C680,145.4 728,137.1 776,137.1 L776,210 L56,210 Z" fill="url(#b2l)"></path>
+                <path d="M56,180.7 C104,180.7 152,168.6 200,168.6 C248,168.6 296,176.7 344,176.7 C392,176.7 440,150.4 488,150.4 C536,150.4 584,145.4 632,145.4 C680,145.4 728,137.1 776,137.1" fill="none" style="stroke:var(--color-accent)" stroke-width="2"></path>
+                <g fill="#75798c" font-size="11" font-family="Inter, sans-serif" text-anchor="middle"><text x="56" y="230">mar</text><text x="200" y="230">abr</text><text x="344" y="230">mai</text><text x="488" y="230">jun</text><text x="632" y="230">jul</text><text x="768" y="230">ago</text></g>
+              </svg>
+            </div>
+
+            <div class="card elev-sm" style="padding:14px 16px;gap:0">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
+                <h5 style="margin:0;font-size:15px">Modelos mais vendidos</h5>
+                <span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 18.740 no período · 100%</span>
+              </div>
+              <div style="display:flex;height:26px;border-radius:4px;overflow:hidden;gap:1px">
+                <div style="flex:266;background:var(--pos);display:grid;place-items:center;font-size:10.5px;font-weight:600;color:#12202e;font-variant-numeric:tabular-nums">26,6%</div>
+                <div style="flex:200;background:color-mix(in srgb, var(--pos) 82%, var(--color-bg));display:grid;place-items:center;font-size:10.5px;font-weight:600;color:#12202e;font-variant-numeric:tabular-nums">20,0%</div>
+                <div style="flex:194;background:color-mix(in srgb, var(--pos) 64%, var(--color-bg));display:grid;place-items:center;font-size:10.5px;font-weight:600;color:#12202e;font-variant-numeric:tabular-nums">19,4%</div>
+                <div style="flex:157;background:color-mix(in srgb, var(--pos) 48%, var(--color-bg));display:grid;place-items:center;font-size:10.5px;font-weight:600;color:var(--color-text);font-variant-numeric:tabular-nums">15,7%</div>
+                <div style="flex:139;background:color-mix(in srgb, var(--pos) 33%, var(--color-bg));display:grid;place-items:center;font-size:10.5px;font-weight:600;color:var(--color-text);font-variant-numeric:tabular-nums">13,9%</div>
+                <div style="flex:44;background:color-mix(in srgb, var(--pos) 19%, var(--color-bg))"></div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:11px">
+                <span style="display:flex;align-items:baseline;gap:7px;font-size:12px"><span style="width:9px;height:9px;border-radius:2px;background:var(--pos);flex:none"></span>V80 <span style="color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 4.980</span></span>
+                <span style="display:flex;align-items:baseline;gap:7px;font-size:12px"><span style="width:9px;height:9px;border-radius:2px;background:color-mix(in srgb, var(--pos) 82%, var(--color-bg));flex:none"></span>BC10000 <span style="color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 3.740</span></span>
+                <span style="display:flex;align-items:baseline;gap:7px;font-size:12px"><span style="width:9px;height:9px;border-radius:2px;background:color-mix(in srgb, var(--pos) 64%, var(--color-bg));flex:none"></span>Outros 7 modelos <span style="color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 3.630</span></span>
+                <span style="display:flex;align-items:baseline;gap:7px;font-size:12px"><span style="width:9px;height:9px;border-radius:2px;background:color-mix(in srgb, var(--pos) 48%, var(--color-bg));flex:none"></span>Cube 20k <span style="color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 2.940</span></span>
+                <span style="display:flex;align-items:baseline;gap:7px;font-size:12px"><span style="width:9px;height:9px;border-radius:2px;background:color-mix(in srgb, var(--pos) 33%, var(--color-bg));flex:none"></span>G8000 <span style="color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 2.610</span></span>
+                <span style="display:flex;align-items:baseline;gap:7px;font-size:12px"><span style="width:9px;height:9px;border-radius:2px;background:color-mix(in srgb, var(--pos) 19%, var(--color-bg));flex:none"></span>15k <span style="color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">R$ 840</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div style="width:312px;flex:none;padding:22px 22px 26px;background:color-mix(in srgb, var(--color-bg) 90%, #000);display:flex;flex-direction:column;gap:14px">
+            <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Dinheiro do mês</span>
+            <div>
+              <span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Receita</span>
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:600;letter-spacing:-.025em;font-variant-numeric:tabular-nums">R$ 18.740</span><span style="font-size:12px;color:var(--pos)">+11%</span></div>
+              <div style="margin-top:8px;height:5px;display:flex;gap:2px"><div style="flex:16120;background:var(--pos);border-radius:2px"></div><div style="flex:2620;background:var(--neg);border-radius:2px"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)"><span>recebido R$ 16.120</span><span style="color:var(--neg)">a receber R$ 2.620</span></div>
+            </div>
+            <hr class="hr" style="margin:2px 0">
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:12.5px;color:color-mix(in srgb, var(--color-text) 65%, transparent)">− CPV</span><span style="font-size:14px;font-variant-numeric:tabular-nums">R$ 9.180</span></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:12.5px;color:color-mix(in srgb, var(--color-text) 65%, transparent)">− Despesas</span><span style="font-size:14px;font-variant-numeric:tabular-nums">R$ 2.340 <span style="font-size:11px;color:var(--neg)">+8%</span></span></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;padding-top:11px;background:linear-gradient(to right,transparent,var(--color-divider) 24px,var(--color-divider) calc(100% - 24px),transparent) no-repeat top / 100% 1px"><span style="font-size:12.5px">Lucro líquido</span><span style="font-size:20px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 7.220</span></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">margem líquida</span><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">38,5% · bruta 51,0%</span></div>
+            </div>
+            <hr class="hr" style="margin:2px 0">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Ticket médio</span><div style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">R$ 167,92 <span style="font-size:11px;font-weight:400;color:var(--neg)">−4%</span></div></div>
+              <div><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Estoque a custo</span><div style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">R$ 12.480</div></div>
+            </div>
+            <hr class="hr" style="margin:2px 0">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Últimas vendas</span><span style="font-size:10.5px;color:color-mix(in srgb, var(--color-text) 40%, transparent)">412 total</span></div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cherry Cola · BC10000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 165</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Blueberry Ice · V80</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 340</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Watermelon · G8000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 155</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Strawberry Kiwi · BC10000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 495</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Mango Peach · V80</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 170</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Grape Ice · G8000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 310</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="margin:24px 0 0;font-size:12px;color:color-mix(in srgb, var(--color-text) 45%, transparent)">Próximos passos: "tira o Modelos mais vendidos da <a href="#2a">2a</a>" · "põe a faixa grande da <a href="#1c">1c</a> no topo da <a href="#2a">2a</a>" · "azul mais forte"</p>
+</section>
+
+<section id="t1" style="--pos:{{ posColor }};--neg:{{ negColor }};padding:36px 44px 40px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 22px">
+    <a href="#t1" style="font:600 10px/1 'Inter',ui-monospace;letter-spacing:.06em;padding:4px 8px;background:var(--color-text);color:var(--color-bg);border-radius:4px">1</a>
+    <span style="font-size:13px;font-weight:500">Três reorganizações do dashboard</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+
+    <div id="1a" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">
+        <a href="#1a" style="font:600 10.5px/1 'Inter',ui-monospace;padding:4px 7px;background:color-mix(in srgb, var(--color-text) 10%, transparent);color:var(--color-text);border-radius:5px">1a</a>
+        <span><strong style="color:var(--color-text);font-weight:500">Mesma estrutura, vestida de novo</strong> — a tela de hoje com a tipografia, densidade e superfícies do Nocturne</span>
+      </div>
+      <div style="width:1240px;border-radius:8px;overflow:hidden;background:var(--color-bg);box-shadow:var(--shadow-md);display:flex">
+        <aside style="width:180px;flex:none;background:color-mix(in srgb, var(--color-bg) 88%, #000);display:flex;flex-direction:column;padding:16px 0">
+          <div style="padding:0 16px 16px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:16px;font-weight:600;letter-spacing:-.01em">California</span>
+            <span class="ph ph-caret-left" style="font-size:14px;color:color-mix(in srgb, var(--color-text) 40%, transparent)"></span>
+          </div>
+          <nav style="display:flex;flex-direction:column;gap:1px;padding:0 8px;flex:1">
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;background:color-mix(in srgb, var(--color-accent) 14%, transparent);box-shadow:inset 2px 0 0 var(--color-accent)"><span class="ph ph-squares-four" style="font-size:16px;color:var(--color-accent)"></span>Dashboard</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-tag" style="font-size:16px"></span>Produtos</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-package" style="font-size:16px"></span>Entrada</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-trend-down" style="font-size:16px"></span>Perdas</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-receipt" style="font-size:16px"></span>Vendas</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-file-text" style="font-size:16px"></span>Despesas</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-hand-coins" style="font-size:16px"></span>Distribuição</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-chart-line" style="font-size:16px"></span>Insights</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-coins" style="font-size:16px"></span>Financeiro</span>
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-book-open" style="font-size:16px"></span>Catálogo</span>
+          </nav>
+          <div style="padding:14px 18px 0;margin-top:14px;background:linear-gradient(to right,transparent,var(--color-divider) 20px,var(--color-divider) calc(100% - 20px),transparent) no-repeat top / 100% 1px">
+            <p style="margin:0 0 8px;font-size:11px;color:color-mix(in srgb, var(--color-text) 45%, transparent)">California Contabilidade</p>
+            <span style="display:flex;align-items:center;gap:7px;font-size:13px;color:color-mix(in srgb, var(--color-text) 62%, transparent)"><span class="ph ph-sign-out" style="font-size:15px"></span>Sair</span>
+          </div>
+        </aside>
+        <div style="flex:1;min-width:0;padding:22px 24px 26px;display:flex;flex-direction:column;gap:17px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat bottom / 100% 1px;padding-bottom:14px">
+            <div>
+              <h4 style="margin:0;font-size:20px">Dashboard</h4>
+              <p style="margin:2px 0 0;font-size:12px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Agosto/2026 · 96 vendas</p>
+            </div>
+            <div class="seg" style="font-size:12px">
+              <label class="seg-opt" style="padding:6px 11px;color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Agosto/2026</label>
+              <label class="seg-opt" style="padding:6px 11px">Julho</label>
+              <label class="seg-opt" style="padding:6px 11px">Geral</label>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:11px;grid-template-columns:repeat(4,minmax(0,1fr))">
+            <div class="card elev-sm" style="padding:13px 15px;gap:0">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Receita</span><span class="ph ph-trend-up" style="font-size:14px;color:var(--pos)"></span></div>
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:5px">
+                <span style="font-size:25px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums">R$ 18.740</span>
+                <svg width="62" height="26" viewBox="0 0 60 24" style="flex:none;margin-bottom:4px"><polyline points="2.0,16.7 6.3,22.0 10.6,13.4 14.9,15.2 19.2,8.1 23.5,12.4 27.8,22.0 32.2,10.9 36.5,6.3 40.8,13.9 45.1,9.6 49.4,4.0 53.7,12.4 58.0,2.0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke="var(--pos)"></polyline></svg>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:5px">
+                <span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">recebido R$ 16.120</span>
+                <span style="margin-left:auto;font-size:11px;color:var(--pos);font-variant-numeric:tabular-nums">+11%</span>
+              </div>
+            </div>
+            <div class="card elev-sm" style="padding:13px 15px;gap:0">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Lucro líquido</span><span class="ph ph-trend-up" style="font-size:14px;color:var(--pos)"></span></div>
+              <div style="margin-top:5px"><span style="font-size:25px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--pos)">R$ 7.220</span></div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:5px">
+                <span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">margem 38,5%</span>
+                <span style="margin-left:auto;font-size:11px;color:var(--pos);font-variant-numeric:tabular-nums">+13%</span>
+              </div>
+            </div>
+            <div class="card elev-sm" style="padding:13px 15px;gap:0">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Ticket médio</span></div>
+              <div style="margin-top:5px"><span style="font-size:25px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums">R$ 167,92</span></div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:5px">
+                <span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">96 vendas no período</span>
+                <span style="margin-left:auto;font-size:11px;color:var(--neg);font-variant-numeric:tabular-nums">−4%</span>
+              </div>
+            </div>
+            <div class="card elev-sm" style="padding:13px 15px;gap:0">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">A receber</span><span class="ph ph-clock" style="font-size:14px;color:var(--warn)"></span></div>
+              <div style="margin-top:5px"><span style="font-size:25px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--warn)">R$ 2.620</span></div>
+              <div style="margin-top:5px"><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">vendas em aberto</span></div>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:11px;grid-template-columns:repeat(3,minmax(0,1fr))">
+            <div class="card elev-sm" style="padding:10px 14px;gap:0;flex-direction:row;align-items:center;justify-content:space-between">
+              <div><div style="display:flex;align-items:center;gap:6px;color:color-mix(in srgb, var(--color-text) 55%, transparent)"><span class="ph ph-percent" style="font-size:11px"></span><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase">Margem bruta</span></div><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 45%, transparent)">lucro bruto R$ 9.560</span></div>
+              <span style="font-size:19px;font-weight:600;font-variant-numeric:tabular-nums">51,0%</span>
+            </div>
+            <div class="card elev-sm" style="padding:10px 14px;gap:0;flex-direction:row;align-items:center;justify-content:space-between">
+              <div><div style="display:flex;align-items:center;gap:6px;color:color-mix(in srgb, var(--color-text) 55%, transparent)"><span class="ph ph-receipt" style="font-size:11px"></span><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase">Despesas</span></div><span style="font-size:11px;color:var(--neg)">+8% vs julho</span></div>
+              <span style="font-size:19px;font-weight:600;font-variant-numeric:tabular-nums">R$ 2.340</span>
+            </div>
+            <div class="card elev-sm" style="padding:10px 14px;gap:0;flex-direction:row;align-items:center;justify-content:space-between">
+              <div><div style="display:flex;align-items:center;gap:6px;color:color-mix(in srgb, var(--color-text) 55%, transparent)"><span class="ph ph-package" style="font-size:11px"></span><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase">Estoque atual</span></div><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 45%, transparent)">R$ 6.900 em reposição</span></div>
+              <span style="font-size:19px;font-weight:600;font-variant-numeric:tabular-nums">214 un.</span>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:11px;grid-template-columns:2fr 1fr">
+            <div class="card elev-sm" style="padding:16px;gap:0;min-width:0">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">
+                <h5 style="margin:0;font-size:15px">Desempenho financeiro</h5>
+                <div style="display:flex;align-items:center;gap:14px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:var(--pos)"></span>Receita</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:var(--color-accent)"></span>Lucro líquido</span>
+                  <span style="padding-left:12px;border-left:1px solid var(--color-divider)">Margem média <strong style="color:var(--color-text);font-weight:600">34,4%</strong></span>
+                </div>
+              </div>
+              <svg width="100%" height="212" viewBox="0 0 784 240" preserveAspectRatio="none" style="display:block">
+                <defs>
+                  <linearGradient id="a1r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5DCAA5" stop-opacity=".26"></stop><stop offset="100%" stop-color="#5DCAA5" stop-opacity="0"></stop></linearGradient>
+                  <linearGradient id="a1l" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#9184d9" stop-opacity=".26"></stop><stop offset="100%" stop-color="#9184d9" stop-opacity="0"></stop></linearGradient>
+                </defs>
+                <g stroke="#3f424d"><line x1="56" y1="210" x2="776" y2="210"></line><line x1="56" y1="159.5" x2="776" y2="159.5" stroke-dasharray="2 5"></line><line x1="56" y1="109" x2="776" y2="109" stroke-dasharray="2 5"></line><line x1="56" y1="58.5" x2="776" y2="58.5" stroke-dasharray="2 5"></line><line x1="56" y1="8" x2="776" y2="8" stroke-dasharray="2 5"></line></g>
+                <g fill="#75798c" font-size="11" font-family="Inter, sans-serif" text-anchor="end"><text x="46" y="214">0</text><text x="46" y="163.5">5k</text><text x="46" y="113">10k</text><text x="46" y="62.5">15k</text><text x="46" y="12">20k</text></g>
+                <path d="M56,111 C104,111 152,84.8 200,84.8 C248,84.8 296,96.9 344,96.9 C392,96.9 440,52.4 488,52.4 C536,52.4 584,39.3 632,39.3 C680,39.3 728,20.7 776,20.7 L776,210 L56,210 Z" fill="url(#a1r)"></path>
+                <path d="M56,111 C104,111 152,84.8 200,84.8 C248,84.8 296,96.9 344,96.9 C392,96.9 440,52.4 488,52.4 C536,52.4 584,39.3 632,39.3 C680,39.3 728,20.7 776,20.7" fill="none" stroke="#5DCAA5" stroke-width="2"></path>
+                <path d="M56,180.7 C104,180.7 152,168.6 200,168.6 C248,168.6 296,176.7 344,176.7 C392,176.7 440,150.4 488,150.4 C536,150.4 584,145.4 632,145.4 C680,145.4 728,137.1 776,137.1 L776,210 L56,210 Z" fill="url(#a1l)"></path>
+                <path d="M56,180.7 C104,180.7 152,168.6 200,168.6 C248,168.6 296,176.7 344,176.7 C392,176.7 440,150.4 488,150.4 C536,150.4 584,145.4 632,145.4 C680,145.4 728,137.1 776,137.1" fill="none" stroke="#9184d9" stroke-width="2"></path>
+                <g fill="#75798c" font-size="11" font-family="Inter, sans-serif" text-anchor="middle"><text x="56" y="230">mar</text><text x="200" y="230">abr</text><text x="344" y="230">mai</text><text x="488" y="230">jun</text><text x="632" y="230">jul</text><text x="768" y="230">ago</text></g>
+              </svg>
+            </div>
+            <div class="card elev-sm" style="padding:16px;gap:0;min-width:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px"><h5 style="margin:0;font-size:15px">Últimas vendas</h5><span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 45%, transparent)">412 total</span></div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 8%,transparent),color-mix(in srgb,var(--color-text) 8%,transparent) calc(100% - 24px),transparent) no-repeat bottom / 100% 1px"><div style="min-width:0"><p style="margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cherry Cola · BC10000</p><p style="margin:1px 0 0;font-size:10.5px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">03/09 · 1 un.</p></div><span style="flex:none;font-size:12.5px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 165</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 8%,transparent),color-mix(in srgb,var(--color-text) 8%,transparent) calc(100% - 24px),transparent) no-repeat bottom / 100% 1px"><div style="min-width:0"><p style="margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Blueberry Ice · V80</p><p style="margin:1px 0 0;font-size:10.5px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">02/09 · 2 un.</p></div><span style="flex:none;font-size:12.5px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 340</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 8%,transparent),color-mix(in srgb,var(--color-text) 8%,transparent) calc(100% - 24px),transparent) no-repeat bottom / 100% 1px"><div style="min-width:0"><p style="margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Watermelon · G8000</p><p style="margin:1px 0 0;font-size:10.5px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">02/09 · 1 un.</p></div><span style="flex:none;font-size:12.5px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 155</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 8%,transparent),color-mix(in srgb,var(--color-text) 8%,transparent) calc(100% - 24px),transparent) no-repeat bottom / 100% 1px"><div style="min-width:0"><p style="margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Strawberry Kiwi · BC10000</p><p style="margin:1px 0 0;font-size:10.5px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">01/09 · 3 un.</p></div><span style="flex:none;font-size:12.5px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 495</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 8%,transparent),color-mix(in srgb,var(--color-text) 8%,transparent) calc(100% - 24px),transparent) no-repeat bottom / 100% 1px"><div style="min-width:0"><p style="margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Mango Peach · V80</p><p style="margin:1px 0 0;font-size:10.5px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">01/09 · 1 un.</p></div><span style="flex:none;font-size:12.5px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 170</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0"><div style="min-width:0"><p style="margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Grape Ice · G8000</p><p style="margin:1px 0 0;font-size:10.5px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">31/08 · 2 un.</p></div><span style="flex:none;font-size:12.5px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 310</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card elev-sm" style="padding:16px;gap:0">
+            <h5 style="margin:0 0 12px;font-size:15px">Modelos mais vendidos</h5>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+              <div><div style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px"><span>V80</span><span style="font-weight:600;font-variant-numeric:tabular-nums">R$ 4.980</span></div><div style="margin-top:6px;height:4px;border-radius:2px;background:color-mix(in srgb, var(--color-text) 10%, transparent);overflow:hidden"><div style="height:100%;width:100%;background:var(--color-accent)"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px"><span>BC10000</span><span style="font-weight:600;font-variant-numeric:tabular-nums">R$ 3.740</span></div><div style="margin-top:6px;height:4px;border-radius:2px;background:color-mix(in srgb, var(--color-text) 10%, transparent);overflow:hidden"><div style="height:100%;width:75%;background:var(--color-accent)"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px"><span>G8000</span><span style="font-weight:600;font-variant-numeric:tabular-nums">R$ 2.610</span></div><div style="margin-top:6px;height:4px;border-radius:2px;background:color-mix(in srgb, var(--color-text) 10%, transparent);overflow:hidden"><div style="height:100%;width:52%;background:var(--color-accent)"></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">
+        <a href="#1b" style="font:600 10.5px/1 'Inter',ui-monospace;padding:4px 7px;background:color-mix(in srgb, var(--color-text) 10%, transparent);color:var(--color-text);border-radius:5px">1b</a>
+        <span><strong style="color:var(--color-text);font-weight:500">Organizado por decisão</strong> — dinheiro numa coluna estreita, "o que repor" e "onde está a margem" no centro</span>
+      </div>
+      <div style="width:1240px;border-radius:8px;overflow:hidden;background:var(--color-bg);box-shadow:var(--shadow-md);display:flex">
+        <aside style="width:56px;flex:none;background:color-mix(in srgb, var(--color-bg) 88%, #000);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:3px">
+          <span style="font-size:15px;font-weight:600;color:var(--color-accent);margin-bottom:12px">C</span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;border-radius:8px;background:color-mix(in srgb, var(--color-accent) 14%, transparent)"><span class="ph ph-squares-four" style="font-size:17px;color:var(--color-accent)"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-tag" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-package" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-receipt" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-file-text" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-hand-coins" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-chart-line" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-coins" style="font-size:17px"></span></span>
+          <span style="width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 50%, transparent)"><span class="ph ph-book-open" style="font-size:17px"></span></span>
+          <span style="margin-top:auto;width:38px;height:34px;display:grid;place-items:center;color:color-mix(in srgb, var(--color-text) 40%, transparent)"><span class="ph ph-sign-out" style="font-size:16px"></span></span>
+        </aside>
+        <div style="flex:1;min-width:0;display:flex">
+          <div style="flex:1;min-width:0;padding:22px 22px 26px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+              <div>
+                <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)">Agosto/2026</span>
+                <h4 style="margin:3px 0 0;font-size:22px">O que precisa da sua atenção</h4>
+              </div>
+              <div class="seg" style="font-size:12px"><label class="seg-opt" style="padding:6px 11px;color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Ago</label><label class="seg-opt" style="padding:6px 11px">Jul</label><label class="seg-opt" style="padding:6px 11px">Jun</label><label class="seg-opt" style="padding:6px 11px">Geral</label></div>
+            </div>
+
+            <div class="card elev-sm" style="padding:0;gap:0;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 11px">
+                <div style="display:flex;align-items:center;gap:8px"><span class="ph ph-package" style="font-size:16px;color:var(--warn)"></span><h5 style="margin:0;font-size:15px">Repor agora</h5></div>
+                <span class="tag tag-outline">3 de 12 modelos</span>
+              </div>
+              <div style="padding:0 16px 14px">
+                <table class="table" style="font-size:13px">
+                  <thead><tr><th style="padding:6px 8px">Modelo</th><th style="padding:6px 8px;text-align:right">Estoque</th><th style="padding:6px 8px;text-align:right">Vende/dia</th><th style="padding:6px 8px;text-align:right">Dura</th><th style="padding:6px 8px;text-align:right">Margem</th><th style="padding:6px 8px;text-align:right">Custo p/ 30d</th></tr></thead>
+                  <tbody>
+                    <tr><td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--neg)"></span>BC10000 <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11.5px">Elfbar</span></div></td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">8 un.</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">0,87</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--neg)">9 dias</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">46,7%</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">R$ 2.024</td></tr>
+                    <tr><td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>V80 <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11.5px">Ignite</span></div></td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">12 un.</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">0,97</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--warn)">12 dias</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">45,9%</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">R$ 2.484</td></tr>
+                    <tr><td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>Cube 20k <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11.5px">Lost Mary</span></div></td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">31 un.</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">0,47</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">66 dias</td><td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">43,8%</td><td style="padding:7px 8px;text-align:right;color:color-mix(in srgb, var(--color-text) 40%, transparent)">—</td></tr>
+                  </tbody>
+                </table>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:11px;background:linear-gradient(to right,transparent,var(--color-divider) 40px,var(--color-divider) calc(100% - 40px),transparent) no-repeat top / 100% 1px">
+                  <span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">2 modelos parados há mais de 60 dias travando <strong style="color:var(--color-text)">R$ 6.885</strong> em estoque</span>
+                  <span class="btn btn-primary" style="font-size:12.5px">Abrir entrada de estoque</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card elev-sm" style="padding:14px 16px;gap:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <div style="display:flex;align-items:center;gap:8px"><span class="ph ph-percent" style="font-size:16px;color:var(--color-accent)"></span><h5 style="margin:0;font-size:15px">Onde está a margem</h5></div>
+                <span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">margem bruta média <strong style="color:var(--color-text)">51,0%</strong> · barra = lucro bruto do mês</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <div style="display:grid;grid-template-columns:118px 1fr 62px 74px;align-items:center;gap:12px;font-size:12.5px"><span>V80</span><div style="height:16px;background:color-mix(in srgb, var(--color-text) 7%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:linear-gradient(to right,color-mix(in srgb, var(--color-accent) 55%, transparent),var(--color-accent))"></div></div><span style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">45,9%</span><span style="text-align:right;color:color-mix(in srgb, var(--color-text) 55%, transparent);font-variant-numeric:tabular-nums">R$ 2.286</span></div>
+                <div style="display:grid;grid-template-columns:118px 1fr 62px 74px;align-items:center;gap:12px;font-size:12.5px"><span>BC10000</span><div style="height:16px;background:color-mix(in srgb, var(--color-text) 7%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:76%;background:linear-gradient(to right,color-mix(in srgb, var(--color-accent) 55%, transparent),var(--color-accent))"></div></div><span style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">46,7%</span><span style="text-align:right;color:color-mix(in srgb, var(--color-text) 55%, transparent);font-variant-numeric:tabular-nums">R$ 1.747</span></div>
+                <div style="display:grid;grid-template-columns:118px 1fr 62px 74px;align-items:center;gap:12px;font-size:12.5px"><span>Cube 20k</span><div style="height:16px;background:color-mix(in srgb, var(--color-text) 7%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:56%;background:linear-gradient(to right,color-mix(in srgb, var(--color-accent) 55%, transparent),var(--color-accent))"></div></div><span style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">43,8%</span><span style="text-align:right;color:color-mix(in srgb, var(--color-text) 55%, transparent);font-variant-numeric:tabular-nums">R$ 1.288</span></div>
+                <div style="display:grid;grid-template-columns:118px 1fr 62px 74px;align-items:center;gap:12px;font-size:12.5px"><span>G8000</span><div style="height:16px;background:color-mix(in srgb, var(--color-text) 7%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:44%;background:linear-gradient(to right,color-mix(in srgb, var(--color-accent) 55%, transparent),var(--color-accent))"></div></div><span style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">38,7%</span><span style="text-align:right;color:color-mix(in srgb, var(--color-text) 55%, transparent);font-variant-numeric:tabular-nums">R$ 1.010</span></div>
+                <div style="display:grid;grid-template-columns:118px 1fr 62px 74px;align-items:center;gap:12px;font-size:12.5px"><span>15k <span style="color:color-mix(in srgb, var(--color-text) 40%, transparent);font-size:11px">Nikbar</span></span><div style="height:16px;background:color-mix(in srgb, var(--color-text) 7%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:16%;background:linear-gradient(to right,color-mix(in srgb, var(--color-accent) 55%, transparent),var(--color-accent))"></div></div><span style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">43,6%</span><span style="text-align:right;color:color-mix(in srgb, var(--color-text) 55%, transparent);font-variant-numeric:tabular-nums">R$ 366</span></div>
+              </div>
+            </div>
+
+            <div class="card elev-sm" style="padding:14px 16px;gap:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <h5 style="margin:0;font-size:15px">6 meses</h5>
+                <div style="display:flex;gap:14px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)"><span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;background:var(--pos)"></span>Receita</span><span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;background:var(--color-accent)"></span>Lucro líquido</span></div>
+              </div>
+              <svg width="100%" height="126" viewBox="0 0 640 126" preserveAspectRatio="none" style="display:block">
+                <g fill="#5DCAA5" opacity=".85"><rect x="20" y="55.9" width="26" height="44.1"></rect><rect x="124" y="44.2" width="26" height="55.8"></rect><rect x="228" y="49.6" width="26" height="50.4"></rect><rect x="332" y="29.8" width="26" height="70.2"></rect><rect x="436" y="23.9" width="26" height="76.1"></rect><rect x="540" y="15.7" width="26" height="84.3"></rect></g>
+                <g fill="#9184d9"><rect x="50" y="86.9" width="26" height="13.1"></rect><rect x="154" y="81.5" width="26" height="18.5"></rect><rect x="258" y="85.1" width="26" height="14.9"></rect><rect x="362" y="73.4" width="26" height="26.6"></rect><rect x="466" y="71.2" width="26" height="28.8"></rect><rect x="570" y="67.5" width="26" height="32.5"></rect></g>
+                <line x1="8" y1="100" x2="632" y2="100" stroke="#3f424d"></line>
+                <g fill="#75798c" font-size="11" font-family="Inter, sans-serif" text-anchor="middle"><text x="48" y="118">mar</text><text x="152" y="118">abr</text><text x="256" y="118">mai</text><text x="360" y="118">jun</text><text x="464" y="118">jul</text><text x="568" y="118">ago</text></g>
+              </svg>
+            </div>
+          </div>
+
+          <div style="width:312px;flex:none;padding:22px 22px 26px;background:color-mix(in srgb, var(--color-bg) 90%, #000);display:flex;flex-direction:column;gap:14px">
+            <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Dinheiro do mês</span>
+            <div>
+              <span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Receita</span>
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:600;letter-spacing:-.025em;font-variant-numeric:tabular-nums">R$ 18.740</span><span style="font-size:12px;color:var(--pos)">+11%</span></div>
+              <div style="margin-top:8px;height:5px;display:flex;gap:2px"><div style="flex:16120;background:var(--pos);border-radius:2px"></div><div style="flex:2620;background:var(--warn);border-radius:2px"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)"><span>recebido R$ 16.120</span><span style="color:var(--warn)">a receber R$ 2.620</span></div>
+            </div>
+            <hr class="hr" style="margin:2px 0">
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:12.5px;color:color-mix(in srgb, var(--color-text) 65%, transparent)">− CPV</span><span style="font-size:14px;font-variant-numeric:tabular-nums">R$ 9.180</span></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:12.5px;color:color-mix(in srgb, var(--color-text) 65%, transparent)">− Despesas</span><span style="font-size:14px;font-variant-numeric:tabular-nums">R$ 2.340 <span style="font-size:11px;color:var(--neg)">+8%</span></span></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;padding-top:11px;background:linear-gradient(to right,transparent,var(--color-divider) 24px,var(--color-divider) calc(100% - 24px),transparent) no-repeat top / 100% 1px"><span style="font-size:12.5px">Lucro líquido</span><span style="font-size:20px;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 7.220</span></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">margem líquida</span><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">38,5% · bruta 51,0%</span></div>
+            </div>
+            <hr class="hr" style="margin:2px 0">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Ticket médio</span><div style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">R$ 167,92 <span style="font-size:11px;font-weight:400;color:var(--neg)">−4%</span></div></div>
+              <div><span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Estoque a custo</span><div style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">R$ 12.480</div></div>
+            </div>
+            <hr class="hr" style="margin:2px 0">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 50%, transparent)">Últimas vendas</span><span style="font-size:10.5px;color:color-mix(in srgb, var(--color-text) 40%, transparent)">412 total</span></div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cherry Cola · BC10000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 165</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Blueberry Ice · V80</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 340</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Watermelon · G8000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 155</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;background:linear-gradient(to right,color-mix(in srgb,var(--color-text) 7%,transparent),color-mix(in srgb,var(--color-text) 7%,transparent) calc(100% - 20px),transparent) no-repeat bottom / 100% 1px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Strawberry Kiwi · BC10000</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 495</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Mango Peach · V80</span><span style="flex:none;font-variant-numeric:tabular-nums">R$ 170</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">
+        <a href="#1c" style="font:600 10.5px/1 'Inter',ui-monospace;padding:4px 7px;background:color-mix(in srgb, var(--color-text) 10%, transparent);color:var(--color-text);border-radius:5px">1c</a>
+        <span><strong style="color:var(--color-text);font-weight:500">Painel largo</strong> — sem sidebar, faixa de números em escala grande e uma matriz margem × giro</span>
+      </div>
+      <div style="width:1240px;border-radius:8px;overflow:hidden;background:var(--color-bg);box-shadow:var(--shadow-md)">
+        <div class="nav" style="padding:12px 26px;gap:22px">
+          <span class="nav-brand" style="font-size:17px">California</span>
+          <span style="font-size:13.5px;color:var(--color-accent)">Dashboard</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Produtos</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Entrada</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Vendas</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Despesas</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Distribuição</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Financeiro</span>
+          <span style="font-size:13.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent)">Catálogo</span>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:10px"><span class="seg" style="font-size:12px"><label class="seg-opt" style="padding:5px 10px;color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Ago/26</label><label class="seg-opt" style="padding:5px 10px">Jul</label><label class="seg-opt" style="padding:5px 10px">Geral</label></span><span class="ph ph-sign-out" style="font-size:16px;color:color-mix(in srgb, var(--color-text) 45%, transparent)"></span></span>
+        </div>
+
+        <div style="padding:26px 26px 22px;background:linear-gradient(160deg, var(--color-section) 0%, color-mix(in srgb, var(--color-section) 55%, var(--color-bg)) 62%, var(--color-bg) 100%)">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+            <div>
+              <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-accent-300)">Agosto/2026 · fechado</span>
+              <div style="display:flex;align-items:baseline;gap:18px;margin-top:8px">
+                <span style="font-size:58px;font-weight:600;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums">R$ 18.740</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:14px;color:var(--pos)"><span class="ph ph-arrow-up-right" style="font-size:14px"></span>+11% vs julho</span>
+              </div>
+              <p style="margin:9px 0 0;font-size:13px;color:color-mix(in srgb, var(--color-text) 68%, transparent)">Receita do mês · 96 vendas · ticket médio R$ 167,92 <span style="color:var(--neg)">−4%</span></p>
+            </div>
+            <div style="display:flex;gap:36px;padding-bottom:4px">
+              <div><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Lucro líquido</span><div style="font-size:29px;font-weight:600;letter-spacing:-.02em;color:var(--pos);font-variant-numeric:tabular-nums;line-height:1.2">R$ 7.220</div><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">margem 38,5%</span></div>
+              <div><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Margem bruta</span><div style="font-size:29px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2">51,0%</div><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">bruto R$ 9.560</span></div>
+              <div><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">A receber</span><div style="font-size:29px;font-weight:600;letter-spacing:-.02em;color:var(--warn);font-variant-numeric:tabular-nums;line-height:1.2">R$ 2.620</div><span style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">vendas em aberto</span></div>
+              <div><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Despesas</span><div style="font-size:29px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2">R$ 2.340</div><span style="font-size:11.5px;color:var(--neg)">+8% vs julho</span></div>
+            </div>
+          </div>
+          <svg width="100%" height="72" viewBox="0 0 1188 72" preserveAspectRatio="none" style="display:block;margin-top:20px">
+            <defs><linearGradient id="c1r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5DCAA5" stop-opacity=".38"></stop><stop offset="100%" stop-color="#5DCAA5" stop-opacity="0"></stop></linearGradient></defs>
+            <path d="M0,50 C79,50 158,38 238,38 C317,38 396,44 476,44 C555,44 634,23 714,23 C793,23 872,17 952,17 C1031,17 1110,8 1188,8 L1188,72 L0,72 Z" fill="url(#c1r)"></path>
+            <path d="M0,50 C79,50 158,38 238,38 C317,38 396,44 476,44 C555,44 634,23 714,23 C793,23 872,17 952,17 C1031,17 1110,8 1188,8" fill="none" stroke="#5DCAA5" stroke-width="1.75"></path>
+            <path d="M0,66 C79,66 158,60 238,60 C317,60 396,64 476,64 C555,64 634,51 714,51 C793,51 872,48 952,48 C1031,48 1110,44 1188,44" fill="none" stroke="#9184d9" stroke-width="1.75"></path>
+            <g fill="color-mix(in srgb, #e9e9ed 45%, transparent)" font-size="10.5" font-family="Inter, sans-serif"><text x="2" y="12">mar</text><text x="236" y="12">abr</text><text x="474" y="12">mai</text><text x="712" y="12">jun</text><text x="950" y="12">jul</text><text x="1160" y="12">ago</text></g>
+          </svg>
+          <div style="display:flex;gap:18px;margin-top:2px;font-size:11px;color:color-mix(in srgb, var(--color-text) 60%, transparent)"><span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:var(--pos)"></span>Receita 6 meses</span><span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:var(--color-accent)"></span>Lucro líquido</span><span>Margem média <strong style="color:var(--color-text);font-weight:600">34,4%</strong></span></div>
+        </div>
+
+        <div style="padding:24px 26px 28px;display:grid;grid-template-columns:1.45fr 1fr;gap:22px">
+          <div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+              <h5 style="margin:0;font-size:15px">Margem × giro por modelo</h5>
+              <span style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">largura = receita do mês · cor = dias de estoque</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>V80 <span style="color:color-mix(in srgb, var(--color-text) 40%, transparent);font-size:11px">Ignite · 29 un.</span></span><span style="display:flex;gap:14px;font-variant-numeric:tabular-nums"><span style="color:color-mix(in srgb, var(--color-text) 55%, transparent)">R$ 4.980</span><strong style="font-weight:600">45,9%</strong></span></div>
+                <div style="display:flex;align-items:center;gap:9px"><div style="flex:1;height:22px;background:color-mix(in srgb, var(--color-text) 6%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:var(--color-accent-800);box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--warn) 55%, transparent)"></div></div><span style="width:64px;font-size:11.5px;color:var(--warn);text-align:right;font-variant-numeric:tabular-nums">12 dias</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>BC10000 <span style="color:color-mix(in srgb, var(--color-text) 40%, transparent);font-size:11px">Elfbar · 26 un.</span></span><span style="display:flex;gap:14px;font-variant-numeric:tabular-nums"><span style="color:color-mix(in srgb, var(--color-text) 55%, transparent)">R$ 3.740</span><strong style="font-weight:600">46,7%</strong></span></div>
+                <div style="display:flex;align-items:center;gap:9px"><div style="flex:1;height:22px;background:color-mix(in srgb, var(--color-text) 6%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:75%;background:var(--color-accent-800);box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--neg) 60%, transparent)"></div></div><span style="width:64px;font-size:11.5px;color:var(--neg);text-align:right;font-variant-numeric:tabular-nums">9 dias</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Cube 20k <span style="color:color-mix(in srgb, var(--color-text) 40%, transparent);font-size:11px">Lost Mary · 14 un.</span></span><span style="display:flex;gap:14px;font-variant-numeric:tabular-nums"><span style="color:color-mix(in srgb, var(--color-text) 55%, transparent)">R$ 2.940</span><strong style="font-weight:600">43,8%</strong></span></div>
+                <div style="display:flex;align-items:center;gap:9px"><div style="flex:1;height:22px;background:color-mix(in srgb, var(--color-text) 6%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:59%;background:var(--color-neutral-900);box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--color-neutral-500) 45%, transparent)"></div></div><span style="width:64px;font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent);text-align:right;font-variant-numeric:tabular-nums">66 dias</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>G8000 <span style="color:color-mix(in srgb, var(--color-text) 40%, transparent);font-size:11px">Oxbar · 21 un.</span></span><span style="display:flex;gap:14px;font-variant-numeric:tabular-nums"><span style="color:color-mix(in srgb, var(--color-text) 55%, transparent)">R$ 2.610</span><strong style="font-weight:600">38,7%</strong></span></div>
+                <div style="display:flex;align-items:center;gap:9px"><div style="flex:1;height:22px;background:color-mix(in srgb, var(--color-text) 6%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:52%;background:var(--color-neutral-900);box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--color-neutral-500) 45%, transparent)"></div></div><span style="width:64px;font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent);text-align:right;font-variant-numeric:tabular-nums">90 dias</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>15k <span style="color:color-mix(in srgb, var(--color-text) 40%, transparent);font-size:11px">Nikbar · 6 un.</span></span><span style="display:flex;gap:14px;font-variant-numeric:tabular-nums"><span style="color:color-mix(in srgb, var(--color-text) 55%, transparent)">R$ 840</span><strong style="font-weight:600">43,6%</strong></span></div>
+                <div style="display:flex;align-items:center;gap:9px"><div style="flex:1;height:22px;background:color-mix(in srgb, var(--color-text) 6%, transparent);border-radius:3px;overflow:hidden"><div style="height:100%;width:17%;background:color-mix(in srgb, var(--color-neutral-500) 30%, transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--color-neutral-500) 55%, transparent)"></div></div><span style="width:64px;font-size:11.5px;color:color-mix(in srgb, var(--color-text) 40%, transparent);text-align:right;font-variant-numeric:tabular-nums">parado</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px"><h5 style="margin:0;font-size:15px">Fila de reposição</h5><span class="tag tag-outline">3 modelos</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:8px;background:var(--color-surface);box-shadow:inset 2px 0 0 var(--neg)"><div style="flex:1;min-width:0"><div style="font-size:13px">BC10000 <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11px">Elfbar</span></div><div style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">8 un. · dura 9 dias · 46,7% de margem</div></div><span style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">R$ 2.024</span></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:8px;background:var(--color-surface);box-shadow:inset 2px 0 0 var(--warn)"><div style="flex:1;min-width:0"><div style="font-size:13px">V80 <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11px">Ignite</span></div><div style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">12 un. · dura 12 dias · 45,9% de margem</div></div><span style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">R$ 2.484</span></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:8px;background:var(--color-surface);box-shadow:inset 2px 0 0 var(--color-neutral-600)"><div style="flex:1;min-width:0"><div style="font-size:13px">15k <span style="color:color-mix(in srgb, var(--color-text) 45%, transparent);font-size:11px">Nikbar · parado</span></div><div style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent);font-variant-numeric:tabular-nums">100 un. travando R$ 7.900 — não repor</div></div><span style="font-size:13px;font-weight:600;color:color-mix(in srgb, var(--color-text) 40%, transparent)">—</span></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><span style="font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Custo estimado para 30 dias <strong style="color:var(--color-text);font-variant-numeric:tabular-nums">R$ 4.508</strong></span><span class="btn btn-primary" style="font-size:12.5px">Registrar entrada</span></div>
+            </div>
+            <hr class="hr" style="margin:0">
+            <div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px"><h5 style="margin:0;font-size:15px">Últimas vendas</h5><span style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb, var(--color-text) 42%, transparent)">412 total</span></div>
+              <table class="table" style="font-size:12.5px">
+                <tbody>
+                  <tr><td style="padding:6px 4px">Cherry Cola · BC10000</td><td style="padding:6px 4px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">03/09 · 1 un.</td><td style="padding:6px 4px;text-align:right;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 165</td></tr>
+                  <tr><td style="padding:6px 4px">Blueberry Ice · V80</td><td style="padding:6px 4px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">02/09 · 2 un.</td><td style="padding:6px 4px;text-align:right;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 340</td></tr>
+                  <tr><td style="padding:6px 4px">Watermelon · G8000</td><td style="padding:6px 4px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">02/09 · 1 un.</td><td style="padding:6px 4px;text-align:right;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 155</td></tr>
+                  <tr><td style="padding:6px 4px">Strawberry Kiwi · BC10000</td><td style="padding:6px 4px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">01/09 · 3 un.</td><td style="padding:6px 4px;text-align:right;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 495</td></tr>
+                  <tr><td style="padding:6px 4px">Mango Peach · V80</td><td style="padding:6px 4px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">01/09 · 1 un.</td><td style="padding:6px 4px;text-align:right;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 170</td></tr>
+                  <tr><td style="padding:6px 4px">Grape Ice · G8000</td><td style="padding:6px 4px;color:color-mix(in srgb, var(--color-text) 45%, transparent);font-variant-numeric:tabular-nums">31/08 · 2 un.</td><td style="padding:6px 4px;text-align:right;font-weight:600;color:var(--pos);font-variant-numeric:tabular-nums">R$ 310</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p style="margin:24px 0 0;font-size:12px;color:color-mix(in srgb, var(--color-text) 45%, transparent)">Próximos passos: "quero <a href="#1b">1b</a> mas com a faixa grande da <a href="#1c">1c</a>" · "tira a coluna da direita da <a href="#1b">1b</a>" · "mais opções, mais ousadas"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;corPrincipal&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#85B7EB&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#85B7EB&quot;,&quot;#5DCAA5&quot;,&quot;#9184d9&quot;],&quot;section&quot;:&quot;Cores de sinal&quot;},&quot;corAlerta&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#EF9F27&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#EF9F27&quot;,&quot;#F09595&quot;,&quot;#b2b6ca&quot;],&quot;section&quot;:&quot;Cores de sinal&quot;}}">class Component extends DCLogic {
+  renderVals() {
+    return {
+      posColor: this.props.corPrincipal ?? "#85B7EB",
+      negColor: this.props.corAlerta ?? "#EF9F27",
+    };
+  }
+}</script>
+</body>
+</html>

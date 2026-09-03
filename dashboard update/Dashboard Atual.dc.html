@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+body{margin:0;background:hsl(240 6% 5%);color:hsl(210 20% 96%);font-family:'DM Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11"}
+h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;font-weight:600;letter-spacing:-0.025em;margin:0}
+a{color:hsl(265 80% 65%);text-decoration:none}
+a:hover{color:hsl(265 80% 74%)}
+@keyframes rgb-cascade{from{background-position:0% 0%}to{background-position:-300% 300%}}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:hsl(240 6% 5%)">
+
+  <aside style="width:192px;flex:none;display:flex;flex-direction:column;background:hsl(240 6% 6%);border-right:1px solid hsl(240 5% 13%);position:sticky;top:0;height:100vh;overflow-y:auto;overflow-x:hidden">
+    <div style="padding:16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid hsl(240 5% 13%)">
+      <h1 style="font-size:18px;line-height:28px;font-weight:700;letter-spacing:-0.025em;white-space:nowrap;background-image:linear-gradient(135deg,#8e24aa,#9c27b0,#ab47bc,#ba68c8,#c880ff,#d8a5ff,#e1bee7,#d8a5ff,#c880ff,#ba68c8,#ab47bc,#9c27b0,#8e24aa);background-size:300% 300%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:rgb-cascade 4s linear infinite">California</h1>
+      <span style="margin-left:auto;color:hsl(240 5% 70%);padding:4px;display:flex;font-size:16px" class="ph ph-caret-left"></span>
+    </div>
+    <nav style="flex:1;display:flex;flex-direction:column;gap:4px;padding:12px 8px">
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;background:hsl(240 5% 11%);color:hsl(210 20% 95%);font-weight:500"><span class="ph ph-squares-four" style="font-size:18px;color:#5DCAA5"></span><span style="white-space:nowrap">Dashboard</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-tag" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Produtos</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-package" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Entrada</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-trend-down" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Perdas</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-receipt" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Vendas</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-file-text" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Despesas</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-hand-coins" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Distribuição</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-chart-line" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Insights</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-coins" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Financeiro</span></span>
+      <span style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;font-size:14px;color:hsl(240 5% 70%)"><span class="ph ph-book-open" style="font-size:18px;color:hsl(210 20% 96%)"></span><span style="white-space:nowrap">Catálogo</span></span>
+    </nav>
+    <div style="padding:16px;border-top:1px solid hsl(240 5% 13%)">
+      <p style="font-size:12px;line-height:16px;color:hsl(240 5% 60%);margin:0 0 12px;white-space:nowrap">California Contabilidade</p>
+      <span style="display:flex;align-items:center;gap:8px;font-size:14px;color:hsl(240 5% 60%)"><span class="ph ph-sign-out" style="font-size:16px"></span><span>Sair</span></span>
+    </div>
+  </aside>
+
+  <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+    <main style="flex:1;overflow:hidden">
+      <div style="padding:24px;max-width:1280px;min-width:1280px;margin:0 auto;width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:20px">
+
+        <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:1px solid hsl(240 5% 15%);padding-bottom:12px">
+          <h1 style="font-size:20px;line-height:28px;font-weight:600;letter-spacing:-0.025em">Dashboard</h1>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 12px;border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 5%);font-size:12px;font-weight:500;color:hsl(210 20% 96%)"><span class="ph ph-download-simple" style="font-size:13px"></span>Exportar Excel</span>
+            <span style="display:flex;align-items:center;justify-content:space-between;width:224px;height:36px;padding:0 12px;border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 5%);font-size:12px;color:hsl(210 20% 96%)">Agosto/2026<span class="ph ph-caret-down" style="font-size:14px;opacity:.5"></span></span>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:8px;grid-template-columns:repeat(4,minmax(0,1fr))">
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:12px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:hsl(240 5% 60%);font-weight:500">Receita</p>
+              <span class="ph ph-trend-up" style="font-size:14px;color:hsl(152 60% 50%)"></span>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
+              <span style="margin-top:4px;font-size:24px;line-height:32px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(210 20% 96%)">R$ 18.740,00</span>
+              <svg width="60" height="24" viewBox="0 0 60 24" style="flex:none;overflow:visible"><polyline points="2.0,16.7 6.3,22.0 10.6,13.4 14.9,15.2 19.2,8.1 23.5,12.4 27.8,22.0 32.2,10.9 36.5,6.3 40.8,13.9 45.1,9.6 49.4,4.0 53.7,12.4 58.0,2.0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke="hsl(152 60% 50%)"></polyline></svg>
+            </div>
+            <p style="margin:4px 0 0;font-size:12px;line-height:16px;color:hsl(240 5% 60%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">recebido R$ 16.120,00</p>
+            <span style="margin-top:4px;display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:500;font-family:'JetBrains Mono',monospace;border-radius:12px;padding:2px 6px;color:hsl(152 60% 50%);background:hsl(152 60% 50% / .1)"><span class="ph ph-arrow-up-right" style="font-size:10px"></span>+11% vs jul</span>
+          </div>
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:12px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:hsl(240 5% 60%);font-weight:500">Lucro líquido</p>
+              <span class="ph ph-trend-up" style="font-size:14px;color:hsl(152 60% 50%)"></span>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
+              <span style="margin-top:4px;font-size:24px;line-height:32px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(152 60% 50%)">R$ 7.220,00</span>
+            </div>
+            <p style="margin:4px 0 0;font-size:12px;line-height:16px;color:hsl(240 5% 60%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">margem 38.5%</p>
+            <span style="margin-top:4px;display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:500;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%)"><span class="ph ph-arrow-up-right" style="font-size:10px"></span>+13% vs jul</span>
+          </div>
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:12px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:hsl(240 5% 60%);font-weight:500">Ticket médio</p>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
+              <span style="margin-top:4px;font-size:24px;line-height:32px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(210 20% 96%)">R$ 167,92</span>
+            </div>
+            <p style="margin:4px 0 0;font-size:12px;line-height:16px;color:hsl(240 5% 60%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">96 vendas no período</p>
+            <span style="margin-top:4px;display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:500;font-family:'JetBrains Mono',monospace;color:hsl(0 70% 58%)"><span class="ph ph-arrow-down-right" style="font-size:10px"></span>-4% vs jul</span>
+          </div>
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:12px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:hsl(240 5% 60%);font-weight:500">A receber</p>
+              <span class="ph ph-clock" style="font-size:14px;color:hsl(32 92% 58%)"></span>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
+              <span style="margin-top:4px;font-size:24px;line-height:32px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(32 92% 58%)">R$ 2.620,00</span>
+            </div>
+            <p style="margin:4px 0 0;font-size:12px;line-height:16px;color:hsl(240 5% 60%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">vendas em aberto</p>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:8px;grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:10px 14px">
+            <div style="display:flex;align-items:center;gap:6px;color:hsl(240 5% 60%)">
+              <span class="ph ph-percent" style="font-size:11px"></span>
+              <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:500">Margem bruta</p>
+            </div>
+            <span style="margin-top:2px;display:block;font-size:16px;line-height:24px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(210 20% 96%)">51.0%</span>
+            <p style="margin:2px 0 0;font-size:12px;line-height:16px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">lucro bruto R$ 9.560,00</p>
+            <span style="margin-top:4px;display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:500;font-family:'JetBrains Mono',monospace;border-radius:12px;padding:2px 6px;color:hsl(152 60% 50%);background:hsl(152 60% 50% / .1)"><span class="ph ph-arrow-up-right" style="font-size:10px"></span>+1% vs jul</span>
+          </div>
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:10px 14px">
+            <div style="display:flex;align-items:center;gap:6px;color:hsl(240 5% 60%)">
+              <span class="ph ph-receipt" style="font-size:11px"></span>
+              <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:500">Despesas</p>
+            </div>
+            <span style="margin-top:2px;display:block;font-size:16px;line-height:24px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(210 20% 96%)">R$ 2.340,00</span>
+            <span style="margin-top:4px;display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:500;font-family:'JetBrains Mono',monospace;border-radius:12px;padding:2px 6px;color:hsl(0 70% 58%);background:hsl(0 70% 58% / .1)"><span class="ph ph-arrow-up-right" style="font-size:10px"></span>+8% vs jul</span>
+          </div>
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:10px 14px">
+            <div style="display:flex;align-items:center;gap:6px;color:hsl(240 5% 60%)">
+              <span class="ph ph-package" style="font-size:11px"></span>
+              <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:500">Estoque atual</p>
+            </div>
+            <span style="margin-top:2px;display:block;font-size:16px;line-height:24px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';color:hsl(210 20% 96%)">214 un. · R$ 12.480,00</span>
+            <p style="margin:2px 0 0;font-size:12px;line-height:16px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">R$ 6.900,00 em reposição</p>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr))">
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:16px">
+            <h2 style="font-size:14px;font-weight:600;letter-spacing:-0.025em;margin:0 0 12px">Insights automáticos</h2>
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid hsl(240 5% 15% / .4)">
+                <span class="ph ph-warning" style="font-size:15px;color:hsl(32 92% 58%)"></span>
+                <p style="margin:0;font-size:12px;line-height:16px">3 produtos com estoque baixo</p>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+                <span class="ph ph-trend-down" style="font-size:15px;color:hsl(0 70% 58%)"></span>
+                <p style="margin:0;font-size:12px;line-height:16px">Ticket médio caiu 4% na última semana</p>
+              </div>
+            </div>
+          </div>
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:16px">
+            <h2 style="font-size:14px;font-weight:600;letter-spacing:-0.025em;margin:0 0 12px">Modelos mais vendidos</h2>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">V80</p>
+                  <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';flex:none">R$ 4.980,00</span>
+                </div>
+                <div style="margin-top:6px;height:6px;border-radius:9999px;background:hsl(240 5% 12%);overflow:hidden"><div style="height:100%;width:100%;border-radius:9999px;background:hsl(265 80% 65%)"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">BC10000</p>
+                  <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';flex:none">R$ 3.740,00</span>
+                </div>
+                <div style="margin-top:6px;height:6px;border-radius:9999px;background:hsl(240 5% 12%);overflow:hidden"><div style="height:100%;width:75%;border-radius:9999px;background:hsl(265 80% 65%)"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">G8000</p>
+                  <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;font-feature-settings:'tnum';flex:none">R$ 2.610,00</span>
+                </div>
+                <div style="margin-top:6px;height:6px;border-radius:9999px;background:hsl(240 5% 12%);overflow:hidden"><div style="height:100%;width:52%;border-radius:9999px;background:hsl(265 80% 65%)"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:16px;grid-template-columns:2fr 1fr">
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:16px;min-width:0">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">
+              <h2 style="font-size:14px;font-weight:600;letter-spacing:-0.025em">Desempenho Financeiro</h2>
+              <div style="display:flex;align-items:center;gap:16px;font-size:11px">
+                <span style="display:flex;align-items:center;gap:6px;color:hsl(240 5% 60%)"><span style="height:8px;width:8px;border-radius:9999px;background:hsl(152 60% 50%)"></span> Receita</span>
+                <span style="display:flex;align-items:center;gap:6px;color:hsl(240 5% 60%)"><span style="height:8px;width:8px;border-radius:9999px;background:hsl(265 80% 65%)"></span> Lucro Líquido</span>
+                <span style="display:flex;align-items:center;gap:6px;color:hsl(240 5% 60%);border-left:1px solid hsl(240 5% 15%);padding-left:12px">Margem média <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:hsl(210 20% 96%)">34.4%</span></span>
+              </div>
+            </div>
+            <div style="height:240px">
+              <svg width="100%" height="240" viewBox="0 0 784 240" preserveAspectRatio="none" style="display:block">
+                <defs>
+                  <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="hsl(152 60% 50%)" stop-opacity="0.3"></stop><stop offset="100%" stop-color="hsl(152 60% 50%)" stop-opacity="0"></stop></linearGradient>
+                  <linearGradient id="gradLucro" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="hsl(265 80% 65%)" stop-opacity="0.3"></stop><stop offset="100%" stop-color="hsl(265 80% 65%)" stop-opacity="0"></stop></linearGradient>
+                </defs>
+                <g stroke="hsl(240 5% 15%)" stroke-dasharray="3 3">
+                  <line x1="56" y1="210" x2="776" y2="210"></line><line x1="56" y1="159.5" x2="776" y2="159.5"></line><line x1="56" y1="109" x2="776" y2="109"></line><line x1="56" y1="58.5" x2="776" y2="58.5"></line><line x1="56" y1="8" x2="776" y2="8"></line>
+                </g>
+                <g fill="hsl(240 5% 60%)" font-size="11" font-family="'DM Sans',system-ui,sans-serif" text-anchor="end">
+                  <text x="48" y="214">0</text><text x="48" y="163.5">5k</text><text x="48" y="113">10k</text><text x="48" y="62.5">15k</text><text x="48" y="12">20k</text>
+                </g>
+                <path d="M56,111 C104,111 152,84.8 200,84.8 C248,84.8 296,96.9 344,96.9 C392,96.9 440,52.4 488,52.4 C536,52.4 584,39.3 632,39.3 C680,39.3 728,20.7 776,20.7 L776,210 L56,210 Z" fill="url(#gradReceita)"></path>
+                <path d="M56,111 C104,111 152,84.8 200,84.8 C248,84.8 296,96.9 344,96.9 C392,96.9 440,52.4 488,52.4 C536,52.4 584,39.3 632,39.3 C680,39.3 728,20.7 776,20.7" fill="none" stroke="hsl(152 60% 50%)" stroke-width="2"></path>
+                <path d="M56,180.7 C104,180.7 152,168.6 200,168.6 C248,168.6 296,176.7 344,176.7 C392,176.7 440,150.4 488,150.4 C536,150.4 584,145.4 632,145.4 C680,145.4 728,137.1 776,137.1 L776,210 L56,210 Z" fill="url(#gradLucro)"></path>
+                <path d="M56,180.7 C104,180.7 152,168.6 200,168.6 C248,168.6 296,176.7 344,176.7 C392,176.7 440,150.4 488,150.4 C536,150.4 584,145.4 632,145.4 C680,145.4 728,137.1 776,137.1" fill="none" stroke="hsl(265 80% 65%)" stroke-width="2"></path>
+                <g fill="hsl(240 5% 60%)" font-size="11" font-family="'DM Sans',system-ui,sans-serif" text-anchor="middle">
+                  <text x="56" y="229">mar</text><text x="200" y="229">abr</text><text x="344" y="229">mai</text><text x="488" y="229">jun</text><text x="632" y="229">jul</text><text x="770" y="229">ago</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <div style="border-radius:12px;border:1px solid hsl(240 5% 15%);background:hsl(240 6% 8%);padding:16px;min-width:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <h2 style="font-size:14px;font-weight:600;letter-spacing:-0.025em">Últimas vendas</h2>
+              <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:hsl(240 5% 60%)">412 total</span>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid hsl(240 5% 15% / .4)">
+                <div style="min-width:0;flex:1;padding-right:8px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Cherry Cola · BC10000</p>
+                  <p style="margin:2px 0 0;font-size:10px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">03/09 · 1 un.</p>
+                </div>
+                <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%);flex:none">R$ 165,00</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid hsl(240 5% 15% / .4)">
+                <div style="min-width:0;flex:1;padding-right:8px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Blueberry Ice · V80</p>
+                  <p style="margin:2px 0 0;font-size:10px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">02/09 · 2 un.</p>
+                </div>
+                <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%);flex:none">R$ 340,00</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid hsl(240 5% 15% / .4)">
+                <div style="min-width:0;flex:1;padding-right:8px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Watermelon · G8000</p>
+                  <p style="margin:2px 0 0;font-size:10px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">02/09 · 1 un.</p>
+                </div>
+                <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%);flex:none">R$ 155,00</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid hsl(240 5% 15% / .4)">
+                <div style="min-width:0;flex:1;padding-right:8px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Strawberry Kiwi · BC10000</p>
+                  <p style="margin:2px 0 0;font-size:10px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">01/09 · 3 un.</p>
+                </div>
+                <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%);flex:none">R$ 495,00</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid hsl(240 5% 15% / .4)">
+                <div style="min-width:0;flex:1;padding-right:8px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Mango Peach · V80</p>
+                  <p style="margin:2px 0 0;font-size:10px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">01/09 · 1 un.</p>
+                </div>
+                <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%);flex:none">R$ 170,00</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">
+                <div style="min-width:0;flex:1;padding-right:8px">
+                  <p style="margin:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Grape Ice · G8000</p>
+                  <p style="margin:2px 0 0;font-size:10px;color:hsl(240 5% 60%);font-family:'JetBrains Mono',monospace">31/08 · 2 un.</p>
+                </div>
+                <span style="font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;color:hsl(152 60% 50%);flex:none">R$ 310,00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

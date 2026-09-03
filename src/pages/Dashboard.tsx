@@ -1,16 +1,15 @@
 import { useStore } from "@/context/StoreContext";
-import { TrendingUp, TrendingDown, Package, Clock, Percent, Receipt, Download, AlertTriangle, Trophy, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Package, Percent, Download, ArrowRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo, useState } from "react";
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, subDays, startOfDay, isSameDay } from "date-fns";
+import { Link } from "react-router-dom";
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
-import { listItem, hoverLift } from "@/lib/motion";
+import { listItem } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
+import { computeModelStats, summarizeRestock, urgencyOf, HORIZON_DAYS, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
 
@@ -18,8 +17,39 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+/** Sem centavos — usado nos números grandes do painel, como no design. */
+function formatCurrencyShort(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
+}
+
+function formatPct(value: number, digits = 1) {
+  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+}
+
+function formatDays(days: number) {
+  if (!isFinite(days)) return "sem giro";
+  return `${Math.round(days)} dias`;
+}
+
+/**
+ * Cores do gráfico em hex literal, de propósito: o recharts escreve `stroke` e
+ * `stop-color` como ATRIBUTO SVG, e atributo não resolve `var(--…)`. Espelham
+ * --nc-accent / --nc-profit / --nc-crit em src/index.css — mudou lá, mude aqui.
+ */
+const CHART_REVENUE = "#85B7EB";
+const CHART_PROFIT = "#9184d9";
+const CHART_LOSS = "#F09595";
+const CHART_GRID = "#3f424d";
+const CHART_AXIS = "#75798c";
+
 const GERAL = "geral";
-const LOW_STOCK_FALLBACK = 5;
+/** Quantos meses aparecem como atalho no seletor de período. */
+const QUICK_MONTHS = 3;
+/** Linhas mínimas na tabela de reposição, para o card não ficar vazio. */
+const MIN_RESTOCK_ROWS = 3;
+const MAX_RESTOCK_ROWS = 6;
+/** Modelos nomeados na barra empilhada; o resto vira "Outros". */
+const TOP_MODELS = 5;
 
 export default function Dashboard() {
   const store = useStore();
@@ -43,19 +73,33 @@ export default function Dashboard() {
     store.expenses.forEach(e => { try { set.add(format(parseISO(e.date), "yyyy-MM")); } catch {} });
     store.stockEntries.forEach(e => { try { set.add(format(parseISO(e.date), "yyyy-MM")); } catch {} });
     const sorted = Array.from(set).sort((a, b) => b.localeCompare(a));
-    const opts: { value: string; label: string }[] = [{ value: GERAL, label: "Geral (todo período)" }];
+    const opts: { value: string; label: string; short: string }[] = [];
     sorted.forEach(ym => {
       const [y, m] = ym.split("-").map(Number);
       const d = new Date(y, m - 1, 15);
       opts.push({
         value: ym,
         label: format(d, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
+        short: format(d, "MMM", { locale: ptBR }).replace(/^./, c => c.toUpperCase()).replace(".", ""),
       });
     });
+    opts.push({ value: GERAL, label: "Geral (todo período)", short: "Geral" });
     return opts;
   }, [store.sales, store.expenses, store.stockEntries]);
 
   const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
+
+  /**
+   * Atalhos do seletor: os meses mais recentes + Geral. Se o mês escolhido for
+   * mais antigo que isso, ele entra na lista para não sumir da tela.
+   */
+  const periodOptions = useMemo(() => {
+    const months = monthOptions.filter(o => o.value !== GERAL);
+    const quick = months.slice(0, QUICK_MONTHS);
+    const selected = months.find(o => o.value === filter);
+    const list = selected && !quick.some(o => o.value === filter) ? [...quick, selected] : quick;
+    return [...list, monthOptions[monthOptions.length - 1]];
+  }, [monthOptions, filter]);
 
   const computeStats = useMemo(() => {
     return (filterFn: (dateISO: string) => boolean) => {
@@ -109,80 +153,48 @@ export default function Dashboard() {
     return { stats: computeStats((d) => isWithinInterval(parseISO(d), interval)), label: format(prev, "MMM", { locale: ptBR }) };
   }, [filter, isGeral, computeStats]);
 
-  // Série diária dos últimos 14 dias (sparklines)
-  const dailySeries = useMemo(() => {
-    const days = Array.from({ length: 14 }, (_, i) => startOfDay(subDays(new Date(), 13 - i)));
-    return days.map(day => {
-      const daySales = store.sales.filter(s => s.type === "venda" && isSameDay(parseISO(s.date), day));
-      const revenue = daySales.reduce((sum, s) => sum + s.totalPrice, 0);
-      const received = daySales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
-      const cogs = daySales.reduce((sum, s) => sum + (productMap.get(s.productId)?.purchasePrice ?? 0) * s.quantity, 0);
-      const expenses = store.expenses.filter(e => isSameDay(parseISO(e.date), day)).reduce((sum, e) => sum + e.amount, 0);
-      return {
-        day,
-        revenue,
-        netProfit: revenue - cogs - expenses,
-        ticket: daySales.length ? received / daySales.length : 0,
-      };
-    });
-  }, [store.sales, store.expenses, productMap]);
+  /**
+   * Estatísticas por modelo. O giro (vendas/dia) e o "parado há X dias" olham
+   * sempre o histórico recente — são números do futuro, não do período filtrado.
+   * Já receita e quantidade seguem o filtro.
+   */
+  const modelStats = useMemo(
+    () => computeModelStats({
+      products: store.products,
+      sales: store.sales,
+      periodSales: periodStats.sales,
+    }),
+    [store.products, store.sales, periodStats.sales],
+  );
 
-  // Modelos mais vendidos do período (agrupado por modelo, top 3)
-  const topModels = useMemo(() => {
-    const map = new Map<string, { label: string; total: number; qty: number }>();
-    periodStats.sales.forEach(s => {
-      const p = productMap.get(s.productId);
-      const label = p?.model || store.getProductName(s.productId);
-      const cur = map.get(label) ?? { label, total: 0, qty: 0 };
-      cur.total += s.totalPrice;
-      cur.qty += s.quantity;
-      map.set(label, cur);
-    });
-    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 3);
-  }, [periodStats, productMap, store]);
+  const restock = useMemo(() => summarizeRestock(modelStats), [modelStats]);
 
+  /** Urgentes primeiro; completa com os próximos para a tabela não ficar vazia. */
+  const restockRows = useMemo(() => {
+    const rows = restock.urgent.slice(0, MAX_RESTOCK_ROWS);
+    if (rows.length >= MIN_RESTOCK_ROWS) return rows;
+    const seen = new Set(rows.map(r => r.key));
+    return [...rows, ...modelStats.filter(m => !seen.has(m.key) && m.stock > 0).slice(0, MIN_RESTOCK_ROWS - rows.length)];
+  }, [restock.urgent, modelStats]);
 
-  // Insights automáticos
-  const insights = useMemo(() => {
-    const out: { icon: any; tone: string; text: string }[] = [];
-
-    // Estoque baixo é por MODELO: soma o estoque de todos os sabores do modelo
-    // e conta quantos modelos distintos estão abaixo do limite.
-    const stockByModel = new Map<string, number>();
-    store.products.forEach(p => {
-      stockByModel.set(p.model, (stockByModel.get(p.model) || 0) + p.stock);
-    });
-    const lowStockModels = Array.from(stockByModel.values()).filter(total => total < LOW_STOCK_FALLBACK);
-    const lowStockCount = lowStockModels.length;
-    if (lowStockCount > 0) {
-      out.push({ icon: AlertTriangle, tone: "text-warning", text: `${lowStockCount} produto${lowStockCount > 1 ? "s" : ""} com estoque baixo` });
+  /** Barra empilhada: os N maiores por receita + "Outros". */
+  const revenueSplit = useMemo(() => {
+    const sold = modelStats.filter(m => m.revenue > 0).sort((a, b) => b.revenue - a.revenue);
+    const total = sold.reduce((s, m) => s + m.revenue, 0);
+    const top = sold.slice(0, TOP_MODELS);
+    const rest = sold.slice(TOP_MODELS);
+    // `key` vem do modelo (marca|modelo) porque dois modelos de marcas
+    // diferentes podem ter o mesmo nome — `label` sozinho não é único.
+    const segments = top.map(m => ({ key: m.key, label: m.model, revenue: m.revenue }));
+    if (rest.length > 0) {
+      segments.push({
+        key: "__outros__",
+        label: `Outros ${rest.length} modelo${rest.length > 1 ? "s" : ""}`,
+        revenue: rest.reduce((s, m) => s + m.revenue, 0),
+      });
     }
-
-    const last7 = dailySeries.slice(7);
-    const prev7 = dailySeries.slice(0, 7);
-    const avg = (arr: typeof dailySeries) => {
-      const withSales = arr.filter(d => d.ticket > 0);
-      return withSales.length ? withSales.reduce((s, d) => s + d.ticket, 0) / withSales.length : 0;
-    };
-    const t1 = avg(last7);
-    const t0 = avg(prev7);
-    if (t0 > 0 && t1 > 0 && t1 < t0) {
-      const drop = ((t0 - t1) / t0) * 100;
-      if (drop >= 1) out.push({ icon: TrendingDown, tone: "text-destructive", text: `Ticket médio caiu ${drop.toFixed(0)}% na última semana` });
-    }
-
-    if (periodStats.sales.length > 0) {
-      const byWeekday = new Array(7).fill(0);
-      periodStats.sales.forEach(s => { byWeekday[parseISO(s.date).getDay()] += s.totalPrice; });
-      const best = byWeekday.indexOf(Math.max(...byWeekday));
-      if (byWeekday[best] > 0) {
-        const name = format(new Date(2024, 0, 7 + best), "EEEE", { locale: ptBR });
-        out.push({ icon: Trophy, tone: "text-income", text: `${name.replace(/^./, c => c.toUpperCase())} é o dia com mais vendas do período` });
-      }
-    }
-
-    return out.slice(0, 2);
-  }, [store.products, dailySeries, periodStats]);
+    return { total, segments: segments.map(s => ({ ...s, pct: total > 0 ? (s.revenue / total) * 100 : 0 })) };
+  }, [modelStats]);
 
   const monthlyData = useMemo(() => {
     const months = [];
@@ -221,13 +233,17 @@ export default function Dashboard() {
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
   const netPositive = periodStats.netProfit >= 0;
-  
 
   const delta = (current: number, previous: number | undefined) => {
     if (prevStats == null || previous === undefined) return undefined;
     if (previous === 0) return undefined;
     return { pct: ((current - previous) / Math.abs(previous)) * 100, label: prevStats.label };
   };
+
+  const recentSales = useMemo(
+    () => store.sales.filter(s => s.type === "venda"),
+    [store.sales],
+  );
 
   async function handleExport() {
     try {
@@ -243,7 +259,6 @@ export default function Dashboard() {
 
       const fmt = (n: number) => Number(n.toFixed(2));
       const wb = XLSX.utils.book_new();
-
 
       // Resumo
       const resumo = [
@@ -276,6 +291,24 @@ export default function Dashboard() {
       })));
       wsEvol["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }];
       XLSX.utils.book_append_sheet(wb, wsEvol, "Evolução 6 meses");
+
+      // Reposição sugerida (mesma conta do card "Repor agora")
+      const wsRepor = XLSX.utils.json_to_sheet(
+        restock.urgent.length
+          ? restock.urgent.map(m => ({
+              Marca: m.brand,
+              Modelo: m.model,
+              "Estoque (un.)": m.stock,
+              "Vende/dia": fmt(m.perDay),
+              "Dura (dias)": isFinite(m.daysLeft) ? Math.round(m.daysLeft) : "sem giro",
+              "Margem (%)": fmt(m.marginPct),
+              "Repor (un.)": m.restockUnits,
+              [`Custo p/ ${HORIZON_DAYS}d (R$)`]: fmt(m.restockCost),
+            }))
+          : [{ Marca: "—" }],
+      );
+      wsRepor["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 13 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, wsRepor, "Repor agora");
 
       // Vendas do período
       const vendas = store.sales.filter(s => s.type === "venda" && filterFn(s.date)).map(s => {
@@ -331,309 +364,421 @@ export default function Dashboard() {
     }
   }
 
-  const maxTop = topModels.length ? topModels[0].total : 0;
-
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={handleExport} className="h-9 gap-1.5 text-xs">
-            <Download size={13} /> Exportar Excel
-          </Button>
-          <div className="flex-1 sm:w-56">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {monthOptions.map(o => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
-              </SelectContent>
-            </Select>
+    // Margem negativa cancela o padding do AppLayout para o painel encostar nas
+    // bordas — sem isso o fundo do Nocturne apareceria como um retângulo solto.
+    <div className="nocturne -m-3 md:-m-6 flex flex-col xl:flex-row xl:items-stretch">
+      {/* ---------------- Coluna principal ---------------- */}
+      <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-accent)" }}>
+              {isGeral ? "Todo o período" : filterLabel}
+            </span>
+            <h1 className="mt-1 text-xl sm:text-[22px]">Dashboard</h1>
           </div>
-        </div>
-      </div>
 
-      {/* KPIs principais — linha 1 */}
-      <Stagger className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-        <PrimaryKPI
-          label="Receita"
-          value={periodStats.revenue}
-          format={formatCurrency}
-          hint={`recebido ${formatCurrency(periodStats.received)}`}
-          icon={TrendingUp}
-          iconTone="text-income"
-          delta={delta(periodStats.revenue, prevStats?.stats.revenue)}
-          spark={dailySeries.map(d => d.revenue)}
-        />
-        <PrimaryKPI
-          label="Lucro líquido"
-          value={periodStats.netProfit}
-          format={formatCurrency}
-          hint={`margem ${periodStats.netMargin.toFixed(1)}%`}
-          icon={netPositive ? TrendingUp : TrendingDown}
-          iconTone={netPositive ? "text-income" : "text-destructive"}
-          valueTone={netPositive ? "text-income" : "text-destructive"}
-          delta={delta(periodStats.netProfit, prevStats?.stats.netProfit)}
-          plainDelta
-        />
-        <PrimaryKPI
-          label="Ticket médio"
-          value={periodStats.ticket}
-          format={formatCurrency}
-          hint={`${periodStats.salesCount} venda${periodStats.salesCount === 1 ? "" : "s"} no período`}
-          delta={delta(periodStats.ticket, prevStats?.stats.ticket)}
-          plainDelta
-        />
-        <PrimaryKPI
-          label="A receber"
-          value={periodStats.receivable}
-          format={formatCurrency}
-          hint="vendas em aberto"
-          icon={Clock}
-          iconTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
-          valueTone={periodStats.receivable > 0 ? "text-warning" : "text-muted-foreground"}
-        />
-      </Stagger>
-
-      {/* KPIs secundários — linha 2 */}
-      <Stagger className="grid gap-2 grid-cols-2 md:grid-cols-3">
-        <SecondaryStat
-          icon={Percent}
-          label="Margem bruta"
-          value={periodStats.grossMargin}
-          format={(v) => `${v.toFixed(1)}%`}
-          hint={`lucro bruto ${formatCurrency(periodStats.grossProfit)}`}
-          delta={delta(periodStats.grossMargin, prevStats?.stats.grossMargin)}
-        />
-        <SecondaryStat
-          icon={Receipt}
-          label="Despesas"
-          value={periodStats.expenses}
-          format={formatCurrency}
-          delta={delta(periodStats.expenses, prevStats?.stats.expenses)}
-          invertDelta
-        />
-        <SecondaryStat
-          icon={Package}
-          label="Estoque atual"
-          value={totalStock}
-          format={(v) => `${Math.round(v)} un. · ${formatCurrency(inventoryAtCost)}`}
-          hint={`${formatCurrency(periodStats.restock)} em reposição`}
-        />
-      </Stagger>
-
-      {/* Insights + modelos mais vendidos lado a lado */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold tracking-tight mb-3">Insights automáticos</h2>
-          {insights.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhum alerta no momento.</p>
-          ) : (
-            <Stagger className="space-y-0">
-              {insights.map((i, idx) => (
-                <motion.div key={idx} variants={listItem} className="flex items-center gap-2.5 py-2 border-b border-border/40 last:border-0">
-                  <i.icon size={15} className={i.tone} />
-                  <p className="text-xs">{i.text}</p>
-                </motion.div>
-              ))}
-            </Stagger>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold tracking-tight mb-3">Modelos mais vendidos</h2>
-          {topModels.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhuma venda no período.</p>
-          ) : (
-            <Stagger className="space-y-3">
-              {topModels.map((p, idx) => (
-                <motion.div key={idx} variants={listItem}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-medium truncate">{p.label}</p>
-                    <span className="text-xs font-semibold mono shrink-0">{formatCurrency(p.total)}</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full bg-primary"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${maxTop > 0 ? (p.total / maxTop) * 100 : 0}%` }}
-                      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </Stagger>
-          )}
-        </div>
-      </div>
-
-
-      {/* Gráfico + atividades lado a lado */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold tracking-tight">Desempenho Financeiro</h2>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--nc-track)" }}>
+              {periodOptions.map(o => {
+                const active = o.value === filter;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setFilter(o.value)}
+                    aria-pressed={active}
+                    className="rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                    style={active
+                      ? { color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }
+                      : { color: "var(--nc-text-2)" }}
+                  >
+                    {o.short}
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex items-center gap-4 text-[11px]">
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-income" /> Receita</span>
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-primary" /> Lucro Líquido</span>
-              <span className="hidden sm:flex items-center gap-1.5 text-muted-foreground border-l border-border pl-3">
-                Margem média <span className="mono font-semibold text-foreground">{avgMargin.toFixed(1)}%</span>
+            <button
+              type="button"
+              onClick={handleExport}
+              title="Exportar Excel"
+              aria-label="Exportar Excel"
+              className="rounded-md p-2 transition-colors hover:bg-white/5"
+              style={{ color: "var(--nc-text-3)" }}
+            >
+              <Download size={15} />
+            </button>
+          </div>
+        </header>
+
+        {/* ---------------- Repor agora ---------------- */}
+        <section className="nc-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-3">
+            <div className="flex items-center gap-2">
+              <Package size={16} style={{ color: "var(--nc-accent)" }} />
+              <h2 className="text-[15px]">Repor agora</h2>
+            </div>
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] nc-num"
+              style={{ color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }}
+            >
+              {restock.urgent.length} de {restock.totalModels} modelo{restock.totalModels === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          <div className="px-4 pb-3.5">
+            {restockRows.length === 0 ? (
+              <p className="py-6 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
+                {modelStats.length === 0 ? "Nenhum modelo cadastrado ainda." : "Nenhum modelo com estoque no momento."}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-[13px]">
+                  <thead>
+                    <tr style={{ color: "var(--nc-text-3)" }}>
+                      <th className="px-2 py-1.5 text-left font-normal">Modelo</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Estoque</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Vende/dia</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Dura</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Margem</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Custo p/ {HORIZON_DAYS}d</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {restockRows.map(m => <RestockRow key={m.key} model={m} />)}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="nc-rule-top mt-3 flex flex-wrap items-center justify-between gap-3 pt-3">
+              <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+                {restock.staleCount > 0 ? (
+                  <>
+                    {restock.staleCount} modelo{restock.staleCount > 1 ? "s" : ""} parado
+                    {restock.staleCount > 1 ? "s" : ""} há mais de {STALE_DAYS} dias travando{" "}
+                    <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
+                      {formatCurrencyShort(restock.staleValue)}
+                    </strong>{" "}
+                    em estoque
+                  </>
+                ) : (
+                  <>Nenhum modelo parado há mais de {STALE_DAYS} dias.</>
+                )}
+              </span>
+              <Link
+                to="/stock"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors hover:bg-white/5"
+                style={{ color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }}
+              >
+                Abrir entrada de estoque <ArrowRight size={13} />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------- Desempenho financeiro ---------------- */}
+        <section className="nc-card min-w-0 p-4">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <h2 className="text-[15px]">Desempenho financeiro</h2>
+            <div className="flex flex-wrap items-center gap-3.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-3.5" style={{ background: "var(--nc-accent)" }} /> Receita
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-3.5" style={{ background: "var(--nc-profit)" }} /> Lucro líquido
+              </span>
+              <span className="pl-3" style={{ borderLeft: "1px solid var(--nc-divider)" }}>
+                Margem média{" "}
+                <strong className="nc-num font-semibold" style={{ color: "var(--nc-text)" }}>
+                  {formatPct(avgMargin)}
+                </strong>
               </span>
             </div>
           </div>
-          <div className="h-60">
+          <div className="h-[212px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--income))" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(var(--income))" stopOpacity={0} />
+                    <stop offset="0%" stopColor={CHART_REVENUE} stopOpacity={0.28} />
+                    <stop offset="100%" stopColor={CHART_REVENUE} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradLucro" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <stop offset="0%" stopColor={CHART_PROFIT} stopOpacity={0.26} />
+                    <stop offset="100%" stopColor={CHART_PROFIT} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} width={56} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1).replace('.0','')}k` : `${v}`} />
+                <CartesianGrid strokeDasharray="2 5" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="month" stroke={CHART_AXIS} fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis
+                  stroke={CHART_AXIS}
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  width={50}
+                  tickFormatter={v => (v >= 1000 ? `${(v / 1000).toFixed(1).replace(".0", "")}k` : `${v}`)}
+                />
                 <Tooltip
-                  contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: 12, padding: "8px 10px" }}
+                  cursor={{ stroke: CHART_GRID }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d: any = payload[0].payload;
                     return (
-                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
-                        <p className="font-semibold mb-1.5">{d.monthLong}</p>
+                      <div
+                        className="rounded-lg px-3 py-2 text-xs"
+                        style={{
+                          background: "var(--nc-surface)",
+                          color: "var(--nc-text)",
+                          boxShadow: "0 0 0 1px #595d6c, 0 6px 18px rgba(0,0,0,0.55)",
+                        }}
+                      >
+                        <p className="mb-1.5 font-medium">{d.monthLong}</p>
                         <div className="space-y-0.5">
-                          <p className="flex items-center justify-between gap-4"><span className="text-muted-foreground">Receita</span><span className="mono text-income font-semibold">{formatCurrency(d.receita)}</span></p>
-                          <p className="flex items-center justify-between gap-4"><span className="text-muted-foreground">Lucro Líquido</span><span className={cn("mono font-semibold", d.lucro >= 0 ? "text-primary" : "text-destructive")}>{formatCurrency(d.lucro)}</span></p>
-                          <p className="flex items-center justify-between gap-4 border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Margem</span><span className="mono font-semibold">{d.margem.toFixed(1)}%</span></p>
+                          <p className="flex items-center justify-between gap-4">
+                            <span style={{ color: "var(--nc-text-2)" }}>Receita</span>
+                            <span className="nc-num font-semibold" style={{ color: CHART_REVENUE }}>{formatCurrency(d.receita)}</span>
+                          </p>
+                          <p className="flex items-center justify-between gap-4">
+                            <span style={{ color: "var(--nc-text-2)" }}>Lucro líquido</span>
+                            <span className="nc-num font-semibold" style={{ color: d.lucro >= 0 ? CHART_PROFIT : CHART_LOSS }}>
+                              {formatCurrency(d.lucro)}
+                            </span>
+                          </p>
+                          <p className="nc-rule-top mt-1 flex items-center justify-between gap-4 pt-1">
+                            <span style={{ color: "var(--nc-text-2)" }}>Margem</span>
+                            <span className="nc-num font-semibold">{formatPct(d.margem)}</span>
+                          </p>
                         </div>
                       </div>
                     );
                   }}
                 />
-                <Area type="monotone" dataKey="receita" stroke="hsl(var(--income))" strokeWidth={2} fill="url(#gradReceita)" name="Receita" />
-                <Area type="monotone" dataKey="lucro" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#gradLucro)" name="Lucro Líquido" />
+                <Area type="monotone" dataKey="receita" stroke={CHART_REVENUE} strokeWidth={2} fill="url(#gradReceita)" name="Receita" />
+                <Area type="monotone" dataKey="lucro" stroke={CHART_PROFIT} strokeWidth={2} fill="url(#gradLucro)" name="Lucro Líquido" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="sm:hidden mt-3 pt-3 border-t border-border flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">Margem média</span>
-            <span className="mono font-semibold">{avgMargin.toFixed(1)}%</span>
+        </section>
+
+        {/* ---------------- Modelos mais vendidos ---------------- */}
+        <section className="nc-card px-4 py-3.5">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[15px]">Modelos mais vendidos</h2>
+            {revenueSplit.total > 0 && (
+              <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                {formatCurrencyShort(revenueSplit.total)} no período · 100%
+              </span>
+            )}
+          </div>
+          {revenueSplit.segments.length === 0 ? (
+            <p className="py-4 text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
+          ) : (
+            <>
+              <div className="flex h-[26px] gap-px overflow-hidden rounded">
+                {revenueSplit.segments.map((s, i) => (
+                  <motion.div
+                    key={s.key}
+                    className="grid place-items-center overflow-hidden text-[10.5px] font-semibold nc-num"
+                    initial={{ flexGrow: 0 }}
+                    animate={{ flexGrow: Math.max(s.pct, 0.5) }}
+                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ flexBasis: 0, background: segmentTint(i), color: i < 3 ? "#12202e" : "var(--nc-text)" }}
+                    title={`${s.label} · ${formatCurrencyShort(s.revenue)}`}
+                  >
+                    {s.pct >= 14 ? formatPct(s.pct) : ""}
+                  </motion.div>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                {revenueSplit.segments.map((s, i) => (
+                  <span key={s.key} className="flex items-baseline gap-1.5 text-xs">
+                    <span className="h-2 w-2 flex-none rounded-sm" style={{ background: segmentTint(i) }} />
+                    {s.label}{" "}
+                    <span className="nc-num" style={{ color: "var(--nc-text-3)" }}>{formatCurrencyShort(s.revenue)}</span>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* ---------------- Coluna direita: Dinheiro do mês ---------------- */}
+      <aside
+        className="w-full flex-none p-4 md:p-6 xl:w-[312px] flex flex-col gap-3.5"
+        style={{ background: "var(--nc-rail)" }}
+      >
+        <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>
+          Dinheiro do {isGeral ? "período" : "mês"}
+        </span>
+
+        <div>
+          <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <AnimatedNumber
+              value={periodStats.revenue}
+              format={formatCurrencyShort}
+              duration={0.7}
+              animateOnMount
+              className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
+            />
+            <Delta delta={delta(periodStats.revenue, prevStats?.stats.revenue)} />
+          </div>
+          <div className="mt-2 flex h-[5px] gap-0.5">
+            <div style={{ flex: Math.max(periodStats.received, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
+            <div style={{ flex: Math.max(periodStats.receivable, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
+          </div>
+          <div className="mt-1.5 flex justify-between gap-2 text-[11px] nc-num" style={{ color: "var(--nc-text-2)" }}>
+            <span>recebido {formatCurrencyShort(periodStats.received)}</span>
+            <span style={{ color: "var(--nc-alert)" }}>a receber {formatCurrencyShort(periodStats.receivable)}</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold tracking-tight">Últimas vendas</h2>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{store.sales.filter(s => s.type === "venda").length} total</span>
+        <Rule />
+
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− CPV</span>
+            <span className="nc-num text-sm">{formatCurrencyShort(periodStats.cogs)}</span>
           </div>
-          {store.sales.filter(s => s.type === "venda").length === 0 ? (
-            <p className="text-xs text-muted-foreground py-8 text-center">Nenhuma venda registrada.</p>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Despesas</span>
+            <span className="nc-num text-sm">
+              {formatCurrencyShort(periodStats.expenses)}{" "}
+              <Delta delta={delta(periodStats.expenses, prevStats?.stats.expenses)} invert />
+            </span>
+          </div>
+          <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
+            <span className="text-[12.5px]">Lucro líquido</span>
+            {/* Prejuízo em vermelho; lucro na cor principal do painel. */}
+            <span style={{ color: netPositive ? "var(--nc-accent)" : "var(--nc-crit)" }}>
+              <AnimatedNumber
+                value={periodStats.netProfit}
+                format={formatCurrencyShort}
+                duration={0.7}
+                animateOnMount
+                className="nc-num text-xl font-semibold"
+              />
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 text-[11.5px] nc-num" style={{ color: "var(--nc-text-3)" }}>
+            <span>margem líquida</span>
+            <span>{formatPct(periodStats.netMargin)} · bruta {formatPct(periodStats.grossMargin)}</span>
+          </div>
+        </div>
+
+        <Rule />
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>Ticket médio</span>
+            <div className="nc-num text-base font-semibold">
+              {formatCurrency(periodStats.ticket)}{" "}
+              <Delta delta={delta(periodStats.ticket, prevStats?.stats.ticket)} />
+            </div>
+          </div>
+          <div>
+            <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>Estoque a custo</span>
+            <div className="nc-num text-base font-semibold">{formatCurrencyShort(inventoryAtCost)}</div>
+            <span className="text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>{totalStock} un.</span>
+          </div>
+        </div>
+
+        <Rule />
+
+        <div className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+          <Percent size={12} />
+          <span>Lucro bruto do período</span>
+          <span className="ml-auto nc-num font-semibold" style={{ color: "var(--nc-text)" }}>
+            {formatCurrencyShort(periodStats.grossProfit)}
+          </span>
+        </div>
+
+        <Rule />
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>
+              Últimas vendas
+            </span>
+            <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>{recentSales.length} total</span>
+          </div>
+          {recentSales.length === 0 ? (
+            <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda registrada.</p>
           ) : (
-            <Stagger className="space-y-0">
-              {store.sales.filter(s => s.type === "venda").slice(-6).reverse().map(s => {
+            <Stagger className="flex flex-col">
+              {recentSales.slice(-6).reverse().map(s => {
                 const product = productMap.get(s.productId);
                 const productLabel = product ? `${product.flavor} · ${product.model}` : store.getProductName(s.productId);
                 return (
-                  <motion.div key={s.id} variants={listItem} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
-                    <div className="min-w-0 flex-1 pr-2">
-                      <p className="text-xs font-medium truncate">{productLabel}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 mono">{format(parseISO(s.date), "dd/MM")} · {s.quantity} un.</p>
-                    </div>
-                    <span className="text-xs font-semibold mono text-income shrink-0">{formatCurrency(s.totalPrice)}</span>
+                  <motion.div key={s.id} variants={listItem} className="nc-row flex items-center justify-between gap-2 py-1.5 text-xs">
+                    <span className="min-w-0 flex-1 truncate">{productLabel}</span>
+                    <span className="nc-num flex-none">{formatCurrencyShort(s.totalPrice)}</span>
                   </motion.div>
                 );
               })}
             </Stagger>
           )}
         </div>
-      </div>
+      </aside>
     </div>
   );
 }
 
-type Delta = { pct: number; label: string } | undefined;
+/** Tom do segmento na barra empilhada: do accent cheio até quase o fundo. */
+function segmentTint(index: number) {
+  const mix = [100, 82, 64, 48, 33, 19][Math.min(index, 5)];
+  return `color-mix(in srgb, var(--nc-accent) ${mix}%, var(--nc-bg))`;
+}
 
-function DeltaBadge({ delta, invert, plain }: { delta: Delta; invert?: boolean; plain?: boolean }) {
+function Rule() {
+  return <div className="nc-rule-top h-px" />;
+}
+
+type DeltaValue = { pct: number; label: string } | undefined;
+
+/** Variação vs. o mês anterior. `invert` = subir é ruim (despesas). */
+function Delta({ delta, invert }: { delta: DeltaValue; invert?: boolean }) {
   if (!delta || !isFinite(delta.pct)) return null;
-  const raw = delta.pct;
-  const good = invert ? raw <= 0 : raw >= 0;
-  const Icon = raw >= 0 ? ArrowUpRight : ArrowDownRight;
+  const good = invert ? delta.pct <= 0 : delta.pct >= 0;
   return (
     <span
-      className={cn(
-        "mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium mono",
-        !plain && "rounded-md px-1.5 py-0.5",
-        good ? cn("text-income", !plain && "bg-income/10") : cn("text-destructive", !plain && "bg-destructive/10"),
-      )}
+      className="nc-num text-[11px] font-normal"
+      style={{ color: good ? "var(--nc-accent)" : "var(--nc-alert)" }}
+      title={`vs ${delta.label}`}
     >
-      <Icon size={10} />
-      {raw >= 0 ? "+" : ""}{raw.toFixed(0)}% vs {delta.label}
+      {delta.pct >= 0 ? "+" : "−"}
+      {Math.abs(delta.pct).toFixed(0)}%
     </span>
   );
 }
 
-/** Minigráfico de linha, sem eixos nem labels. */
-function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
-  if (!data.length) return null;
-  const w = 60, h = 24, pad = 2;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const points = data.map((v, i) => {
-    const x = pad + (i / Math.max(1, data.length - 1)) * (w - pad * 2);
-    const y = h - pad - ((v - min) / range) * (h - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0 overflow-visible" aria-hidden>
-      <polyline
-        points={points}
-        fill="none"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        stroke={positive ? "hsl(var(--income))" : "hsl(var(--destructive))"}
-      />
-    </svg>
-  );
-}
+function RestockRow({ model }: { model: ModelStat }) {
+  const urgency = urgencyOf(model.daysLeft);
+  const dot = urgency === "critical" ? "var(--nc-crit)" : urgency === "warning" ? "var(--nc-alert)" : "var(--nc-text-3)";
+  const daysColor = urgency === "ok" ? undefined : dot;
 
-function SecondaryStat({ icon: Icon, label, value, format, tone, hint, delta, invertDelta }: { icon: any; label: string; value: number; format: (v: number) => string; tone?: "destructive" | "warning"; hint?: string; delta?: Delta; invertDelta?: boolean }) {
-  const toneClass = tone === "destructive" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-foreground";
   return (
-    <motion.div variants={listItem} className="rounded-xl border border-border bg-card px-3.5 py-2.5">
-      <div className="flex items-center gap-1.5 text-muted-foreground">
-        <Icon size={11} />
-        <p className="text-[11px] uppercase tracking-wider font-medium">{label}</p>
-      </div>
-      <AnimatedNumber value={value} format={format} duration={0.7} animateOnMount className={cn("mt-0.5 block text-base font-semibold mono", toneClass)} />
-      {hint && <p className="text-xs text-muted-foreground mono mt-0.5">{hint}</p>}
-      <DeltaBadge delta={delta} invert={invertDelta} />
-    </motion.div>
-  );
-}
-
-function PrimaryKPI({ icon: Icon, label, value, format, hint, iconTone, valueTone, delta, spark, plainDelta }: { icon?: any; label: string; value: number; format: (v: number) => string; hint?: string; iconTone?: string; valueTone?: string; delta?: Delta; spark?: number[]; plainDelta?: boolean }) {
-  return (
-    <motion.div variants={listItem} {...hoverLift} className="rounded-xl border border-border bg-card px-4 py-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-        {Icon && <Icon size={14} className={iconTone ?? "text-muted-foreground"} />}
-      </div>
-      <div className="flex items-end justify-between gap-2">
-        <AnimatedNumber value={value} format={format} duration={0.7} animateOnMount className={cn("mt-1 text-xl sm:text-2xl font-semibold mono break-all", valueTone ?? "text-foreground")} />
-        {spark && <Sparkline data={spark} positive={value >= 0} />}
-      </div>
-      {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
-      <DeltaBadge delta={delta} plain={plainDelta} />
-    </motion.div>
+    <tr className="nc-row">
+      <td className="px-2 py-1.5">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: dot }} />
+          <span className="truncate">{model.model}</span>
+          <span className="truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>{model.brand}</span>
+        </div>
+      </td>
+      <td className="px-2 py-1.5 text-right nc-num">{model.stock} un.</td>
+      <td className="px-2 py-1.5 text-right nc-num">
+        {model.perDay.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </td>
+      <td className="px-2 py-1.5 text-right nc-num" style={daysColor ? { color: daysColor } : undefined}>
+        {formatDays(model.daysLeft)}
+      </td>
+      <td className="px-2 py-1.5 text-right nc-num">{formatPct(model.marginPct)}</td>
+      <td className="px-2 py-1.5 text-right nc-num" style={model.restockCost > 0 ? undefined : { color: "var(--nc-text-3)" }}>
+        {model.restockCost > 0 ? formatCurrencyShort(model.restockCost) : "—"}
+      </td>
+    </tr>
   );
 }
