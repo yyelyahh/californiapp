@@ -538,6 +538,30 @@ export type Database = {
           },
         ]
       }
+      product_model_images: {
+        Row: {
+          brand: string
+          created_at: string
+          id: string
+          image_url: string
+          model: string
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          id?: string
+          image_url: string
+          model?: string
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          id?: string
+          image_url?: string
+          model?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           brand: string
@@ -1006,10 +1030,10 @@ export type Database = {
         Returns: {
           customer_id: string
           customer_name: string
+          gifts_earned: number
           loyalty_tier: string
-          next_reward_name: string
-          purchases_for_next_reward: number
-          total_purchases: number
+          total_units: number
+          units_until_next_gift: number
           whatsapp: string
         }[]
       }
