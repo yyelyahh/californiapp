@@ -21,7 +21,7 @@ import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, subMonths, parseISO } from "date-fns";
 import { computeSellerBalance, PROJECT_START } from "@/lib/commissions";
 
 function timeAgo(dateStr: string) {
@@ -213,6 +213,14 @@ type PaymentMethodValue =
   | "dinheiro_com_vendedor"
   | "pendente";
 
+type SellerPeriod = "month" | "lastMonth" | "quarter";
+
+const SELLER_PERIODS: { id: SellerPeriod; label: string }[] = [
+  { id: "month", label: "Este mês" },
+  { id: "lastMonth", label: "Mês passado" },
+  { id: "quarter", label: "Trimestre" },
+];
+
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
@@ -229,6 +237,9 @@ export default function SalesPage() {
   const [editingSale, setEditingSale] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+
+  // Filtro de período da visão do vendedor
+  const [sellerPeriod, setSellerPeriod] = useState<SellerPeriod>("month");
 
   // Pedidos pendentes
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
@@ -288,17 +299,29 @@ export default function SalesPage() {
     }
   };
 
+  // Período selecionado na visão do vendedor (mês atual / mês passado / trimestre)
+  const sellerRange = useMemo(() => {
+    const now = new Date();
+    if (sellerPeriod === "lastMonth") {
+      const prev = subMonths(now, 1);
+      return { start: startOfMonth(prev), end: endOfMonth(prev) };
+    }
+    if (sellerPeriod === "quarter") {
+      return { start: startOfQuarter(now), end: endOfQuarter(now) };
+    }
+    return { start: startOfMonth(now), end: endOfMonth(now) };
+  }, [sellerPeriod]);
+
   // "Minha comissão" (somente leitura, vendedor) — mesmo cálculo usado na página de Distribuição (admin),
-  // mas restrito ao mês atual.
+  // restrito ao período selecionado.
   const myCommissionBalance = useMemo(() => {
     if (!isSeller || !sellerId) return null;
     const mySeller = sellers.find(s => s.id === sellerId);
     if (!mySeller) return null;
-    const now = new Date();
-    const start = startOfMonth(now);
-    const end = endOfMonth(now);
-    const closedStart = startOfMonth(now);
-    const closedEnd = endOfMonth(now);
+    const { start, end } = sellerRange;
+    // Comissão fecha por mês: a faixa acumula do dia 1 ao último dia de cada mês tocado pelo período.
+    const closedStart = startOfMonth(start);
+    const closedEnd = endOfMonth(end);
     const isLegacy = (iso: string) => {
       try { return parseISO(iso) < PROJECT_START; } catch { return false; }
     };
@@ -312,7 +335,7 @@ export default function SalesPage() {
       sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
       start, end, closedStart, PROJECT_START, isLegacy, inClosedPeriod,
     });
-  }, [isSeller, sellerId, sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts]);
+  }, [isSeller, sellerId, sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, sellerRange]);
 
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
@@ -612,9 +635,16 @@ export default function SalesPage() {
   );
 
   if (isSeller) {
+    const rangeStartTs = sellerRange.start.getTime();
+    const rangeEndTs = sellerRange.end.getTime();
     const mySales = [...sales]
-      .filter(s => s.sellerId === sellerId && (s.type || "venda") !== "retirada_funcionario")
+      .filter(s => {
+        if (s.sellerId !== sellerId || (s.type || "venda") === "retirada_funcionario") return false;
+        const ts = new Date(s.date).getTime();
+        return !isNaN(ts) && ts >= rangeStartTs && ts <= rangeEndTs;
+      })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const periodLabel = SELLER_PERIODS.find(p => p.id === sellerPeriod)?.label ?? "";
 
     const sumTotal = mySales.reduce((acc, s) => acc + s.totalPrice, 0);
     const sumPaid = mySales.reduce((acc, s) => acc + s.paidAmount, 0);
@@ -667,6 +697,22 @@ export default function SalesPage() {
         </div>
 
         <TabsContent value="vendas" className="mt-0 space-y-5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {SELLER_PERIODS.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSellerPeriod(p.id)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                  sellerPeriod === p.id
+                    ? "bg-primary/15 text-primary border-primary/40"
+                    : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-border/80"
+                )}
+              >{p.label}</button>
+            ))}
+          </div>
+
           <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
@@ -683,14 +729,16 @@ export default function SalesPage() {
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold tracking-tight">Minha comissão</h2>
+            <h2 className="text-sm font-semibold tracking-tight">
+              Minha comissão <span className="text-[11px] font-normal text-muted-foreground">· {periodLabel}</span>
+            </h2>
             <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
               <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Faixa atual</p>
                 <p className="mt-0.5 text-base font-semibold truncate">{myCommissionBalance?.tier.label ?? "—"}</p>
               </div>
               <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Unidades no mês</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Unidades</p>
                 <p className="mt-0.5 text-base font-semibold mono">{myCommissionBalance?.units ?? 0}</p>
               </div>
               <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
@@ -709,7 +757,7 @@ export default function SalesPage() {
 
           {mySales.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-12 text-center">
-              <p className="text-sm text-muted-foreground">Nenhuma venda registrada ainda.</p>
+              <p className="text-sm text-muted-foreground">Nenhuma venda registrada no período.</p>
             </div>
           ) : (
             <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
