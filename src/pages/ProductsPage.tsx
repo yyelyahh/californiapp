@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AddProductDialog from "@/components/AddProductDialog";
+import ModelImagesDialog from "@/components/ModelImagesDialog";
 import { cn } from "@/lib/utils";
 import { StaggerAuto } from "@/components/motion/Stagger";
 import { AnimatePresence, motion } from "motion/react";
@@ -27,7 +28,7 @@ export default function ProductsPage() {
   const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "", imageUrl: "" });
+  const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
   const [bulkMinOpen, setBulkMinOpen] = useState(false);
@@ -114,7 +115,7 @@ export default function ProductsPage() {
     setEditForm({
       name: p.name, brand: p.brand, model: p.model || '', flavor: p.flavor,
       purchasePrice: String(p.purchasePrice), salePrice: String(p.salePrice), stock: String(p.stock),
-      minStock: String(p.minStock ?? 0), imageUrl: p.imageUrl || "",
+      minStock: String(p.minStock ?? 0),
     });
   };
 
@@ -130,7 +131,7 @@ export default function ProductsPage() {
       salePrice: Number(editForm.salePrice) || 0,
       stock: Number(editForm.stock) || 0,
       minStock: Number(editForm.minStock) || 0,
-      imageUrl: editForm.imageUrl.trim() || undefined,
+      
     });
     setEditId(null);
   };
@@ -206,6 +207,7 @@ export default function ProductsPage() {
           <Button variant="outline" size="sm" onClick={() => setBulkMinOpen(true)} className="h-9 gap-1.5">
             <Package size={14} /> <span className="hidden sm:inline">Mínimo por Modelo</span><span className="sm:hidden">Mínimo</span>
           </Button>
+          <ModelImagesDialog />
           <AddProductDialog />
         </div>
       </div>
@@ -331,7 +333,7 @@ export default function ProductsPage() {
             </div>
             <div><Label className="text-xs">Sabor</Label><Input value={editForm.flavor} onChange={e => setEditForm(f => ({ ...f, flavor: e.target.value }))} /></div>
             <div><Label className="text-xs">Nome interno</Label><Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
-            <div><Label className="text-xs">URL da foto (opcional)</Label><Input type="url" placeholder="https://..." value={editForm.imageUrl} onChange={e => setEditForm(f => ({ ...f, imageUrl: e.target.value }))} /></div>
+            
             <div className="grid grid-cols-4 gap-3">
               <div><Label className="text-xs">Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
               <div><Label className="text-xs">Venda (R$)</Label><Input type="number" step="0.01" value={editForm.salePrice} onChange={e => setEditForm(f => ({ ...f, salePrice: e.target.value }))} /></div>
