@@ -173,8 +173,10 @@
   }
 
   /* ------------------------------------------------------------------
-   * Nocturne — sistema de design aplicado SÓ no Dashboard (admin).
-   * Tudo fica sob `.nocturne`, então nenhuma outra tela é afetada.
+   * Nocturne — sistema de design das telas já migradas (hoje: Dashboard).
+   * Tudo fica sob `.nocturne`, então nenhuma outra tela é afetada. A classe
+   * entra na página E no <main> do AppLayout (ver `fullBleedRoutes`), para o
+   * fundo cobrir a área de rolagem inteira.
    * Trocar a cor principal do painel = trocar --nc-accent aqui.
    * ------------------------------------------------------------------ */
   .nocturne {

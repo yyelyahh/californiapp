@@ -23,6 +23,15 @@ const allNavItems = [
 
 type NavItem = (typeof allNavItems)[number];
 
+/**
+ * Telas já migradas para o tema Nocturne. Elas ocupam a largura e a altura
+ * inteiras: sem o container centralizado (max-w-7xl) e sem o padding padrão do
+ * layout — a própria tela cuida do seu espaçamento.
+ *
+ * Ao migrar uma tela nova para o Nocturne, adicione a rota dela aqui.
+ */
+const fullBleedRoutes = new Set(["/dashboard"]);
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -32,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion();
 
   const navItems = allNavItems.filter(item => role === "admin" || !item.adminOnly);
+  const fullBleed = fullBleedRoutes.has(location.pathname);
   const bottomBarRoutes = ["/dashboard", "/products", "/sales", "/commissions"];
   const mobileNavItems = navItems.filter(item => bottomBarRoutes.includes(item.to));
 
@@ -175,9 +185,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </AnimatePresence>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-6 md:p-0">
-          <div className="p-3 md:p-6 max-w-7xl mx-auto w-full min-w-0">
-            <PageTransition>{children}</PageTransition>
+        <main
+          className={cn(
+            "flex-1 overflow-y-auto overflow-x-hidden pb-20",
+            fullBleed
+              // O tema fica no <main>, e não só na página: assim o fundo escuro
+              // cobre a área de rolagem inteira mesmo quando o conteúdo é curto
+              // ou quando sobra o respiro da barra inferior no mobile.
+              ? "nocturne flex flex-col md:pb-0"
+              : "md:pb-6",
+          )}
+        >
+          <div
+            className={cn(
+              "min-w-0",
+              fullBleed ? "flex flex-1 flex-col" : "p-3 md:p-6 max-w-7xl mx-auto w-full",
+            )}
+          >
+            <PageTransition className={fullBleed ? "flex flex-1 flex-col" : undefined}>
+              {children}
+            </PageTransition>
           </div>
         </main>
 

@@ -365,9 +365,11 @@ export default function Dashboard() {
   }
 
   return (
-    // Margem negativa cancela o padding do AppLayout para o painel encostar nas
-    // bordas — sem isso o fundo do Nocturne apareceria como um retângulo solto.
-    <div className="nocturne -m-3 md:-m-6 flex flex-col xl:flex-row xl:items-stretch">
+    // `/dashboard` está em `fullBleedRoutes` (AppLayout), então chega aqui sem
+    // padding e sem max-width — o painel encosta nas bordas sozinho. O `flex-1`
+    // estica o painel até o rodapé da janela, para o trilho da direita e o fundo
+    // escuro cobrirem a tela inteira mesmo com pouco conteúdo.
+    <div className="nocturne flex flex-1 flex-col xl:flex-row xl:items-stretch">
       {/* ---------------- Coluna principal ---------------- */}
       <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
         <header className="flex flex-wrap items-end justify-between gap-4">
@@ -478,7 +480,7 @@ export default function Dashboard() {
         </section>
 
         {/* ---------------- Desempenho financeiro ---------------- */}
-        <section className="nc-card min-w-0 p-4">
+        <section className="nc-card min-w-0 p-4 flex flex-col xl:flex-1">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <h2 className="text-[15px]">Desempenho financeiro</h2>
             <div className="flex flex-wrap items-center gap-3.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
@@ -496,7 +498,9 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-          <div className="h-[212px]">
+          {/* No desktop o gráfico cresce para consumir a sobra vertical da tela,
+              nunca ficando menor que a altura original. */}
+          <div className="h-[212px] xl:h-auto xl:min-h-[212px] xl:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
