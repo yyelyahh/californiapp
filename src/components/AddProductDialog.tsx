@@ -95,7 +95,6 @@ export default function AddProductDialog() {
 
   const handleReset = () => {
     setBrandSelect(""); setBrand(""); setModelSelect(""); setModel(""); setFlavorsText("");
-    setImageUrl(""); setPurchasePrice(""); setSalePrice("");
   };
 
   const handleSubmit = async () => {
