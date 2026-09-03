@@ -207,6 +207,7 @@ export default function ProductsPage() {
           <Button variant="outline" size="sm" onClick={() => setBulkMinOpen(true)} className="h-9 gap-1.5">
             <Package size={14} /> <span className="hidden sm:inline">Mínimo por Modelo</span><span className="sm:hidden">Mínimo</span>
           </Button>
+          <ModelImagesDialog />
           <AddProductDialog />
         </div>
       </div>
