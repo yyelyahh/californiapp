@@ -1,4 +1,8 @@
-import type { Sale } from "@/types";
+import type { Sale, Seller, CommissionPayment, SellerDebtPayment, SellerManualDebt } from "@/types";
+
+// Cutoff legado: tudo antes de 01/06/2026 é tratado como legado (10% de comissão, só abate consumo).
+// Mesma data usada em CommissionsPage.tsx (LEGACY_CUTOFF / PROJECT_START).
+export const PROJECT_START = new Date(2026, 5, 1);
 
 export type CommissionTier = {
   label: string;
@@ -197,4 +201,124 @@ export function computePriorCommissionBalance(input: SellerLedgerInput): number 
     .reduce((a, p) => a + p.amount, 0);
 
   return accrued - consumo + debtPaid - commPaid;
+}
+
+export function computeAccrualHistory(sales: Sale[]) {
+  const sorted = [...sales].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const items: {
+    id: string; when: string; label: string; amount: number;
+    kind: "accrual" | "adjustment"; meta?: string;
+  }[] = [];
+  let cumUnits = 0;
+  let cumRevenue = 0;
+  let currentRate = COMMISSION_TIERS[0].rate;
+  for (const s of sorted) {
+    const priorRevenue = cumRevenue;
+    cumUnits += s.quantity;
+    cumRevenue += s.totalPrice;
+    const tierAfter = getTierForUnits(cumUnits);
+    if (tierAfter.rate > currentRate) {
+      const adjustment = priorRevenue * (tierAfter.rate - currentRate);
+      if (adjustment > 0.001) {
+        items.push({
+          id: `adj-${s.id}`,
+          when: s.date,
+          label: `Ajuste de Faixa → ${tierAfter.label}`,
+          amount: adjustment,
+          kind: "adjustment",
+          meta: "Recálculo retroativo à nova taxa",
+        });
+      }
+      currentRate = tierAfter.rate;
+    }
+    items.push({
+      id: `acc-${s.id}`,
+      when: s.date,
+      label: `Comissão da venda (${s.quantity} un.)`,
+      amount: s.totalPrice * currentRate,
+      kind: "accrual",
+      meta: `Taxa: ${(currentRate * 100).toFixed(currentRate === 0.125 ? 1 : 0)}%`,
+    });
+  }
+  return items;
+}
+
+/* ------------------------------------------------------------------ *
+ * Saldo do vendedor num período (unidades, comissão, dívidas, saldo)
+ * ------------------------------------------------------------------ */
+export type SellerBalanceContext = {
+  sales: Sale[];
+  commissionPayments: CommissionPayment[];
+  sellerDebtPayments: SellerDebtPayment[];
+  sellerManualDebts: SellerManualDebt[];
+  start: Date;
+  end: Date;
+  closedStart: Date;
+  PROJECT_START: Date;
+  isLegacy: (iso: string) => boolean;
+  inClosedPeriod: (iso: string) => boolean;
+};
+
+export function computeSellerBalance(seller: Seller, ctx: SellerBalanceContext) {
+  const {
+    sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
+    start, end, closedStart, PROJECT_START, isLegacy, inClosedPeriod,
+  } = ctx;
+
+  const salesPeriod = sales.filter(s => inClosedPeriod(s.date) && !isLegacy(s.date));
+  const sellerSales = salesPeriod.filter(s => s.sellerId === seller.id);
+  const vendas = sellerSales.filter(s => s.type === "venda");
+  // Comissão fecha no último dia do mês: a faixa acumula do dia 1 ao dia 30/31.
+  // Num período personalizado, mostramos o valor FECHADO dos meses tocados.
+  const vendasPagasTodas = sales.filter(s =>
+    s.sellerId === seller.id &&
+    s.type === "venda" &&
+    (s.paidAmount || 0) >= s.totalPrice - 0.01 &&
+    !isLegacy(s.date)
+  );
+  const closed = computeClosedCommission(vendasPagasTodas, start, end);
+  const vendasPagas = closed.sales;
+  const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
+  const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inClosedPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
+
+  const c = { tier: closed.tier };
+  const accrued = closed.accrued;
+  const units = closed.units;
+
+  const accrualItems = closed.groups.flatMap(g => computeAccrualHistory(g.sales));
+  const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
+  const baseAccrued = accrued - adjustmentsTotal;
+
+  const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
+  const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
+  const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inClosedPeriod(d.date) && !isLegacy(d.date));
+  const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
+  const consumoTotal = retiradasTotal + manualDebtsTotal;
+  const debtPaymentsTotal = sellerDebtPayments.filter(p => p.sellerId === seller.id && inClosedPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
+
+  const legacyCredit = 0;
+  const saldoConsumo = consumoTotal;
+  const retiradasCount = retiradas.length + manualDebts.length;
+
+  const periodBalance = accrued - saldoConsumo + debtPaymentsTotal - commPaid;
+  // Saldo trazido dos meses anteriores (recalculado do histórico real).
+  const priorBalance = computePriorCommissionBalance({
+    sellerId: seller.id,
+    sales,
+    commissionPayments,
+    debtPayments: sellerDebtPayments,
+    manualDebts: sellerManualDebts,
+    historyStart: PROJECT_START,
+    periodStart: closedStart,
+  });
+  const balance = priorBalance + periodBalance;
+
+  return {
+    seller, units, vendasTotal, commPaid,
+    accrued, baseAccrued, adjustmentsTotal,
+    tier: c.tier, balance, accrualItems,
+    consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
+    retiradasTotal, manualDebtsTotal, retiradasCount,
+    periodBalance, priorBalance,
+  };
 }

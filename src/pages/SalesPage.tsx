@@ -21,6 +21,8 @@ import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { computeSellerBalance, PROJECT_START } from "@/lib/commissions";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -60,6 +62,113 @@ type Order = {
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+function PendingOrdersList({
+  orders, loading, processingOrder, onConfirm, onDecline,
+}: {
+  orders: Order[];
+  loading: boolean;
+  processingOrder: string | null;
+  onConfirm: (orderId: string) => void;
+  onDecline: (orderId: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-12 text-center">
+        <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
+      </div>
+    );
+  }
+  if (orders.length === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-12 text-center">
+        <p className="text-sm text-muted-foreground">Nenhum pedido pendente no momento.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {orders.map(order => (
+        <motion.div
+          key={order.id}
+          layout
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="rounded-xl border border-border bg-card p-4"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-foreground">{order.sellers?.name ?? "Sem vendedor"}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="font-medium text-foreground">{order.customers?.name ?? "Sem cliente"}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+                <span className="mono">{order.customers?.whatsapp ?? "—"}</span>
+                <span>·</span>
+                <span className="flex items-center gap-1"><Clock size={12} />{timeAgo(order.created_at)}</span>
+              </div>
+            </div>
+            <div className="text-right min-w-[100px]">
+              <p className="text-base font-semibold mono text-foreground">{formatCurrency(order.total_amount)}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
+            </div>
+          </div>
+
+          {order.freight_notes && (
+            <div className="mt-2 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Frete:</span> {order.freight_notes}
+            </div>
+          )}
+
+          <div className="mt-3 rounded-lg border border-border/60 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <th className="text-left py-1.5 px-3">Produto</th>
+                  <th className="text-left py-1.5 px-3">Sabor</th>
+                  <th className="text-right py-1.5 px-3 w-[50px]">Qtd</th>
+                  <th className="text-right py-1.5 px-3 w-[90px]">Unitário</th>
+                </tr>
+              </thead>
+              <tbody>
+                {order.order_items?.map(item => (
+                  <tr key={item.id} className="border-t border-border/40 text-xs">
+                    <td className="py-1.5 px-3">{item.products ? `${item.products.brand} · ${item.products.name}` : "—"}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{item.products?.flavor ?? "—"}</td>
+                    <td className="py-1.5 px-3 text-right mono">{item.quantity}</td>
+                    <td className="py-1.5 px-3 text-right mono">{formatCurrency(item.unit_price)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={processingOrder === order.id}
+              onClick={() => onDecline(order.id)}
+            >
+              <Ban size={13} className="mr-1.5" />Recusar
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              disabled={processingOrder === order.id}
+              onClick={() => onConfirm(order.id)}
+            >
+              <Check size={13} className="mr-1.5" />Confirmar
+            </Button>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
 }
 
 function MarkPaidPopover({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro") => Promise<void> }) {
@@ -107,7 +216,10 @@ type PaymentMethodValue =
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
-  const { products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName, refreshSales } = useStore();
+  const {
+    products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName, refreshSales,
+    commissionPayments, sellerDebtPayments, sellerManualDebts,
+  } = useStore();
   const { role, sellerId } = useAuth();
   const confirm = useConfirm();
   const isSeller = role === "seller";
@@ -124,7 +236,6 @@ export default function SalesPage() {
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
 
   const fetchPendingOrders = async () => {
-    if (isSeller) return;
     setLoadingOrders(true);
     const { data, error } = await supabase
       .from("orders")
@@ -176,6 +287,32 @@ export default function SalesPage() {
       setProcessingOrder(null);
     }
   };
+
+  // "Minha comissão" (somente leitura, vendedor) — mesmo cálculo usado na página de Distribuição (admin),
+  // mas restrito ao mês atual.
+  const myCommissionBalance = useMemo(() => {
+    if (!isSeller || !sellerId) return null;
+    const mySeller = sellers.find(s => s.id === sellerId);
+    if (!mySeller) return null;
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+    const closedStart = startOfMonth(now);
+    const closedEnd = endOfMonth(now);
+    const isLegacy = (iso: string) => {
+      try { return parseISO(iso) < PROJECT_START; } catch { return false; }
+    };
+    const inClosedPeriod = (iso: string) => {
+      try {
+        const d = parseISO(iso);
+        return d >= closedStart && d <= closedEnd;
+      } catch { return false; }
+    };
+    return computeSellerBalance(mySeller, {
+      sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
+      start, end, closedStart, PROJECT_START, isLegacy, inClosedPeriod,
+    });
+  }, [isSeller, sellerId, sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts]);
 
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
@@ -484,10 +621,22 @@ export default function SalesPage() {
     const sumOpen = mySales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
 
     return (
-      <div className="space-y-5">
+      <Tabs defaultValue="vendas" className="w-full space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
+          <div className="flex flex-col gap-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
+            </div>
+            <TabsList className="bg-transparent p-0 h-auto gap-4 border-0">
+              <TabsTrigger
+                value="vendas"
+                className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+              >Vendas <span className="ml-1.5 text-[11px] text-muted-foreground">{mySales.length}</span></TabsTrigger>
+              <TabsTrigger
+                value="pedidos"
+                className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+              >Pedidos pendentes <span className="ml-1.5 text-[11px] text-muted-foreground">{pendingOrders.length}</span></TabsTrigger>
+            </TabsList>
           </div>
           <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
             <SheetTrigger asChild>
@@ -517,58 +666,95 @@ export default function SalesPage() {
           </Sheet>
         </div>
 
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-          <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
-            <p className="mt-0.5 text-base font-semibold mono">{mySales.length}</p>
+        <TabsContent value="vendas" className="mt-0 space-y-5">
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
+              <p className="mt-0.5 text-base font-semibold mono">{mySales.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recebido</p>
+              <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(sumPaid)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
+              <p className={cn("mt-0.5 text-base font-semibold mono truncate", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recebido</p>
-            <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(sumPaid)}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
-            <p className={cn("mt-0.5 text-base font-semibold mono truncate", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
-          </div>
-        </div>
 
-        {mySales.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma venda registrada ainda.</p>
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold tracking-tight">Minha comissão</h2>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Faixa atual</p>
+                <p className="mt-0.5 text-base font-semibold truncate">{myCommissionBalance?.tier.label ?? "—"}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Unidades no mês</p>
+                <p className="mt-0.5 text-base font-semibold mono">{myCommissionBalance?.units ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Comissão acumulada</p>
+                <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(myCommissionBalance?.accrued ?? 0)}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saldo</p>
+                <p className={cn(
+                  "mt-0.5 text-base font-semibold mono truncate",
+                  (myCommissionBalance?.balance ?? 0) > 0.01 ? "text-warning" : (myCommissionBalance?.balance ?? 0) < -0.01 ? "text-income" : "text-foreground"
+                )}>{formatCurrency(myCommissionBalance?.balance ?? 0)}</p>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm min-w-[420px]">
-              <thead>
-                <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  <th className="text-left py-2 px-2 sm:px-3">Produto</th>
-                  <th className="text-right py-2 px-2 sm:px-3 w-[50px]">Qtd</th>
-                  <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Total</th>
-                  <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Falta</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mySales.map(s => {
-                  const remaining = Math.max(0, s.totalPrice - s.paidAmount);
-                  return (
-                    <tr key={s.id} className="border-b border-border/40 last:border-0">
-                      <td className="py-2.5 px-3">
-                        <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(s.date)}</div>
-                      </td>
-                      <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
-                      <td className="py-2.5 px-3 text-right mono text-sm font-semibold">{formatCurrency(s.totalPrice)}</td>
-                      <td className="py-2.5 px-3 text-right mono text-sm">
-                        {remaining > 0 ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span> : <span className="text-income">Pago</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+
+          {mySales.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-12 text-center">
+              <p className="text-sm text-muted-foreground">Nenhuma venda registrada ainda.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm min-w-[420px]">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    <th className="text-left py-2 px-2 sm:px-3">Produto</th>
+                    <th className="text-right py-2 px-2 sm:px-3 w-[50px]">Qtd</th>
+                    <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Total</th>
+                    <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Falta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mySales.map(s => {
+                    const remaining = Math.max(0, s.totalPrice - s.paidAmount);
+                    return (
+                      <tr key={s.id} className="border-b border-border/40 last:border-0">
+                        <td className="py-2.5 px-3">
+                          <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(s.date)}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
+                        <td className="py-2.5 px-3 text-right mono text-sm font-semibold">{formatCurrency(s.totalPrice)}</td>
+                        <td className="py-2.5 px-3 text-right mono text-sm">
+                          {remaining > 0 ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span> : <span className="text-income">Pago</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="pedidos" className="mt-0">
+          <PendingOrdersList
+            orders={pendingOrders}
+            loading={loadingOrders}
+            processingOrder={processingOrder}
+            onConfirm={handleConfirmOrder}
+            onDecline={handleDeclineOrder}
+          />
+        </TabsContent>
+      </Tabs>
     );
   }
 
@@ -889,96 +1075,13 @@ export default function SalesPage() {
             </TabsContent>
 
             <TabsContent value="pedidos" className="mt-0">
-              {loadingOrders ? (
-                <div className="rounded-xl border border-border bg-card p-12 text-center">
-                  <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
-                </div>
-              ) : pendingOrders.length === 0 ? (
-                <div className="rounded-xl border border-border bg-card p-12 text-center">
-                  <p className="text-sm text-muted-foreground">Nenhum pedido pendente no momento.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingOrders.map(order => (
-                    <motion.div
-                      key={order.id}
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="rounded-xl border border-border bg-card p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-foreground">{order.sellers?.name ?? "Sem vendedor"}</span>
-                            <span className="text-muted-foreground">→</span>
-                            <span className="font-medium text-foreground">{order.customers?.name ?? "Sem cliente"}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
-                            <span className="mono">{order.customers?.whatsapp ?? "—"}</span>
-                            <span>·</span>
-                            <span className="flex items-center gap-1"><Clock size={12} />{timeAgo(order.created_at)}</span>
-                          </div>
-                        </div>
-                        <div className="text-right min-w-[100px]">
-                          <p className="text-base font-semibold mono text-foreground">{formatCurrency(order.total_amount)}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
-                        </div>
-                      </div>
-
-                      {order.freight_notes && (
-                        <div className="mt-2 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">Frete:</span> {order.freight_notes}
-                        </div>
-                      )}
-
-                      <div className="mt-3 rounded-lg border border-border/60 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                              <th className="text-left py-1.5 px-3">Produto</th>
-                              <th className="text-left py-1.5 px-3">Sabor</th>
-                              <th className="text-right py-1.5 px-3 w-[50px]">Qtd</th>
-                              <th className="text-right py-1.5 px-3 w-[90px]">Unitário</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {order.order_items?.map(item => (
-                              <tr key={item.id} className="border-t border-border/40 text-xs">
-                                <td className="py-1.5 px-3">{item.products ? `${item.products.brand} · ${item.products.name}` : "—"}</td>
-                                <td className="py-1.5 px-3 text-muted-foreground">{item.products?.flavor ?? "—"}</td>
-                                <td className="py-1.5 px-3 text-right mono">{item.quantity}</td>
-                                <td className="py-1.5 px-3 text-right mono">{formatCurrency(item.unit_price)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs"
-                          disabled={processingOrder === order.id}
-                          onClick={() => handleDeclineOrder(order.id)}
-                        >
-                          <Ban size={13} className="mr-1.5" />Recusar
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="h-8 text-xs"
-                          disabled={processingOrder === order.id}
-                          onClick={() => handleConfirmOrder(order.id)}
-                        >
-                          <Check size={13} className="mr-1.5" />Confirmar
-                        </Button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
+              <PendingOrdersList
+                orders={pendingOrders}
+                loading={loadingOrders}
+                processingOrder={processingOrder}
+                onConfirm={handleConfirmOrder}
+                onDecline={handleDeclineOrder}
+              />
             </TabsContent>
           </>
         );
