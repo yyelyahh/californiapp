@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,7 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, subMonths, parseISO } from "date-fns";
-import { computeSellerBalance, PROJECT_START } from "@/lib/commissions";
+import { computeSellerBalance, computeSellerConsumption, PROJECT_START } from "@/lib/commissions";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -171,6 +171,87 @@ function PendingOrdersList({
   );
 }
 
+/**
+ * Card de pedido novo na visão do vendedor — mobile-first.
+ * O admin usa PendingOrdersList (tabela); aqui o formato é de "pedido chegando",
+ * com o essencial visível sem rolar e as duas ações no polegar.
+ */
+function SellerOrderCard({
+  order, processing, onConfirm, onDecline,
+}: {
+  order: Order;
+  processing: boolean;
+  onConfirm: (orderId: string) => void;
+  onDecline: (orderId: string) => void;
+}) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      className="rounded-2xl border border-primary/30 bg-card p-4 shadow-lg ring-1 ring-primary/10"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+            </span>
+            Novo pedido
+          </span>
+          <p className="text-base font-semibold leading-tight truncate">{order.customers?.name ?? "Sem cliente"}</p>
+          <p className="text-[11px] text-muted-foreground mono truncate">{order.customers?.whatsapp ?? "—"}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-lg font-bold mono leading-tight">{formatCurrency(order.total_amount)}</p>
+          <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1 mt-0.5">
+            <Clock size={11} />{timeAgo(order.created_at)}
+          </p>
+        </div>
+      </div>
+
+      <ul className="mt-3 space-y-1 rounded-lg bg-secondary/40 px-3 py-2">
+        {order.order_items?.map(item => (
+          <li key={item.id} className="flex items-baseline justify-between gap-2 text-[13px]">
+            <span className="min-w-0 flex-1 truncate">
+              <span className="mono font-semibold">{item.quantity}×</span>{" "}
+              <span className="font-medium">{item.products?.flavor ?? "Produto"}</span>
+              {item.products?.brand && <span className="text-muted-foreground"> · {item.products.brand}</span>}
+            </span>
+            <span className="mono shrink-0 text-muted-foreground">{formatCurrency(item.quantity * item.unit_price)}</span>
+          </li>
+        ))}
+      </ul>
+
+      {order.freight_notes && (
+        <p className="mt-2 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Frete:</span> {order.freight_notes}
+        </p>
+      )}
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Button
+          variant="outline"
+          className="h-11 text-sm"
+          disabled={processing}
+          onClick={() => onDecline(order.id)}
+        >
+          <Ban size={15} className="mr-1.5" />Recusar
+        </Button>
+        <Button
+          className="h-11 text-sm col-span-2"
+          disabled={processing}
+          onClick={() => onConfirm(order.id)}
+        >
+          <Check size={16} className="mr-1.5" />{processing ? "Confirmando..." : "Confirmar pedido"}
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 function MarkPaidPopover({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro") => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -240,29 +321,49 @@ export default function SalesPage() {
 
   // Filtro de período da visão do vendedor
   const [sellerPeriod, setSellerPeriod] = useState<SellerPeriod>("month");
+  const [consumoOpen, setConsumoOpen] = useState(false);
 
   // Pedidos pendentes
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
 
-  const fetchPendingOrders = async () => {
-    setLoadingOrders(true);
+  // silent = atualização em segundo plano: não pisca o "Carregando..." nem avisa erro de rede.
+  const fetchPendingOrders = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoadingOrders(true);
     const { data, error } = await supabase
       .from("orders")
       .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, flavor))")
       .eq("status", "pendente")
       .order("created_at", { ascending: false });
     if (error) {
-      toast({ title: "Erro ao carregar pedidos", description: error.message, variant: "destructive" });
+      if (!silent) toast({ title: "Erro ao carregar pedidos", description: error.message, variant: "destructive" });
     } else {
       setPendingOrders((data as Order[]) ?? []);
     }
-    setLoadingOrders(false);
+    if (!silent) setLoadingOrders(false);
   };
 
   useEffect(() => {
     fetchPendingOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pedido novo precisa aparecer sem o vendedor recarregar a página: recarrega ao
+  // voltar para a aba e a cada minuto enquanto ela está visível.
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") fetchPendingOrders({ silent: true });
+    };
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+    const timer = window.setInterval(refreshIfVisible, 60000);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+      window.clearInterval(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -336,6 +437,13 @@ export default function SalesPage() {
       start, end, closedStart, PROJECT_START, isLegacy, inClosedPeriod,
     });
   }, [isSeller, sellerId, sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, sellerRange]);
+
+  // Consumo próprio (retiradas + dívidas − pagamentos). Acumulado, não segue o filtro
+  // de período: é o que o vendedor ainda deve, não o consumo de um mês só.
+  const myConsumption = useMemo(() => {
+    if (!isSeller || !sellerId) return null;
+    return computeSellerConsumption(sellerId, { sales, sellerManualDebts, sellerDebtPayments });
+  }, [isSeller, sellerId, sales, sellerManualDebts, sellerDebtPayments]);
 
   // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
   const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
@@ -650,24 +758,12 @@ export default function SalesPage() {
     const sumPaid = mySales.reduce((acc, s) => acc + s.paidAmount, 0);
     const sumOpen = mySales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
 
+    const consumo = myConsumption;
+
     return (
-      <Tabs defaultValue="vendas" className="w-full space-y-5">
+      <div className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
-          <div className="flex flex-col gap-3">
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
-            </div>
-            <TabsList className="bg-transparent p-0 h-auto gap-4 border-0">
-              <TabsTrigger
-                value="vendas"
-                className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
-              >Vendas <span className="ml-1.5 text-[11px] text-muted-foreground">{mySales.length}</span></TabsTrigger>
-              <TabsTrigger
-                value="pedidos"
-                className="relative rounded-none border-0 bg-transparent px-0 pb-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
-              >Pedidos pendentes <span className="ml-1.5 text-[11px] text-muted-foreground">{pendingOrders.length}</span></TabsTrigger>
-            </TabsList>
-          </div>
+          <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
           <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
             <SheetTrigger asChild>
               <Button onClick={openNew} size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Venda</Button>
@@ -696,24 +792,41 @@ export default function SalesPage() {
           </Sheet>
         </div>
 
-        <TabsContent value="vendas" className="mt-0 space-y-5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {SELLER_PERIODS.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setSellerPeriod(p.id)}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
-                  sellerPeriod === p.id
-                    ? "bg-primary/15 text-primary border-primary/40"
-                    : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-border/80"
-                )}
-              >{p.label}</button>
-            ))}
+        {/* Pedidos novos — em destaque, antes de tudo */}
+        {pendingOrders.length > 0 && (
+          <div className="space-y-3">
+            <AnimatePresence initial={false}>
+              {pendingOrders.map(order => (
+                <SellerOrderCard
+                  key={order.id}
+                  order={order}
+                  processing={processingOrder === order.id}
+                  onConfirm={handleConfirmOrder}
+                  onDecline={handleDeclineOrder}
+                />
+              ))}
+            </AnimatePresence>
           </div>
+        )}
 
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {SELLER_PERIODS.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setSellerPeriod(p.id)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                sellerPeriod === p.id
+                  ? "bg-primary/15 text-primary border-primary/40"
+                  : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-border/80"
+              )}
+            >{p.label}</button>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
             <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
               <p className="mt-0.5 text-base font-semibold mono">{mySales.length}</p>
@@ -726,53 +839,137 @@ export default function SalesPage() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
               <p className={cn("mt-0.5 text-base font-semibold mono truncate", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setConsumoOpen(o => !o)}
+              className={cn(
+                "rounded-xl border bg-card px-3 py-2.5 min-w-0 text-left transition-colors",
+                consumoOpen ? "border-warning/40 bg-warning/5" : "border-border hover:border-border/80"
+              )}
+            >
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1">
+                Consumo
+                <ChevronDown size={11} className={cn("transition-transform", consumoOpen && "rotate-180")} />
+              </p>
+              <p className={cn(
+                "mt-0.5 text-base font-semibold mono truncate",
+                (consumo?.openTotal ?? 0) > 0.01 ? "text-warning" : "text-muted-foreground"
+              )}>{formatCurrency(consumo?.openTotal ?? 0)}</p>
+            </button>
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold tracking-tight">
-              Minha comissão <span className="text-[11px] font-normal text-muted-foreground">· {periodLabel}</span>
-            </h2>
-            <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Faixa atual</p>
-                <p className="mt-0.5 text-base font-semibold truncate">{myCommissionBalance?.tier.label ?? "—"}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Unidades</p>
-                <p className="mt-0.5 text-base font-semibold mono">{myCommissionBalance?.units ?? 0}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Comissão acumulada</p>
-                <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(myCommissionBalance?.accrued ?? 0)}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saldo</p>
-                <p className={cn(
-                  "mt-0.5 text-base font-semibold mono truncate",
-                  (myCommissionBalance?.balance ?? 0) > 0.01 ? "text-warning" : (myCommissionBalance?.balance ?? 0) < -0.01 ? "text-income" : "text-foreground"
-                )}>{formatCurrency(myCommissionBalance?.balance ?? 0)}</p>
-              </div>
+          <AnimatePresence initial={false}>
+            {consumoOpen && consumo && (
+              <motion.div
+                key="consumo"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2">
+                    <p className="text-[11px] font-semibold">Meu consumo</p>
+                    <p className="text-[11px] text-muted-foreground">total acumulado</p>
+                  </div>
+
+                  {consumo.retiradas.length === 0 && consumo.manualDebts.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">Nenhum consumo registrado.</p>
+                  ) : (
+                    <>
+                      {consumo.retiradas.map(s => (
+                        <div key={s.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-medium truncate">{getProductDisplayName(s.productId)}</p>
+                            <p className="text-[11px] text-muted-foreground mono">{formatDateBR(s.date)} · {s.quantity} un.</p>
+                          </div>
+                          <span className="mono text-[13px] font-semibold text-warning shrink-0">{formatCurrency(s.totalPrice)}</span>
+                        </div>
+                      ))}
+                      {consumo.manualDebts.map(d => (
+                        <div key={d.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-medium truncate">Dívida{d.notes ? ` · ${d.notes}` : ""}</p>
+                            <p className="text-[11px] text-muted-foreground mono">{formatDateBR(d.date)}</p>
+                          </div>
+                          <span className="mono text-[13px] font-semibold text-warning shrink-0">{formatCurrency(d.amount)}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  <div className="px-3 py-2 space-y-1 bg-secondary/20">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Retiradas</span><span className="mono">{formatCurrency(consumo.retiradasTotal)}</span>
+                    </div>
+                    {consumo.manualDebtsTotal > 0 && (
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Dívidas</span><span className="mono">{formatCurrency(consumo.manualDebtsTotal)}</span>
+                      </div>
+                    )}
+                    {consumo.debtPaymentsTotal > 0 && (
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Pagamentos</span><span className="mono text-income">−{formatCurrency(consumo.debtPaymentsTotal)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border-t border-border/40 pt-1 text-[12px] font-semibold">
+                      <span>Em aberto</span>
+                      <span className={cn("mono", consumo.openTotal > 0.01 ? "text-warning" : "text-income")}>
+                        {formatCurrency(consumo.openTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold tracking-tight">
+            Minha comissão <span className="text-[11px] font-normal text-muted-foreground">· {periodLabel}</span>
+          </h2>
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Faixa atual</p>
+              <p className="mt-0.5 text-base font-semibold truncate">{myCommissionBalance?.tier.label ?? "—"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Unidades</p>
+              <p className="mt-0.5 text-base font-semibold mono">{myCommissionBalance?.units ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Comissão acumulada</p>
+              <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(myCommissionBalance?.accrued ?? 0)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saldo</p>
+              <p className={cn(
+                "mt-0.5 text-base font-semibold mono truncate",
+                (myCommissionBalance?.balance ?? 0) > 0.01 ? "text-warning" : (myCommissionBalance?.balance ?? 0) < -0.01 ? "text-income" : "text-foreground"
+              )}>{formatCurrency(myCommissionBalance?.balance ?? 0)}</p>
             </div>
           </div>
+        </div>
 
-          {mySales.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-12 text-center">
-              <p className="text-sm text-muted-foreground">Nenhuma venda registrada no período.</p>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-              <table className="w-full text-sm min-w-[420px]">
+        {mySales.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-12 text-center">
+            <p className="text-sm text-muted-foreground">Nenhuma venda registrada no período.</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    <th className="text-left py-2 px-2 sm:px-3">Produto</th>
-                    <th className="text-right py-2 px-2 sm:px-3 w-[50px]">Qtd</th>
-                    <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Total</th>
-                    <th className="text-right py-2 px-2 sm:px-3 w-[90px] sm:w-[110px]">Falta</th>
+                    <th className="text-left py-2 px-3">Produto</th>
+                    <th className="text-right py-2 px-3 w-[46px]">Qtd</th>
+                    <th className="text-right py-2 px-3 w-[100px]">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
                   {mySales.map(s => {
-                    const remaining = Math.max(0, s.totalPrice - s.paidAmount);
+                    const received = s.paidAmount >= s.totalPrice - 0.01;
                     return (
                       <tr key={s.id} className="border-b border-border/40 last:border-0">
                         <td className="py-2.5 px-3">
@@ -780,29 +977,23 @@ export default function SalesPage() {
                           <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(s.date)}</div>
                         </td>
                         <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
-                        <td className="py-2.5 px-3 text-right mono text-sm font-semibold">{formatCurrency(s.totalPrice)}</td>
-                        <td className="py-2.5 px-3 text-right mono text-sm">
-                          {remaining > 0 ? <span className="text-warning font-medium">{formatCurrency(remaining)}</span> : <span className="text-income">Pago</span>}
-                        </td>
+                        <td className={cn(
+                          "py-2.5 px-3 text-right mono text-sm font-semibold",
+                          received ? "text-income" : "text-warning"
+                        )}>{formatCurrency(s.totalPrice)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="pedidos" className="mt-0">
-          <PendingOrdersList
-            orders={pendingOrders}
-            loading={loadingOrders}
-            processingOrder={processingOrder}
-            onConfirm={handleConfirmOrder}
-            onDecline={handleDeclineOrder}
-          />
-        </TabsContent>
-      </Tabs>
+            <p className="flex items-center gap-3 px-1 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-income" />Recebido</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" />Falta receber</span>
+            </p>
+          </div>
+        )}
+      </div>
     );
   }
 

@@ -18,7 +18,7 @@ const allNavItems = [
   { to: "/commissions", icon: HandCoins, label: "Distribuição", adminOnly: true, color: "#85B7EB" },
   { to: "/insights", icon: LineChart, label: "Insights", adminOnly: true, color: "#7F77DD" },
   { to: "/finance", icon: Coins, label: "Financeiro", adminOnly: true, color: "#EF9F27" },
-  { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: false, color: "#D4537E" },
+  { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: true, color: "#D4537E" },
 ];
 
 type NavItem = (typeof allNavItems)[number];

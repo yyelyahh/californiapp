@@ -244,6 +244,67 @@ export function computeAccrualHistory(sales: Sale[]) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Consumo do vendedor (retiradas + dívidas manuais − pagamentos)
+ * ------------------------------------------------------------------ *
+ * Diferente de computeSellerBalance, aqui o recorte é ACUMULADO: vale
+ * desde o início do histórico até hoje, porque é a dívida que o
+ * vendedor ainda tem em aberto — não o consumo de um mês específico.
+ */
+export type SellerConsumption = {
+  /** Retiradas do vendedor, mais recentes primeiro. */
+  retiradas: Sale[];
+  retiradasTotal: number;
+  manualDebts: SellerManualDebt[];
+  manualDebtsTotal: number;
+  debtPaymentsTotal: number;
+  /** Retiradas + dívidas manuais. */
+  consumoTotal: number;
+  /** consumoTotal − pagamentos de dívida já feitos. */
+  openTotal: number;
+};
+
+export function computeSellerConsumption(
+  sellerId: string,
+  input: {
+    sales: Sale[];
+    sellerManualDebts: SellerManualDebt[];
+    sellerDebtPayments: SellerDebtPayment[];
+    /** Início válido do histórico. Padrão: PROJECT_START. */
+    since?: Date;
+  },
+): SellerConsumption {
+  const { sales, sellerManualDebts, sellerDebtPayments, since = PROJECT_START } = input;
+  const afterStart = (iso: string) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return !isNaN(d.getTime()) && d >= since;
+  };
+
+  const retiradas = sales
+    .filter(s => s.sellerId === sellerId && s.type === "retirada_funcionario" && afterStart(s.date))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
+
+  const manualDebts = sellerManualDebts
+    .filter(d => d.sellerId === sellerId && afterStart(d.date))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const manualDebtsTotal = manualDebts.reduce((a, d) => a + d.amount, 0);
+
+  const debtPaymentsTotal = sellerDebtPayments
+    .filter(p => p.sellerId === sellerId && afterStart(p.date))
+    .reduce((a, p) => a + p.amount, 0);
+
+  const consumoTotal = retiradasTotal + manualDebtsTotal;
+
+  return {
+    retiradas, retiradasTotal,
+    manualDebts, manualDebtsTotal,
+    debtPaymentsTotal, consumoTotal,
+    openTotal: consumoTotal - debtPaymentsTotal,
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * Saldo do vendedor num período (unidades, comissão, dívidas, saldo)
  * ------------------------------------------------------------------ */
 export type SellerBalanceContext = {
