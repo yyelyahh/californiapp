@@ -279,6 +279,15 @@
     --sf-accent-ink: #1a1a1a; /* texto escuro sobre o accent */
     --sf-warn: #d98c6b;       /* "só restam N" */
 
+    /* A onda de confirmação e a tela que ela deixa para trás são o MESMO campo
+     * de cor — é isso que deixa a camada sair sem piscar (ver `settleFlood`).
+     * Por isso a cor mora num token só, e num tom mais fundo que o accent: uma
+     * tela inteira de #8fc1e3 estoura depois de toda a loja ser escura.
+     * Estes dois não são reescritos em `.storefront-flooded`: assim a camada
+     * pinta a mesma água em qualquer uma das telas. */
+    --sf-flood: #5496bd;
+    --sf-flood-ink: #10202b;
+
     /* Componentes do shadcn (Input, Textarea) desenham o foco com
      * `ring-ring`, que sai roxo do tema global. Redefinir --ring aqui pinta
      * esse anel de accent sem precisar remendar cada campo — é o mesmo
@@ -288,6 +297,37 @@
     font-family: 'Manrope', system-ui, sans-serif;
     background: var(--sf-bg);
     color: var(--sf-text);
+  }
+
+  /* Tela que a onda de confirmação deixa para trás.
+   *
+   * A água sobe até encher a tela e NÃO escoa: ela vira o comprovante. Para
+   * isso o comprovante precisa ser a mesma loja de cabeça para baixo — o fundo
+   * é o accent em que a água encheu, e a tinta escura passa a ser o texto.
+   * Sem essa virada a onda seria um efeito solto: subiria, sumiria, e a tela
+   * voltaria igualzinha ao que era.
+   *
+   * A inversão é feita nos TOKENS, não nas peças: `PillButton`, o círculo do
+   * check e os textos continuam pedindo `--sf-accent` e `--sf-text` como
+   * sempre, e viram sozinhos. Nenhum componente precisa saber que está do
+   * lado avesso. */
+  .storefront.storefront-flooded {
+    --sf-bg: var(--sf-flood);
+    --sf-surface: rgba(16, 32, 43, 0.1);
+    --sf-surface-2: rgba(16, 32, 43, 0.16);
+    --sf-border: rgba(16, 32, 43, 0.22);
+    --sf-hairline: rgba(16, 32, 43, 0.16);
+    --sf-text: var(--sf-flood-ink);
+    --sf-text-muted: rgba(16, 32, 43, 0.78);
+    --sf-text-faint: rgba(16, 32, 43, 0.62);
+    --sf-text-dim: rgba(16, 32, 43, 0.48);
+    /* O papel se inverte: quem era o destaque claro passa a ser a tinta funda,
+     * e o texto sobre ela fica claro. */
+    --sf-accent: var(--sf-flood-ink);
+    --sf-accent-tint: rgba(16, 32, 43, 0.12);
+    --sf-accent-soft: rgba(16, 32, 43, 0.3);
+    --sf-accent-line: rgba(16, 32, 43, 0.45);
+    --sf-accent-ink: #eaf3f8;
   }
 
   .storefront ::placeholder {

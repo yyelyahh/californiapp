@@ -21,7 +21,6 @@ import {
   Package,
   Check,
   ArrowLeft,
-  ArrowRight,
   X,
 } from "lucide-react";
 
@@ -133,6 +132,9 @@ const MEDIA_RATIO = "4 / 3";
 /* Peças de UI do tema                                                  */
 /* ------------------------------------------------------------------ */
 
+/** Altura padrão das pílulas da loja. As animações precisam dela em número. */
+const PILL_HEIGHT = 50;
+
 /**
  * Botão principal da loja: pílula, fundo accent, texto escuro. Desabilitado
  * esmaece o PREENCHIMENTO (não o botão inteiro), como no protótipo — por isso
@@ -142,7 +144,7 @@ function PillButton({
   children,
   onClick,
   disabled,
-  height = 50,
+  height = PILL_HEIGHT,
   className = "",
 }: {
   children: React.ReactNode;
@@ -169,30 +171,59 @@ function PillButton({
 }
 
 /** Duração da varredura do preenchimento do botão "Adicionar". */
-const FILL_SECONDS = 0.8;
+const FILL_SECONDS = 0.7;
 
 /** Quanto tempo o check fica na tela antes de o sheet fechar. */
-const CHECK_HOLD_MS = 400;
+const CHECK_HOLD_MS = 450;
+
+/** Cor da fumaça: a mesma da borda quente da tinta e das plumas. */
+const SMOKE_RGB = "245,243,238";
 
 /**
- * Baforadas da pluma que viaja junto com o preenchimento.
+ * Geometria da tinta que varre o botão, em px.
  *
- * Todas nascem no mesmo ponto — a frente do azul — e se repetem enquanto a
- * varredura corre. O que muda entre elas é o atraso, o tamanho e a opacidade:
- * é isso que vira rastro, em vez de uma nuvem só piscando.
+ * O ruído que rasga a frente empurra TODAS as bordas da peça. Se ela terminasse
+ * exatamente na área visível, o deslocamento abriria entalhes na esquerda e nas
+ * laterais de cima e de baixo do botão. Por isso ela nasce maior que o botão
+ * nos quatro lados: o rasgo acontece na sobra, que o `overflow-hidden` da
+ * pílula corta fora.
+ *
+ * `LEAD` é maior que `FADE` de propósito. Quando a varredura termina, a faixa
+ * que está se desfazendo já saiu inteira pela direita, então o botão fica com a
+ * cor cheia em vez de terminar com um borrão claro na ponta.
  */
-const PUFFS = [
-  { delay: 0, size: 30, opacity: 0.55 },
-  { delay: 0.14, size: 38, opacity: 0.48 },
-  { delay: 0.28, size: 34, opacity: 0.6 },
-  { delay: 0.42, size: 42, opacity: 0.44 },
+const INK_BLEED = 14;
+const INK_LEAD = 34;
+const INK_FADE = 28;
+
+/** Largura da tinta (e da carruagem de fumaça) em relação ao botão. */
+const INK_WIDTH = `calc(100% + ${INK_BLEED + INK_LEAD}px)`;
+
+/**
+ * Plumas que se desprendem da frente enquanto ela se desfaz.
+ *
+ * Nascem espalhadas pela ALTURA da borda, não num ponto só: é a faixa inteira
+ * que está virando vapor, então a fumaça tem que sair de toda a frente. Os
+ * atrasos diferentes fazem as gerações se sobreporem, em vez de piscarem todas
+ * no mesmo compasso.
+ */
+const WISPS = [
+  { top: "6%", size: 24, delay: 0, opacity: 0.5 },
+  { top: "30%", size: 33, delay: 0.11, opacity: 0.6 },
+  { top: "54%", size: 27, delay: 0.05, opacity: 0.54 },
+  { top: "76%", size: 35, delay: 0.17, opacity: 0.48 },
+  { top: "44%", size: 20, delay: 0.26, opacity: 0.64 },
 ];
 
+/** Uma pluma nasce, sobe e some nesse tempo; várias gerações cabem na varredura. */
+const WISP_CYCLE = 0.52;
+
 /**
- * Botão "Adicionar" com a confirmação embutida: ao tocar, o preenchimento
- * accent varre o botão da esquerda para a direita sobre o fundo esmaecido,
- * soltando fumaça na frente da varredura, e quando chega ao fim o rótulo dá
- * lugar a um check no meio.
+ * Botão "Adicionar" com a confirmação embutida: ao tocar, a tinta accent varre
+ * o botão da esquerda para a direita sobre o fundo esmaecido, e a frente dessa
+ * varredura não é uma borda reta — ela se DESFAZ. Os últimos px de tinta viram
+ * um degradê que o ruído rasga, e desse esgarçado saem as plumas. Quando a
+ * varredura chega ao fim, o rótulo dá lugar a um check no meio.
  *
  * O item entra no carrinho já no toque (`onPress`) — se a pessoa fechar o
  * sheet no meio da animação, nada se perde. O `onDone` só roda depois do
@@ -212,6 +243,7 @@ function AddToCartButton({
   const reduce = useReducedMotion();
   const [phase, setPhase] = useState<"idle" | "filling" | "done">("idle");
   const timer = useRef<number | null>(null);
+  const edgeId = useId();
   const smokeId = useId();
 
   // O `onDone` desmonta este botão junto com o sheet: sem a limpeza, o timer
@@ -235,17 +267,48 @@ function AddToCartButton({
     setPhase("filling");
   };
 
+  // A tinta e a carruagem de fumaça andam com a MESMA geometria, a MESMA
+  // duração e a MESMA curva — é um movimento só, visto de duas camadas. Se
+  // fossem duas animações parecidas, a fumaça descolaria da borda no meio do
+  // caminho. Anda em `x` (transform) em vez de crescer em `width`: assim o
+  // filtro de ruído é rasterizado uma vez e só é deslocado a cada quadro, em
+  // vez de ser remontado; e a porcentagem do transform é do próprio elemento,
+  // então nada precisa medir o botão em JS.
+  const sweep = {
+    initial: { x: "-100%" },
+    animate: { x: "0%" },
+    transition: { duration: FILL_SECONDS, ease: EASE_IN_OUT },
+  };
+
   return (
-    // O botão precisa de `overflow-hidden` para recortar o preenchimento no
-    // formato da pílula, e isso decapitaria qualquer baforada que subisse acima
-    // da borda. Por isso a fumaça mora neste wrapper, fora do botão.
+    // O botão precisa de `overflow-hidden` para recortar a tinta no formato da
+    // pílula, e isso decapitaria qualquer pluma que subisse acima da borda. Por
+    // isso a fumaça mora neste wrapper, fora do botão.
     <div className="relative flex-1">
+      {phase !== "idle" && (
+        // Dois ruídos, um para cada trabalho: o de baixo rasga a borda da tinta
+        // (deslocamento curto e alongado na vertical, senão a faixa vira poça);
+        // o de cima esgarça as plumas. Estáticos de propósito — animar o
+        // `baseFrequency` remonta o filtro a cada quadro e engasga em celular
+        // fraco.
+        <svg aria-hidden width="0" height="0" className="absolute">
+          <filter id={edgeId} x="-30%" y="-30%" width="160%" height="160%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.014 0.06" numOctaves="3" seed="4" result="ruido" />
+            <feDisplacementMap in="SourceGraphic" in2="ruido" scale="17" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+          <filter id={smokeId} x="-40%" y="-40%" width="180%" height="180%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.04" numOctaves="2" seed="7" result="ruido" />
+            <feDisplacementMap in="SourceGraphic" in2="ruido" scale="26" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </svg>
+      )}
+
       <button
         type="button"
         onClick={press}
         disabled={disabled}
         style={{
-          height: 50,
+          height: PILL_HEIGHT,
           background: disabled || phase !== "idle" ? "var(--sf-accent-soft)" : "var(--sf-accent)",
           color: "var(--sf-accent-ink)",
         }}
@@ -254,17 +317,31 @@ function AddToCartButton({
         <span className="relative z-10 flex h-full items-center justify-center gap-2">{label}</span>
 
         {phase !== "idle" && (
-          // Fica ACIMA do rótulo (z-20), não atrás: a faixa é opaca, então vai
+          // Fica ACIMA do rótulo (z-20), não atrás: a tinta é opaca, então vai
           // encobrindo o texto conforme avança — é o preenchimento que confirma,
-          // não o texto que some sozinho. Anima `width` em vez de `scaleX` porque
-          // escala depende de `transform-origin` e distorce se um dia entrar
-          // conteúdo aqui; largura é o próprio avanço, sem intermediário.
+          // não o texto que some sozinho.
+          //
+          // A frente não termina numa linha reta: os últimos `INK_FADE` px
+          // deixam de ser tinta, passam por uma faixa quente cor de fumaça e
+          // acabam em transparente. É esse degradê que o filtro de ruído rasga,
+          // e é por isso que a borda parece esfarelar em vez de avançar como um
+          // retângulo.
           <motion.span
-            className="absolute bottom-0 left-0 top-0 z-20"
-            style={{ background: "var(--sf-accent)" }}
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: FILL_SECONDS, ease: EASE_IN_OUT }}
+            aria-hidden
+            className="absolute z-20"
+            style={{
+              left: -INK_BLEED,
+              top: -INK_BLEED,
+              bottom: -INK_BLEED,
+              width: INK_WIDTH,
+              background: `linear-gradient(to right,
+                var(--sf-accent) 0,
+                var(--sf-accent) calc(100% - ${INK_FADE}px),
+                rgba(${SMOKE_RGB},0.42) calc(100% - ${Math.round(INK_FADE * 0.45)}px),
+                rgba(${SMOKE_RGB},0) 100%)`,
+              filter: `url(#${edgeId})`,
+            }}
+            {...sweep}
             onAnimationComplete={() => {
               setPhase("done");
               timer.current = window.setTimeout(onDone, CHECK_HOLD_MS);
@@ -285,63 +362,53 @@ function AddToCartButton({
       </button>
 
       {phase !== "idle" && (
-        // `-top-12` é o céu por onde a fumaça sobe; `pointer-events-none` para a
-        // camada não roubar toque de nada que fique embaixo.
-        <div className="pointer-events-none absolute inset-x-0 -top-12 bottom-0 z-40">
-          {/* A textura vem de um deslocamento por ruído: sem ele as baforadas
-              são círculos borrados perfeitos; com ele a borda esgarça e lembra
-              vapor. O ruído é estático de propósito — só os elementos se movem.
-              Animar o `baseFrequency` remonta o filtro a cada quadro e engasga
-              em celular fraco. */}
-          <svg aria-hidden width="0" height="0" className="absolute">
-            <filter id={smokeId} x="-40%" y="-40%" width="180%" height="180%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.02 0.04" numOctaves="2" seed="7" result="ruido" />
-              <feDisplacementMap in="SourceGraphic" in2="ruido" scale="26" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-          </svg>
-
+        // `-top-14` é o céu por onde a fumaça sobe; `pointer-events-none` para
+        // a camada não roubar toque de nada que fique embaixo.
+        <div className="pointer-events-none absolute inset-x-0 -top-14 bottom-0 z-40">
           <div className="absolute inset-0" style={{ filter: `url(#${smokeId})` }}>
-            {/* A carruagem viaja com a MESMA duração e a MESMA curva do
-                preenchimento, então a fumaça fica grudada na frente do azul o
-                percurso inteiro — é o mesmo movimento, não uma animação
-                paralela que combina mais ou menos. Ela ocupa a largura toda e
-                anda `x: 100%`: em transform a porcentagem é do próprio
-                elemento, então o percurso sai puro em GPU, sem relayout a cada
-                quadro e sem precisar medir o botão em JS. */}
+            {/* Carruagem: mesma caixa e mesmo percurso da tinta, mas com a
+                altura do botão, para as plumas se distribuírem pela altura da
+                borda que está se desfazendo. */}
             <motion.div
-              className="absolute inset-y-0 left-0 w-full"
-              initial={{ x: "0%" }}
-              animate={{ x: "100%" }}
-              transition={{ duration: FILL_SECONDS, ease: EASE_IN_OUT }}
+              className="absolute bottom-0"
+              style={{ left: -INK_BLEED, width: INK_WIDTH, height: PILL_HEIGHT }}
+              {...sweep}
             >
-              {PUFFS.map(p => (
+              {WISPS.map(w => (
                 <motion.span
-                  key={p.delay}
+                  key={`${w.top}-${w.delay}`}
                   className="absolute rounded-full"
                   style={{
-                    left: 0,
-                    bottom: 12,
-                    width: p.size,
-                    height: p.size,
-                    marginLeft: -p.size / 2,
+                    top: w.top,
+                    // Ancorada logo atrás da ponta transparente, ou seja, em
+                    // cima da faixa que está se desmanchando — a pluma sai da
+                    // tinta, não do vazio à frente dela.
+                    right: 22,
+                    width: w.size * 1.2,
+                    height: w.size,
+                    marginTop: -w.size / 2,
+                    marginRight: -w.size * 0.6,
                     // O gradiente já entrega a borda macia, então não precisa de
-                    // `blur()` por cima — seriam quatro filtros a mais rodando
-                    // junto com o do ruído.
-                    background: `radial-gradient(closest-side, rgba(245,243,238,${p.opacity}), rgba(245,243,238,0) 72%)`,
+                    // `blur()` por cima — seriam cinco filtros a mais rodando
+                    // junto com os dois de ruído.
+                    background: `radial-gradient(closest-side, rgba(${SMOKE_RGB},${w.opacity}), rgba(${SMOKE_RGB},0) 72%)`,
                   }}
-                  initial={{ opacity: 0, scale: 0.3, x: 0, y: 6 }}
-                  // O `x` negativo é o rastro: a baforada recua enquanto a
-                  // carruagem avança, então ela vai ficando para trás no
-                  // caminho já percorrido em vez de viajar rígida com a frente.
-                  animate={{ opacity: [0, 1, 0], scale: [0.3, 1, 1.7], x: [0, -10, -26], y: [6, -12, -34] }}
+                  initial={{ opacity: 0, scale: 0.25, x: 0, y: 0 }}
+                  // O `x` negativo é o rastro: a pluma recua enquanto a
+                  // carruagem avança, então ela fica para trás no caminho já
+                  // percorrido em vez de viajar rígida com a frente.
+                  animate={{ opacity: [0, 1, 0], scale: [0.25, 1, 2], x: [0, -14, -38], y: [0, -12, -40] }}
                   transition={{
-                    duration: 0.62,
-                    delay: p.delay,
+                    duration: WISP_CYCLE,
+                    delay: w.delay,
                     ease: "easeOut",
-                    times: [0, 0.3, 1],
-                    // Continua saindo enquanto o botão preenche e durante o
-                    // check, até o sheet fechar.
-                    repeat: Infinity,
+                    times: [0, 0.28, 1],
+                    // Repete só o suficiente para cobrir a varredura. Com
+                    // `Infinity` as plumas continuavam brotando depois que a
+                    // faixa parava, e o que era rastro virava um chafariz preso
+                    // na ponta do botão. Assim a última geração termina de subir
+                    // durante o check e a fumaça se dissipa sozinha.
+                    repeat: Math.max(0, Math.round((FILL_SECONDS - w.delay) / WISP_CYCLE)),
                   }}
                 />
               ))}
@@ -353,15 +420,15 @@ function AddToCartButton({
                 className="absolute rounded-full"
                 style={{
                   left: "100%",
-                  bottom: 10,
-                  width: 96,
-                  height: 96,
-                  marginLeft: -48,
-                  background: "radial-gradient(closest-side, rgba(245,243,238,0.5), rgba(245,243,238,0) 70%)",
+                  bottom: 6,
+                  width: 110,
+                  height: 88,
+                  marginLeft: -68,
+                  background: `radial-gradient(closest-side, rgba(${SMOKE_RGB},0.5), rgba(${SMOKE_RGB},0) 70%)`,
                 }}
-                initial={{ opacity: 0, scale: 0.5, y: 6 }}
-                animate={{ opacity: [0, 0.9, 0], scale: [0.5, 1.3, 2], x: [0, -12, -30], y: [6, -20, -52] }}
-                transition={{ duration: 1, ease: "easeOut", times: [0, 0.25, 1] }}
+                initial={{ opacity: 0, scale: 0.45, y: 4 }}
+                animate={{ opacity: [0, 0.9, 0], scale: [0.45, 1.25, 2.1], x: [0, -16, -40], y: [4, -22, -58] }}
+                transition={{ duration: 0.95, ease: "easeOut", times: [0, 0.24, 1] }}
               />
             )}
           </div>
@@ -371,6 +438,185 @@ function AddToCartButton({
   );
 }
 
+/** Quanto tempo a água leva para cobrir a tela, e para escoar depois. */
+const FLOOD_RISE = 0.95;
+const FLOOD_DRAIN = 0.7;
+
+/**
+ * Batida de tela cheia antes de a água escoar. É debaixo dela que a página
+ * troca de conteúdo, então esse instante não pode ser zero: sem ele dá para
+ * flagrar a troca acontecendo.
+ */
+const FLOOD_HOLD = 0.2;
+
+/** Altura da crista da frente, em px. A de trás é um pouco mais alta. */
+const CREST_HEIGHT = 26;
+
+/**
+ * Crista da onda: uma faixa de SVG do DOBRO da largura do botão, deslizando
+ * para o lado em laço.
+ *
+ * O caminho tem dois períodos idênticos e o deslize é de exatos -50%, então no
+ * instante em que ele reinicia o desenho está no mesmo lugar de onde saiu — o
+ * laço não tem emenda. `preserveAspectRatio="none"` deixa a onda esticar até a
+ * largura do botão sem achatar a altura junto.
+ */
+function WaveCrest({ opacity, height, duration }: { opacity: number; height: number; duration: number }) {
+  return (
+    <motion.svg
+      aria-hidden
+      viewBox="0 0 200 20"
+      preserveAspectRatio="none"
+      className="absolute left-0"
+      // O `+1` encosta a base da crista dentro do corpo da água: sem essa
+      // sobreposição sobra um fio de 1px do fundo entre as duas peças.
+      style={{ top: 1 - height, height, width: "200%", opacity, fill: "var(--sf-flood)" }}
+      initial={{ x: "0%" }}
+      animate={{ x: "-50%" }}
+      transition={{ duration, ease: "linear", repeat: Infinity }}
+    >
+      <path d="M0,20 V12 Q25,2 50,12 T100,12 T150,12 T200,12 V20 Z" />
+    </motion.svg>
+  );
+}
+
+/**
+ * Check que se desenha em vez de aparecer pronto: o traço sai da ponta
+ * esquerda, desce até o vértice e sobe para a direita — o gesto de riscar o
+ * certinho, não o símbolo já feito.
+ *
+ * O caminho é o do `Check` do lucide ESCRITO AO CONTRÁRIO. O de lá começa na
+ * ponta direita (`M20 6 9 17l-5-5`), e `pathLength` corre na ordem em que o
+ * caminho foi escrito — desenhado assim, o traço nasceria à direita e desceria
+ * para a esquerda, de trás para frente.
+ */
+const CHECK_DELAY = 0.02;
+const CHECK_DRAW = 0.7;
+
+/**
+ * Instante em que o traço fecha.
+ *
+ * O texto do comprovante espera por ele em vez de entrar numa cascata de tempo
+ * fixo: o check é uma frase sendo escrita, e ler o desfecho antes de ela
+ * terminar é ler por cima do ombro de quem escreve. Como este valor é derivado
+ * dos dois de cima, mexer na duração do traço reacerta o texto sozinho.
+ */
+const CHECK_DONE = CHECK_DELAY + CHECK_DRAW;
+
+function DrawnCheck({ size = 18, strokeWidth = 3 }: { size?: number; strokeWidth?: number }) {
+  const reduce = useReducedMotion();
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <motion.path
+        d="M4 12l5 5L20 6"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={reduce ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        // A perna curta (esquerda) e a longa (direita) levam o mesmo tempo em
+        // `pathLength`, então a subida sai mais rápida que a descida sozinha —
+        // que é como a mão risca de verdade.
+        transition={{ duration: CHECK_DRAW, ease: EASE_OUT, delay: CHECK_DELAY }}
+      />
+    </svg>
+  );
+}
+
+/**
+ * Fases da onda que confirma o pedido.
+ *
+ * `rising` cobre a tela, `waiting` é a água cheia enquanto o banco ainda não
+ * respondeu, `draining` escoa e revela o que ficou embaixo.
+ */
+type FloodPhase = "idle" | "rising" | "waiting" | "draining";
+
+/**
+ * A onda de confirmação. Toma a TELA inteira, de baixo para cima, e não só o
+ * botão: é o pedido acontecendo, não um detalhe de um controle.
+ *
+ * Por isso ela mora na página e não dentro do botão — precisa passar por cima
+ * do sheet do checkout (que é `z-50`) e continuar na tela depois que a página
+ * troca para o comprovante. Como a raiz da loja não cria contexto de
+ * empilhamento, um `fixed` com z acima do sheet basta.
+ *
+ * O ciclo é sempre o mesmo, dê certo ou não: sobe, cobre, escoa. O que muda é
+ * o que a página põe embaixo da água enquanto ela está cheia — a tela de
+ * compartilhar, se o pedido foi aceito; o próprio checkout, se não foi.
+ */
+function FloodLayer({
+  phase,
+  busyLabel,
+  onCovered,
+  onGone,
+}: {
+  phase: FloodPhase;
+  busyLabel: string;
+  onCovered: () => void;
+  onGone: () => void;
+}) {
+  if (phase === "idle") return null;
+  const draining = phase === "draining";
+
+  return (
+    // A moldura que recorta. As cristas têm o DOBRO da largura da tela e moram
+    // acima da linha d'água, então precisam de algo aparando as sobras: sem
+    // isto elas vazariam pelos lados e apareceriam sobrando por cima quando a
+    // água enche. O recorte não pode estar na própria água — ele decapitaria a
+    // crista, que fica fora do quadro dela.
+    //
+    // Também é esta camada que engole os toques: com o pedido em trânsito,
+    // nada atrás dela deve responder.
+    <div
+      // O rótulo de espera é a única pista de que algo está acontecendo; num
+      // pedido lento ele precisa ser lido em voz alta.
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[100] overflow-hidden"
+    >
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center"
+        // `--sf-flood`, e não `--sf-accent`: esta cor tem que ser a mesma do
+        // fundo do comprovante nos dois lados da troca, e o accent vira outra
+        // coisa no tema invertido.
+        style={{ background: "var(--sf-flood)", color: "var(--sf-flood-ink)" }}
+        // Montar já em `draining` é como se sai do comprovante: a tela ali já
+        // é deste mesmo accent, então a água aparece coberta (invisível) e
+        // escoa levando o comprovante embora, em vez de cortar seco para o
+        // catálogo escuro.
+        initial={{ y: draining ? "0%" : "100%" }}
+        animate={{ y: draining ? "100%" : "0%" }}
+        transition={{
+          duration: draining ? FLOOD_DRAIN : FLOOD_RISE,
+          delay: draining ? FLOOD_HOLD : 0,
+          ease: EASE_IN_OUT,
+        }}
+        // A mesma peça sobe e desce, então o desfecho depende de qual dos dois
+        // percursos acabou de terminar.
+        onAnimationComplete={() => (draining ? onGone() : onCovered())}
+      >
+        {/* Duas cristas em velocidades diferentes: é o descompasso entre elas
+            que dá volume à água. A de trás é mais alta e translúcida. */}
+        <WaveCrest opacity={0.4} height={CREST_HEIGHT + 12} duration={2.4} />
+        <WaveCrest opacity={1} height={CREST_HEIGHT} duration={1.6} />
+
+        {phase === "waiting" && (
+          // A água chegou ao topo e o banco ainda não respondeu. Sem isto a
+          // tela ficaria azul e muda, parecendo travada.
+          <motion.span
+            className="text-sm font-extrabold"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25, ease: EASE_OUT }}
+          >
+            {busyLabel}
+          </motion.span>
+        )}
+      </motion.div>
+    </div>
+  );
+}
 /**
  * Foto do produto. Preenche o quadro que o pai definir.
  *
@@ -433,6 +679,26 @@ function ProductMedia({
       ) : (
         <Package size={iconSize} style={{ color: "var(--sf-text-dim)" }} />
       )}
+    </div>
+  );
+}
+
+/** Aparência dos campos de texto da loja (WhatsApp, nome, observações). */
+const FIELD_CLASS = "rounded-[14px] text-[15px]";
+const FIELD_STYLE = {
+  background: "var(--sf-surface)",
+  border: "1px solid var(--sf-border)",
+  color: "var(--sf-text)",
+};
+
+/** Campo rotulado. `htmlFor` amarrado ao `id` do controle que vem como filho. */
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-xs font-semibold" style={{ color: "var(--sf-text-muted)" }}>
+        {label}
+      </Label>
+      {children}
     </div>
   );
 }
@@ -659,27 +925,46 @@ export default function SellerStorePage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
-  const [name, setName] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
   const [freight, setFreight] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // A onda de confirmação e o encontro dela com a resposta do banco.
+  //
+  // Os três valores abaixo ficam em ref, e não em state, porque cada lado
+  // termina no seu próprio callback e precisa ler o que o OUTRO acabou de
+  // escrever — não a cópia congelada do render em que ele nasceu.
+  const [flood, setFlood] = useState<FloodPhase>("idle");
+  /** A água já cobriu a tela. */
+  const floodCovered = useRef(false);
+  /** `null` = banco ainda não respondeu. */
+  const orderAccepted = useRef<boolean | null>(null);
+  /** Mensagem pronta do pedido aceito, esperando a água escoar para virar tela. */
+  const pendingMessage = useRef<string | null>(null);
+  /** Erro a mostrar depois que a água sair da frente. */
+  const pendingError = useRef<string | null>(null);
 
   // Detalhe do produto: um único sheet na página, não um por card.
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string>("");
   const [qty, setQty] = useState(1);
 
-  // Passo 1: identificação por WhatsApp
-  const [identified, setIdentified] = useState(false);
+  // Identificação do cliente. Mora no CHECKOUT, não na entrada: o link chega
+  // pelo WhatsApp e muita gente abre só para dar uma olhada — pedir telefone
+  // antes de mostrar um preço perde essa pessoa na primeira tela. O dado só é
+  // necessário no momento em que o pedido vai virar um registro no banco.
+  //
+  // O nome só é perguntado quando o WhatsApp não acha cadastro; se acha, ele
+  // vem de lá junto com a fidelidade e o campo nem aparece.
   const [phoneInput, setPhoneInput] = useState("");
+  const [nameInput, setNameInput] = useState("");
   const [loyalty, setLoyalty] = useState<Loyalty | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupDone, setLookupDone] = useState(false);
-  const [newName, setNewName] = useState("");
 
   const phoneDigits = onlyDigits(phoneInput);
   const phoneComplete = phoneDigits.length >= 10 && phoneDigits.length <= 11;
+  const customerName = (loyalty?.customer_name ?? nameInput).trim();
 
   useEffect(() => {
     if (!phoneComplete) {
@@ -825,7 +1110,7 @@ export default function SellerStorePage() {
     lines.push(`🛒 Novo pedido`);
     lines.push(``);
     if (sellerName) lines.push(`👤 Vendedor: ${sellerName}`);
-    lines.push(`🙋 Cliente: ${name}`);
+    lines.push(`🙋 Cliente: ${customerName}`);
     lines.push(``);
     lines.push(`📦 ITENS`);
     cart.forEach(i => {
@@ -842,16 +1127,84 @@ export default function SellerStorePage() {
     return lines.join("\n");
   };
 
-  const submit = async () => {
-    if (!name.trim()) return toast.error("Informe seu nome");
-    if (!whatsapp.trim()) return toast.error("Informe seu WhatsApp");
+  /**
+   * O pedido só pode sair com cliente identificado — é ele que vira a linha em
+   * `customers` e amarra a fidelidade. Como a identificação agora acontece aqui
+   * no checkout, e não mais na porta da loja, esta é a única barreira.
+   */
+  const canSubmit = cart.length > 0 && phoneComplete && !lookupLoading && customerName.length > 1;
+
+  /** Troca a página para o comprovante. Roda com a tela coberta pela água. */
+  const revealSuccess = () => {
+    setSuccessMessage(pendingMessage.current);
+    setCart([]);
+    setCheckout(false);
+    setFreight("");
+    load();
+  };
+
+  /** Mostra o desfecho. Roda com a água já fora da frente. */
+  const announce = () => {
+    if (orderAccepted.current) {
+      toast.success("Pedido confirmado!", {
+        description: "Agora é só compartilhar com o vendedor pelo WhatsApp.",
+        // O check do sonner entra pronto; este se risca na frente da pessoa.
+        icon: <DrawnCheck />,
+      });
+    } else if (pendingError.current) {
+      toast.error(pendingError.current);
+    }
+    pendingError.current = null;
+    orderAccepted.current = null;
+    floodCovered.current = false;
+  };
+
+  /**
+   * Só age quando a água cobriu a tela E o banco respondeu — a onda não é
+   * enfeite em cima de um pedido já resolvido, ela É a espera.
+   *
+   * Os dois desfechos são opostos de propósito:
+   *
+   * Aceito — a água NÃO escoa, ela VIRA a tela. O comprovante é desenhado com
+   * as cores invertidas (`storefront-flooded`), de fundo accent, exatamente a
+   * cor em que a água está. Por isso a camada pode sair no mesmo quadro em que
+   * o comprovante entra, sem piscar nada: o que some e o que aparece são o
+   * mesmo campo de cor. É essa virada que dá sentido à onda — ela entrega uma
+   * tela em vez de passar por cima e ir embora.
+   *
+   * Recusado — nada mudou, então a água escoa e devolve o checkout como estava.
+   */
+  const settleFlood = () => {
+    if (!floodCovered.current || orderAccepted.current === null) return;
+    if (!orderAccepted.current) {
+      setFlood("draining");
+      return;
+    }
+    revealSuccess();
+    setFlood("idle");
+    setSubmitting(false);
+    announce();
+  };
+
+  const confirmOrder = async () => {
     if (cart.length === 0) return toast.error("Seu carrinho está vazio");
+    if (!phoneComplete) return toast.error("Informe seu WhatsApp");
+    if (customerName.length < 2) return toast.error("Informe seu nome");
+
+    floodCovered.current = false;
+    orderAccepted.current = null;
+    pendingError.current = null;
+    // Tranca o sheet durante todo o fluxo, não só até a resposta do banco: se
+    // desse para fechar no meio da onda, o pedido ficaria criado sem que a
+    // pessoa chegasse a ver a tela de compartilhar.
     setSubmitting(true);
+    if (!reduceMotion) setFlood("rising");
+
     try {
       const { error } = await supabase.rpc("create_pending_order", {
         p_seller_id: sellerId,
-        p_customer_name: name.trim(),
-        p_customer_whatsapp: whatsapp.trim(),
+        p_customer_name: customerName,
+        p_customer_whatsapp: phoneDigits,
         p_freight_notes: freight.trim() || null,
         p_items: cart.map(item => ({
           product_id: item.product_id,
@@ -860,23 +1213,53 @@ export default function SellerStorePage() {
         })) as any,
       });
       if (error) throw error;
-
-      const message = buildMessage();
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
-      setSuccessMessage(message);
-      setCart([]);
-      setCheckout(false);
-      setFreight("");
-
-      load();
+      pendingMessage.current = buildMessage();
+      orderAccepted.current = true;
     } catch (err: any) {
       const msg = String(err?.message ?? "");
-      toast.error(friendlyError(msg));
+      pendingError.current = friendlyError(msg);
       if (msg.includes("estoque_insuficiente")) load();
-    } finally {
-      setSubmitting(false);
+      orderAccepted.current = false;
     }
+
+    if (reduceMotion) {
+      if (orderAccepted.current) revealSuccess();
+      setSubmitting(false);
+      announce();
+      return;
+    }
+    settleFlood();
   };
+
+  /** A água cobriu a tela. */
+  const onFloodCovered = () => {
+    floodCovered.current = true;
+    // Banco ainda pensando: a tela cheia ganha um rótulo em vez de ficar muda.
+    if (orderAccepted.current === null) setFlood("waiting");
+    else settleFlood();
+  };
+
+  /** A água escoou; o que estava embaixo dela está à mostra. */
+  const onFloodGone = () => {
+    setFlood("idle");
+    setSubmitting(false);
+    announce();
+  };
+
+  /**
+   * Sai do comprovante pela mesma porta por onde entrou. A tela do comprovante
+   * já é do accent da água, então a camada monta coberta — invisível — e escoa
+   * levando-o embora. Sem isso, o salto do azul cheio para o catálogo escuro é
+   * um corte seco.
+   */
+  const leaveSuccess = () => {
+    setSuccessMessage(null);
+    if (!reduceMotion) setFlood("draining");
+  };
+
+  const floodLayer = (
+    <FloodLayer phase={flood} busyLabel="Enviando pedido..." onCovered={onFloodCovered} onGone={onFloodGone} />
+  );
 
   /* ---------------- Link inválido ---------------- */
 
@@ -893,144 +1276,68 @@ export default function SellerStorePage() {
     );
   }
 
-  /* ---------------- 1. Identificação ---------------- */
-
-  if (!identified) {
-    const needsName = lookupDone && !loyalty;
-    const canContinue = phoneComplete && !lookupLoading && (loyalty ? true : newName.trim().length > 1);
-    const continuar = () => {
-      if (!canContinue) return;
-      setName((loyalty?.customer_name ?? newName).trim());
-      setWhatsapp(phoneDigits);
-      setIdentified(true);
-    };
-
-    const fieldClass = "h-[50px] rounded-[14px] px-4 text-[15px]";
-    const fieldStyle = {
-      background: "var(--sf-surface)",
-      border: "1px solid var(--sf-border)",
-      color: "var(--sf-text)",
-    };
-    const labelClass = "text-xs font-semibold";
-    const labelStyle = { color: "var(--sf-text-muted)" };
-
-    return (
-      // `my-auto` no filho centraliza sem cortar: com `justify-center` no pai,
-      // se o teclado do celular espremer a tela, o topo do formulário fica
-      // inalcançável pela rolagem.
-      <main className="storefront flex h-[100dvh] flex-col overflow-y-auto overscroll-contain px-[26px] pb-10 pt-20">
-        <div className={`${COLUMN} my-auto flex flex-col gap-6`}>
-          <div>
-            <div className="mb-1.5 text-xl font-extrabold tracking-[0.02em]" style={{ color: "var(--sf-accent)" }}>
-              {COMPANY.toUpperCase()}
-            </div>
-            <h1 className="mb-2 text-[23px] font-bold">Bem-vindo ao catálogo</h1>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
-              Informe seus dados para ver os produtos e finalizar seu pedido direto pelo WhatsApp.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ident-whats" className={labelClass} style={labelStyle}>
-              Seu WhatsApp
-            </Label>
-            <Input
-              id="ident-whats"
-              inputMode="numeric"
-              autoFocus
-              value={formatPhoneDisplay(phoneInput)}
-              onChange={e => setPhoneInput(onlyDigits(e.target.value))}
-              placeholder="(11) 90000-0000"
-              className={fieldClass}
-              style={fieldStyle}
-            />
-          </div>
-
-          {lookupLoading && (
-            <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-              Buscando seu cadastro...
-            </p>
-          )}
-
-          {!lookupLoading && loyalty && (
-            <div
-              className="rounded-2xl p-4"
-              style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
-            >
-              <p className="text-[15px] font-bold">Oi, {loyalty.customer_name}!</p>
-              <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                Nível <span style={{ color: "var(--sf-accent)" }}>{loyalty.loyalty_tier}</span> · {loyalty.total_units}{" "}
-                {loyalty.total_units === 1 ? "unidade" : "unidades"} compradas
-              </p>
-              <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                {loyalty.units_until_next_gift === 0
-                  ? `Você já garantiu ${loyalty.gifts_earned > 1 ? `${loyalty.gifts_earned} brindes` : "um brinde"}! 🎁`
-                  : `Faltam ${loyalty.units_until_next_gift} ${
-                      loyalty.units_until_next_gift === 1 ? "unidade" : "unidades"
-                    } para o próximo brinde`}
-              </p>
-            </div>
-          )}
-
-          {!lookupLoading && needsName && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ident-nome" className={labelClass} style={labelStyle}>
-                Seu nome
-              </Label>
-              <Input
-                id="ident-nome"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="ex: Jordan Lee"
-                className={fieldClass}
-                style={fieldStyle}
-              />
-            </div>
-          )}
-
-          <PillButton height={52} disabled={!canContinue} onClick={continuar} className="text-[15px] font-bold">
-            Continuar
-            <ArrowRight size={15} />
-          </PillButton>
-        </div>
-      </main>
-    );
-  }
-
   /* ---------------- 6. Sucesso (tela cheia) ---------------- */
+
+  /** Entrada de um bloco do comprovante, com o atraso dele no roteiro. */
+  const rise = (delay: number) => ({
+    initial: reduceMotion ? false : { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.34, ease: EASE_OUT, delay: reduceMotion ? 0 : delay },
+  });
 
   if (successMessage) {
     return (
-      <main className="storefront flex h-[100dvh] flex-col items-center overflow-y-auto overscroll-contain px-[30px] py-10 text-center">
+      // `storefront-flooded` troca os tokens de cor: esta tela é a loja do lado
+      // avesso, de fundo accent — a mesma cor em que a onda encheu a tela. É o
+      // que faz a água ter ido a algum lugar em vez de só passar por cima.
+      //
+      // A camada da onda NÃO é renderizada aqui: no caminho do sucesso ela sai
+      // no mesmo quadro em que esta tela entra (ver `settleFlood`), então nunca
+      // chega a ser pintada sobre este fundo.
+      <main className="storefront storefront-flooded flex h-[100dvh] flex-col items-center overflow-y-auto overscroll-contain px-[30px] py-10 text-center">
+        {/* O conteúdo emerge depois que a água assenta, em vez de já estar
+            pronto no instante da troca — é o que amarra esta tela ao fim do
+            movimento.
+
+            Não é uma cascata de intervalo fixo: o círculo entra primeiro, o
+            traço do check se completa, e só então vem o texto. Os atrasos
+            saem de `CHECK_DONE`, então acertar a duração do traço reacerta
+            esta sequência inteira. */}
         <div className={`${COLUMN} my-auto flex flex-col items-center gap-[18px]`}>
-          <div
+          <motion.div
+            {...rise(0.04)}
             className="flex h-[68px] w-[68px] items-center justify-center rounded-full"
             style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
           >
-            <Check size={30} strokeWidth={2.6} />
-          </div>
-          <div>
-            <h2 className="mb-2 text-[21px] font-extrabold">Pedido enviado!</h2>
+            {/* O mesmo traço do check do toast: os dois aparecem no mesmo
+                instante, um estático ao lado de um animado destoaria. */}
+            <DrawnCheck size={30} strokeWidth={2.6} />
+          </motion.div>
+          <motion.div {...rise(CHECK_DONE + 0.04)}>
+            <h2 className="mb-2 text-[21px] font-extrabold">Pedido confirmado!</h2>
+            {/* O WhatsApp NÃO abre sozinho: em celular isso troca de aplicativo
+                sem aviso, e quem só queria conferir o resumo se perde. O envio
+                é um toque, e o botão fica aqui até a pessoa querer. */}
             <p className="text-[13.5px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
-              Confirme o envio no WhatsApp que abriu para o vendedor.
+              Falta mandar para o vendedor: toque abaixo e escolha a conversa dele no WhatsApp.
             </p>
-          </div>
-          <div className="mt-2.5 flex w-full flex-col gap-2.5">
+          </motion.div>
+          <motion.div {...rise(CHECK_DONE + 0.13)} className="mt-2.5 flex w-full flex-col gap-2.5">
             <PillButton
               onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(successMessage)}`, "_blank")}
             >
               <MessageCircle size={15} />
-              Reabrir WhatsApp
+              Compartilhar no WhatsApp
             </PillButton>
             <button
               type="button"
-              onClick={() => setSuccessMessage(null)}
+              onClick={leaveSuccess}
               className="h-11 text-[13.5px] font-bold"
               style={{ color: "var(--sf-accent)" }}
             >
               Voltar ao catálogo
             </button>
-          </div>
+          </motion.div>
         </div>
       </main>
     );
@@ -1054,8 +1361,10 @@ export default function SellerStorePage() {
             <p className="truncate text-sm font-extrabold tracking-[0.03em]" style={{ color: "var(--sf-accent)" }}>
               {COMPANY.toUpperCase()}
             </p>
+            {/* Só cumprimenta pelo nome depois que ele existe — hoje isso só
+                acontece se a pessoa já passou pelo checkout uma vez. */}
             <p className="mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
-              Oi, {name} — escolha seu produto
+              {customerName ? `Oi, ${customerName} — escolha seu produto` : "Escolha seu produto"}
             </p>
           </div>
 
@@ -1393,56 +1702,82 @@ export default function SellerStorePage() {
         <SheetContent
           side="bottom"
           hideClose
-          className={`storefront ${COLUMN} inset-x-0 flex h-[70vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
+          // Mais alto que antes: este sheet deixou de ser um resumo e virou o
+          // formulário de identificação, então precisa caber telefone, nome e
+          // observações com o teclado do celular aberto por cima.
+          className={`storefront ${COLUMN} inset-x-0 flex h-[84vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
           style={{ background: "var(--sf-bg)" }}
         >
           <SheetTopBar title="Finalizar pedido" onClose={() => !submitting && setCheckout(false)} />
           <SheetDescription className="sr-only">Confirme seus dados e envie o pedido.</SheetDescription>
 
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-[18px]">
-            <div
-              className="flex items-center justify-between gap-2.5 rounded-2xl px-4 py-3.5"
-              style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
-            >
-              <div className="min-w-0">
-                <p className="truncate text-[13.5px] font-bold">{name}</p>
-                <p className="mt-0.5 text-xs" style={{ color: "var(--sf-text-muted)" }}>
-                  {formatPhoneDisplay(whatsapp)}
+            {/* O WhatsApp é a chave do cliente: assim que fica completo, o
+                efeito de fidelidade dispara e o resto do formulário se decide
+                sozinho — cartão de boas-vindas se já é cadastrado, campo de
+                nome se é a primeira compra. */}
+            <Field id="cliente-whats" label="Seu WhatsApp">
+              <Input
+                id="cliente-whats"
+                inputMode="numeric"
+                value={formatPhoneDisplay(phoneInput)}
+                onChange={e => setPhoneInput(onlyDigits(e.target.value))}
+                placeholder="(11) 90000-0000"
+                className={`h-[50px] px-4 ${FIELD_CLASS}`}
+                style={FIELD_STYLE}
+              />
+            </Field>
+
+            {lookupLoading && (
+              <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                Buscando seu cadastro...
+              </p>
+            )}
+
+            {!lookupLoading && loyalty && (
+              <div
+                className="rounded-2xl p-4"
+                style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+              >
+                <p className="text-[15px] font-bold">Oi, {loyalty.customer_name}!</p>
+                <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  Nível <span style={{ color: "var(--sf-accent)" }}>{loyalty.loyalty_tier}</span> ·{" "}
+                  {loyalty.total_units} {loyalty.total_units === 1 ? "unidade" : "unidades"} compradas
+                </p>
+                <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  {loyalty.units_until_next_gift === 0
+                    ? `Você já garantiu ${loyalty.gifts_earned > 1 ? `${loyalty.gifts_earned} brindes` : "um brinde"}! 🎁`
+                    : `Faltam ${loyalty.units_until_next_gift} ${
+                        loyalty.units_until_next_gift === 1 ? "unidade" : "unidades"
+                      } para o próximo brinde`}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckout(false);
-                  setPhoneInput(whatsapp);
-                  setNewName(name);
-                  setIdentified(false);
-                }}
-                className="flex-none text-[12.5px] font-bold"
-                style={{ color: "var(--sf-accent)" }}
-              >
-                Editar
-              </button>
-            </div>
+            )}
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cliente-frete" className="text-xs font-semibold" style={{ color: "var(--sf-text-muted)" }}>
-                Observações de entrega
-              </Label>
+            {!lookupLoading && lookupDone && !loyalty && (
+              <Field id="cliente-nome" label="Seu nome">
+                <Input
+                  id="cliente-nome"
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  placeholder="ex: Jordan Lee"
+                  className={`h-[50px] px-4 ${FIELD_CLASS}`}
+                  style={FIELD_STYLE}
+                />
+              </Field>
+            )}
+
+            <Field id="cliente-frete" label="Observações de entrega">
               <Textarea
                 id="cliente-frete"
                 value={freight}
                 onChange={e => setFreight(e.target.value)}
                 placeholder="Opcional — horário, endereço, etc."
                 rows={3}
-                className="resize-none rounded-[14px] px-3.5 py-3 text-sm"
-                style={{
-                  background: "var(--sf-surface)",
-                  border: "1px solid var(--sf-border)",
-                  color: "var(--sf-text)",
-                }}
+                className={`resize-none px-3.5 py-3 text-sm ${FIELD_CLASS}`}
+                style={FIELD_STYLE}
               />
-            </div>
+            </Field>
 
             <div
               className="flex items-center justify-between pt-3.5"
@@ -1458,12 +1793,14 @@ export default function SellerStorePage() {
           </div>
 
           <div className="flex-shrink-0 px-5 pb-7 pt-3.5" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
-            <PillButton onClick={submit} disabled={submitting || cart.length === 0}>
-              {submitting ? "Enviando..." : "Confirmar pedido"}
+            <PillButton onClick={confirmOrder} disabled={!canSubmit || submitting}>
+              Confirmar pedido
             </PillButton>
           </div>
         </SheetContent>
       </Sheet>
+
+      {floodLayer}
     </div>
   );
 }
