@@ -64,6 +64,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Chip "Todos" — valor sentinela do filtro de marca. */
 const ALL = "__all__";
 
+/**
+ * A loja é da empresa, não de cada vendedor: o cabeçalho mostra sempre a marca
+ * da casa. O nome do vendedor continua indo na mensagem de WhatsApp do pedido,
+ * que é onde ele importa.
+ */
+const COMPANY = "California Company";
+
+/** Marca da casa: vem sempre primeiro no catálogo e com a cor de destaque. */
+const FEATURED_BRAND = "ignite";
+
+const isFeatured = (brand: string) => (brand || "").trim().toLowerCase() === FEATURED_BRAND;
+
+/** Ordena marcas em ordem alfabética, mas com a marca de destaque no topo. */
+function compareBrands(a: string, b: string) {
+  const fa = isFeatured(a);
+  const fb = isFeatured(b);
+  if (fa !== fb) return fa ? -1 : 1;
+  return (a || "").localeCompare(b || "", undefined, { numeric: true });
+}
+
 interface ModelGroup {
   key: string;
   brand: string;
@@ -372,7 +392,7 @@ export default function SellerStorePage() {
       const b = (r.brand || "").trim();
       if (b) set.add(b);
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    return Array.from(set).sort(compareBrands);
   }, [rows]);
 
   const groups = useMemo(() => {
@@ -409,9 +429,7 @@ export default function SellerStorePage() {
       brandMap.get(bKey)!.models.push(m);
     });
 
-    return Array.from(brandMap.values()).sort((a, b) =>
-      (a.brand || "").localeCompare(b.brand || "", undefined, { numeric: true }),
-    );
+    return Array.from(brandMap.values()).sort((a, b) => compareBrands(a.brand, b.brand));
   }, [rows, query, activeBrand]);
 
   const total = useMemo(() => cart.reduce((a, i) => a + i.sale_price * i.quantity, 0), [cart]);
@@ -453,7 +471,12 @@ export default function SellerStorePage() {
       }
       return [...prev, { ...row, quantity: qtyToAdd }];
     });
-    toast.success("Adicionado ao carrinho", { description: `${row.flavor} · ${row.model}` });
+    // Curto de propósito: o padrão do sonner (4s) fica na frente de quem está
+    // adicionando um item atrás do outro.
+    toast.success("Adicionado ao carrinho", {
+      description: `${row.flavor} · ${row.model}`,
+      duration: 1500,
+    });
   };
 
   const setItemQty = (productId: string, q: number) => {
@@ -564,7 +587,7 @@ export default function SellerStorePage() {
         <div className={`${COLUMN} flex flex-col gap-6`}>
           <div>
             <div className="mb-1.5 text-xl font-extrabold tracking-[0.02em]" style={{ color: "var(--sf-accent)" }}>
-              {(sellerName || "Catálogo").toUpperCase()}
+              {COMPANY.toUpperCase()}
             </div>
             <h1 className="mb-2 text-[23px] font-bold">Bem-vindo ao catálogo</h1>
             <p className="text-sm leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
@@ -689,7 +712,7 @@ export default function SellerStorePage() {
         <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0">
             <p className="truncate text-sm font-extrabold tracking-[0.03em]" style={{ color: "var(--sf-accent)" }}>
-              {(sellerName || "Catálogo").toUpperCase()}
+              {COMPANY.toUpperCase()}
             </p>
             <p className="mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
               Oi, {name} — escolha seu produto
@@ -765,10 +788,10 @@ export default function SellerStorePage() {
           </p>
         ) : (
           groups.map(g => (
-            <section key={g.key} className="mt-4">
+            <section key={g.key} className="mt-5">
               <h2
-                className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.1em]"
-                style={{ color: "var(--sf-text-faint)" }}
+                className="mb-3 text-[15px] font-extrabold uppercase tracking-[0.06em]"
+                style={{ color: isFeatured(g.brand) ? "var(--sf-accent)" : "var(--sf-text)" }}
               >
                 {g.brand || "Sem marca"}
               </h2>
