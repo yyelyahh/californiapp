@@ -1,9 +1,9 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react";
 
 export type NavBurst = {
   id: number;
-  icon: LucideIcon;
+  icon: Icon;
   label: string;
   color: string;
 };

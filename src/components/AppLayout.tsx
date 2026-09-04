@@ -1,5 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutGrid, Tag, Package, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
+import {
+  SquaresFour, Tag, Package, TrendDown, Receipt, FileText, HandCoins, ChartLine, Coins, BookOpen,
+  CaretLeft, CaretRight, SignOut, List, X,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -9,23 +12,24 @@ import NavIconBurst, { type NavBurst } from "@/components/motion/NavIconBurst";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
 
 /**
- * Glifos equivalentes aos do mockup Nocturne (que usa Phosphor por ser HTML
- * solto): squares-four→LayoutGrid, tag→Tag, package→Package, trend-down,
- * receipt, file-text, hand-coins, chart-line→LineChart, coins, book-open.
+ * Os glifos são os mesmos do mockup Nocturne: Phosphor Regular, um a um
+ * (squares-four, tag, package, trend-down, receipt, file-text, hand-coins,
+ * chart-line, coins, book-open) — antes eram equivalentes aproximados do
+ * lucide, com peso de traço e desenho diferentes.
  *
  * `color` NÃO pinta mais o ícone do menu — no Nocturne o item ativo usa só o
  * accent. A cor sobrevive aqui para o NavIconBurst (o flash em tela cheia ao
  * trocar de página), que continua com a identidade de cada seção.
  */
 const allNavItems = [
-  { to: "/dashboard", icon: LayoutGrid, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
+  { to: "/dashboard", icon: SquaresFour, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
   { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
   { to: "/stock", icon: Package, label: "Entrada", adminOnly: true, color: "#85B7EB" },
-  { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
+  { to: "/losses", icon: TrendDown, label: "Perdas", adminOnly: true, color: "#F09595" },
   { to: "/sales", icon: Receipt, label: "Vendas", adminOnly: false, color: "#5DCAA5" },
   { to: "/expenses", icon: FileText, label: "Despesas", adminOnly: true, color: "#EF9F27" },
   { to: "/commissions", icon: HandCoins, label: "Distribuição", adminOnly: true, color: "#85B7EB" },
-  { to: "/insights", icon: LineChart, label: "Insights", adminOnly: true, color: "#7F77DD" },
+  { to: "/insights", icon: ChartLine, label: "Insights", adminOnly: true, color: "#7F77DD" },
   { to: "/finance", icon: Coins, label: "Financeiro", adminOnly: true, color: "#EF9F27" },
   { to: "/", icon: BookOpen, label: "Catálogo", adminOnly: true, color: "#D4537E" },
 ];
@@ -74,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-bold tracking-tight text-rgb-cascade whitespace-nowrap">California</h1>
           )}
           <button onClick={() => setCollapsed(!collapsed)} className="ml-auto text-sidebar-foreground hover:text-foreground transition-colors p-1">
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            {collapsed ? <CaretRight size={16} /> : <CaretLeft size={16} />}
           </button>
         </div>
         <nav className="flex-1 py-3 space-y-1 px-2">
@@ -121,7 +125,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={signOut}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-destructive transition-colors w-full"
             >
-              <LogOut size={16} />
+              <SignOut size={16} />
               <span>Sair</span>
             </button>
           </div>
@@ -129,7 +133,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {collapsed && (
           <div className="p-2 border-t border-sidebar-border flex justify-center">
             <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors p-2">
-              <LogOut size={16} />
+              <SignOut size={16} />
             </button>
           </div>
         )}
@@ -141,7 +145,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-sidebar sticky top-0 z-40">
           <h1 className="text-base font-bold tracking-tight text-rgb-cascade">California</h1>
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-sidebar-foreground hover:text-foreground p-1">
-            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            {mobileMenuOpen ? <X size={20} /> : <List size={20} />}
           </button>
         </header>
 
@@ -179,7 +183,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => { signOut(); setMobileMenuOpen(false); }}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-destructive transition-colors w-full"
                 >
-                  <LogOut size={18} />
+                  <SignOut size={18} />
                   <span>Sair</span>
                 </button>
               </nav>
