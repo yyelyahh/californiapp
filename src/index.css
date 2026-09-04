@@ -179,7 +179,10 @@
    * fundo cobrir a área de rolagem inteira.
    * Trocar a cor principal do painel = trocar --nc-accent aqui.
    * ------------------------------------------------------------------ */
-  .nocturne {
+  /* Os tokens ficam no :root porque a navegação (sidebar/barra inferior) vive
+   * fora do <main> e mesmo assim precisa do accent. Declarar um token não pinta
+   * nada sozinho — quem aplica fundo, cor e fonte é a classe .nocturne abaixo. */
+  :root {
     --nc-bg: #161826;
     --nc-rail: #141522;
     --nc-surface: #232532;
@@ -194,7 +197,9 @@
     --nc-alert: #EF9F27;   /* alerta: a receber, deltas negativos */
     --nc-crit: #F09595;    /* crítico: estoque prestes a acabar */
     --nc-profit: #9184d9;  /* série de lucro no gráfico */
+  }
 
+  .nocturne {
     font-family: 'Inter', system-ui, sans-serif;
     background: var(--nc-bg);
     color: var(--nc-text);

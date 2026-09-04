@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Tag, PackagePlus, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
+import { LayoutGrid, Tag, Package, TrendingDown, Receipt, FileText, HandCoins, LineChart, Coins, BookOpen, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -8,10 +8,19 @@ import PageTransition from "@/components/motion/PageTransition";
 import NavIconBurst, { type NavBurst } from "@/components/motion/NavIconBurst";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
 
+/**
+ * Glifos equivalentes aos do mockup Nocturne (que usa Phosphor por ser HTML
+ * solto): squares-four→LayoutGrid, tag→Tag, package→Package, trend-down,
+ * receipt, file-text, hand-coins, chart-line→LineChart, coins, book-open.
+ *
+ * `color` NÃO pinta mais o ícone do menu — no Nocturne o item ativo usa só o
+ * accent. A cor sobrevive aqui para o NavIconBurst (o flash em tela cheia ao
+ * trocar de página), que continua com a identidade de cada seção.
+ */
 const allNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
+  { to: "/dashboard", icon: LayoutGrid, label: "Dashboard", adminOnly: true, color: "#5DCAA5" },
   { to: "/products", icon: Tag, label: "Produtos", adminOnly: true, color: "#5DCAA5" },
-  { to: "/stock", icon: PackagePlus, label: "Entrada", adminOnly: true, color: "#85B7EB" },
+  { to: "/stock", icon: Package, label: "Entrada", adminOnly: true, color: "#85B7EB" },
   { to: "/losses", icon: TrendingDown, label: "Perdas", adminOnly: true, color: "#F09595" },
   { to: "/sales", icon: Receipt, label: "Vendas", adminOnly: false, color: "#5DCAA5" },
   { to: "/expenses", icon: FileText, label: "Despesas", adminOnly: true, color: "#EF9F27" },
@@ -96,11 +105,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   whileTap={reduce ? undefined : { scale: 0.97 }}
                   transition={transitionFast}
                 >
-                  <item.icon
-                    size={18}
-                    className={cn(isActive ? "" : "text-foreground")}
-                    style={isActive ? { color: item.color } : undefined}
-                  />
+                  {/* Inativo herda a cor da linha (currentColor), como no
+                      mockup — antes o ícone vinha mais claro que o rótulo. */}
+                  <item.icon size={18} style={isActive ? { color: "var(--nc-accent)" } : undefined} />
                   {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
                 </motion.span>
               </NavLink>
@@ -163,11 +170,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                           : "text-sidebar-foreground hover:bg-sidebar-accent/50"
                       )}
                     >
-                      <item.icon
-                        size={18}
-                        className={cn(isActive ? "" : "text-foreground")}
-                        style={isActive ? { color: item.color } : undefined}
-                      />
+                      <item.icon size={18} style={isActive ? { color: "var(--nc-accent)" } : undefined} />
                       <span>{item.label}</span>
                     </NavLink>
                   );
@@ -219,13 +222,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => triggerBurst(item)}
                 className={cn(
                   "relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] transition-all min-w-[48px]",
-                  isActive ? "text-primary" : "text-muted-foreground"
+                  isActive ? "" : "text-muted-foreground"
                 )}
+                style={isActive ? { color: "var(--nc-accent)" } : undefined}
               >
                 {isActive && !reduce && (
                   <motion.span
                     layoutId="mobile-active-dot"
-                    className="absolute -top-1 h-0.5 w-6 rounded-full bg-primary"
+                    className="absolute -top-1 h-0.5 w-6 rounded-full"
+                    style={{ background: "var(--nc-accent)" }}
                     transition={springSoft}
                   />
                 )}
@@ -234,11 +239,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   whileTap={reduce ? undefined : { scale: 0.92 }}
                   transition={transitionFast}
                 >
-                  <item.icon
-                    size={20}
-                    className={cn(isActive ? "" : "text-foreground")}
-                    style={isActive ? { color: item.color } : undefined}
-                  />
+                  <item.icon size={20} />
                   <span>{item.label}</span>
                 </motion.span>
               </NavLink>
