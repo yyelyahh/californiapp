@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
+import { EASE_OUT } from "@/lib/motion";
 import { formatPhoneDisplay, onlyDigits } from "@/lib/phone";
 
 import { Input } from "@/components/ui/input";
@@ -118,6 +120,15 @@ function firstModelImage(rows: CatalogRow[]) {
  */
 const COLUMN = "mx-auto w-full max-w-[480px]";
 
+/**
+ * Proporção única de toda foto de produto da loja. Antes cada tela travava uma
+ * ALTURA em pixels e deixava a largura esticar com a coluna, então o mesmo card
+ * era 1,59:1 num celular pequeno e 2,50:1 num grande — a foto ficava recortada
+ * diferente em cada aparelho. Com a proporção fixa o quadro só muda de tamanho,
+ * nunca de formato.
+ */
+const MEDIA_RATIO = "4 / 3";
+
 /* ------------------------------------------------------------------ */
 /* Peças de UI do tema                                                  */
 /* ------------------------------------------------------------------ */
@@ -157,15 +168,35 @@ function PillButton({
   );
 }
 
-/** Foto do produto, com o mesmo fallback de ícone de antes — só que maior. */
+/**
+ * Foto do produto. Preenche o quadro que o pai definir, sempre com
+ * `object-contain`: as URLs são coladas à mão no ModelImagesDialog e vêm em
+ * qualquer proporção, então cortar (`cover`) decepava justamente os packshots
+ * verticais. O que sobra fica com o fundo do placeholder, sem emenda visível.
+ */
 function ProductMedia({ src, alt, iconSize }: { src: string | null; alt: string; iconSize: number }) {
-  if (src) return <img src={src} alt={alt} className="h-full w-full object-cover" loading="lazy" />;
+  // Link quebrado cai no mesmo placeholder do produto sem foto, em vez de
+  // mostrar o ícone de imagem partida do navegador.
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+
   return (
     <div
-      className="flex h-full w-full items-center justify-center"
+      className="flex h-full w-full items-center justify-center overflow-hidden"
       style={{ background: "var(--sf-surface-2)" }}
     >
-      <Package size={iconSize} style={{ color: "var(--sf-text-dim)" }} />
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setFailed(true)}
+          className="h-full w-full object-contain"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <Package size={iconSize} style={{ color: "var(--sf-text-dim)" }} />
+      )}
     </div>
   );
 }
@@ -232,6 +263,70 @@ function QtyStepper({
   );
 }
 
+/**
+ * Chips de marca com o preenchimento accent como peça única: em vez de cada
+ * chip pintar o próprio fundo, só o ativo renderiza o `motion.span` com
+ * `layoutId`, então o motion anima a peça deslizando do chip antigo pro novo.
+ * Mesmo padrão do `SegmentedToggle`, adaptado ao tema da loja.
+ */
+function BrandChips({
+  chips,
+  active,
+  onChange,
+}: {
+  chips: { key: string; label: string }[];
+  active: string;
+  onChange: (key: string) => void;
+}) {
+  const reduce = useReducedMotion();
+  const pillId = useId();
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  // A linha rola na horizontal: sem isso, tocar numa marca fora da área
+  // visível faz o pill viajar pra fora da tela.
+  useEffect(() => {
+    const el = activeRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest", inline: "center" });
+  }, [active, reduce]);
+
+  return (
+    // overscroll-x-contain: sem isso, arrastar os chips até o fim dispara
+    // o gesto de "voltar" do navegador no celular.
+    // layoutScroll: avisa o motion que este container rola, senão ele mede a
+    // posição do pill sem descontar o scroll e a peça pousa no lugar errado.
+    <motion.div layoutScroll className="mt-3.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5">
+      {chips.map(c => {
+        const isActive = c.key === active;
+        return (
+          <button
+            key={c.key}
+            ref={isActive ? activeRef : undefined}
+            type="button"
+            onClick={() => onChange(c.key)}
+            aria-pressed={isActive}
+            className="relative flex-none rounded-full px-4 py-2 text-[12.5px] font-bold transition-colors duration-200"
+            style={{
+              background: "var(--sf-surface)",
+              color: isActive ? "var(--sf-accent-ink)" : "var(--sf-text-muted)",
+            }}
+          >
+            {isActive && (
+              <motion.span
+                layoutId={reduce ? undefined : pillId}
+                className="absolute inset-0 rounded-full"
+                style={{ background: "var(--sf-accent)" }}
+                transition={{ duration: 0.28, ease: EASE_OUT }}
+              />
+            )}
+            <span className="relative z-10">{c.label}</span>
+          </button>
+        );
+      })}
+    </motion.div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Card do catálogo                                                     */
 /* ------------------------------------------------------------------ */
@@ -259,7 +354,7 @@ function ProductCard({ model, onOpen }: { model: ModelGroup; onOpen: () => void 
       className="cursor-pointer overflow-hidden rounded-[20px]"
       style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
     >
-      <div className="relative h-[176px] w-full">
+      <div className="relative w-full" style={{ aspectRatio: MEDIA_RATIO }}>
         <ProductMedia src={firstModelImage(allRows)} alt={model.model || "Produto"} iconSize={56} />
 
         {allOut && (
@@ -761,30 +856,7 @@ export default function SellerStorePage() {
           />
         </div>
 
-        {chips.length > 1 && (
-          // overscroll-x-contain: sem isso, arrastar os chips até o fim dispara
-          // o gesto de "voltar" do navegador no celular.
-          <div className="mt-3.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5">
-            {chips.map(c => {
-              const active = c.key === activeBrand;
-              return (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setActiveBrand(c.key)}
-                  aria-pressed={active}
-                  className="flex-none rounded-full px-4 py-2 text-[12.5px] font-bold"
-                  style={{
-                    background: active ? "var(--sf-accent)" : "var(--sf-surface)",
-                    color: active ? "var(--sf-accent-ink)" : "var(--sf-text-muted)",
-                  }}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {chips.length > 1 && <BrandChips chips={chips} active={activeBrand} onChange={setActiveBrand} />}
         </div>
       </header>
 
@@ -844,7 +916,13 @@ export default function SellerStorePage() {
               <SheetTitle className="sr-only">{detailModel.model || "Produto"}</SheetTitle>
               <SheetDescription className="sr-only">Escolha o sabor e a quantidade.</SheetDescription>
 
-              <div className="relative h-[230px] flex-shrink-0 overflow-hidden rounded-t-[28px]">
+              {/* Mesma proporção do card, com teto de altura: num aparelho
+                  baixo o hero em 4:3 comeria a lista de sabores. Como a foto é
+                  `contain`, o teto só encolhe o quadro — nunca corta a imagem. */}
+              <div
+                className="relative max-h-[34vh] w-full flex-shrink-0 overflow-hidden rounded-t-[28px]"
+                style={{ aspectRatio: MEDIA_RATIO }}
+              >
                 <ProductMedia
                   src={firstModelImage(detailModel.flavors)}
                   alt={detailModel.model || "Produto"}
