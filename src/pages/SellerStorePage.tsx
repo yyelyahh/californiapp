@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
-import { EASE_IN_OUT, EASE_OUT } from "@/lib/motion";
+import { EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
 import { formatPhoneDisplay, onlyDigits } from "@/lib/phone";
 
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
-import { toast } from "sonner";
 import {
   ShoppingCart,
   Trash2,
@@ -490,19 +489,6 @@ function WaveCrest({ opacity, height, duration }: { opacity: number; height: num
  * caminho foi escrito — desenhado assim, o traço nasceria à direita e desceria
  * para a esquerda, de trás para frente.
  */
-const CHECK_DELAY = 0.02;
-const CHECK_DRAW = 0.7;
-
-/**
- * Instante em que o traço fecha.
- *
- * O texto do comprovante espera por ele em vez de entrar numa cascata de tempo
- * fixo: o check é uma frase sendo escrita, e ler o desfecho antes de ela
- * terminar é ler por cima do ombro de quem escreve. Como este valor é derivado
- * dos dois de cima, mexer na duração do traço reacerta o texto sozinho.
- */
-const CHECK_DONE = CHECK_DELAY + CHECK_DRAW;
-
 function DrawnCheck({ size = 18, strokeWidth = 3 }: { size?: number; strokeWidth?: number }) {
   const reduce = useReducedMotion();
   return (
@@ -518,7 +504,7 @@ function DrawnCheck({ size = 18, strokeWidth = 3 }: { size?: number; strokeWidth
         // A perna curta (esquerda) e a longa (direita) levam o mesmo tempo em
         // `pathLength`, então a subida sai mais rápida que a descida sozinha —
         // que é como a mão risca de verdade.
-        transition={{ duration: CHECK_DRAW, ease: EASE_OUT, delay: CHECK_DELAY }}
+        transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.08 }}
       />
     </svg>
   );
@@ -919,6 +905,8 @@ export default function SellerStorePage() {
   const flavorPillId = useId();
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Falha ao carregar o catálogo — ocupa o lugar da lista. */
+  const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
   const [activeBrand, setActiveBrand] = useState<string>(ALL);
 
@@ -943,6 +931,8 @@ export default function SellerStorePage() {
   const pendingMessage = useRef<string | null>(null);
   /** Erro a mostrar depois que a água sair da frente. */
   const pendingError = useRef<string | null>(null);
+  /** Recusa do pedido, mostrada dentro do checkout — a água devolve a pessoa nele. */
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // Detalhe do produto: um único sheet na página, não um por card.
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -975,9 +965,10 @@ export default function SellerStorePage() {
     let cancelled = false;
     setLookupLoading(true);
     (async () => {
-      const { data, error } = await supabase.rpc("get_customer_loyalty", { p_whatsapp: phoneDigits });
+      const { data } = await supabase.rpc("get_customer_loyalty", { p_whatsapp: phoneDigits });
       if (cancelled) return;
-      if (error) toast.error("Erro ao buscar cadastro", { description: error.message });
+      // Sem aviso de erro aqui: a busca é um extra, e a falha já tem saída
+      // visível — sem cadastro, o campo de nome aparece e o pedido segue igual.
       const row = ((data as unknown as Loyalty[] | null) ?? [])[0] ?? null;
       setLoyalty(row);
       setLookupDone(true);
@@ -995,7 +986,7 @@ export default function SellerStorePage() {
     }
     setLoading(true);
     const { data, error } = await supabase.rpc("get_seller_catalog", { p_seller_id: sellerId });
-    if (error) toast.error("Erro ao carregar catálogo", { description: error.message });
+    setLoadError(!!error);
     setRows((data as CatalogRow[]) ?? []);
     setLoading(false);
   }, [sellerId, validId]);
@@ -1143,17 +1134,14 @@ export default function SellerStorePage() {
     load();
   };
 
-  /** Mostra o desfecho. Roda com a água já fora da frente. */
+  /**
+   * Fecha o ciclo da onda. O desfecho não é anunciado por cima: quando aceito,
+   * o comprovante JÁ é a tela inteira (mesmo título, mesmo check) — um toast
+   * repetiria palavra por palavra o que está embaixo dele. Quando recusado, o
+   * motivo vai para dentro do checkout, que é para onde a água devolve a pessoa.
+   */
   const announce = () => {
-    if (orderAccepted.current) {
-      toast.success("Pedido confirmado!", {
-        description: "Agora é só compartilhar com o vendedor pelo WhatsApp.",
-        // O check do sonner entra pronto; este se risca na frente da pessoa.
-        icon: <DrawnCheck />,
-      });
-    } else if (pendingError.current) {
-      toast.error(pendingError.current);
-    }
+    if (!orderAccepted.current && pendingError.current) setOrderError(pendingError.current);
     pendingError.current = null;
     orderAccepted.current = null;
     floodCovered.current = false;
@@ -1187,13 +1175,15 @@ export default function SellerStorePage() {
   };
 
   const confirmOrder = async () => {
-    if (cart.length === 0) return toast.error("Seu carrinho está vazio");
-    if (!phoneComplete) return toast.error("Informe seu WhatsApp");
-    if (customerName.length < 2) return toast.error("Informe seu nome");
+    // Trava muda de propósito: são exatamente as três condições de `canSubmit`,
+    // que já deixam o botão desabilitado. Quem chega aqui sem elas não clicou —
+    // não há o que avisar, só o que não fazer.
+    if (!canSubmit) return;
 
     floodCovered.current = false;
     orderAccepted.current = null;
     pendingError.current = null;
+    setOrderError(null);
     // Tranca o sheet durante todo o fluxo, não só até a resposta do banco: se
     // desse para fechar no meio da onda, o pedido ficaria criado sem que a
     // pessoa chegasse a ver a tela de compartilhar.
@@ -1278,13 +1268,6 @@ export default function SellerStorePage() {
 
   /* ---------------- 6. Sucesso (tela cheia) ---------------- */
 
-  /** Entrada de um bloco do comprovante, com o atraso dele no roteiro. */
-  const rise = (delay: number) => ({
-    initial: reduceMotion ? false : { opacity: 0, y: 10 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.34, ease: EASE_OUT, delay: reduceMotion ? 0 : delay },
-  });
-
   if (successMessage) {
     return (
       // `storefront-flooded` troca os tokens de cor: esta tela é a loja do lado
@@ -1297,23 +1280,23 @@ export default function SellerStorePage() {
       <main className="storefront storefront-flooded flex h-[100dvh] flex-col items-center overflow-y-auto overscroll-contain px-[30px] py-10 text-center">
         {/* O conteúdo emerge depois que a água assenta, em vez de já estar
             pronto no instante da troca — é o que amarra esta tela ao fim do
-            movimento.
-
-            Não é uma cascata de intervalo fixo: o círculo entra primeiro, o
-            traço do check se completa, e só então vem o texto. Os atrasos
-            saem de `CHECK_DONE`, então acertar a duração do traço reacerta
-            esta sequência inteira. */}
-        <div className={`${COLUMN} my-auto flex flex-col items-center gap-[18px]`}>
+            movimento. */}
+        <motion.div
+          className={`${COLUMN} my-auto flex flex-col items-center gap-[18px]`}
+          variants={stagger(0.08, 0.14)}
+          initial={reduceMotion ? "visible" : "hidden"}
+          animate="visible"
+        >
           <motion.div
-            {...rise(0.04)}
+            variants={fadeUp}
             className="flex h-[68px] w-[68px] items-center justify-center rounded-full"
             style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
           >
-            {/* O mesmo traço do check do toast: os dois aparecem no mesmo
-                instante, um estático ao lado de um animado destoaria. */}
+            {/* O traço se desenha na frente da pessoa — é a única confirmação
+                que sobrou, então ela acontece aqui, não num card por cima. */}
             <DrawnCheck size={30} strokeWidth={2.6} />
           </motion.div>
-          <motion.div {...rise(CHECK_DONE + 0.04)}>
+          <motion.div variants={fadeUp}>
             <h2 className="mb-2 text-[21px] font-extrabold">Pedido confirmado!</h2>
             {/* O WhatsApp NÃO abre sozinho: em celular isso troca de aplicativo
                 sem aviso, e quem só queria conferir o resumo se perde. O envio
@@ -1322,7 +1305,7 @@ export default function SellerStorePage() {
               Falta mandar para o vendedor: toque abaixo e escolha a conversa dele no WhatsApp.
             </p>
           </motion.div>
-          <motion.div {...rise(CHECK_DONE + 0.13)} className="mt-2.5 flex w-full flex-col gap-2.5">
+          <motion.div variants={fadeUp} className="mt-2.5 flex w-full flex-col gap-2.5">
             <PillButton
               onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(successMessage)}`, "_blank")}
             >
@@ -1338,7 +1321,7 @@ export default function SellerStorePage() {
               Voltar ao catálogo
             </button>
           </motion.div>
-        </div>
+        </motion.div>
       </main>
     );
   }
@@ -1411,6 +1394,23 @@ export default function SellerStorePage() {
           <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
             Carregando catálogo...
           </p>
+        ) : loadError ? (
+          // A falha ocupa o lugar da lista em vez de flutuar por cima dela: sem
+          // catálogo não há nada embaixo para o aviso atrapalhar, e o botão de
+          // tentar de novo precisa estar onde a pessoa está olhando.
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+              Não foi possível carregar o catálogo.
+            </p>
+            <button
+              type="button"
+              onClick={load}
+              className="h-10 rounded-full px-5 text-[13px] font-bold"
+              style={{ background: "var(--sf-surface)", color: "var(--sf-accent)" }}
+            >
+              Tentar de novo
+            </button>
+          </div>
         ) : groups.length === 0 ? (
           <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
             {query.trim() ? `Nenhum produto encontrado para "${query.trim()}".` : "Nenhum produto encontrado."}
@@ -1698,7 +1698,16 @@ export default function SellerStorePage() {
       </Sheet>
 
       {/* ---------------- 5. Checkout ---------------- */}
-      <Sheet open={checkout} onOpenChange={o => !submitting && setCheckout(o)}>
+      <Sheet
+        open={checkout}
+        onOpenChange={o => {
+          if (submitting) return;
+          // O aviso morre junto com o sheet: reabrir o checkout é um recomeço,
+          // não a continuação da tentativa que deu errado.
+          if (!o) setOrderError(null);
+          setCheckout(o);
+        }}
+      >
         <SheetContent
           side="bottom"
           hideClose
@@ -1708,7 +1717,14 @@ export default function SellerStorePage() {
           className={`storefront ${COLUMN} inset-x-0 flex h-[84vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
           style={{ background: "var(--sf-bg)" }}
         >
-          <SheetTopBar title="Finalizar pedido" onClose={() => !submitting && setCheckout(false)} />
+          <SheetTopBar
+            title="Finalizar pedido"
+            onClose={() => {
+              if (submitting) return;
+              setOrderError(null);
+              setCheckout(false);
+            }}
+          />
           <SheetDescription className="sr-only">Confirme seus dados e envie o pedido.</SheetDescription>
 
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-[18px]">
@@ -1793,6 +1809,13 @@ export default function SellerStorePage() {
           </div>
 
           <div className="flex-shrink-0 px-5 pb-7 pt-3.5" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
+            {/* O motivo da recusa fica colado no botão que a pessoa vai apertar
+                de novo — é o único lugar em que ele muda o que ela faz. */}
+            {orderError && (
+              <p className="mb-3 text-[13px] font-semibold" style={{ color: "var(--sf-danger)" }}>
+                {orderError}
+              </p>
+            )}
             <PillButton onClick={confirmOrder} disabled={!canSubmit || submitting}>
               Confirmar pedido
             </PillButton>

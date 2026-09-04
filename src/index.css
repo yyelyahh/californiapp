@@ -278,6 +278,9 @@
     --sf-accent-line: rgba(143, 193, 227, 0.5); /* borda do sabor escolhido */
     --sf-accent-ink: #1a1a1a; /* texto escuro sobre o accent */
     --sf-warn: #d98c6b;       /* "só restam N" */
+    /* Recusa: o pedido não passou. Separado do --sf-warn de propósito — um
+     * avisa que está acabando, o outro diz que não deu. */
+    --sf-danger: #e07a6b;
 
     /* A onda de confirmação e a tela que ela deixa para trás são o MESMO campo
      * de cor — é isso que deixa a camada sair sem piscar (ver `settleFlood`).
