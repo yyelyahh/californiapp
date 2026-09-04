@@ -1,11 +1,11 @@
 import { useStore } from "@/context/StoreContext";
 import { Package, Percent, Download, ArrowRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import { listItem } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
@@ -381,25 +381,7 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--nc-track)" }}>
-              {periodOptions.map(o => {
-                const active = o.value === filter;
-                return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => setFilter(o.value)}
-                    aria-pressed={active}
-                    className="rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                    style={active
-                      ? { color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }
-                      : { color: "var(--nc-text-2)" }}
-                  >
-                    {o.short}
-                  </button>
-                );
-              })}
-            </div>
+            <PeriodChips options={periodOptions} value={filter} onChange={setFilter} />
             <button
               type="button"
               onClick={handleExport}
@@ -734,6 +716,57 @@ export default function Dashboard() {
 function segmentTint(index: number) {
   const mix = [100, 82, 64, 48, 33, 19][Math.min(index, 5)];
   return `color-mix(in srgb, var(--nc-accent) ${mix}%, var(--nc-bg))`;
+}
+
+/**
+ * Chips de período com o realce accent como peça única: em vez de cada chip
+ * desenhar a própria moldura, só o ativo renderiza o `motion.span` com
+ * `layoutId`, então o motion anima o realce deslizando do chip antigo pro novo.
+ * Mesmo padrão do `SegmentedToggle` / `BrandChips` da loja.
+ */
+function PeriodChips({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: string; label: string; short: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const reduce = useReducedMotion();
+  const pillId = useId();
+
+  return (
+    <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--nc-track)" }}>
+      {options.map(o => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            aria-pressed={active}
+            title={o.label}
+            className="relative rounded-md px-2.5 py-1.5 text-xs transition-colors duration-200"
+            style={{ color: active ? "var(--nc-accent)" : "var(--nc-text-2)" }}
+          >
+            {active && (
+              <motion.span
+                layoutId={reduce ? undefined : pillId}
+                className="absolute inset-0 rounded-md"
+                style={{
+                  boxShadow: "inset 0 0 0 1px var(--nc-accent)",
+                  background: "color-mix(in srgb, var(--nc-accent) 10%, transparent)",
+                }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              />
+            )}
+            <span className="relative z-10">{o.short}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function Rule() {
