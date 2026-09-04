@@ -168,10 +168,31 @@ function PillButton({
   );
 }
 
+/** Duração da varredura do preenchimento do botão "Adicionar". */
+const FILL_SECONDS = 0.8;
+
+/** Quanto tempo o check fica na tela antes de o sheet fechar. */
+const CHECK_HOLD_MS = 400;
+
+/**
+ * Baforadas da pluma que viaja junto com o preenchimento.
+ *
+ * Todas nascem no mesmo ponto — a frente do azul — e se repetem enquanto a
+ * varredura corre. O que muda entre elas é o atraso, o tamanho e a opacidade:
+ * é isso que vira rastro, em vez de uma nuvem só piscando.
+ */
+const PUFFS = [
+  { delay: 0, size: 30, opacity: 0.55 },
+  { delay: 0.14, size: 38, opacity: 0.48 },
+  { delay: 0.28, size: 34, opacity: 0.6 },
+  { delay: 0.42, size: 42, opacity: 0.44 },
+];
+
 /**
  * Botão "Adicionar" com a confirmação embutida: ao tocar, o preenchimento
- * accent varre o botão da esquerda para a direita sobre o fundo esmaecido e,
- * quando chega ao fim, o rótulo dá lugar a um check no meio.
+ * accent varre o botão da esquerda para a direita sobre o fundo esmaecido,
+ * soltando fumaça na frente da varredura, e quando chega ao fim o rótulo dá
+ * lugar a um check no meio.
  *
  * O item entra no carrinho já no toque (`onPress`) — se a pessoa fechar o
  * sheet no meio da animação, nada se perde. O `onDone` só roda depois do
@@ -191,6 +212,7 @@ function AddToCartButton({
   const reduce = useReducedMotion();
   const [phase, setPhase] = useState<"idle" | "filling" | "done">("idle");
   const timer = useRef<number | null>(null);
+  const smokeId = useId();
 
   // O `onDone` desmonta este botão junto com o sheet: sem a limpeza, o timer
   // do check dispararia com o componente já fora da árvore.
@@ -214,49 +236,138 @@ function AddToCartButton({
   };
 
   return (
-    <button
-      type="button"
-      onClick={press}
-      disabled={disabled}
-      style={{
-        height: 50,
-        background: disabled || phase !== "idle" ? "var(--sf-accent-soft)" : "var(--sf-accent)",
-        color: "var(--sf-accent-ink)",
-      }}
-      className="relative w-full overflow-hidden rounded-full text-sm font-extrabold"
-    >
-      <span className="relative z-10 flex h-full items-center justify-center gap-2">{label}</span>
+    // O botão precisa de `overflow-hidden` para recortar o preenchimento no
+    // formato da pílula, e isso decapitaria qualquer baforada que subisse acima
+    // da borda. Por isso a fumaça mora neste wrapper, fora do botão.
+    <div className="relative flex-1">
+      <button
+        type="button"
+        onClick={press}
+        disabled={disabled}
+        style={{
+          height: 50,
+          background: disabled || phase !== "idle" ? "var(--sf-accent-soft)" : "var(--sf-accent)",
+          color: "var(--sf-accent-ink)",
+        }}
+        className="relative w-full overflow-hidden rounded-full text-sm font-extrabold"
+      >
+        <span className="relative z-10 flex h-full items-center justify-center gap-2">{label}</span>
+
+        {phase !== "idle" && (
+          // Fica ACIMA do rótulo (z-20), não atrás: a faixa é opaca, então vai
+          // encobrindo o texto conforme avança — é o preenchimento que confirma,
+          // não o texto que some sozinho. Anima `width` em vez de `scaleX` porque
+          // escala depende de `transform-origin` e distorce se um dia entrar
+          // conteúdo aqui; largura é o próprio avanço, sem intermediário.
+          <motion.span
+            className="absolute bottom-0 left-0 top-0 z-20"
+            style={{ background: "var(--sf-accent)" }}
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: FILL_SECONDS, ease: EASE_IN_OUT }}
+            onAnimationComplete={() => {
+              setPhase("done");
+              timer.current = window.setTimeout(onDone, CHECK_HOLD_MS);
+            }}
+          />
+        )}
+
+        {phase === "done" && (
+          <motion.span
+            className="absolute inset-0 z-30 flex items-center justify-center"
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 420, damping: 18 }}
+          >
+            <Check size={20} strokeWidth={3} />
+          </motion.span>
+        )}
+      </button>
 
       {phase !== "idle" && (
-        // Fica ACIMA do rótulo (z-20), não atrás: a faixa é opaca, então vai
-        // encobrindo o texto conforme avança — é o preenchimento que confirma,
-        // não o texto que some sozinho. Anima `width` em vez de `scaleX` porque
-        // escala depende de `transform-origin` e distorce se um dia entrar
-        // conteúdo aqui; largura é o próprio avanço, sem intermediário.
-        <motion.span
-          className="absolute bottom-0 left-0 top-0 z-20"
-          style={{ background: "var(--sf-accent)" }}
-          initial={{ width: "0%" }}
-          animate={{ width: "100%" }}
-          transition={{ duration: 0.6, ease: EASE_IN_OUT }}
-          onAnimationComplete={() => {
-            setPhase("done");
-            timer.current = window.setTimeout(onDone, 380);
-          }}
-        />
-      )}
+        // `-top-12` é o céu por onde a fumaça sobe; `pointer-events-none` para a
+        // camada não roubar toque de nada que fique embaixo.
+        <div className="pointer-events-none absolute inset-x-0 -top-12 bottom-0 z-40">
+          {/* A textura vem de um deslocamento por ruído: sem ele as baforadas
+              são círculos borrados perfeitos; com ele a borda esgarça e lembra
+              vapor. O ruído é estático de propósito — só os elementos se movem.
+              Animar o `baseFrequency` remonta o filtro a cada quadro e engasga
+              em celular fraco. */}
+          <svg aria-hidden width="0" height="0" className="absolute">
+            <filter id={smokeId} x="-40%" y="-40%" width="180%" height="180%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.02 0.04" numOctaves="2" seed="7" result="ruido" />
+              <feDisplacementMap in="SourceGraphic" in2="ruido" scale="26" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </svg>
 
-      {phase === "done" && (
-        <motion.span
-          className="absolute inset-0 z-30 flex items-center justify-center"
-          initial={{ scale: 0.3, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 420, damping: 18 }}
-        >
-          <Check size={20} strokeWidth={3} />
-        </motion.span>
+          <div className="absolute inset-0" style={{ filter: `url(#${smokeId})` }}>
+            {/* A carruagem viaja com a MESMA duração e a MESMA curva do
+                preenchimento, então a fumaça fica grudada na frente do azul o
+                percurso inteiro — é o mesmo movimento, não uma animação
+                paralela que combina mais ou menos. Ela ocupa a largura toda e
+                anda `x: 100%`: em transform a porcentagem é do próprio
+                elemento, então o percurso sai puro em GPU, sem relayout a cada
+                quadro e sem precisar medir o botão em JS. */}
+            <motion.div
+              className="absolute inset-y-0 left-0 w-full"
+              initial={{ x: "0%" }}
+              animate={{ x: "100%" }}
+              transition={{ duration: FILL_SECONDS, ease: EASE_IN_OUT }}
+            >
+              {PUFFS.map(p => (
+                <motion.span
+                  key={p.delay}
+                  className="absolute rounded-full"
+                  style={{
+                    left: 0,
+                    bottom: 12,
+                    width: p.size,
+                    height: p.size,
+                    marginLeft: -p.size / 2,
+                    // O gradiente já entrega a borda macia, então não precisa de
+                    // `blur()` por cima — seriam quatro filtros a mais rodando
+                    // junto com o do ruído.
+                    background: `radial-gradient(closest-side, rgba(245,243,238,${p.opacity}), rgba(245,243,238,0) 72%)`,
+                  }}
+                  initial={{ opacity: 0, scale: 0.3, x: 0, y: 6 }}
+                  // O `x` negativo é o rastro: a baforada recua enquanto a
+                  // carruagem avança, então ela vai ficando para trás no
+                  // caminho já percorrido em vez de viajar rígida com a frente.
+                  animate={{ opacity: [0, 1, 0], scale: [0.3, 1, 1.7], x: [0, -10, -26], y: [6, -12, -34] }}
+                  transition={{
+                    duration: 0.62,
+                    delay: p.delay,
+                    ease: "easeOut",
+                    times: [0, 0.3, 1],
+                    // Continua saindo enquanto o botão preenche e durante o
+                    // check, até o sheet fechar.
+                    repeat: Infinity,
+                  }}
+                />
+              ))}
+            </motion.div>
+
+            {/* Sopro final, mais largo, na ponta onde a varredura terminou. */}
+            {phase === "done" && (
+              <motion.span
+                className="absolute rounded-full"
+                style={{
+                  left: "100%",
+                  bottom: 10,
+                  width: 96,
+                  height: 96,
+                  marginLeft: -48,
+                  background: "radial-gradient(closest-side, rgba(245,243,238,0.5), rgba(245,243,238,0) 70%)",
+                }}
+                initial={{ opacity: 0, scale: 0.5, y: 6 }}
+                animate={{ opacity: [0, 0.9, 0], scale: [0.5, 1.3, 2], x: [0, -12, -30], y: [6, -20, -52] }}
+                transition={{ duration: 1, ease: "easeOut", times: [0, 0.25, 1] }}
+              />
+            )}
+          </div>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
