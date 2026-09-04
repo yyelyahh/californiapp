@@ -2,7 +2,13 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- maximum-scale/user-scalable travam o pinch-zoom para o app não sair do
+         lugar no celular. Atenção: o iOS Safari ignora isso de propósito
+         (acessibilidade), então lá o zoom continua disponível. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <!-- TODO: Set the document title to the name of your application -->
     <title>California Company</title>
     <meta name="description" content="Estoque e contabilidade california company">

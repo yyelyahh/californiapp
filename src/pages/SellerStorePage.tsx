@@ -550,7 +550,7 @@ export default function SellerStorePage() {
 
   if (!validId) {
     return (
-      <main className="storefront flex min-h-screen items-center justify-center p-6">
+      <main className="storefront flex h-[100dvh] items-center justify-center overflow-hidden p-6">
         <div className={`${COLUMN} space-y-2 text-center`}>
           <h1 className="text-xl font-bold">Link inválido</h1>
           <p className="text-sm" style={{ color: "var(--sf-text-muted)" }}>
@@ -583,8 +583,11 @@ export default function SellerStorePage() {
     const labelStyle = { color: "var(--sf-text-muted)" };
 
     return (
-      <main className="storefront flex min-h-screen flex-col justify-center px-[26px] pb-10 pt-20">
-        <div className={`${COLUMN} flex flex-col gap-6`}>
+      // `my-auto` no filho centraliza sem cortar: com `justify-center` no pai,
+      // se o teclado do celular espremer a tela, o topo do formulário fica
+      // inalcançável pela rolagem.
+      <main className="storefront flex h-[100dvh] flex-col overflow-y-auto overscroll-contain px-[26px] pb-10 pt-20">
+        <div className={`${COLUMN} my-auto flex flex-col gap-6`}>
           <div>
             <div className="mb-1.5 text-xl font-extrabold tracking-[0.02em]" style={{ color: "var(--sf-accent)" }}>
               {COMPANY.toUpperCase()}
@@ -666,8 +669,8 @@ export default function SellerStorePage() {
 
   if (successMessage) {
     return (
-      <main className="storefront flex min-h-screen flex-col items-center justify-center px-[30px] py-10 text-center">
-        <div className={`${COLUMN} flex flex-col items-center gap-[18px]`}>
+      <main className="storefront flex h-[100dvh] flex-col items-center overflow-y-auto overscroll-contain px-[30px] py-10 text-center">
+        <div className={`${COLUMN} my-auto flex flex-col items-center gap-[18px]`}>
           <div
             className="flex h-[68px] w-[68px] items-center justify-center rounded-full"
             style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
@@ -707,8 +710,13 @@ export default function SellerStorePage() {
   const chips = [{ key: ALL, label: "Todos" }, ...brands.map(b => ({ key: b, label: b }))];
 
   return (
-    <div className="storefront flex min-h-screen flex-col">
-      <header className={`${COLUMN} flex-shrink-0 px-5 pb-3 pt-4`}>
+    // App-shell: a raiz ocupa exatamente a altura da janela e não rola. Só o
+    // <main> rola, então o cabeçalho fica parado sem precisar de `sticky`, e o
+    // documento não tem o que arrastar — nem na horizontal nem no repique
+    // vertical. `dvh` acompanha a barra de endereço recolhendo no celular.
+    <div className="storefront flex h-[100dvh] flex-col overflow-hidden">
+      <header className="flex-shrink-0">
+        <div className={`${COLUMN} px-5 pb-3 pt-4`}>
         <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0">
             <p className="truncate text-sm font-extrabold tracking-[0.03em]" style={{ color: "var(--sf-accent)" }}>
@@ -754,7 +762,9 @@ export default function SellerStorePage() {
         </div>
 
         {chips.length > 1 && (
-          <div className="mt-3.5 flex gap-2 overflow-x-auto pb-0.5">
+          // overscroll-x-contain: sem isso, arrastar os chips até o fim dispara
+          // o gesto de "voltar" do navegador no celular.
+          <div className="mt-3.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5">
             {chips.map(c => {
               const active = c.key === activeBrand;
               return (
@@ -775,9 +785,10 @@ export default function SellerStorePage() {
             })}
           </div>
         )}
+        </div>
       </header>
 
-      <main className={`${COLUMN} flex-1 px-5 pb-[100px] pt-1.5`}>
+      <main className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-[100px] pt-1.5`}>
         {loading ? (
           <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
             Carregando catálogo...
