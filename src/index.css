@@ -254,6 +254,54 @@
     background: none;
   }
 
+  /* ------------------------------------------------------------------
+   * Storefront — tema da loja pública (/loja/:sellerId), no mesmo espírito
+   * do Nocturne: tudo sob `.storefront`, nenhuma tela do ERP é afetada.
+   *
+   * A classe precisa ser repetida em cada <SheetContent>: o radix porta os
+   * sheets para o <body>, fora da árvore da página, e lá os tokens não
+   * chegariam por herança.
+   * ------------------------------------------------------------------ */
+  .storefront {
+    --sf-bg: #14141a;         /* fundo da página e dos sheets */
+    --sf-surface: #1c1c22;    /* cards, inputs, chips inativos, miniaturas */
+    --sf-surface-2: #23232b;  /* pílulas sobre o surface */
+    --sf-border: rgba(255, 255, 255, 0.08);   /* inputs e chips */
+    --sf-hairline: rgba(255, 255, 255, 0.06); /* bordas de card e divisórias */
+    --sf-text: #f5f3ee;
+    --sf-text-muted: rgba(245, 243, 238, 0.55);
+    --sf-text-faint: rgba(245, 243, 238, 0.45);
+    --sf-text-dim: rgba(245, 243, 238, 0.35);
+    --sf-accent: #8fc1e3;
+    --sf-accent-tint: rgba(143, 193, 227, 0.12);
+    --sf-accent-soft: rgba(143, 193, 227, 0.3); /* botão desabilitado */
+    --sf-accent-line: rgba(143, 193, 227, 0.5); /* borda do sabor escolhido */
+    --sf-accent-ink: #1a1a1a; /* texto escuro sobre o accent */
+    --sf-warn: #d98c6b;       /* "só restam N" */
+
+    /* Componentes do shadcn (Input, Textarea) desenham o foco com
+     * `ring-ring`, que sai roxo do tema global. Redefinir --ring aqui pinta
+     * esse anel de accent sem precisar remendar cada campo — é o mesmo
+     * #8fc1e3 em HSL, que é o formato lido pelo `hsl(var(--ring))`. */
+    --ring: 204 60% 73%;
+
+    font-family: 'Manrope', system-ui, sans-serif;
+    background: var(--sf-bg);
+    color: var(--sf-text);
+  }
+
+  .storefront ::placeholder {
+    color: var(--sf-text-dim);
+  }
+
+  /* Foco dos elementos sem anel próprio (chips, botões-pílula). Nos campos do
+   * shadcn não aparece: eles trazem `focus-visible:outline-none` e ficam só
+   * com o anel acima. */
+  .storefront :focus-visible {
+    outline: 2px solid var(--sf-accent);
+    outline-offset: 2px;
+  }
+
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }

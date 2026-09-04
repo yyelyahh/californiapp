@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <script src="./image-slot.js"></script>
+  <style>
+    body { margin: 0; }
+    @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    a { color: #8fc1e3; }
+    a:hover { color: #b8dcf2; }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;background:#0b0b0d;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:56px 24px;font-family:'Manrope',system-ui,sans-serif;color:#f5f3ee">
+
+  <div style="display:flex;align-items:center;gap:14px">
+    <span style="font-weight:700;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:rgba(245,243,238,0.4)">Marketplace mobile — prototipo interativo</span>
+    <button type="button" onClick="{{ resetPrototype }}" style="font-weight:700;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:#8fc1e3;background:transparent;border:1px solid rgba(143,193,227,0.4);border-radius:999px;padding:6px 14px;cursor:pointer">Reiniciar</button>
+  </div>
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+    <div style="position:relative;height:100%;display:flex;flex-direction:column;background:#14141a;overflow:hidden;font-family:'Manrope',system-ui,sans-serif;color:#f5f3ee">
+
+      <!-- ============ IDENTIFY ============ -->
+      <sc-if value="{{ showIdentify }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;overflow:auto;display:flex;flex-direction:column;justify-content:center;padding:80px 26px 40px;gap:24px">
+          <div>
+            <div style="font-weight:800;font-size:20px;letter-spacing:0.02em;color:#8fc1e3;margin-bottom:6px">NIMBUS VAPOR CO.</div>
+            <h1 style="font-size:23px;font-weight:700;margin:0 0 8px;color:#f5f3ee">Bem-vindo ao catálogo</h1>
+            <p style="font-size:14px;color:rgba(245,243,238,0.55);margin:0;line-height:1.5">Informe seus dados para ver os produtos e finalizar seu pedido direto pelo WhatsApp.</p>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label for="ident-name" style="font-size:12px;font-weight:600;color:rgba(245,243,238,0.6)">Seu nome</label>
+            <input id="ident-name" placeholder="ex: Jordan Lee" value="{{ name }}" onChange="{{ onNameChange }}" style="height:50px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);background:#1c1c22;color:#f5f3ee;padding:0 16px;font-size:15px;font-family:inherit">
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label for="ident-phone" style="font-size:12px;font-weight:600;color:rgba(245,243,238,0.6)">Seu WhatsApp</label>
+            <input id="ident-phone" inputMode="numeric" placeholder="(11) 90000-0000" value="{{ phone }}" onChange="{{ onPhoneChange }}" style="height:50px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);background:#1c1c22;color:#f5f3ee;padding:0 16px;font-size:15px;font-family:inherit">
+          </div>
+
+          <button type="button" disabled="{{ identifyDisabled }}" onClick="{{ continueIdentify }}" style="height:52px;border-radius:999px;border:none;background:{{ identifyDisabled ? 'rgba(143,193,227,0.3)' : '#8fc1e3' }};color:#1a1a1a;font-family:inherit;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer">
+            Continuar
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+          </button>
+        </div>
+      </sc-if>
+
+      <!-- ============ CATALOG ============ -->
+      <sc-if value="{{ showCatalog }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;height:100%">
+
+          <div style="padding:54px 20px 12px;flex-shrink:0;background:#14141a">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+              <div style="min-width:0">
+                <p style="margin:0;font-weight:800;font-size:14px;letter-spacing:0.03em;color:#8fc1e3">NIMBUS VAPOR CO.</p>
+                <p style="font-size:12px;color:rgba(245,243,238,0.5);margin:2px 0 0">Oi, {{ name }} — escolha seu produto</p>
+              </div>
+              <button type="button" onClick="{{ openCart }}" style="position:relative;flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#1c1c22;border:1px solid rgba(255,255,255,0.08);border-radius:999px;cursor:pointer;color:#f5f3ee">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                <sc-if value="{{ cartCountPositive }}" hint-placeholder-val="{{ false }}">
+                  <span style="position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#8fc1e3;color:#1a1a1a;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center">{{ cartCount }}</span>
+                </sc-if>
+              </button>
+            </div>
+
+            <div style="position:relative;margin-top:14px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(245,243,238,0.4)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:14px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+              <input placeholder="Buscar produtos..." value="{{ query }}" onChange="{{ onQueryChange }}" style="width:100%;height:42px;border-radius:999px;border:none;background:#1c1c22;color:#f5f3ee;padding:0 16px 0 38px;font-size:13.5px;font-family:inherit;box-sizing:border-box">
+            </div>
+
+            <div style="display:flex;gap:8px;overflow-x:auto;margin-top:14px;padding-bottom:2px">
+              <sc-for list="{{ chips }}" as="chip" hint-placeholder-count="3">
+                <button type="button" onClick="{{ chip.select }}" style="flex-shrink:0;padding:8px 16px;border-radius:999px;border:none;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer;background:{{ chip.bg }};color:{{ chip.color }}">{{ chip.name }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:1;overflow:auto;padding:6px 20px 100px">
+            <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ groups }}" as="grp" hint-placeholder-count="2">
+                <div style="margin-top:16px">
+                  <h6 style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(245,243,238,0.4)">{{ grp.name }}</h6>
+                  <div style="display:flex;flex-direction:column;gap:16px">
+                    <sc-for list="{{ grp.products }}" as="prod" hint-placeholder-count="2">
+                      <div role="button" tabIndex="0" onClick="{{ prod.open }}" style="border-radius:20px;background:#1c1c22;border:1px solid rgba(255,255,255,0.06);overflow:hidden;cursor:pointer">
+                        <div style="position:relative;width:100%;height:176px">
+                          <image-slot id="{{ prod.imgId }}" shape="rect" placeholder="Foto do produto" style="width:100%;height:100%"></image-slot>
+                          <button type="button" onClick="{{ prod.open }}" aria-label="Ver opções" style="position:absolute;right:12px;bottom:12px;width:36px;height:36px;border-radius:999px;background:#8fc1e3;border:2px solid #14141a;color:#1a1a1a;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.4);cursor:pointer">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                          </button>
+                        </div>
+                        <div style="padding:14px 16px 16px">
+                          <p style="margin:0;font-size:16px;font-weight:700">{{ prod.name }}</p>
+                          <p style="margin:4px 0 10px;font-size:12.5px;color:rgba(245,243,238,0.5);line-height:1.4">{{ prod.desc }}</p>
+                          <div style="display:flex;align-items:center;justify-content:space-between">
+                            <span style="font-size:11px;font-weight:600;color:rgba(245,243,238,0.45);background:#23232b;padding:4px 10px;border-radius:999px">{{ prod.variantCount }} sabores</span>
+                            <span style="font-size:15px;font-weight:800;color:#8fc1e3">{{ prod.priceLabel }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+              <p style="text-align:center;padding:60px 0;font-size:13px;color:rgba(245,243,238,0.4)">Nenhum produto encontrado para "{{ query }}".</p>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{ showCartBar }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 20px 26px;background:linear-gradient(to top, #14141a 70%, transparent)">
+              <button type="button" onClick="{{ openCart }}" style="width:100%;height:52px;border-radius:999px;border:none;background:#8fc1e3;color:#1a1a1a;font-family:inherit;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                Ver carrinho · {{ cartCount }} · {{ cartTotal }}
+              </button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ PRODUCT DETAIL SHEET ============ -->
+      <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:30;background:rgba(0,0,0,0.6);animation:fadeIn 180ms ease-out" onClick="{{ closeOverlay }}"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:88%;z-index:31;background:#14141a;border-radius:28px 28px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;animation:sheetUp 260ms cubic-bezier(.2,.8,.2,1)">
+          <div style="position:relative;flex-shrink:0;height:230px">
+            <image-slot id="{{ detailHeroId }}" shape="rect" placeholder="Foto do produto" style="width:100%;height:100%"></image-slot>
+            <button type="button" onClick="{{ closeOverlay }}" aria-label="Voltar" style="position:absolute;left:14px;top:14px;width:36px;height:36px;border-radius:999px;background:rgba(20,20,26,0.7);backdropFilter:blur(6px);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f5f3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+            </button>
+          </div>
+
+          <div style="flex:1;overflow:auto;padding:20px 20px 12px">
+            <p style="margin:0 0 4px;font-size:11.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#8fc1e3">{{ detailCatName }}</p>
+            <h2 style="margin:0 0 8px;font-size:22px;font-weight:800">{{ detailName }}</h2>
+            <p style="margin:0 0 18px;font-size:13.5px;color:rgba(245,243,238,0.55);line-height:1.5">{{ detailDesc }}</p>
+
+            <p style="margin:0 0 10px;font-weight:700;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:rgba(245,243,238,0.4)">Sabor</p>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ detailVariants }}" as="v" hint-placeholder-count="2">
+                <button type="button" disabled="{{ v.soldOut }}" onClick="{{ v.select }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;border:1px solid {{ v.borderColor }};border-radius:16px;padding:13px 14px;cursor:pointer;background:{{ v.bg }};opacity:{{ v.opacity }};font-family:inherit">
+                  <div style="display:flex;align-items:center;gap:11px;min-width:0">
+                    <span style="flex-shrink:0;width:19px;height:19px;border-radius:50%;border:1.5px solid {{ v.dotBorder }};background:{{ v.dotBg }};display:flex;align-items:center;justify-content:center">
+                      <sc-if value="{{ v.active }}" hint-placeholder-val="{{ false }}">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                      </sc-if>
+                    </span>
+                    <span>
+                      <p style="margin:0;font-size:14px;font-weight:600;color:#f5f3ee">{{ v.label }}</p>
+                      <p style="margin:2px 0 0;font-size:11.5px;color:{{ v.stockColor }}">{{ v.stockLabel }}</p>
+                    </span>
+                  </div>
+                  <span style="flex-shrink:0;font-size:14px;font-weight:700;color:#f5f3ee">{{ v.price }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;border-top:1px solid rgba(255,255,255,0.06);background:#14141a;padding:14px 20px 28px">
+            <div style="display:flex;align-items:center;background:#1c1c22;border-radius:999px">
+              <button type="button" disabled="{{ decQtyDisabled }}" onClick="{{ decQty }}" style="padding:11px 14px;background:transparent;border:none;cursor:pointer;color:#f5f3ee">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path></svg>
+              </button>
+              <span style="width:28px;text-align:center;font-size:14px;font-weight:700">{{ detailQty }}</span>
+              <button type="button" disabled="{{ incQtyDisabled }}" onClick="{{ incQty }}" style="padding:11px 14px;background:transparent;border:none;cursor:pointer;color:#f5f3ee">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+              </button>
+            </div>
+            <button type="button" disabled="{{ detailAddDisabled }}" onClick="{{ addToCart }}" style="flex:1;height:50px;border-radius:999px;border:none;background:{{ detailAddDisabled ? 'rgba(143,193,227,0.3)' : '#8fc1e3' }};color:#1a1a1a;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer">
+              {{ detailAddLabel }}
+            </button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ CART SHEET ============ -->
+      <sc-if value="{{ showCart }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:30;background:rgba(0,0,0,0.6);animation:fadeIn 180ms ease-out" onClick="{{ closeOverlay }}"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:76%;z-index:31;background:#14141a;border-radius:28px 28px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;animation:sheetUp 260ms cubic-bezier(.2,.8,.2,1)">
+          <div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:20px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <h2 style="margin:0;font-size:19px;font-weight:800">Seu carrinho</h2>
+            <button type="button" onClick="{{ closeOverlay }}" aria-label="Fechar" style="background:#1c1c22;border:none;border-radius:999px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f5f3ee">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+          </div>
+
+          <div style="flex:1;overflow:auto;padding:8px 20px">
+            <sc-if value="{{ cartEmpty }}" hint-placeholder-val="{{ false }}">
+              <p style="text-align:center;padding:60px 0;font-size:13px;color:rgba(245,243,238,0.4)">Seu carrinho está vazio.</p>
+            </sc-if>
+            <sc-for list="{{ cartItems }}" as="i" hint-placeholder-count="2">
+              <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <image-slot id="{{ i.imgId }}" shape="rounded" radius="12" placeholder="Foto" style="width:56px;height:56px;flex-shrink:0"></image-slot>
+                <div style="flex:1;min-width:0">
+                  <p style="margin:0;font-size:13.5px;font-weight:700">{{ i.name }}</p>
+                  <p style="margin:2px 0 8px;font-size:12px;color:rgba(245,243,238,0.5)">{{ i.optionLabel }}</p>
+                  <div style="display:flex;align-items:center;background:#1c1c22;border-radius:999px;width:fit-content">
+                    <button type="button" disabled="{{ i.decDisabled }}" onClick="{{ i.dec }}" style="padding:5px 10px;background:transparent;border:none;cursor:pointer;color:#f5f3ee">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path></svg>
+                    </button>
+                    <span style="width:22px;text-align:center;font-size:12.5px;font-weight:700">{{ i.qty }}</span>
+                    <button type="button" disabled="{{ i.incDisabled }}" onClick="{{ i.inc }}" style="padding:5px 10px;background:transparent;border:none;cursor:pointer;color:#f5f3ee">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px;flex-shrink:0">
+                  <span style="font-size:13.5px;font-weight:800;color:#8fc1e3">{{ i.lineTotal }}</span>
+                  <button type="button" onClick="{{ i.remove }}" style="background:transparent;border:none;cursor:pointer;color:rgba(245,243,238,0.4)" aria-label="Remover">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  </button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex-shrink:0;border-top:1px solid rgba(255,255,255,0.06);padding:16px 20px 28px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:13px;color:rgba(245,243,238,0.5)">Total</span>
+              <span style="font-size:19px;font-weight:800;color:#8fc1e3">{{ cartTotal }}</span>
+            </div>
+            <button type="button" disabled="{{ cartEmpty }}" onClick="{{ goCheckout }}" style="height:50px;border-radius:999px;border:none;background:{{ cartEmpty ? 'rgba(143,193,227,0.3)' : '#8fc1e3' }};color:#1a1a1a;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer">Finalizar pedido</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ CHECKOUT SHEET ============ -->
+      <sc-if value="{{ showCheckout }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:30;background:rgba(0,0,0,0.6);animation:fadeIn 180ms ease-out" onClick="{{ closeOverlay }}"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:70%;z-index:31;background:#14141a;border-radius:28px 28px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;animation:sheetUp 260ms cubic-bezier(.2,.8,.2,1)">
+          <div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:20px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <h2 style="margin:0;font-size:19px;font-weight:800">Finalizar pedido</h2>
+            <button type="button" onClick="{{ closeOverlay }}" aria-label="Fechar" style="background:#1c1c22;border:none;border-radius:999px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f5f3ee">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+          </div>
+
+          <div style="flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:16px;background:#1c1c22;border:1px solid rgba(255,255,255,0.06)">
+              <div style="min-width:0">
+                <p style="margin:0;font-size:13.5px;font-weight:700">{{ name }}</p>
+                <p style="margin:2px 0 0;font-size:12px;color:rgba(245,243,238,0.5)">{{ phone }}</p>
+              </div>
+              <button type="button" onClick="{{ editIdentity }}" style="background:transparent;border:none;color:#8fc1e3;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">Editar</button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label for="checkout-notes" style="font-size:12px;font-weight:600;color:rgba(245,243,238,0.6)">Observações de entrega</label>
+              <textarea id="checkout-notes" rows="3" placeholder="Opcional — horário, endereço, etc." value="{{ notes }}" onChange="{{ onNotesChange }}" style="border-radius:14px;border:1px solid rgba(255,255,255,0.08);background:#1c1c22;color:#f5f3ee;padding:12px 14px;font-size:14px;font-family:inherit;resize:none"></textarea>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.06);padding-top:14px">
+              <span style="font-size:13px;color:rgba(245,243,238,0.5)">Total</span>
+              <span style="font-size:18px;font-weight:800;color:#8fc1e3">{{ cartTotal }}</span>
+            </div>
+          </div>
+
+          <div style="flex-shrink:0;padding:14px 20px 28px;border-top:1px solid rgba(255,255,255,0.06)">
+            <button type="button" onClick="{{ submitOrder }}" style="width:100%;height:50px;border-radius:999px;border:none;background:#8fc1e3;color:#1a1a1a;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer">Confirmar pedido</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SUCCESS ============ -->
+      <sc-if value="{{ showSuccess }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:32;background:#14141a;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 30px;text-align:center;gap:18px;animation:fadeIn 220ms ease-out">
+          <div style="width:68px;height:68px;border-radius:999px;background:#8fc1e3;display:flex;align-items:center;justify-content:center">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          </div>
+          <div>
+            <h2 style="margin:0 0 8px;font-size:21px;font-weight:800">Pedido enviado!</h2>
+            <p style="margin:0;font-size:13.5px;color:rgba(245,243,238,0.55);line-height:1.5">Confirme o envio no WhatsApp que abriu para o vendedor.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;width:100%;margin-top:10px">
+            <button type="button" style="height:50px;border-radius:999px;border:none;background:#8fc1e3;color:#1a1a1a;font-family:inherit;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>
+              Reabrir WhatsApp
+            </button>
+            <button type="button" onClick="{{ backToCatalog }}" style="height:44px;background:transparent;border:none;color:#8fc1e3;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer">Voltar ao catálogo</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+
+  <p style="max-width:340px;text-align:center;font-size:12px;color:rgba(245,243,238,0.35);margin:0">Arraste fotos reais dos produtos direto nos espaços de imagem — elas ficam salvas e aparecem no catálogo, no card e no detalhe.</p>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+const CATALOG = [
+  { key: 'nimbus', name: 'Nimbus', models: [
+    { id: 'm-01', name: 'Nimbus Air', desc: 'Descartável leve, tragos suaves e discretos.', variants: [
+      { id: 'v-01a', label: 'Menta Glacial', price: 59.9, stock: 6 },
+      { id: 'v-01b', label: 'Frutas Vermelhas', price: 59.9, stock: 0 },
+      { id: 'v-01c', label: 'Uva', price: 59.9, stock: 3 },
+    ]},
+    { id: 'm-02', name: 'Nimbus Pro', desc: 'Maior autonomia e sabor mais intenso.', variants: [
+      { id: 'v-02a', label: 'Original', price: 79.9, stock: 8 },
+      { id: 'v-02b', label: 'Gelo', price: 84.9, stock: 2 },
+    ]},
+  ]},
+  { key: 'aurora', name: 'Aurora', models: [
+    { id: 'm-03', name: 'Aurora Mini', desc: 'Formato compacto, ideal para o dia a dia.', variants: [
+      { id: 'v-03a', label: 'Pêssego', price: 54.9, stock: 5 },
+      { id: 'v-03b', label: 'Melancia', price: 54.9, stock: 5 },
+    ]},
+    { id: 'm-04', name: 'Aurora Max', desc: 'Edição premium com acabamento metálico.', variants: [
+      { id: 'v-04a', label: 'Tabaco Suave', price: 99.9, stock: 1 },
+      { id: 'v-04b', label: 'Menta', price: 99.9, stock: 0 },
+    ]},
+  ]},
+];
+
+const fmt = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+
+class Component extends DCLogic {
+  state = {
+    screen: 'identify',
+    name: '',
+    phone: '',
+    query: '',
+    activeCategory: 'all',
+    cart: [],
+    overlay: null,
+    detailProductId: null,
+    detailVariantId: null,
+    detailQty: 1,
+    notes: '',
+  };
+
+  continueIdentify() {
+    const s = this.state;
+    if (s.phone.trim().length < 8 || s.name.trim().length < 2) return;
+    this.setState({ screen: 'catalog' });
+  }
+
+  openDetail(productId) {
+    this.setState({ overlay: 'detail', detailProductId: productId, detailVariantId: null, detailQty: 1 });
+  }
+
+  addToCart(product, variant, qty) {
+    if (!product || !variant || variant.stock <= 0) return;
+    this.setState((s) => {
+      const existing = s.cart.find((c) => c.variantId === variant.id);
+      let cart;
+      if (existing) {
+        cart = s.cart.map((c) => c.variantId === variant.id ? { ...c, qty: Math.min(c.qty + qty, variant.stock) } : c);
+      } else {
+        cart = [...s.cart, { variantId: variant.id, productId: product.id, productName: product.name, optionLabel: variant.label, price: variant.price, stock: variant.stock, qty: Math.min(qty, variant.stock) }];
+      }
+      return { cart, overlay: null };
+    });
+  }
+
+  setCartQty(variantId, delta) {
+    this.setState((s) => ({ cart: s.cart.map((c) => c.variantId === variantId ? { ...c, qty: Math.min(Math.max(1, c.qty + delta), c.stock) } : c) }));
+  }
+
+  removeCartItem(variantId) {
+    this.setState((s) => ({ cart: s.cart.filter((c) => c.variantId !== variantId) }));
+  }
+
+  submitOrder() {
+    this.setState({ overlay: 'success', cart: [], notes: '' });
+  }
+
+  resetPrototype() {
+    this.setState({ screen: 'identify', name: '', phone: '', query: '', activeCategory: 'all', cart: [], overlay: null, detailProductId: null, detailVariantId: null, detailQty: 1, notes: '' });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim().toLowerCase();
+
+    const chips = [{ key: 'all', name: 'Todos' }, ...CATALOG.map((b) => ({ key: b.key, name: b.name }))].map((c) => ({
+      key: c.key,
+      name: c.name,
+      bg: s.activeCategory === c.key ? '#8fc1e3' : '#1c1c22',
+      color: s.activeCategory === c.key ? '#1a1a1a' : 'rgba(245,243,238,0.6)',
+      select: () => this.setState({ activeCategory: c.key }),
+    }));
+
+    const groups = CATALOG
+      .filter((b) => s.activeCategory === 'all' || s.activeCategory === b.key)
+      .map((brand) => {
+        const products = brand.models
+          .filter((m) => !q || m.name.toLowerCase().includes(q) || brand.name.toLowerCase().includes(q))
+          .map((m) => {
+            const inStock = m.variants.filter((v) => v.stock > 0);
+            const prices = (inStock.length ? inStock : m.variants).map((v) => v.price);
+            const minPrice = Math.min(...prices);
+            const samePrice = prices.every((p) => p === prices[0]);
+            return {
+              id: m.id,
+              name: m.name,
+              desc: m.desc,
+              variantCount: m.variants.length,
+              priceLabel: samePrice ? fmt(minPrice) : ('A partir de ' + fmt(minPrice)),
+              imgId: 'cat-' + m.id,
+              open: () => this.openDetail(m.id),
+            };
+          });
+        return { key: brand.key, name: brand.name, products };
+      })
+      .filter((g) => g.products.length > 0);
+
+    const cartCount = s.cart.reduce((a, i) => a + i.qty, 0);
+    const cartTotal = s.cart.reduce((a, i) => a + i.qty * i.price, 0);
+    const cartItems = s.cart.map((i) => ({
+      variantId: i.variantId,
+      name: i.productName,
+      optionLabel: i.optionLabel,
+      qty: i.qty,
+      imgId: 'cat-' + i.productId,
+      lineTotal: fmt(i.qty * i.price),
+      decDisabled: i.qty <= 1,
+      incDisabled: i.qty >= i.stock,
+      dec: () => this.setCartQty(i.variantId, -1),
+      inc: () => this.setCartQty(i.variantId, 1),
+      remove: () => this.removeCartItem(i.variantId),
+    }));
+
+    let detailProduct = null, detailCatName = '', detailVariants = [], detailSelected = null;
+    if (s.detailProductId) {
+      for (const brand of CATALOG) {
+        const m = brand.models.find((mm) => mm.id === s.detailProductId);
+        if (m) { detailProduct = m; detailCatName = brand.name; break; }
+      }
+    }
+    let detailAvailable = 0, detailQty = 1, detailAddDisabled = true, detailAddLabel = '';
+    if (detailProduct) {
+      const selId = s.detailVariantId || detailProduct.variants[0].id;
+      detailSelected = detailProduct.variants.find((v) => v.id === selId) || detailProduct.variants[0];
+      detailAvailable = detailSelected.stock;
+      detailQty = Math.min(Math.max(1, s.detailQty), Math.max(detailAvailable, 1));
+      detailAddDisabled = detailAvailable <= 0;
+      detailAddLabel = detailAvailable <= 0 ? 'Esgotado' : `Adicionar · ${fmt(detailSelected.price * detailQty)}`;
+
+      detailVariants = detailProduct.variants.map((v) => {
+        const active = v.id === selId;
+        const soldOut = v.stock <= 0;
+        return {
+          id: v.id,
+          label: v.label,
+          price: fmt(v.price),
+          active,
+          soldOut,
+          bg: active ? 'rgba(143,193,227,0.12)' : 'transparent',
+          borderColor: active ? 'rgba(143,193,227,0.5)' : 'rgba(255,255,255,0.08)',
+          opacity: soldOut ? 0.4 : 1,
+          dotBg: active ? '#8fc1e3' : 'transparent',
+          dotBorder: active ? '#8fc1e3' : 'rgba(245,243,238,0.3)',
+          stockLabel: soldOut ? 'Esgotado' : (v.stock <= 2 ? `Só restam ${v.stock}` : `${v.stock} em estoque`),
+          stockColor: soldOut ? 'rgba(245,243,238,0.35)' : (v.stock <= 2 ? '#d98c6b' : 'rgba(245,243,238,0.45)'),
+          select: () => this.setState({ detailVariantId: v.id, detailQty: 1 }),
+        };
+      });
+    }
+
+    return {
+      showIdentify: s.screen === 'identify',
+      showCatalog: s.screen === 'catalog',
+      name: s.name,
+      phone: s.phone,
+      identifyDisabled: !(s.phone.trim().length >= 8 && s.name.trim().length > 1),
+      onNameChange: (e) => this.setState({ name: e.target.value }),
+      onPhoneChange: (e) => this.setState({ phone: e.target.value }),
+      continueIdentify: () => this.continueIdentify(),
+
+      query: s.query,
+      onQueryChange: (e) => this.setState({ query: e.target.value }),
+      chips,
+      groups,
+      hasResults: groups.length > 0,
+      noResults: groups.length === 0,
+
+      cartCount,
+      cartCountPositive: cartCount > 0,
+      cartTotal: fmt(cartTotal),
+      showCartBar: cartCount > 0 && s.overlay === null,
+      openCart: () => this.setState({ overlay: 'cart' }),
+
+      showDetail: s.overlay === 'detail',
+      showCart: s.overlay === 'cart',
+      showCheckout: s.overlay === 'checkout',
+      showSuccess: s.overlay === 'success',
+      closeOverlay: () => this.setState({ overlay: null }),
+
+      detailCatName,
+      detailName: detailProduct ? detailProduct.name : '',
+      detailDesc: detailProduct ? detailProduct.desc : '',
+      detailHeroId: detailProduct ? 'hero-' + detailProduct.id : 'hero-none',
+      detailVariants,
+      detailQty,
+      decQtyDisabled: detailQty <= 1,
+      incQtyDisabled: detailQty >= detailAvailable,
+      decQty: () => this.setState({ detailQty: Math.max(1, detailQty - 1) }),
+      incQty: () => this.setState({ detailQty: Math.min(detailAvailable, detailQty + 1) }),
+      detailAddDisabled,
+      detailAddLabel,
+      addToCart: () => this.addToCart(detailProduct, detailSelected, detailQty),
+
+      cartItems,
+      cartEmpty: cartItems.length === 0,
+      goCheckout: () => this.setState({ overlay: 'checkout' }),
+
+      notes: s.notes,
+      onNotesChange: (e) => this.setState({ notes: e.target.value }),
+      editIdentity: () => this.setState({ overlay: null, screen: 'identify' }),
+      submitOrder: () => this.submitOrder(),
+      backToCatalog: () => this.setState({ overlay: null }),
+      resetPrototype: () => this.resetPrototype(),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
