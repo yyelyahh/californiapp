@@ -6,6 +6,14 @@ import type { Transition, Variants } from "motion/react";
  */
 export const EASE_OUT: Transition["ease"] = [0.22, 1, 0.36, 1];
 
+/**
+ * Só para percurso longo que precisa de velocidade constante — barra que
+ * preenche, faixa que varre. O `EASE_OUT` acima é quase exponencial: em
+ * animação de meio segundo pra cima ele dispara no começo e parece travar no
+ * fim. Para o resto do app continue usando `EASE_OUT`.
+ */
+export const EASE_IN_OUT: Transition["ease"] = [0.42, 0, 0.58, 1];
+
 export const transitionFast: Transition = { duration: 0.18, ease: EASE_OUT };
 export const transitionBase: Transition = { duration: 0.28, ease: EASE_OUT };
 export const transitionSlow: Transition = { duration: 0.35, ease: EASE_OUT };

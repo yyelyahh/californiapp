@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
-import { EASE_OUT } from "@/lib/motion";
+import { EASE_IN_OUT, EASE_OUT } from "@/lib/motion";
 import { formatPhoneDisplay, onlyDigits } from "@/lib/phone";
 
 import { Input } from "@/components/ui/input";
@@ -169,12 +169,120 @@ function PillButton({
 }
 
 /**
- * Foto do produto. Preenche o quadro que o pai definir, sempre com
- * `object-contain`: as URLs são coladas à mão no ModelImagesDialog e vêm em
- * qualquer proporção, então cortar (`cover`) decepava justamente os packshots
- * verticais. O que sobra fica com o fundo do placeholder, sem emenda visível.
+ * Botão "Adicionar" com a confirmação embutida: ao tocar, o preenchimento
+ * accent varre o botão da esquerda para a direita sobre o fundo esmaecido e,
+ * quando chega ao fim, o rótulo dá lugar a um check no meio.
+ *
+ * O item entra no carrinho já no toque (`onPress`) — se a pessoa fechar o
+ * sheet no meio da animação, nada se perde. O `onDone` só roda depois do
+ * check, e é ele que fecha o sheet.
  */
-function ProductMedia({ src, alt, iconSize }: { src: string | null; alt: string; iconSize: number }) {
+function AddToCartButton({
+  label,
+  disabled,
+  onPress,
+  onDone,
+}: {
+  label: string;
+  disabled?: boolean;
+  onPress: () => void;
+  onDone: () => void;
+}) {
+  const reduce = useReducedMotion();
+  const [phase, setPhase] = useState<"idle" | "filling" | "done">("idle");
+  const timer = useRef<number | null>(null);
+
+  // O `onDone` desmonta este botão junto com o sheet: sem a limpeza, o timer
+  // do check dispararia com o componente já fora da árvore.
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const press = () => {
+    // Ignora toque repetido: durante a animação o botão já está comprometido
+    // com um item, e um segundo clique adicionaria em dobro.
+    if (disabled || phase !== "idle") return;
+    onPress();
+    if (reduce) {
+      onDone();
+      return;
+    }
+    setPhase("filling");
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={press}
+      disabled={disabled}
+      style={{
+        height: 50,
+        background: disabled || phase !== "idle" ? "var(--sf-accent-soft)" : "var(--sf-accent)",
+        color: "var(--sf-accent-ink)",
+      }}
+      className="relative w-full overflow-hidden rounded-full text-sm font-extrabold"
+    >
+      <span className="relative z-10 flex h-full items-center justify-center gap-2">{label}</span>
+
+      {phase !== "idle" && (
+        // Fica ACIMA do rótulo (z-20), não atrás: a faixa é opaca, então vai
+        // encobrindo o texto conforme avança — é o preenchimento que confirma,
+        // não o texto que some sozinho. Anima `width` em vez de `scaleX` porque
+        // escala depende de `transform-origin` e distorce se um dia entrar
+        // conteúdo aqui; largura é o próprio avanço, sem intermediário.
+        <motion.span
+          className="absolute bottom-0 left-0 top-0 z-20"
+          style={{ background: "var(--sf-accent)" }}
+          initial={{ width: "0%" }}
+          animate={{ width: "100%" }}
+          transition={{ duration: 0.8, ease: EASE_IN_OUT }}
+          onAnimationComplete={() => {
+            setPhase("done");
+            timer.current = window.setTimeout(onDone, 360);
+          }}
+        />
+      )}
+
+      {phase === "done" && (
+        <motion.span
+          className="absolute inset-0 z-30 flex items-center justify-center"
+          initial={{ scale: 0.3, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 420, damping: 18 }}
+        >
+          <Check size={20} strokeWidth={3} />
+        </motion.span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * Foto do produto. Preenche o quadro que o pai definir.
+ *
+ * `contain` (padrão) é para as fotos grandes: as URLs são coladas à mão no
+ * ModelImagesDialog e vêm em qualquer proporção, então cortar (`cover`)
+ * decepava justamente os packshots verticais. O que sobra da moldura é
+ * preenchido por uma cópia ampliada e borrada da própria foto — antes ficava
+ * uma tarja cinza chapada denunciando a diferença de proporção.
+ *
+ * `cover` é para miniatura: em 56px não cabe tarja, e o corte central não
+ * atrapalha o reconhecimento.
+ */
+function ProductMedia({
+  src,
+  alt,
+  iconSize,
+  fit = "contain",
+}: {
+  src: string | null;
+  alt: string;
+  iconSize: number;
+  fit?: "contain" | "cover";
+}) {
   // Link quebrado cai no mesmo placeholder do produto sem foto, em vez de
   // mostrar o ícone de imagem partida do navegador.
   const [failed, setFailed] = useState(false);
@@ -182,18 +290,35 @@ function ProductMedia({ src, alt, iconSize }: { src: string | null; alt: string;
 
   return (
     <div
-      className="flex h-full w-full items-center justify-center overflow-hidden"
-      style={{ background: "var(--sf-surface-2)" }}
+      className="relative flex h-full w-full items-center justify-center overflow-hidden"
+      style={{ background: "var(--sf-surface)" }}
     >
       {src && !failed ? (
-        <img
-          src={src}
-          alt={alt}
-          onError={() => setFailed(true)}
-          className="h-full w-full object-contain"
-          loading="lazy"
-          decoding="async"
-        />
+        <>
+          {fit === "contain" && (
+            // Decoração: o alt de verdade está na imagem da frente. É a mesma
+            // URL da outra <img>, então o navegador serve do cache em vez de
+            // baixar duas vezes. `scale-110` cobre o halo transparente que o
+            // blur deixa na borda.
+            <img
+              src={src}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
+              style={{ opacity: 0.5 }}
+              loading="lazy"
+              decoding="async"
+            />
+          )}
+          <img
+            src={src}
+            alt={alt}
+            onError={() => setFailed(true)}
+            className={`relative h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"}`}
+            loading="lazy"
+            decoding="async"
+          />
+        </>
       ) : (
         <Package size={iconSize} style={{ color: "var(--sf-text-dim)" }} />
       )}
@@ -410,6 +535,11 @@ function ProductCard({ model, onOpen }: { model: ModelGroup; onOpen: () => void 
 export default function SellerStorePage() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const validId = !!sellerId && UUID_RE.test(sellerId);
+  // Realce flutuante da lista de sabores. Ficam aqui em cima porque abaixo há
+  // returns antecipados (link inválido, identificação, sucesso) e hook não
+  // pode ficar depois de um return.
+  const reduceMotion = useReducedMotion();
+  const flavorPillId = useId();
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -566,12 +696,9 @@ export default function SellerStorePage() {
       }
       return [...prev, { ...row, quantity: qtyToAdd }];
     });
-    // Curto de propósito: o padrão do sonner (4s) fica na frente de quem está
-    // adicionando um item atrás do outro.
-    toast.success("Adicionado ao carrinho", {
-      description: `${row.flavor} · ${row.model}`,
-      duration: 1500,
-    });
+    // Sem toast aqui: quem confirma agora é o próprio botão (`AddToCartButton`),
+    // que preenche e vira um check antes de o sheet fechar. Um toast por cima
+    // seria a mesma confirmação duas vezes, e ainda por cima da animação.
   };
 
   const setItemQty = (productId: string, q: number) => {
@@ -916,11 +1043,13 @@ export default function SellerStorePage() {
               <SheetTitle className="sr-only">{detailModel.model || "Produto"}</SheetTitle>
               <SheetDescription className="sr-only">Escolha o sabor e a quantidade.</SheetDescription>
 
-              {/* Mesma proporção do card, com teto de altura: num aparelho
-                  baixo o hero em 4:3 comeria a lista de sabores. Como a foto é
-                  `contain`, o teto só encolhe o quadro — nunca corta a imagem. */}
+              {/* Mesma proporção do card, sem teto de altura. O `max-h-[34vh]`
+                  que existia aqui cortava a ALTURA sem encolher a largura, então
+                  a moldura virava ~1,47:1 em vez de 4:3 e a foto `contain`
+                  aparecia com faixa dos dois lados. O hero em 4:3 ocupa ~37vh
+                  dos 88vh do sheet; a lista de sabores rola no resto. */}
               <div
-                className="relative max-h-[34vh] w-full flex-shrink-0 overflow-hidden rounded-t-[28px]"
+                className="relative w-full flex-shrink-0 overflow-hidden rounded-t-[28px]"
                 style={{ aspectRatio: MEDIA_RATIO }}
               >
                 <ProductMedia
@@ -939,7 +1068,10 @@ export default function SellerStorePage() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-5 pb-3 pt-5">
+              {/* layoutScroll: avisa o motion que este bloco rola, senão ele mede
+                  a posição do realce do sabor sem descontar o scroll e a peça
+                  pousa fora do lugar. Mesmo cuidado do `BrandChips`. */}
+              <motion.div layoutScroll className="flex-1 overflow-y-auto px-5 pb-3 pt-5">
                 <p
                   className="mb-1 text-[11.5px] font-bold uppercase tracking-[0.06em]"
                   style={{ color: "var(--sf-accent)" }}
@@ -956,6 +1088,10 @@ export default function SellerStorePage() {
                 >
                   Sabor
                 </p>
+                {/* O realce do sabor escolhido é uma peça única: só o item ativo
+                    renderiza o `motion.span` com `layoutId`, então o motion
+                    desliza a caixinha da opção antiga para a nova em vez de
+                    apagar aqui e acender ali. Mesmo padrão do `BrandChips`. */}
                 <div className="flex flex-col gap-2">
                   {detailModel.flavors.map(f => {
                     const out = f.available <= 0;
@@ -970,23 +1106,44 @@ export default function SellerStorePage() {
                           setSelectedId(f.product_id);
                           setQty(1);
                         }}
-                        className="flex w-full items-center justify-between gap-2.5 rounded-2xl px-3.5 py-3 text-left"
+                        className="relative flex w-full items-center justify-between gap-2.5 rounded-2xl px-3.5 py-3 text-left"
                         style={{
-                          background: active ? "var(--sf-accent-tint)" : "transparent",
-                          border: `1px solid ${active ? "var(--sf-accent-line)" : "var(--sf-border)"}`,
+                          border: "1px solid var(--sf-border)",
                           opacity: out ? 0.4 : 1,
                         }}
                       >
-                        <div className="flex min-w-0 items-center gap-[11px]">
+                        {active && (
+                          // `-inset-px` cobre a borda cinza do próprio botão em
+                          // vez de desenhar uma segunda linha por dentro dela.
+                          <motion.span
+                            layoutId={reduceMotion ? undefined : flavorPillId}
+                            className="absolute -inset-px rounded-[17px]"
+                            style={{
+                              background: "var(--sf-accent-tint)",
+                              border: "1px solid var(--sf-accent-line)",
+                            }}
+                            transition={{ duration: 0.28, ease: EASE_OUT }}
+                          />
+                        )}
+                        <div className="relative z-10 flex min-w-0 items-center gap-[11px]">
                           <span
-                            className="flex h-[19px] w-[19px] flex-none items-center justify-center rounded-full"
+                            className="flex h-[19px] w-[19px] flex-none items-center justify-center rounded-full transition-colors duration-300"
                             style={{
                               background: active ? "var(--sf-accent)" : "transparent",
                               border: `1.5px solid ${active ? "var(--sf-accent)" : "var(--sf-text-dim)"}`,
                               color: "var(--sf-accent-ink)",
                             }}
                           >
-                            {active && <Check size={10} strokeWidth={3} />}
+                            {active && (
+                              <motion.span
+                                className="flex"
+                                initial={{ scale: 0.3, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ duration: 0.2, ease: EASE_OUT }}
+                              >
+                                <Check size={10} strokeWidth={3} />
+                              </motion.span>
+                            )}
                           </span>
                           <span className="min-w-0">
                             <p className="truncate text-sm font-semibold">{f.flavor || "Sem sabor"}</p>
@@ -1004,12 +1161,12 @@ export default function SellerStorePage() {
                             </p>
                           </span>
                         </div>
-                        <span className="flex-none text-sm font-bold">{fmt(f.sale_price)}</span>
+                        <span className="relative z-10 flex-none text-sm font-bold">{fmt(f.sale_price)}</span>
                       </button>
                     );
                   })}
                 </div>
-              </div>
+              </motion.div>
 
               <div
                 className="flex flex-shrink-0 items-center gap-2.5 px-5 pb-7 pt-3.5"
@@ -1022,16 +1179,14 @@ export default function SellerStorePage() {
                   decDisabled={available <= 0 || clampedQty <= 1}
                   incDisabled={clampedQty >= available}
                 />
-                <PillButton
+                <AddToCartButton
                   disabled={!selectedFlavor || available <= 0}
-                  onClick={() => {
-                    if (!selectedFlavor) return;
-                    addToCart(selectedFlavor, clampedQty);
-                    setDetailKey(null);
-                  }}
-                >
-                  {available <= 0 ? "Esgotado" : `Adicionar · ${fmt((selectedFlavor?.sale_price ?? 0) * clampedQty)}`}
-                </PillButton>
+                  label={
+                    available <= 0 ? "Esgotado" : `Adicionar · ${fmt((selectedFlavor?.sale_price ?? 0) * clampedQty)}`
+                  }
+                  onPress={() => selectedFlavor && addToCart(selectedFlavor, clampedQty)}
+                  onDone={() => setDetailKey(null)}
+                />
               </div>
             </>
           )}
@@ -1062,7 +1217,7 @@ export default function SellerStorePage() {
                   style={{ borderBottom: "1px solid var(--sf-hairline)" }}
                 >
                   <div className="h-14 w-14 flex-none overflow-hidden rounded-xl">
-                    <ProductMedia src={i.image_url ?? null} alt={i.model} iconSize={22} />
+                    <ProductMedia src={i.image_url ?? null} alt={i.model} iconSize={22} fit="cover" />
                   </div>
 
                   <div className="min-w-0 flex-1">
