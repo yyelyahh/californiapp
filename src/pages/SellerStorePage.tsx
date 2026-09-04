@@ -238,10 +238,10 @@ function AddToCartButton({
           style={{ background: "var(--sf-accent)" }}
           initial={{ width: "0%" }}
           animate={{ width: "100%" }}
-          transition={{ duration: 0.8, ease: EASE_IN_OUT }}
+          transition={{ duration: 0.6, ease: EASE_IN_OUT }}
           onAnimationComplete={() => {
             setPhase("done");
-            timer.current = window.setTimeout(onDone, 360);
+            timer.current = window.setTimeout(onDone, 380);
           }}
         />
       )}
@@ -715,7 +715,6 @@ export default function SellerStorePage() {
     lines.push(``);
     if (sellerName) lines.push(`👤 Vendedor: ${sellerName}`);
     lines.push(`🙋 Cliente: ${name}`);
-    lines.push(`📱 WhatsApp: ${whatsapp}`);
     lines.push(``);
     lines.push(`📦 ITENS`);
     cart.forEach(i => {
