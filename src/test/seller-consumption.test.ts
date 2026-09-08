@@ -78,3 +78,84 @@ describe("consumo acumulado do vendedor", () => {
     expect(r.openTotal).toBeCloseTo(-50);
   });
 });
+
+describe("consumo do período e imputação FIFO", () => {
+  const JUL = { start: new Date(2026, 6, 1), end: new Date(2026, 6, 31, 23, 59, 59, 999) };
+  const AGO = { start: new Date(2026, 7, 1), end: new Date(2026, 7, 31, 23, 59, 59, 999) };
+
+  it("o card é do período; o em aberto continua acumulado", () => {
+    const r = computeSellerConsumption("s1", {
+      sales: [
+        sale("jul", "2026-07-10T12:00:00Z", 120),
+        sale("ago", "2026-08-02T12:00:00Z", 130),
+      ],
+      sellerManualDebts: [],
+      sellerDebtPayments: [],
+      ...AGO,
+    });
+
+    expect(r.periodTotal).toBeCloseTo(130);
+    expect(r.openTotal).toBeCloseTo(250);
+    expect(r.otherOpen).toBeCloseTo(120);
+  });
+
+  it("o pagamento quita do mais antigo para o mais novo", () => {
+    const r = computeSellerConsumption("s1", {
+      sales: [
+        sale("jul", "2026-07-10T12:00:00Z", 100),
+        sale("ago", "2026-08-02T12:00:00Z", 100),
+      ],
+      sellerManualDebts: [],
+      sellerDebtPayments: [debt("p1", "2026-08-20T12:00:00Z", 100)],
+      ...AGO,
+    });
+
+    const jul = r.entries.find(e => e.id === "jul")!;
+    const ago = r.entries.find(e => e.id === "ago")!;
+    expect(jul.remaining).toBeCloseTo(0);
+    expect(ago.remaining).toBeCloseTo(100);
+    expect(r.periodOpen).toBeCloseTo(100);
+    expect(r.otherOpen).toBeCloseTo(0);
+  });
+
+  it("lançamento quitado de outro mês sai da lista; o em aberto fica", () => {
+    const r = computeSellerConsumption("s1", {
+      sales: [
+        sale("junQuitado", "2026-06-10T12:00:00Z", 100),
+        sale("julAberto", "2026-07-05T12:00:00Z", 80),
+        sale("ago", "2026-08-02T12:00:00Z", 50),
+      ],
+      sellerManualDebts: [],
+      sellerDebtPayments: [debt("p1", "2026-08-20T12:00:00Z", 100)],
+      ...AGO,
+    });
+
+    expect(r.visible.map(e => e.id)).toEqual(["ago", "julAberto"]);
+  });
+
+  it("sem período informado, tudo é do período (compatível com o acumulado)", () => {
+    const r = computeSellerConsumption("s1", {
+      sales: [sale("a", "2026-07-10T12:00:00Z", 120)],
+      sellerManualDebts: [],
+      sellerDebtPayments: [],
+    });
+
+    expect(r.periodTotal).toBeCloseTo(r.consumoTotal);
+    expect(r.otherOpen).toBeCloseTo(0);
+  });
+
+  it("dívida manual entra na mesma fila das retiradas", () => {
+    const r = computeSellerConsumption("s1", {
+      sales: [sale("retJul", "2026-07-20T12:00:00Z", 60)],
+      sellerManualDebts: [debt("divJul", "2026-07-10T12:00:00Z", 40)],
+      sellerDebtPayments: [debt("p1", "2026-07-25T12:00:00Z", 40)],
+      ...JUL,
+    });
+
+    // a dívida é mais velha, então é ela que o pagamento quita
+    expect(r.entries.find(e => e.id === "divJul")!.remaining).toBeCloseTo(0);
+    expect(r.entries.find(e => e.id === "retJul")!.remaining).toBeCloseTo(60);
+    expect(r.periodTotal).toBeCloseTo(100);
+    expect(r.openTotal).toBeCloseTo(60);
+  });
+});

@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   usePendingOrders,
   ORDER_PAYMENT_CHOICES,
+  ORDER_NOTE_MAX,
   type Order,
   type PaymentMethodValue,
 } from "@/hooks/usePendingOrders";
@@ -47,25 +48,52 @@ function formatCurrency(v: number) {
  * `MarkPaidPopover` que já existe para dar baixa numa venda antiga — quem usa
  * um reconhece o outro.
  */
+/**
+ * Confirmar pedido: forma de pagamento + observação curta.
+ *
+ * Mesma peça que a `PaymentPicker` da tela do vendedor, no tema do ERP — as
+ * duas portas de entrada de venda não podem divergir. A observação vai acima
+ * porque o clique no método é o que confirma; fechar o popover apaga o que foi
+ * digitado, para reabrir ser um recomeço.
+ */
 function ConfirmOrderPopover({
   children, disabled, onConfirm,
 }: {
   children: ReactNode;
   disabled?: boolean;
-  onConfirm: (method: PaymentMethodValue) => void | Promise<void>;
+  onConfirm: (method: PaymentMethodValue, notes: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+
+  const change = (next: boolean) => {
+    if (disabled) return;
+    if (!next) setNote("");
+    setOpen(next);
+  };
 
   const pick = async (method: PaymentMethodValue) => {
+    const typed = note.trim();
     setOpen(false);
-    await onConfirm(method);
+    setNote("");
+    await onConfirm(method, typed);
   };
 
   return (
-    <Popover open={open} onOpenChange={o => !disabled && setOpen(o)}>
+    <Popover open={open} onOpenChange={change}>
       <PopoverTrigger asChild disabled={disabled}>{children}</PopoverTrigger>
       <PopoverContent align="end" className="w-60 space-y-2.5 p-3">
         <div className="space-y-1.5">
+          <p className="text-[11px] font-medium text-muted-foreground">Observação (opcional)</p>
+          <Input
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            maxLength={ORDER_NOTE_MAX}
+            placeholder="dia 20, fiado..."
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="space-y-1.5 border-t border-border pt-2.5">
           <p className="text-[11px] font-medium text-muted-foreground">Recebido agora</p>
           <div className="grid grid-cols-2 gap-1.5">
             {ORDER_PAYMENT_CHOICES.filter(c => c.paid).map(c => (
@@ -95,7 +123,7 @@ function PendingOrdersList({
   orders: Order[];
   loading: boolean;
   processingOrder: string | null;
-  onConfirm: (orderId: string, method: PaymentMethodValue) => void;
+  onConfirm: (orderId: string, method: PaymentMethodValue, notes?: string) => void;
   onDecline: (orderId: string) => void;
 }) {
   if (loading) {
@@ -183,7 +211,7 @@ function PendingOrdersList({
             </Button>
             <ConfirmOrderPopover
               disabled={processingOrder === order.id}
-              onConfirm={method => onConfirm(order.id, method)}
+              onConfirm={(method, notes) => onConfirm(order.id, method, notes)}
             >
               <Button size="sm" className="h-8 text-xs" disabled={processingOrder === order.id}>
                 <Check size={13} className="mr-1.5" />Confirmar

@@ -973,7 +973,7 @@ export type Database = {
     }
     Functions: {
       confirm_order: {
-        Args: { p_order_id: string; p_payment_method?: string }
+        Args: { p_notes?: string; p_order_id: string; p_payment_method?: string }
         Returns: undefined
       }
       create_pending_order: {

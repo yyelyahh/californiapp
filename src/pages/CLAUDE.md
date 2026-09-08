@@ -64,6 +64,17 @@ repete a classe:
 
 Vale para qualquer coisa portada: Dialog, Popover, Tooltip, Toast.
 
+**Peça compartilhada com o ERP: a classe sozinha não basta.** `.storefront` só
+define os `--sf-*` — não reescreve `--background`, `--foreground` nem
+`--destructive`. Num componente shadcn que pinta por esses tokens (o
+`AlertDialogContent` do `ConfirmProvider`, por exemplo) repetir a classe não
+muda nada: ele continua saindo com o Nocturne. E o tema não dá para deduzir do
+DOM, porque o Radix já tirou o elemento da árvore da página. Quem sabe é a tela
+que chama, e ela avisa: `useConfirm` aceita `storefront: true`, e
+`usePendingOrders({ storefront: true })` repassa isso no diálogo de recusar
+pedido. Peça nova compartilhada entre os dois temas segue esse caminho — um
+sinalizador vindo de quem chama, não uma adivinhação no componente.
+
 ## 3. Esqueleto da página
 
 ```tsx

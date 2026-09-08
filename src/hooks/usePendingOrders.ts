@@ -66,7 +66,21 @@ export const ORDER_PAYMENT_CHOICES: { id: PaymentMethodValue; label: string; pai
   { id: "pendente", label: "Falta receber (a definir)", paid: false },
 ];
 
-export function usePendingOrders() {
+/**
+ * `storefront`: a tela do vendedor usa o tema da loja, e o diálogo de
+ * confirmação é portado para fora da árvore dela pelo Radix — sem este aviso
+ * ele sai pintado com o Nocturne do ERP no meio da loja. O hook é o mesmo nas
+ * duas telas, então quem sabe o tema é quem chama.
+ */
+/**
+ * Teto da observação de confirmação. Espelha o `left(..., 80)` do
+ * `confirm_order`: cortar só no banco deixaria a pessoa digitar 200
+ * caracteres e descobrir depois, na listagem, que metade sumiu.
+ */
+export const ORDER_NOTE_MAX = 80;
+
+export function usePendingOrders(options?: { storefront?: boolean }) {
+  const storefront = options?.storefront === true;
   const { refreshSales } = useStore();
   const confirm = useConfirm();
 
@@ -117,13 +131,23 @@ export function usePendingOrders() {
     };
   }, [fetchPendingOrders]);
 
-  const confirmOrder = async (orderId: string, method: PaymentMethodValue) => {
+  /**
+   * `notes` é o acerto que não cabe no vocabulário fechado de forma de
+   * pagamento: "dia 20", "fiado", "pagou metade". Texto livre, não mexe em
+   * valor nenhum — quem deriva o valor pago continua sendo o método. O banco
+   * corta em 80 caracteres e grava a observação ANTES da referência do pedido
+   * em `sales.notes`, senão a coluna da SalesPage (140px) só mostraria o
+   * "Pedido via catálogo #<uuid>".
+   */
+  const confirmOrder = async (orderId: string, method: PaymentMethodValue, notes?: string) => {
     if (processingOrder) return;
     setProcessingOrder(orderId);
     try {
+      const trimmed = notes?.trim();
       const { error } = await supabase.rpc("confirm_order", {
         p_order_id: orderId,
         p_payment_method: method,
+        p_notes: trimmed || undefined,
       });
       if (error) throw error;
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
@@ -154,7 +178,14 @@ export function usePendingOrders() {
   };
 
   const declineOrder = async (orderId: string) => {
-    if (!(await confirm({ title: "Recusar pedido", description: "Tem certeza? Essa ação não pode ser desfeita e o pedido será cancelado." }))) return;
+    const ok = await confirm({
+      title: "Recusar pedido",
+      description: "Tem certeza? Essa ação não pode ser desfeita e o pedido será cancelado.",
+      confirmText: "Recusar",
+      cancelText: "Voltar",
+      storefront,
+    });
+    if (!ok) return;
     if (processingOrder) return;
     setProcessingOrder(orderId);
     try {

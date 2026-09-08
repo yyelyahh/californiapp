@@ -158,6 +158,14 @@ export type SellerLedgerInput = {
   historyStart: Date;
   /** Início do período consultado (dia 1 do mês inicial). */
   periodStart: Date;
+  /**
+   * Projeção: trata TODA venda como quitada, não só as que já foram pagas.
+   * A comissão é apurada por mês fechado, então a venda em aberto entra no
+   * fechamento do mês em que foi FEITA — é o mesmo que assumir o pagamento no
+   * dia da venda. Sem isso, receber uma venda velha não mexeria em faixa
+   * nenhuma e o saldo projetado sairia menor do que vai ser de verdade.
+   */
+  assumePaid?: boolean;
 };
 
 function inRange(iso: string, from: Date, to: Date) {
@@ -173,14 +181,14 @@ function isPaidSale(s: Sale) {
 
 /** Saldo de comissão acumulado ANTES do início do período consultado. */
 export function computePriorCommissionBalance(input: SellerLedgerInput): number {
-  const { sellerId, sales, commissionPayments, debtPayments, manualDebts, historyStart, periodStart } = input;
+  const { sellerId, sales, commissionPayments, debtPayments, manualDebts, historyStart, periodStart, assumePaid } = input;
   const priorEnd = new Date(periodStart.getTime() - 1);
   if (priorEnd <= historyStart) return 0;
 
   const sellerSales = sales.filter(s => s.sellerId === sellerId);
 
   const paidSales = sellerSales.filter(
-    s => s.type === "venda" && isPaidSale(s) && new Date(s.date) >= historyStart,
+    s => s.type === "venda" && (assumePaid || isPaidSale(s)) && new Date(s.date) >= historyStart,
   );
   const accrued = computeClosedCommission(paidSales, historyStart, priorEnd).accrued;
 
@@ -246,10 +254,36 @@ export function computeAccrualHistory(sales: Sale[]) {
 /* ------------------------------------------------------------------ *
  * Consumo do vendedor (retiradas + dívidas manuais − pagamentos)
  * ------------------------------------------------------------------ *
- * Diferente de computeSellerBalance, aqui o recorte é ACUMULADO: vale
- * desde o início do histórico até hoje, porque é a dívida que o
- * vendedor ainda tem em aberto — não o consumo de um mês específico.
+ * Dois recortes convivem aqui de propósito:
+ *
+ * - `periodTotal` é o consumo LANÇADO no período consultado — é o número
+ *   que o vendedor vê no card, porque "consumi tanto este mês" é a
+ *   pergunta que ele faz.
+ * - `openTotal` é ACUMULADO desde o início do histórico: é a dívida que
+ *   ele ainda tem, e ela não zera na virada do mês.
+ *
+ * Os pagamentos de dívida (`sellerDebtPayments`) são lançamentos soltos,
+ * sem vínculo com um item específico, então a quitação é imputada em
+ * FIFO — do lançamento mais antigo para o mais novo. É isso que decide
+ * quais itens de meses anteriores continuam aparecendo na lista: item
+ * que ainda tem saldo não sai dali até ser pago.
  */
+export type ConsumptionEntry = {
+  id: string;
+  kind: "retirada" | "divida";
+  date: string;
+  /** Valor lançado. */
+  amount: number;
+  /** Quanto ainda falta pagar deste item, depois da imputação FIFO. */
+  remaining: number;
+  /** Caiu dentro do período consultado. */
+  inPeriod: boolean;
+  /** A retirada original, quando `kind === "retirada"`. */
+  sale?: Sale;
+  /** A dívida original, quando `kind === "divida"`. */
+  debt?: SellerManualDebt;
+};
+
 export type SellerConsumption = {
   /** Retiradas do vendedor, mais recentes primeiro. */
   retiradas: Sale[];
@@ -257,10 +291,20 @@ export type SellerConsumption = {
   manualDebts: SellerManualDebt[];
   manualDebtsTotal: number;
   debtPaymentsTotal: number;
-  /** Retiradas + dívidas manuais. */
+  /** Retiradas + dívidas manuais, acumulado. */
   consumoTotal: number;
   /** consumoTotal − pagamentos de dívida já feitos. */
   openTotal: number;
+  /** Todo o consumo como lançamentos, mais recentes primeiro. */
+  entries: ConsumptionEntry[];
+  /** O que aparece na lista: o do período + o que ficou em aberto fora dele. */
+  visible: ConsumptionEntry[];
+  /** Consumo lançado dentro do período. */
+  periodTotal: number;
+  /** Quanto do consumo do período ainda falta pagar. */
+  periodOpen: number;
+  /** O que falta dos outros meses (openTotal − periodOpen). */
+  otherOpen: number;
 };
 
 export function computeSellerConsumption(
@@ -271,13 +315,21 @@ export function computeSellerConsumption(
     sellerDebtPayments: SellerDebtPayment[];
     /** Início válido do histórico. Padrão: PROJECT_START. */
     since?: Date;
+    /** Recorte do card. Sem ele, período = histórico inteiro. */
+    start?: Date;
+    end?: Date;
   },
 ): SellerConsumption {
-  const { sales, sellerManualDebts, sellerDebtPayments, since = PROJECT_START } = input;
+  const { sales, sellerManualDebts, sellerDebtPayments, since = PROJECT_START, start, end } = input;
   const afterStart = (iso: string) => {
     if (!iso) return false;
     const d = new Date(iso);
     return !isNaN(d.getTime()) && d >= since;
+  };
+  const inPeriod = (iso: string) => {
+    if (!start || !end) return true;
+    const d = new Date(iso);
+    return !isNaN(d.getTime()) && d >= start && d <= end;
   };
 
   const retiradas = sales
@@ -295,14 +347,43 @@ export function computeSellerConsumption(
     .reduce((a, p) => a + p.amount, 0);
 
   const consumoTotal = retiradasTotal + manualDebtsTotal;
+  const openTotal = consumoTotal - debtPaymentsTotal;
+
+  // Imputação FIFO: o pagamento mais velho quita o lançamento mais velho.
+  let pool = Math.max(0, debtPaymentsTotal);
+  const entries: ConsumptionEntry[] = [
+    ...retiradas.map<ConsumptionEntry>(s => ({
+      id: s.id, kind: "retirada", date: s.date, amount: s.totalPrice,
+      remaining: s.totalPrice, inPeriod: inPeriod(s.date), sale: s,
+    })),
+    ...manualDebts.map<ConsumptionEntry>(d => ({
+      id: d.id, kind: "divida", date: d.date, amount: d.amount,
+      remaining: d.amount, inPeriod: inPeriod(d.date), debt: d,
+    })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  for (const e of entries) {
+    const applied = Math.min(pool, e.amount);
+    pool -= applied;
+    e.remaining = e.amount - applied;
+  }
+  entries.reverse(); // volta para "mais recente primeiro"
+
+  const periodTotal = entries.filter(e => e.inPeriod).reduce((a, e) => a + e.amount, 0);
+  const periodOpen = entries.filter(e => e.inPeriod).reduce((a, e) => a + e.remaining, 0);
 
   return {
     retiradas, retiradasTotal,
     manualDebts, manualDebtsTotal,
     debtPaymentsTotal, consumoTotal,
-    openTotal: consumoTotal - debtPaymentsTotal,
+    openTotal,
+    entries,
+    visible: entries.filter(e => e.inPeriod || e.remaining > 0.01),
+    periodTotal, periodOpen,
+    otherOpen: openTotal - periodOpen,
   };
 }
+
 
 /* ------------------------------------------------------------------ *
  * Saldo do vendedor num período (unidades, comissão, dívidas, saldo)
@@ -350,6 +431,25 @@ export function computeSellerBalance(seller: Seller, ctx: SellerBalanceContext) 
   const adjustmentsTotal = accrualItems.filter(i => i.kind === "adjustment").reduce((a, x) => a + x.amount, 0);
   const baseAccrued = accrued - adjustmentsTotal;
 
+  // Projeção: o saldo que este vendedor tem DEPOIS de receber tudo o que está
+  // em aberto — de qualquer mês, não só do período. A comissão só é apurada
+  // sobre venda quitada, então a venda em aberto hoje não conta nem no valor
+  // nem nas unidades que definem a faixa; é justamente ela que pode empurrar o
+  // vendedor para a faixa de cima. Aqui as mesmas vendas entram pelo valor de
+  // venda normal (`totalPrice`, não o que já foi recebido) e no fechamento do
+  // mês em que foram FEITAS — o mesmo que assumir o pagamento no dia da venda.
+  const vendasTodas = sales.filter(s =>
+    s.sellerId === seller.id && s.type === "venda" && !isLegacy(s.date)
+  );
+  const projected = computeClosedCommission(vendasTodas, start, end);
+  const projectedAccrued = projected.accrued;
+  const projectedUnits = projected.units;
+  const projectedTier = projected.tier;
+  // Tudo o que ainda falta entrar no bolso (soma dos saldos, não do valor cheio).
+  const pendingToReceive = vendasTodas
+    .filter(s => (s.paidAmount || 0) < s.totalPrice - 0.01)
+    .reduce((a, s) => a + (s.totalPrice - (s.paidAmount || 0)), 0);
+
   const retiradas = sellerSales.filter(s => s.type === "retirada_funcionario");
   const retiradasTotal = retiradas.reduce((a, s) => a + s.totalPrice, 0);
   const manualDebts = sellerManualDebts.filter(d => d.sellerId === seller.id && inClosedPeriod(d.date) && !isLegacy(d.date));
@@ -374,10 +474,28 @@ export function computeSellerBalance(seller: Seller, ctx: SellerBalanceContext) 
   });
   const balance = priorBalance + periodBalance;
 
+  // O mesmo saldo, mas com todo mundo pago. `assumePaid` recalcula o histórico
+  // anterior ao período pela mesma regra, senão receber uma venda de julho não
+  // apareceria em lugar nenhum na tela de agosto.
+  const projectedPeriodBalance = projectedAccrued - saldoConsumo + debtPaymentsTotal - commPaid;
+  const projectedPriorBalance = computePriorCommissionBalance({
+    sellerId: seller.id,
+    sales,
+    commissionPayments,
+    debtPayments: sellerDebtPayments,
+    manualDebts: sellerManualDebts,
+    historyStart: PROJECT_START,
+    periodStart: closedStart,
+    assumePaid: true,
+  });
+  const projectedBalance = projectedPriorBalance + projectedPeriodBalance;
+
   return {
     seller, units, vendasTotal, commPaid,
     accrued, baseAccrued, adjustmentsTotal,
     tier: c.tier, balance, accrualItems,
+    projectedAccrued, projectedUnits, projectedTier, pendingToReceive,
+    projectedBalance, projectedPriorBalance, projectedPeriodBalance,
     consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
     retiradasTotal, manualDebtsTotal, retiradasCount,
     periodBalance, priorBalance,
