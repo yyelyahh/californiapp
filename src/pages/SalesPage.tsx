@@ -1,7 +1,6 @@
 import { useStore } from "@/context/StoreContext";
-import { useAuth } from "@/context/AuthContext";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, ChevronDown } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,10 +18,12 @@ import BatchSaleForm from "@/components/BatchSaleForm";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
-import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, subMonths, parseISO } from "date-fns";
-import { computeSellerBalance, computeSellerConsumption, PROJECT_START } from "@/lib/commissions";
+import {
+  usePendingOrders,
+  ORDER_PAYMENT_CHOICES,
+  type Order,
+  type PaymentMethodValue,
+} from "@/hooks/usePendingOrders";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -36,52 +37,9 @@ function timeAgo(dateStr: string) {
   return `há ${days} dias`;
 }
 
-type OrderItem = {
-  id: string;
-  order_id: string;
-  product_id: string;
-  quantity: number;
-  unit_price: number;
-  created_at: string;
-  products: { name: string; brand: string; flavor: string } | null;
-};
-
-type Order = {
-  id: string;
-  customer_id: string;
-  seller_id: string;
-  status: string;
-  freight_notes?: string;
-  total_amount: number;
-  created_at: string;
-  confirmed_at?: string;
-  customers: { name: string; whatsapp: string } | null;
-  sellers: { name: string } | null;
-  order_items: OrderItem[];
-};
-
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
-
-/**
- * As formas de pagamento oferecidas ao confirmar um pedido do catálogo.
- *
- * É o mesmo vocabulário do formulário de venda manual, e a divisão entre
- * recebido e a receber é a mesma regra: método "pago" grava a venda quitada,
- * método "pendente" grava com zero recebido e ela cai nos filtros de cobrança.
- * O valor pago não é digitado aqui de propósito — pedido de catálogo é sempre
- * o total ou nada, e um campo livre só abriria espaço para divergir do total
- * que o cliente já viu no comprovante.
- */
-const ORDER_PAYMENT_CHOICES: { id: PaymentMethodValue; label: string; paid: boolean }[] = [
-  { id: "pix", label: "Pix", paid: true },
-  { id: "dinheiro", label: "Dinheiro", paid: true },
-  { id: "pix_pendente", label: "Falta receber Pix", paid: false },
-  { id: "dinheiro_pendente", label: "Falta receber Dinheiro", paid: false },
-  { id: "dinheiro_com_vendedor", label: "Dinheiro com o vendedor", paid: false },
-  { id: "pendente", label: "Falta receber (a definir)", paid: false },
-];
 
 /**
  * Confirmar deixou de ser um clique só: a venda precisa saber se o dinheiro
@@ -238,85 +196,6 @@ function PendingOrdersList({
   );
 }
 
-/**
- * Card de pedido novo na visão do vendedor — mobile-first.
- * O admin usa PendingOrdersList (tabela); aqui o formato é de "pedido chegando",
- * com o essencial visível sem rolar e as duas ações no polegar.
- */
-function SellerOrderCard({
-  order, processing, onConfirm, onDecline,
-}: {
-  order: Order;
-  processing: boolean;
-  onConfirm: (orderId: string, method: PaymentMethodValue) => void;
-  onDecline: (orderId: string) => void;
-}) {
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 10, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      className="rounded-2xl border border-primary/30 bg-card p-4 shadow-lg ring-1 ring-primary/10"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-            </span>
-            Novo pedido
-          </span>
-          <p className="text-base font-semibold leading-tight truncate">{order.customers?.name ?? "Sem cliente"}</p>
-          <p className="text-[11px] text-muted-foreground mono truncate">{order.customers?.whatsapp ?? "—"}</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-lg font-bold mono leading-tight">{formatCurrency(order.total_amount)}</p>
-          <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1 mt-0.5">
-            <Clock size={11} />{timeAgo(order.created_at)}
-          </p>
-        </div>
-      </div>
-
-      <ul className="mt-3 space-y-1 rounded-lg bg-secondary/40 px-3 py-2">
-        {order.order_items?.map(item => (
-          <li key={item.id} className="flex items-baseline justify-between gap-2 text-[13px]">
-            <span className="min-w-0 flex-1 truncate">
-              <span className="mono font-semibold">{item.quantity}×</span>{" "}
-              <span className="font-medium">{item.products?.flavor ?? "Produto"}</span>
-              {item.products?.brand && <span className="text-muted-foreground"> · {item.products.brand}</span>}
-            </span>
-            <span className="mono shrink-0 text-muted-foreground">{formatCurrency(item.quantity * item.unit_price)}</span>
-          </li>
-        ))}
-      </ul>
-
-      {order.freight_notes && (
-        <p className="mt-2 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Frete:</span> {order.freight_notes}
-        </p>
-      )}
-
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <Button
-          variant="outline"
-          className="h-11 text-sm"
-          disabled={processing}
-          onClick={() => onDecline(order.id)}
-        >
-          <Ban size={15} className="mr-1.5" />Recusar
-        </Button>
-        <ConfirmOrderPopover disabled={processing} onConfirm={method => onConfirm(order.id, method)}>
-          <Button className="h-11 text-sm col-span-2" disabled={processing}>
-            <Check size={16} className="mr-1.5" />{processing ? "Confirmando..." : "Confirmar pedido"}
-          </Button>
-        </ConfirmOrderPopover>
-      </div>
-    </motion.div>
-  );
-}
-
 function MarkPaidPopover({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro") => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -351,22 +230,6 @@ function MarkPaidPopover({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro"
 }
 
 
-type PaymentMethodValue =
-  | "pix"
-  | "dinheiro"
-  | "pix_pendente"
-  | "dinheiro_pendente"
-  | "dinheiro_com_vendedor"
-  | "pendente";
-
-type SellerPeriod = "month" | "lastMonth" | "quarter";
-
-const SELLER_PERIODS: { id: SellerPeriod; label: string }[] = [
-  { id: "month", label: "Este mês" },
-  { id: "lastMonth", label: "Mês passado" },
-  { id: "quarter", label: "Trimestre" },
-];
-
 const emptyForm = { productId: "", quantity: "", unitPrice: "", date: todayDateString(), notes: "", installments: "1", paidAmount: "0", sellerId: "", type: "venda" as "venda" | "retirada_funcionario", paymentMethod: "pix" as PaymentMethodValue, paidDate: todayDateString() };
 
 export default function SalesPage() {
@@ -374,9 +237,18 @@ export default function SalesPage() {
     products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName, refreshSales,
     commissionPayments, sellerDebtPayments, sellerManualDebts,
   } = useStore();
-  const { role, sellerId } = useAuth();
   const confirm = useConfirm();
-  const isSeller = role === "seller";
+
+  // Pedidos do catálogo esperando decisão. O vendedor decide os dele na
+  // SellerSalesPage, pelo MESMO hook: confirmar e recusar são uma regra só, em
+  // um lugar só.
+  const {
+    pendingOrders,
+    loadingOrders,
+    processingOrder,
+    confirmOrder: handleConfirmOrder,
+    declineOrder: handleDeclineOrder,
+  } = usePendingOrders();
 
   const [open, setOpen] = useState(false);
   const [modalTab, setModalTab] = useState<"unica" | "lote">("unica");
@@ -384,166 +256,16 @@ export default function SalesPage() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
 
-  // Filtro de período da visão do vendedor
-  const [sellerPeriod, setSellerPeriod] = useState<SellerPeriod>("month");
-  const [consumoOpen, setConsumoOpen] = useState(false);
-
-  // Pedidos pendentes
-  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
-
-  // silent = atualização em segundo plano: não pisca o "Carregando..." nem avisa erro de rede.
-  const fetchPendingOrders = async (opts?: { silent?: boolean }) => {
-    const silent = opts?.silent ?? false;
-    if (!silent) setLoadingOrders(true);
-    // Carimba como 'expirada' o que passou das 24h antes de listar, senão
-    // pedido morto continuaria aqui pedindo uma decisão que não existe mais.
-    // O estoque dele já voltou ao catálogo sozinho (o cálculo do `available`
-    // ignora reserva vencida), então isto é só a limpeza da lista — se falhar,
-    // nada trava: no máximo um card a mais aparece até a próxima passagem.
-    await supabase.rpc("expire_stale_orders");
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, flavor))")
-      .eq("status", "pendente")
-      .order("created_at", { ascending: false });
-    if (error) {
-      if (!silent) toast({ title: "Erro ao carregar pedidos", description: error.message, variant: "destructive" });
-    } else {
-      setPendingOrders((data as Order[]) ?? []);
-    }
-    if (!silent) setLoadingOrders(false);
-  };
-
-  useEffect(() => {
-    fetchPendingOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Pedido novo precisa aparecer sem o vendedor recarregar a página: recarrega ao
-  // voltar para a aba e a cada minuto enquanto ela está visível.
-  useEffect(() => {
-    const refreshIfVisible = () => {
-      if (document.visibilityState === "visible") fetchPendingOrders({ silent: true });
-    };
-    document.addEventListener("visibilitychange", refreshIfVisible);
-    window.addEventListener("focus", refreshIfVisible);
-    const timer = window.setInterval(refreshIfVisible, 60000);
-    return () => {
-      document.removeEventListener("visibilitychange", refreshIfVisible);
-      window.removeEventListener("focus", refreshIfVisible);
-      window.clearInterval(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleConfirmOrder = async (orderId: string, method: PaymentMethodValue) => {
-    if (processingOrder) return;
-    setProcessingOrder(orderId);
-    try {
-      const { error } = await supabase.rpc("confirm_order", {
-        p_order_id: orderId,
-        p_payment_method: method,
-      });
-      if (error) throw error;
-      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-      await refreshSales();
-      const paid = ORDER_PAYMENT_CHOICES.find(c => c.id === method)?.paid;
-      toast({
-        title: "Pedido confirmado",
-        description: paid
-          ? "Estoque atualizado e venda registrada como recebida."
-          : "Estoque atualizado. A venda entrou como falta receber.",
-      });
-    } catch (err: any) {
-      const raw = String(err?.message ?? "");
-      // Pedido vencido é o caso mais provável de dar erro aqui, e a mensagem
-      // crua do Postgres não diz nada para quem está com o celular na mão.
-      const description = raw.includes("pedido_expirado")
-        ? "Este pedido passou das 24h e a reserva já foi liberada. Peça ao cliente para refazer no catálogo."
-        : raw.includes("pedido_ja_processado")
-          ? "Este pedido já tinha sido confirmado ou recusado."
-          : raw.includes("estoque")
-            ? "Não há mais estoque suficiente para este pedido."
-            : raw || "Tente novamente.";
-      toast({ title: "Erro ao confirmar", description, variant: "destructive" });
-      fetchPendingOrders({ silent: true });
-    } finally {
-      setProcessingOrder(null);
-    }
-  };
-
-  const handleDeclineOrder = async (orderId: string) => {
-    if (!(await confirm({ title: "Recusar pedido", description: "Tem certeza? Essa ação não pode ser desfeita e o pedido será cancelado." }))) return;
-    if (processingOrder) return;
-    setProcessingOrder(orderId);
-    try {
-      const { error } = await supabase.rpc("decline_order", { p_order_id: orderId });
-      if (error) throw error;
-      setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-      toast({ title: "Pedido recusado", description: "O pedido foi cancelado com sucesso." });
-    } catch (err: any) {
-      toast({ title: "Erro ao recusar", description: err?.message || "Tente novamente.", variant: "destructive" });
-    } finally {
-      setProcessingOrder(null);
-    }
-  };
-
-  // Período selecionado na visão do vendedor (mês atual / mês passado / trimestre)
-  const sellerRange = useMemo(() => {
-    const now = new Date();
-    if (sellerPeriod === "lastMonth") {
-      const prev = subMonths(now, 1);
-      return { start: startOfMonth(prev), end: endOfMonth(prev) };
-    }
-    if (sellerPeriod === "quarter") {
-      return { start: startOfQuarter(now), end: endOfQuarter(now) };
-    }
-    return { start: startOfMonth(now), end: endOfMonth(now) };
-  }, [sellerPeriod]);
-
-  // "Minha comissão" (somente leitura, vendedor) — mesmo cálculo usado na página de Distribuição (admin),
-  // restrito ao período selecionado.
-  const myCommissionBalance = useMemo(() => {
-    if (!isSeller || !sellerId) return null;
-    const mySeller = sellers.find(s => s.id === sellerId);
-    if (!mySeller) return null;
-    const { start, end } = sellerRange;
-    // Comissão fecha por mês: a faixa acumula do dia 1 ao último dia de cada mês tocado pelo período.
-    const closedStart = startOfMonth(start);
-    const closedEnd = endOfMonth(end);
-    const isLegacy = (iso: string) => {
-      try { return parseISO(iso) < PROJECT_START; } catch { return false; }
-    };
-    const inClosedPeriod = (iso: string) => {
-      try {
-        const d = parseISO(iso);
-        return d >= closedStart && d <= closedEnd;
-      } catch { return false; }
-    };
-    return computeSellerBalance(mySeller, {
-      sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
-      start, end, closedStart, PROJECT_START, isLegacy, inClosedPeriod,
-    });
-  }, [isSeller, sellerId, sellers, sales, commissionPayments, sellerDebtPayments, sellerManualDebts, sellerRange]);
-
-  // Consumo próprio (retiradas + dívidas − pagamentos). Acumulado, não segue o filtro
-  // de período: é o que o vendedor ainda deve, não o consumo de um mês só.
-  const myConsumption = useMemo(() => {
-    if (!isSeller || !sellerId) return null;
-    return computeSellerConsumption(sellerId, { sales, sellerManualDebts, sellerDebtPayments });
-  }, [isSeller, sellerId, sales, sellerManualDebts, sellerDebtPayments]);
-
-  // Vendedor efetivo para filtrar produtos: vendedor logado, ou seleção do admin
-  const effectiveSellerId = isSeller ? sellerId : (form.sellerId || null);
+  // Esta tela é só do admin — o vendedor tem a SellerSalesPage e não registra
+  // venda —, então o vendedor da venda é sempre o escolhido no formulário.
+  const effectiveSellerId = form.sellerId || null;
 
   const availableProducts = effectiveSellerId
     ? products.filter(p => {
         const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === effectiveSellerId);
         return assignment && assignment.quantity > 0;
       })
-    : (isSeller ? [] : products.filter(p => p.stock > 0));
+    : products.filter(p => p.stock > 0);
 
   const getAssignedQuantity = (productId: string) => {
     if (!effectiveSellerId) return null;
@@ -619,7 +341,7 @@ export default function SalesPage() {
     if (!form.productId || !form.quantity) return;
 
     // Retirada exige vendedor
-    if (form.type === "retirada_funcionario" && !isSeller && !form.sellerId) {
+    if (form.type === "retirada_funcionario" && !form.sellerId) {
       alert("Selecione o funcionário para a retirada.");
       return;
     }
@@ -645,7 +367,7 @@ export default function SalesPage() {
           paymentMethod: form.type === "venda" ? form.paymentMethod : undefined,
         });
       } else {
-        const effectiveSellerId = isSeller && sellerId ? sellerId : (form.sellerId || undefined);
+        const effectiveSellerId = form.sellerId || undefined;
         await addSale({
           productId: form.productId,
           quantity: Number(form.quantity),
@@ -680,45 +402,40 @@ export default function SalesPage() {
 
   const saleForm = (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Toggle tipo - só admin pode marcar retirada para outros */}
-      {!isSeller && (
-        <div>
-          <Label className="mb-2 block">Tipo de Registro</Label>
-          <SegmentedToggle
-            value={form.type}
-            onChange={(v) => setForm(f => ({ ...f, type: v }))}
-            options={[
-              { id: "venda" as const, label: "Venda Normal" },
-              { id: "retirada_funcionario" as const, label: "Retirada Funcionário" },
-            ]}
-          />
+      <div>
+        <Label className="mb-2 block">Tipo de Registro</Label>
+        <SegmentedToggle
+          value={form.type}
+          onChange={(v) => setForm(f => ({ ...f, type: v }))}
+          options={[
+            { id: "venda" as const, label: "Venda Normal" },
+            { id: "retirada_funcionario" as const, label: "Retirada Funcionário" },
+          ]}
+        />
 
-          {isRetirada && (
-            <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
-              <span>Não entra no faturamento. Vai para o saldo devedor do funcionário.</span>
-            </div>
-          )}
-        </div>
-      )}
+        {isRetirada && (
+          <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>Não entra no faturamento. Vai para o saldo devedor do funcionário.</span>
+          </div>
+        )}
+      </div>
 
-      {!isSeller && (
-        <div>
-          <Label>Funcionário {isRetirada && <span className="text-destructive">*</span>}</Label>
-          <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v, productId: "" }))} disabled={!!editingSale}>
-            <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Selecione o vendedor"} /></SelectTrigger>
-            <SelectContent>
-              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {!form.sellerId && !editingSale && (
-            <p className="text-xs text-muted-foreground mt-1">Selecione um vendedor para ver os produtos atribuídos a ele.</p>
-          )}
-        </div>
-      )}
+      <div>
+        <Label>Funcionário {isRetirada && <span className="text-destructive">*</span>}</Label>
+        <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v, productId: "" }))} disabled={!!editingSale}>
+          <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Selecione o vendedor"} /></SelectTrigger>
+          <SelectContent>
+            {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {!form.sellerId && !editingSale && (
+          <p className="text-xs text-muted-foreground mt-1">Selecione um vendedor para ver os produtos atribuídos a ele.</p>
+        )}
+      </div>
 
       <motion.div
-        key={!isSeller && !form.sellerId ? "produto-off" : "produto-on"}
+        key={!form.sellerId ? "produto-off" : "produto-on"}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
@@ -728,8 +445,8 @@ export default function SalesPage() {
         <Select value={form.productId} onValueChange={v => {
           const prod = products.find(p => p.id === v);
           setForm(f => ({ ...f, productId: v, unitPrice: prod?.salePrice?.toString() || f.unitPrice }));
-        }} disabled={!!editingSale || (!isSeller && !form.sellerId)}>
-          <SelectTrigger><SelectValue placeholder={!isSeller && !form.sellerId ? "Selecione o vendedor primeiro" : "Selecione"} /></SelectTrigger>
+        }} disabled={!!editingSale || !form.sellerId}>
+          <SelectTrigger><SelectValue placeholder={!form.sellerId ? "Selecione o vendedor primeiro" : "Selecione"} /></SelectTrigger>
           <SelectContent>
             {availableProducts.length === 0 && (
               <div className="px-2 py-3 text-xs text-muted-foreground text-center">
@@ -762,7 +479,7 @@ export default function SalesPage() {
         const total = Number(form.quantity) * Number(form.unitPrice);
         const paid = Number(form.paidAmount) || 0;
         const isPending = total > 0 ? paid < total - 0.01 : false;
-        const sellerName = form.sellerId ? getSellerName(form.sellerId) : (isSeller && sellerId ? getSellerName(sellerId) : "");
+        const sellerName = form.sellerId ? getSellerName(form.sellerId) : "";
         const paidOpts: { id: PaymentMethodValue; label: string; disabled?: boolean }[] = [
           { id: "pix", label: "Pix" },
           { id: "dinheiro", label: "Dinheiro" },
@@ -831,261 +548,6 @@ export default function SalesPage() {
       <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Salvando..." : (editingSale ? "Salvar Alterações" : (isRetirada ? "Registrar Retirada" : "Registrar Venda"))}</Button>
     </form>
   );
-
-  if (isSeller) {
-    const rangeStartTs = sellerRange.start.getTime();
-    const rangeEndTs = sellerRange.end.getTime();
-    const mySales = [...sales]
-      .filter(s => {
-        if (s.sellerId !== sellerId || (s.type || "venda") === "retirada_funcionario") return false;
-        const ts = new Date(s.date).getTime();
-        return !isNaN(ts) && ts >= rangeStartTs && ts <= rangeEndTs;
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const periodLabel = SELLER_PERIODS.find(p => p.id === sellerPeriod)?.label ?? "";
-
-    const sumTotal = mySales.reduce((acc, s) => acc + s.totalPrice, 0);
-    const sumPaid = mySales.reduce((acc, s) => acc + s.paidAmount, 0);
-    const sumOpen = mySales.reduce((acc, s) => acc + Math.max(0, s.totalPrice - s.paidAmount), 0);
-
-    const consumo = myConsumption;
-
-    return (
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
-          <h1 className="text-xl font-semibold tracking-tight">Vendas</h1>
-          <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
-            <SheetTrigger asChild>
-              <Button onClick={openNew} size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Venda</Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-              <SheetHeader className="mb-4">
-                <SheetTitle>{editingSale ? "Editar venda" : "Registrar venda"}</SheetTitle>
-                <SheetDescription>{editingSale ? "Ajuste os dados da venda." : "Registre uma venda ou várias de uma vez."}</SheetDescription>
-              </SheetHeader>
-              {editingSale ? saleForm : (
-                <Tabs value={modalTab} onValueChange={(v) => setModalTab(v as "unica" | "lote")} className="space-y-4">
-                  <SegmentedToggle
-                    value={modalTab}
-                    onChange={(v) => setModalTab(v)}
-                    options={[
-                      { id: "unica" as const, label: "Venda única" },
-                      { id: "lote" as const, label: "Em lote" },
-                    ]}
-                  />
-
-                  <TabsContent value="unica" className="mt-0">{saleForm}</TabsContent>
-                  <TabsContent value="lote" className="mt-0"><BatchSaleForm onDone={() => setOpen(false)} /></TabsContent>
-                </Tabs>
-              )}
-            </SheetContent>
-          </Sheet>
-        </div>
-
-        {/* Pedidos novos — em destaque, antes de tudo */}
-        {pendingOrders.length > 0 && (
-          <div className="space-y-3">
-            <AnimatePresence initial={false}>
-              {pendingOrders.map(order => (
-                <SellerOrderCard
-                  key={order.id}
-                  order={order}
-                  processing={processingOrder === order.id}
-                  onConfirm={handleConfirmOrder}
-                  onDecline={handleDeclineOrder}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {SELLER_PERIODS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setSellerPeriod(p.id)}
-              className={cn(
-                "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
-                sellerPeriod === p.id
-                  ? "bg-primary/15 text-primary border-primary/40"
-                  : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-border/80"
-              )}
-            >{p.label}</button>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Vendas</p>
-              <p className="mt-0.5 text-base font-semibold mono">{mySales.length}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recebido</p>
-              <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(sumPaid)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Em aberto</p>
-              <p className={cn("mt-0.5 text-base font-semibold mono truncate", sumOpen > 0 ? "text-warning" : "text-muted-foreground")}>{formatCurrency(sumOpen)}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setConsumoOpen(o => !o)}
-              className={cn(
-                "rounded-xl border bg-card px-3 py-2.5 min-w-0 text-left transition-colors",
-                consumoOpen ? "border-warning/40 bg-warning/5" : "border-border hover:border-border/80"
-              )}
-            >
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1">
-                Consumo
-                <ChevronDown size={11} className={cn("transition-transform", consumoOpen && "rotate-180")} />
-              </p>
-              <p className={cn(
-                "mt-0.5 text-base font-semibold mono truncate",
-                (consumo?.openTotal ?? 0) > 0.01 ? "text-warning" : "text-muted-foreground"
-              )}>{formatCurrency(consumo?.openTotal ?? 0)}</p>
-            </button>
-          </div>
-
-          <AnimatePresence initial={false}>
-            {consumoOpen && consumo && (
-              <motion.div
-                key="consumo"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
-                  <div className="flex items-center justify-between gap-2 px-3 py-2">
-                    <p className="text-[11px] font-semibold">Meu consumo</p>
-                    <p className="text-[11px] text-muted-foreground">total acumulado</p>
-                  </div>
-
-                  {consumo.retiradas.length === 0 && consumo.manualDebts.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">Nenhum consumo registrado.</p>
-                  ) : (
-                    <>
-                      {consumo.retiradas.map(s => (
-                        <div key={s.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium truncate">{getProductDisplayName(s.productId)}</p>
-                            <p className="text-[11px] text-muted-foreground mono">{formatDateBR(s.date)} · {s.quantity} un.</p>
-                          </div>
-                          <span className="mono text-[13px] font-semibold text-warning shrink-0">{formatCurrency(s.totalPrice)}</span>
-                        </div>
-                      ))}
-                      {consumo.manualDebts.map(d => (
-                        <div key={d.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium truncate">Dívida{d.notes ? ` · ${d.notes}` : ""}</p>
-                            <p className="text-[11px] text-muted-foreground mono">{formatDateBR(d.date)}</p>
-                          </div>
-                          <span className="mono text-[13px] font-semibold text-warning shrink-0">{formatCurrency(d.amount)}</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  <div className="px-3 py-2 space-y-1 bg-secondary/20">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>Retiradas</span><span className="mono">{formatCurrency(consumo.retiradasTotal)}</span>
-                    </div>
-                    {consumo.manualDebtsTotal > 0 && (
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>Dívidas</span><span className="mono">{formatCurrency(consumo.manualDebtsTotal)}</span>
-                      </div>
-                    )}
-                    {consumo.debtPaymentsTotal > 0 && (
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>Pagamentos</span><span className="mono text-income">−{formatCurrency(consumo.debtPaymentsTotal)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between border-t border-border/40 pt-1 text-[12px] font-semibold">
-                      <span>Em aberto</span>
-                      <span className={cn("mono", consumo.openTotal > 0.01 ? "text-warning" : "text-income")}>
-                        {formatCurrency(consumo.openTotal)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold tracking-tight">
-            Minha comissão <span className="text-[11px] font-normal text-muted-foreground">· {periodLabel}</span>
-          </h2>
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Faixa atual</p>
-              <p className="mt-0.5 text-base font-semibold truncate">{myCommissionBalance?.tier.label ?? "—"}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Unidades</p>
-              <p className="mt-0.5 text-base font-semibold mono">{myCommissionBalance?.units ?? 0}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Comissão acumulada</p>
-              <p className="mt-0.5 text-base font-semibold mono text-income truncate">{formatCurrency(myCommissionBalance?.accrued ?? 0)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2.5 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saldo</p>
-              <p className={cn(
-                "mt-0.5 text-base font-semibold mono truncate",
-                (myCommissionBalance?.balance ?? 0) > 0.01 ? "text-warning" : (myCommissionBalance?.balance ?? 0) < -0.01 ? "text-income" : "text-foreground"
-              )}>{formatCurrency(myCommissionBalance?.balance ?? 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        {mySales.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma venda registrada no período.</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/30 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    <th className="text-left py-2 px-3">Produto</th>
-                    <th className="text-right py-2 px-3 w-[46px]">Qtd</th>
-                    <th className="text-right py-2 px-3 w-[100px]">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mySales.map(s => {
-                    const received = s.paidAmount >= s.totalPrice - 0.01;
-                    return (
-                      <tr key={s.id} className="border-b border-border/40 last:border-0">
-                        <td className="py-2.5 px-3">
-                          <div className="font-medium text-foreground leading-tight">{getProductDisplayName(s.productId)}</div>
-                          <div className="text-[11px] text-muted-foreground mt-0.5 mono">{formatDateBR(s.date)}</div>
-                        </td>
-                        <td className="py-2.5 px-3 text-right mono text-sm text-muted-foreground">{s.quantity}</td>
-                        <td className={cn(
-                          "py-2.5 px-3 text-right mono text-sm font-semibold",
-                          received ? "text-income" : "text-warning"
-                        )}>{formatCurrency(s.totalPrice)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="flex items-center gap-3 px-1 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-income" />Recebido</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" />Falta receber</span>
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   return (
     <Tabs defaultValue="vendas" className="w-full space-y-5">

@@ -13,6 +13,7 @@ import Dashboard from "@/pages/Dashboard";
 import ProductsPage from "@/pages/ProductsPage";
 import StockEntryPage from "@/pages/StockEntryPage";
 import SalesPage from "@/pages/SalesPage";
+import SellerSalesPage from "@/pages/SellerSalesPage";
 import ExpensesPage from "@/pages/ExpensesPage";
 import FinancePage from "@/pages/FinancePage";
 import LossesPage from "@/pages/LossesPage";
@@ -44,28 +45,47 @@ function ProtectedRoutes() {
     return <Navigate to="/login" replace />;
   }
 
-  const isSeller = role === "seller";
+  // O vendedor tem uma tela só, e ela usa o tema da loja em vez do Nocturne do
+  // ERP. Por isso a bifurcação acontece ANTES do AppLayout: a sidebar e a barra
+  // inferior existiriam para navegar entre uma opção, e o shell de tela cheia
+  // da tela dele brigaria com o shell do ERP por fora. O `StoreProvider`
+  // continua, que é de onde vêm os dados.
+  //
+  // Chegar aqui com `role` ainda desconhecido não acontece mais: o
+  // `AuthContext` só desliga o `loading` depois de resolver o papel.
+  if (role === "seller") {
+    return (
+      <StoreProvider>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/minhas-vendas" element={<SellerSalesPage />} />
+            <Route path="*" element={<Navigate to="/minhas-vendas" replace />} />
+          </Routes>
+        </Suspense>
+      </StoreProvider>
+    );
+  }
 
   return (
     <StoreProvider>
       <AppLayout>
         <Suspense fallback={<PageFallback />}>
           <Routes>
-            {!isSeller && <Route path="/dashboard" element={<Dashboard />} />}
-            {!isSeller && <Route path="/products" element={<ProductsPage />} />}
-            {!isSeller && <Route path="/stock" element={<StockEntryPage />} />}
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/stock" element={<StockEntryPage />} />
             <Route path="/sales" element={<SalesPage />} />
-            {!isSeller && <Route path="/expenses" element={<ExpensesPage />} />}
-            {!isSeller && <Route path="/investors" element={<Navigate to="/finance" replace />} />}
-            {!isSeller && <Route path="/finance" element={<FinancePage />} />}
-            {!isSeller && <Route path="/revenue" element={<Navigate to="/commissions" replace />} />}
-            {!isSeller && <Route path="/sellers" element={<Navigate to="/commissions" replace />} />}
-            {!isSeller && <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />}
-            {!isSeller && <Route path="/losses" element={<LossesPage />} />}
-            {!isSeller && <Route path="/commissions" element={<CommissionsPage />} />}
-            {!isSeller && <Route path="/insights" element={<InsightsPage />} />}
+            <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/investors" element={<Navigate to="/finance" replace />} />
+            <Route path="/finance" element={<FinancePage />} />
+            <Route path="/revenue" element={<Navigate to="/commissions" replace />} />
+            <Route path="/sellers" element={<Navigate to="/commissions" replace />} />
+            <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />
+            <Route path="/losses" element={<LossesPage />} />
+            <Route path="/commissions" element={<CommissionsPage />} />
+            <Route path="/insights" element={<InsightsPage />} />
 
-            <Route path="*" element={<Navigate to={isSeller ? "/sales" : "/dashboard"} replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
       </AppLayout>
@@ -74,7 +94,7 @@ function ProtectedRoutes() {
 }
 
 function AuthGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, role } = useAuth();
 
   if (loading) {
     return (
@@ -89,7 +109,14 @@ function AuthGate() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/loja/:sellerId" element={<SellerStorePage />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        {/* Já logado em /login vai direto para a tela do próprio papel. Mandar
+            todo mundo para /dashboard funcionava (o vendedor ricocheteava de
+            lá para a tela dele), mas era um redirect a mais no caminho de quem
+            acabou de entrar. */}
+        <Route
+          path="/login"
+          element={user ? <Navigate to={role === "seller" ? "/minhas-vendas" : "/dashboard"} replace /> : <LoginPage />}
+        />
         <Route path="/*" element={<ProtectedRoutes />} />
       </Routes>
     </Suspense>
