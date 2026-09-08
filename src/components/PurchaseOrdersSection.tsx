@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { PurchaseOrder } from "@/types";
+import { sortNames } from "@/lib/catalog-order";
 
 type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string; unitPrice: string };
 type FlavorRow = { flavor: string; quantity: string };
@@ -107,13 +108,13 @@ export default function PurchaseOrdersSection() {
   const brands = useMemo(() => {
     const set = new Set<string>();
     products.forEach(p => p.brand && set.add(p.brand));
-    return Array.from(set).sort();
+    return sortNames(Array.from(set));
   }, [products]);
 
   const modelsFor = (brand: string) => {
     const set = new Set<string>();
     products.filter(p => p.brand.toLowerCase() === brand.toLowerCase()).forEach(p => p.model && set.add(p.model));
-    return Array.from(set).sort();
+    return sortNames(Array.from(set));
   };
 
   const pending = purchaseOrders.filter(o => o.status === "pending");

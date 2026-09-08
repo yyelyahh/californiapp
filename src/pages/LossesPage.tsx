@@ -30,10 +30,10 @@ export default function LossesPage() {
   const selectedProduct = products.find(p => p.id === productId);
   const totalLoss = getTotalLossValue();
 
-  const sortedProducts = useMemo(
-    () => [...products].sort((a, b) => `${a.flavor} ${a.brand} ${a.model}`.localeCompare(`${b.flavor} ${b.brand} ${b.model}`)),
-    [products]
-  );
+  // Ordenava por sabor primeiro, o que espalhava a mesma marca pela lista
+  // inteira. Agora segue a ordem do resto do sistema — que já vem pronta do
+  // StoreContext, então aqui é só o nome local.
+  const sortedProducts = products;
 
   const sortedLosses = useMemo(() => [...stockLosses].sort((a, b) => b.date.localeCompare(a.date)), [stockLosses]);
 

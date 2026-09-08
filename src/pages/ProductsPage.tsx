@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { StaggerAuto } from "@/components/motion/Stagger";
 import { AnimatePresence, motion } from "motion/react";
 import { transitionBase } from "@/lib/motion";
+import { sortNames, sortCatalog, compareText } from "@/lib/catalog-order";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -56,7 +57,10 @@ export default function ProductsPage() {
     });
     return Array.from(groups.entries())
       .map(([brand, prods]) => {
-        const sorted = prods.sort((a, b) => a.salePrice - b.salePrice);
+        // Ordem de leitura, não de preço: quem abre esta tela está procurando
+        // um sabor pelo nome. O preço ordenava por número e, como todo sabor
+        // do mesmo modelo custa igual, o desempate caía na ordem de cadastro.
+        const sorted = sortCatalog(prods);
         const modelMap = new Map<string, typeof filtered>();
         sorted.forEach(p => {
           const model = (p.model || "").trim() || "Sem Modelo";
@@ -72,7 +76,7 @@ export default function ProductsPage() {
             totalProfit: mProds.reduce((s, p) => s + (p.salePrice - p.purchasePrice) * p.stock, 0),
             totalStock: mProds.reduce((s, p) => s + p.stock, 0),
           }))
-          .sort((a, b) => (a.products[0]?.salePrice ?? 0) - (b.products[0]?.salePrice ?? 0) || a.model.localeCompare(b.model));
+          .sort((a, b) => compareText(a.model, b.model));
         return {
           brand,
           products: sorted,
@@ -83,7 +87,7 @@ export default function ProductsPage() {
           totalStock: prods.reduce((s, p) => s + p.stock, 0),
         };
       })
-      .sort((a, b) => a.brand.localeCompare(b.brand));
+      .sort((a, b) => compareText(a.brand, b.brand));
   }, [filtered]);
 
   const totals = useMemo(() => ({
@@ -139,13 +143,13 @@ export default function ProductsPage() {
   const availableModels = useMemo(() => {
     const set = new Set<string>();
     products.forEach(p => { if (p.model && p.model.trim()) set.add(p.model.trim()); });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return sortNames(Array.from(set));
   }, [products]);
 
   const availableBrands = useMemo(() => {
     const set = new Set<string>();
     products.forEach(p => { if (p.brand && p.brand.trim()) set.add(p.brand.trim()); });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return sortNames(Array.from(set));
   }, [products]);
 
   const bulkAffected = useMemo(() => {

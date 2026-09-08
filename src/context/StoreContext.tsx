@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { localDateToISO } from "@/lib/date-utils";
+import { sortCatalog, sortByName } from "@/lib/catalog-order";
 
 // Columns readable by every authenticated user (purchase_price is admin-only via RPC)
 const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,image_url,created_at";
@@ -2063,16 +2064,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [getRetainedEarnings],
   );
 
+  /**
+   * Ordem alfabética sai daqui, não de cada tela.
+   *
+   * O banco devolve produto e vendedor em ordem de `created_at`, e isso
+   * vazava para toda caixa de seleção do ERP — registrar venda, dar entrada,
+   * atribuir estoque —, onde a ordem de cadastro não ajuda ninguém a achar o
+   * item. Como TODA tela lê a lista daqui, ordenar no valor do contexto
+   * conserta as telas de uma vez, e uma tela nova nasce certa sem precisar
+   * lembrar de ordenar.
+   *
+   * Nada dependia da ordem de criação: as buscas são todas por `id`.
+   */
+  const sortedProducts = useMemo(() => sortCatalog(products), [products]);
+  const sortedSellers = useMemo(() => sortByName(sellers), [sellers]);
+  const sortedPartners = useMemo(() => sortByName(partners), [partners]);
+
   const ctxValue = useMemo<StoreContextType>(
     () => ({
-      products,
+      products: sortedProducts,
       stockEntries,
       sales,
       expenses,
       investors,
       dividends,
-      partners,
-      sellers,
+      partners: sortedPartners,
+      sellers: sortedSellers,
       productAssignments,
       sellerDebtPayments,
       partnerPayments,
@@ -2164,14 +2181,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getLoanRemaining,
     }),
     [
-      products,
+      sortedProducts,
       stockEntries,
       sales,
       expenses,
       investors,
       dividends,
-      partners,
-      sellers,
+      sortedPartners,
+      sortedSellers,
       productAssignments,
       sellerDebtPayments,
       partnerPayments,

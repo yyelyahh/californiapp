@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { sortNames } from "@/lib/catalog-order";
 import { useStore } from "@/context/StoreContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,14 +43,14 @@ export default function AddProductDialog() {
   const allBrands = useMemo(() => {
     const set = new Set<string>(DEFAULT_BRANDS);
     products.forEach(p => p.brand && set.add(p.brand));
-    return Array.from(set).sort();
+    return sortNames(Array.from(set));
   }, [products]);
 
   const existingModels = useMemo(() => {
     if (!brand) return [];
     const set = new Set<string>();
     products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
-    return Array.from(set).sort();
+    return sortNames(Array.from(set));
   }, [products, brand]);
 
   const previewProducts = useMemo(() => {

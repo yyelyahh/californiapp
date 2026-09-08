@@ -17,6 +17,7 @@ import { ptBR } from "date-fns/locale";
 import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { Sale } from "@/types";
+import { compareCatalog } from "@/lib/catalog-order";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
 
@@ -191,9 +192,14 @@ export default function SellerReportDrawer({
       .filter(a => a.sellerId === seller.id && a.quantity > 0)
       .map(a => {
         const p = products.find(pp => pp.id === a.productId);
-        return { id: a.id, name: getProductName(a.productId), qty: a.quantity, brand: p?.brand || "" };
+        return {
+          id: a.id, name: getProductName(a.productId), qty: a.quantity,
+          brand: p?.brand || "", model: p?.model || "", flavor: p?.flavor || "",
+        };
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      // Mesma ordem do resto do sistema: marca, modelo, sabor — e não o nome
+      // montado, que começava pelo sabor e espalhava a marca pela lista.
+      .sort(compareCatalog);
     const stockTotalUnits = stockItems.reduce((acc, i) => acc + i.qty, 0);
 
     const c = { units: closed.units, revenue: closed.revenue, tier: closed.tier, accrued: closed.accrued };

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { compareCatalog } from "@/lib/catalog-order";
 
 export default function ModelImagesDialog() {
   const { products } = useStore();
@@ -35,7 +36,7 @@ export default function ModelImagesDialog() {
     });
     return Array.from(map.entries())
       .map(([key, v]) => ({ key, ...v }))
-      .sort((a, b) => a.brand.localeCompare(b.brand) || a.model.localeCompare(b.model));
+      .sort(compareCatalog);
   }, [products]);
 
   useEffect(() => {

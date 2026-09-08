@@ -1,3 +1,4 @@
+import { catalogCollator, compareText } from "@/lib/catalog-order";
 import type { Product, ProductAssignment } from "@/types";
 
 export type StockLine = {
@@ -85,15 +86,11 @@ export function buildSellerStock(
     byGroup.set(key, group);
   }
 
-  // Ordem da conferência: marca em ordem alfabética, e dentro dela o modelo.
-  // `sensitivity: base` porque marca digitada à mão vem com maiúscula e acento
-  // trocados; `numeric` porque modelo termina em número, e sem isso "V150" vem
-  // antes de "V90" — a caixa está na ordem do número, não na do texto.
-  const collator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
+  // Mesma ordem do resto do sistema: marca, depois modelo, depois sabor.
   const groups = Array.from(byGroup.values()).sort(
-    (a, b) => collator.compare(a.brand, b.brand) || collator.compare(a.model, b.model),
+    (a, b) => compareText(a.brand, b.brand) || compareText(a.model, b.model),
   );
-  for (const g of groups) g.lines.sort((a, b) => collator.compare(a.flavor, b.flavor));
+  for (const g of groups) g.lines.sort((a, b) => catalogCollator.compare(a.flavor, b.flavor));
 
   return {
     groups,

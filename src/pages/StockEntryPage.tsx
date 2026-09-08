@@ -15,6 +15,7 @@ import PurchaseOrdersSection from "@/components/PurchaseOrdersSection";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import { transitionBase } from "@/lib/motion";
+import { sortNames } from "@/lib/catalog-order";
 
 const BRAND_PRESETS: Record<string, number> = {
   Ignite: 68.5,
@@ -81,13 +82,13 @@ export default function StockEntryPage() {
     if (!brand) return [];
     const set = new Set<string>();
     products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
-    return Array.from(set).sort();
+    return sortNames(Array.from(set));
   }, [products, brand]);
 
   const allBrands = useMemo(() => {
     const set = new Set<string>(DEFAULT_BRANDS);
     products.forEach(p => p.brand && set.add(p.brand));
-    return Array.from(set).sort();
+    return sortNames(Array.from(set));
   }, [products]);
 
   const handleBrandChange = (value: string) => {

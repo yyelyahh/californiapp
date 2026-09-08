@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { StaggerAuto } from "@/components/motion/Stagger";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
+import { compareCatalog } from "@/lib/catalog-order";
 import {
   getNextTier, unitsUntilNextTier, computeSellerBalance,
 } from "@/lib/commissions";
@@ -249,12 +250,20 @@ export default function CommissionsPage() {
   const transferFromAssignments = useMemo(() => {
     if (!transferForm.fromSellerId) return [];
     const productById = new Map(products.map(p => [p.id, p]));
+    // A lista vem de productAssignments, que está em ordem de criação — o
+    // produto ordenado do StoreContext não alcança aqui, então a ordem é
+    // reconstruída a partir dele.
     return productAssignments
       .filter(a => a.sellerId === transferForm.fromSellerId && a.quantity > 0)
       .map(a => {
         const p = productById.get(a.productId);
-        return { ...a, productLabel: p ? `${p.flavor} · ${p.model}` : "—" };
-      });
+        return {
+          ...a,
+          brand: p?.brand ?? "", model: p?.model ?? "", flavor: p?.flavor ?? "",
+          productLabel: p ? `${p.flavor} · ${p.model}` : "—",
+        };
+      })
+      .sort(compareCatalog);
   }, [productAssignments, products, transferForm.fromSellerId]);
 
   const transferSelected = transferFromAssignments.find(a => a.id === transferForm.assignmentId);
