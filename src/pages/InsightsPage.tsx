@@ -362,7 +362,7 @@ export default function InsightsPage() {
 
       {/* Drawer: Low stock */}
       <Sheet open={openCard === "lowStock"} onOpenChange={v => !v && setOpenCard(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Modelos abaixo do mínimo</SheetTitle>
             <SheetDescription>Estoque total do modelo (somando todos os sabores) menor que o mínimo configurado.</SheetDescription>
@@ -387,7 +387,7 @@ export default function InsightsPage() {
 
       {/* Drawer: Top sold */}
       <Sheet open={openCard === "topSold"} onOpenChange={v => !v && setOpenCard(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Modelos mais vendidos</SheetTitle>
             <SheetDescription>{label} · Total: {totalUnits} unidades</SheetDescription>
@@ -415,7 +415,7 @@ export default function InsightsPage() {
 
       {/* Drawer: Top profit */}
       <Sheet open={openCard === "topProfit"} onOpenChange={v => !v && setOpenCard(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Modelos mais lucrativos</SheetTitle>
             <SheetDescription>{label} · (Preço venda − custo) × unidades</SheetDescription>
@@ -458,7 +458,7 @@ export default function InsightsPage() {
 
       {/* Drawer: Turnover */}
       <Sheet open={openCard === "turnover"} onOpenChange={v => !v && setOpenCard(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Giro de estoque</SheetTitle>
             <SheetDescription>{label} · Vendidos ÷ estoque médio ((inicial + final) / 2)</SheetDescription>

@@ -239,7 +239,7 @@ export default function PurchaseOrdersSection() {
 
       {/* Histórico de compras recebidas */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Histórico de recebimentos</SheetTitle>
           </SheetHeader>
@@ -257,7 +257,7 @@ export default function PurchaseOrdersSection() {
 
       {/* Nova compra */}
       <Sheet open={newOpen} onOpenChange={(v) => { setNewOpen(v); if (!v) resetNew(); }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Nova compra</SheetTitle>
           </SheetHeader>
@@ -346,7 +346,7 @@ export default function PurchaseOrdersSection() {
 
       {/* Receber compra */}
       <Sheet open={!!receiving} onOpenChange={(v) => { if (!v) setReceiving(null); }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Receber compra #{receiving?.number}</SheetTitle>
           </SheetHeader>

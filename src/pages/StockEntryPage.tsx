@@ -225,7 +225,7 @@ export default function StockEntryPage() {
           <SheetTrigger asChild>
             <Button size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Entrada</Button>
           </SheetTrigger>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+          <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
             <SheetHeader className="px-6 py-4 border-b border-border">
               <SheetTitle className="text-base font-semibold">Nova Entrada de Estoque</SheetTitle>
             </SheetHeader>

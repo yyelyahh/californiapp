@@ -484,7 +484,7 @@ export default function CommissionsPage() {
 
       {/* Sidebar: Consultar vendedor */}
       <Sheet open={consultOpen} onOpenChange={setConsultOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Consultar vendedor</SheetTitle>
           </SheetHeader>
@@ -747,7 +747,7 @@ export default function CommissionsPage() {
 
       {/* Drawer Pagar Vendedor */}
       <Sheet open={!!payDrawer} onOpenChange={(v) => !v && setPayDrawer(null)}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="nocturne w-full sm:max-w-md">
           <SheetHeader><SheetTitle>Pagar Vendedor</SheetTitle></SheetHeader>
           {sellerRow && (
             <div className="mt-4 space-y-4">
@@ -769,7 +769,7 @@ export default function CommissionsPage() {
 
       {/* Drawer Retirada Sócio */}
       <Sheet open={!!wdDrawer} onOpenChange={(v) => !v && setWdDrawer(null)}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="nocturne w-full sm:max-w-md">
           <SheetHeader><SheetTitle>Registrar Retirada</SheetTitle></SheetHeader>
           {partnerRow && (
             <div className="mt-4 space-y-4">
@@ -789,7 +789,7 @@ export default function CommissionsPage() {
 
       {/* Drawer Pagar Dívida (consumo) */}
       <Sheet open={!!debtPayDrawer} onOpenChange={(v) => !v && setDebtPayDrawer(null)}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="nocturne w-full sm:max-w-md">
           <SheetHeader><SheetTitle>Pagar Dívida (consumo)</SheetTitle></SheetHeader>
           {debtSellerRow && (
             <div className="mt-4 space-y-4">
@@ -813,7 +813,7 @@ export default function CommissionsPage() {
 
       {/* Drawer Dívida Manual */}
       <Sheet open={manualDebtDrawer} onOpenChange={(v) => setManualDebtDrawer(v)}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="nocturne w-full sm:max-w-md">
           <SheetHeader><SheetTitle>Adicionar Dívida Manual</SheetTitle></SheetHeader>
           <div className="mt-4 space-y-4">
             <div>
@@ -835,7 +835,7 @@ export default function CommissionsPage() {
 
       {/* Drawer Atribuir Estoque */}
       <Sheet open={assignOpen} onOpenChange={setAssignOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-base font-semibold">Atribuir Estoque</SheetTitle>
           </SheetHeader>
@@ -917,7 +917,7 @@ export default function CommissionsPage() {
 
       {/* Drawer Transferir Estoque */}
       <Sheet open={transferOpen} onOpenChange={setTransferOpen}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="nocturne w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle className="text-base font-semibold">Transferir Estoque</SheetTitle>
           </SheetHeader>

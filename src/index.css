@@ -33,7 +33,11 @@
     --input: 220 15% 90%;
     --ring: 220 70% 50%;
 
-    --radius: 0.875rem;
+    /* Geometria do Nocturne: card 8px (rounded-lg), controle 6px
+       (rounded-md), o mesmo do .nc-card e do .nc-btn. Era 0.875rem (14px), e
+       com o painel ao lado a diferença aparecia — cada Dialog/Input do shadcn
+       saía visivelmente mais arredondado que o card atrás dele. */
+    --radius: 0.5rem;
 
     /* Semantic financial tokens */
     --income: 152 60% 40%;
@@ -67,62 +71,76 @@
     --shadow-elevated: 0 10px 30px -10px hsl(220 25% 10% / 0.1);
   }
 
+  /* Tema escuro do ERP = paleta Nocturne (a mesma do Dashboard), traduzida
+   * para os canais HSL que o shadcn/tailwind consomem. Os hex de origem estão
+   * nos --nc-* mais abaixo; mudou lá, converta aqui — é a MESMA cor escrita em
+   * dois dialetos, porque `hsl(var(--token))` do tailwind não engole hex.
+   *   --background  #161826  (--nc-bg)
+   *   --card        #232532  (--nc-surface)
+   *   sidebar       #141522  (--nc-rail)
+   *   --primary     #85B7EB  (--nc-accent)
+   */
   .dark {
-    --background: 240 6% 5%;
-    --foreground: 210 20% 96%;
+    --background: 232 27% 12%;
+    --foreground: 240 10% 92%;
 
-    --card: 240 6% 8%;
-    --card-foreground: 210 20% 96%;
+    --card: 232 18% 17%;
+    --card-foreground: 240 10% 92%;
 
-    --popover: 240 6% 8%;
-    --popover-foreground: 210 20% 96%;
+    --popover: 232 18% 17%;
+    --popover-foreground: 240 10% 92%;
 
-    --primary: 265 80% 65%;
-    --primary-foreground: 0 0% 100%;
+    /* O accent do Nocturne é claro: tinta sobre ele é o fundo, não branco. */
+    --primary: 211 72% 72%;
+    --primary-foreground: 232 27% 12%;
 
-    --secondary: 240 5% 12%;
-    --secondary-foreground: 210 20% 88%;
+    --secondary: 232 18% 17%;
+    --secondary-foreground: 240 10% 92%;
 
-    --muted: 240 5% 12%;
-    --muted-foreground: 240 5% 60%;
+    --muted: 232 18% 17%;
+    --muted-foreground: 235 8% 62%;
 
-    --accent: 240 5% 12%;
-    --accent-foreground: 210 20% 92%;
+    --accent: 232 18% 17%;
+    --accent-foreground: 240 10% 92%;
 
+    /* Destructive continua um vermelho de preenchimento: --nc-crit (#F09595) é
+       cor de TEXTO no Nocturne e não sustenta rótulo branco por cima. */
     --destructive: 0 70% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 5% 15%;
-    --input: 240 5% 15%;
-    --ring: 265 80% 65%;
+    /* Equivale ao --nc-track (texto a 8% sobre o fundo): a régua discreta do
+       painel. O --nc-divider (16%) é forte demais para borda de tudo. */
+    --border: 232 16% 18%;
+    --input: 232 16% 18%;
+    --ring: 211 72% 72%;
 
     --income: 152 60% 50%;
     --income-foreground: 0 0% 100%;
     --expense: 0 70% 58%;
     --expense-foreground: 0 0% 100%;
-    --investment: 265 80% 65%;
-    --investment-foreground: 0 0% 100%;
-    --fixed: 32 92% 58%;
-    --fixed-foreground: 0 0% 5%;
+    --investment: 211 72% 72%;
+    --investment-foreground: 232 27% 12%;
+    --fixed: 36 86% 55%;
+    --fixed-foreground: 232 27% 12%;
 
     --success: 152 60% 50%;
-    --warning: 32 92% 58%;
-    --info: 265 80% 65%;
+    --warning: 36 86% 55%;   /* --nc-alert */
+    --info: 211 72% 72%;     /* --nc-accent */
 
-    --sidebar-background: 240 6% 6%;
-    --sidebar-foreground: 240 5% 70%;
-    --sidebar-primary: 265 80% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 11%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 240 5% 13%;
-    --sidebar-ring: 265 80% 65%;
+    --sidebar-background: 236 26% 11%;
+    --sidebar-foreground: 235 8% 62%;
+    --sidebar-primary: 211 72% 72%;
+    --sidebar-primary-foreground: 232 27% 12%;
+    --sidebar-accent: 232 18% 17%;
+    --sidebar-accent-foreground: 240 10% 92%;
+    --sidebar-border: 232 16% 18%;
+    --sidebar-ring: 211 72% 72%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(265 80% 65%), hsl(285 75% 60%));
-    --gradient-income: linear-gradient(135deg, hsl(152 60% 50%), hsl(152 65% 42%));
-    --gradient-expense: linear-gradient(135deg, hsl(0 70% 58%), hsl(0 75% 48%));
-    --gradient-card: linear-gradient(145deg, hsl(240 6% 9%), hsl(240 6% 6%));
-    --shadow-glow: 0 0 30px -5px hsl(265 80% 65% / 0.25);
+    --gradient-primary: linear-gradient(135deg, hsl(211 72% 72%), hsl(249 53% 68%));
+    --gradient-income: linear-gradient(135deg, hsl(211 72% 72%), hsl(211 72% 60%));
+    --gradient-expense: linear-gradient(135deg, hsl(36 86% 55%), hsl(0 75% 76%));
+    --gradient-card: linear-gradient(145deg, hsl(232 18% 17%), hsl(232 22% 14%));
+    --shadow-glow: 0 0 30px -5px hsl(211 72% 72% / 0.2);
     --shadow-card: 0 4px 24px -4px hsl(0 0% 0% / 0.4);
     --shadow-elevated: 0 10px 30px -10px hsl(0 0% 0% / 0.6);
   }
@@ -173,10 +191,16 @@
   }
 
   /* ------------------------------------------------------------------
-   * Nocturne — sistema de design das telas já migradas (hoje: Dashboard).
-   * Tudo fica sob `.nocturne`, então nenhuma outra tela é afetada. A classe
-   * entra na página E no <main> do AppLayout (ver `fullBleedRoutes`), para o
-   * fundo cobrir a área de rolagem inteira.
+   * Nocturne — sistema de design do ERP. O app-shell inteiro (sidebar, menu
+   * mobile e barra inferior do AppLayout) já é Nocturne; das telas, só o
+   * Dashboard. Tudo fica sob `.nocturne`: a classe entra em cada peça da
+   * navegação, na página migrada E no <main> do AppLayout (ver
+   * `fullBleedRoutes`), para o fundo cobrir a área de rolagem inteira.
+   *
+   * O chão de TODAS as telas, migradas ou não, já é esta paleta: o bloco
+   * `.dark` lá em cima repete os mesmos hex em HSL. Então uma tela que ainda
+   * pinta por `bg-card`/`text-muted-foreground` não destoa da sidebar — ela só
+   * ainda não tem a tipografia, o raio de 8px e as réguas daqui.
    * Trocar a cor principal do painel = trocar --nc-accent aqui.
    * ------------------------------------------------------------------ */
   /* Os tokens ficam no :root porque a navegação (sidebar/barra inferior) vive
@@ -252,6 +276,181 @@
 
   .nc-row:last-child {
     background: none;
+  }
+
+  /* ---- App-shell: sidebar, menu mobile e barra inferior ----
+     Ficam em classe (e não em `style` inline) porque precisam de :hover, que
+     inline não alcança — e porque o "Sair" precisa vencer o token de cor sem
+     virar um `!important` espalhado pelo JSX. */
+  .nc-nav-item {
+    color: var(--nc-text-2);
+    transition: color 150ms ease, background-color 150ms ease;
+  }
+
+  .nc-nav-item:hover {
+    color: var(--nc-text);
+    background-color: color-mix(in srgb, var(--nc-text) 5%, transparent);
+  }
+
+  /* Ativo: o rótulo e o ícone (currentColor) sobem para o accent. O fundo do
+     realce é peça separada — o motion.span com layoutId — para deslizar de um
+     item ao outro em vez de apagar aqui e acender ali. */
+  .nc-nav-item[data-active="true"],
+  .nc-nav-item[data-active="true"]:hover {
+    color: var(--nc-accent);
+    background-color: transparent;
+  }
+
+  .nc-signout {
+    color: var(--nc-text-2);
+    transition: color 150ms ease;
+  }
+
+  .nc-signout:hover {
+    color: var(--nc-crit);
+  }
+  /* ---- Portais (Sheet, Dialog, AlertDialog, Drawer) ----
+     O véu era `bg-black/80`: preto puro, a única cor do app que não sai de
+     token nenhum, e que ao lado do fundo azulado do painel lê como um buraco.
+     Agora é o próprio fundo do Nocturne quase opaco.
+
+     É um véu SÓ para os dois temas — a loja também passa por aqui, porque o
+     overlay é portado para o <body> e não dá para trocá-lo por tema de dentro
+     da página. Como --sf-bg (#14141a) e --nc-bg (#161826) são vizinhos, o
+     escurecimento serve aos dois; o que não podia continuar era o preto. */
+  .nc-overlay {
+    background: color-mix(in srgb, var(--nc-bg) 78%, transparent);
+  }
+
+  /* Fio da lateral do painel deslizante, no lugar do `border-l` genérico. */
+  .nc-edge-l { border-left: 1px solid var(--nc-divider); }
+  .nc-edge-r { border-right: 1px solid var(--nc-divider); }
+
+
+  /* ---- Botões ----
+     O painel nasceu com dois: o de contorno accent ("Abrir entrada de estoque")
+     e o fantasma de ícone (exportar). O sólido entrou aqui, para tela que tem
+     uma ação primária de verdade — e segue a regra do accent: preenchimento
+     claro, tinta escura.
+
+     Desabilitado esmaece o PREENCHIMENTO, nunca o botão inteiro. `opacity` no
+     conjunto (o que o Button do shadcn faz) apaga o rótulo junto e a pessoa
+     deixa de ler o que o botão faria se estivesse ativo — mesma lição do
+     PillButton da loja. */
+  .nc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 6px;
+    padding: 0.375rem 0.625rem;
+    font-size: 12.5px;
+    line-height: 1.35;
+    white-space: nowrap;
+    transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .nc-btn:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Tamanhos. `icon` é quadrado; `md` é o da ação principal do cabeçalho. */
+  .nc-btn--icon { padding: 0.375rem; }
+  .nc-btn--md { padding: 0.5rem 0.875rem; font-size: 13px; }
+
+  .nc-btn--solid {
+    background: var(--nc-accent);
+    color: var(--nc-bg);
+    font-weight: 500;
+  }
+  .nc-btn--solid:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--nc-accent) 86%, #fff);
+  }
+  .nc-btn--solid:disabled {
+    background: color-mix(in srgb, var(--nc-accent) 32%, var(--nc-surface));
+    color: color-mix(in srgb, var(--nc-bg) 65%, var(--nc-text));
+  }
+
+  .nc-btn--outline {
+    color: var(--nc-accent);
+    box-shadow: inset 0 0 0 1px var(--nc-accent);
+  }
+  .nc-btn--outline:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--nc-accent) 10%, transparent);
+  }
+
+  /* Contorno neutro: ação secundária, que existe mas não é a da vez. */
+  .nc-btn--quiet {
+    color: var(--nc-text-2);
+    box-shadow: inset 0 0 0 1px var(--nc-divider);
+  }
+  .nc-btn--quiet:hover:not(:disabled) {
+    color: var(--nc-text);
+    background: color-mix(in srgb, var(--nc-text) 5%, transparent);
+  }
+
+  .nc-btn--ghost {
+    color: var(--nc-text-3);
+  }
+  .nc-btn--ghost:hover:not(:disabled) {
+    color: var(--nc-text);
+    background: color-mix(in srgb, var(--nc-text) 5%, transparent);
+  }
+
+  /* Só o hover vai para o crítico: um botão de excluir que já nasce vermelho
+     puxa o olho para a ação mais perigosa da linha. */
+  .nc-btn--danger {
+    color: var(--nc-text-3);
+  }
+  .nc-btn--danger:hover:not(:disabled) {
+    color: var(--nc-crit);
+    background: color-mix(in srgb, var(--nc-crit) 12%, transparent);
+  }
+
+  /* Campo de texto. O foco não ganha anel próprio: `.nocturne :focus-visible`
+     já desenha o dele, e os dois juntos viram borda dupla. */
+  .nc-input {
+    background: var(--nc-bg);
+    color: var(--nc-text);
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--nc-divider);
+  }
+  .nc-input::placeholder {
+    color: var(--nc-text-3);
+  }
+
+  /* Linha/cabeçalho clicável. Toca SÓ a background-color de propósito: a régua
+     da .nc-row é background-image, e um `background` cheio no hover apagaria
+     ela junto. */
+  .nc-hover {
+    transition: background-color 150ms ease;
+  }
+  .nc-hover:hover {
+    background-color: color-mix(in srgb, var(--nc-text) 4%, transparent);
+  }
+
+  /* Marca da casa dentro do app-shell Nocturne. Mesmo movimento do
+     .text-rgb-cascade (que continua roxo na landing e no login, fora do tema),
+     só que percorrendo accent → lucro → accent, as duas cores do painel. */
+  .nc-wordmark {
+    background-image: linear-gradient(
+      135deg,
+      var(--nc-accent), var(--nc-profit), var(--nc-accent),
+      var(--nc-profit), var(--nc-accent)
+    );
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: rgb-cascade 6s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nc-wordmark {
+      animation: none;
+      background-position: 0% 0%;
+    }
   }
 
   /* ------------------------------------------------------------------

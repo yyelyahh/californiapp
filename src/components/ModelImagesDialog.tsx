@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/context/StoreContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,6 +14,7 @@ import {
 import { ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { compareCatalog } from "@/lib/catalog-order";
+import { NcButton } from "@/components/nocturne";
 
 export default function ModelImagesDialog() {
   const { products } = useStore();
@@ -92,13 +92,13 @@ export default function ModelImagesDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 gap-1.5">
-          <ImageIcon size={14} />
+        <NcButton>
+          <ImageIcon size={13} />
           <span className="hidden sm:inline">Fotos por Modelo</span>
           <span className="sm:hidden">Fotos</span>
-        </Button>
+        </NcButton>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="nocturne max-w-2xl">
         <DialogHeader>
           <DialogTitle>Fotos por modelo</DialogTitle>
           <DialogDescription>
@@ -119,7 +119,7 @@ export default function ModelImagesDialog() {
               const value = urls[c.key] ?? "";
               const dirty = value.trim() !== (initial[c.key] ?? "");
               return (
-                <div key={c.key} className="rounded-lg border border-border p-3 space-y-2">
+                <div key={c.key} className="rounded-lg p-3 space-y-2" style={{ boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
@@ -134,7 +134,8 @@ export default function ModelImagesDialog() {
                         src={value}
                         alt={`Foto do modelo ${c.brand} ${c.model}`}
                         loading="lazy"
-                        className="h-10 w-10 rounded-md object-cover border border-border"
+                        className="h-10 w-10 rounded-md object-cover"
+                        style={{ boxShadow: "inset 0 0 0 1px var(--nc-track)" }}
                         onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
                       />
                     )}
@@ -150,14 +151,14 @@ export default function ModelImagesDialog() {
                         onBlur={() => save(c.key, c.brand, c.model)}
                       />
                     </div>
-                    <Button
-                      size="sm"
-                      variant={dirty ? "default" : "outline"}
+                    <NcButton
+                      variant={dirty ? "solid" : "quiet"}
+                      size="md"
                       disabled={!dirty || savingKey === c.key}
                       onClick={() => save(c.key, c.brand, c.model)}
                     >
                       {savingKey === c.key ? <Loader2 className="animate-spin" size={14} /> : "Salvar"}
-                    </Button>
+                    </NcButton>
                   </div>
                 </div>
               );

@@ -4,7 +4,8 @@ import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban } 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { NcButton, NcSheetHeader } from "@/components/nocturne";
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
@@ -738,13 +739,15 @@ export default function SalesPage() {
               </div>
               <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
                 <SheetTrigger asChild>
-                  <Button onClick={openNew} size="sm" className="h-9"><Plus size={15} className="mr-1.5" />Nova Venda</Button>
+                  <NcButton onClick={openNew} variant="solid" size="md"><Plus size={14} />Nova venda</NcButton>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-                  <SheetHeader className="mb-4">
-                    <SheetTitle>{editingSale ? "Editar registro" : "Novo registro"}</SheetTitle>
-                    <SheetDescription>{editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}</SheetDescription>
-                  </SheetHeader>
+                <SheetContent side="right" className="nocturne flex w-full flex-col p-0 sm:max-w-lg">
+                  <NcSheetHeader
+                    eyebrow="Vendas"
+                    title={editingSale ? "Editar registro" : "Novo registro"}
+                    description={editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}
+                  />
+                  <div className="flex-1 overflow-y-auto px-5 py-5">
                   {editingSale ? saleForm : (
                     <Tabs value={modalTab} onValueChange={(v) => setModalTab(v as "unica" | "lote")} className="space-y-4">
                       <SegmentedToggle
@@ -760,6 +763,7 @@ export default function SalesPage() {
                       <TabsContent value="lote" className="mt-0"><BatchSaleForm onDone={() => setOpen(false)} /></TabsContent>
                     </Tabs>
                   )}
+                  </div>
                 </SheetContent>
               </Sheet>
             </div>

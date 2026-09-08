@@ -274,7 +274,7 @@ export default function SellerReportDrawer({
   if (!seller || !report) {
     return (
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent className="w-full sm:max-w-lg" />
+        <SheetContent className="nocturne w-full sm:max-w-lg" />
       </Sheet>
     );
   }
@@ -376,7 +376,7 @@ export default function SellerReportDrawer({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Relatório do Funcionário</SheetTitle>
         </SheetHeader>
