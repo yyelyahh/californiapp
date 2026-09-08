@@ -972,7 +972,10 @@ export type Database = {
       }
     }
     Functions: {
-      confirm_order: { Args: { p_order_id: string }; Returns: undefined }
+      confirm_order: {
+        Args: { p_order_id: string; p_payment_method?: string }
+        Returns: undefined
+      }
       create_pending_order: {
         Args: {
           p_customer_name: string
@@ -1025,6 +1028,7 @@ export type Database = {
         Returns: number
       }
       delete_sale: { Args: { p_sale_id: string }; Returns: undefined }
+      expire_stale_orders: { Args: never; Returns: number }
       get_customer_loyalty: {
         Args: { p_whatsapp: string }
         Returns: {

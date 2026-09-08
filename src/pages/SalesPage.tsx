@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,13 +64,80 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+/**
+ * As formas de pagamento oferecidas ao confirmar um pedido do catálogo.
+ *
+ * É o mesmo vocabulário do formulário de venda manual, e a divisão entre
+ * recebido e a receber é a mesma regra: método "pago" grava a venda quitada,
+ * método "pendente" grava com zero recebido e ela cai nos filtros de cobrança.
+ * O valor pago não é digitado aqui de propósito — pedido de catálogo é sempre
+ * o total ou nada, e um campo livre só abriria espaço para divergir do total
+ * que o cliente já viu no comprovante.
+ */
+const ORDER_PAYMENT_CHOICES: { id: PaymentMethodValue; label: string; paid: boolean }[] = [
+  { id: "pix", label: "Pix", paid: true },
+  { id: "dinheiro", label: "Dinheiro", paid: true },
+  { id: "pix_pendente", label: "Falta receber Pix", paid: false },
+  { id: "dinheiro_pendente", label: "Falta receber Dinheiro", paid: false },
+  { id: "dinheiro_com_vendedor", label: "Dinheiro com o vendedor", paid: false },
+  { id: "pendente", label: "Falta receber (a definir)", paid: false },
+];
+
+/**
+ * Confirmar deixou de ser um clique só: a venda precisa saber se o dinheiro
+ * entrou, e o único momento em que alguém sabe disso é agora. Mesmo formato do
+ * `MarkPaidPopover` que já existe para dar baixa numa venda antiga — quem usa
+ * um reconhece o outro.
+ */
+function ConfirmOrderPopover({
+  children, disabled, onConfirm,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onConfirm: (method: PaymentMethodValue) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const pick = async (method: PaymentMethodValue) => {
+    setOpen(false);
+    await onConfirm(method);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={o => !disabled && setOpen(o)}>
+      <PopoverTrigger asChild disabled={disabled}>{children}</PopoverTrigger>
+      <PopoverContent align="end" className="w-60 space-y-2.5 p-3">
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium text-muted-foreground">Recebido agora</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {ORDER_PAYMENT_CHOICES.filter(c => c.paid).map(c => (
+              <Button key={c.id} type="button" size="sm" variant="outline" className="h-8 text-xs"
+                onClick={() => pick(c.id)}>{c.label}</Button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5 border-t border-border pt-2.5">
+          <p className="text-[11px] font-medium text-muted-foreground">Falta receber</p>
+          <div className="grid gap-1.5">
+            {ORDER_PAYMENT_CHOICES.filter(c => !c.paid).map(c => (
+              <Button key={c.id} type="button" size="sm" variant="ghost"
+                className="h-8 justify-start px-2 text-xs font-normal"
+                onClick={() => pick(c.id)}>{c.label}</Button>
+            ))}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function PendingOrdersList({
   orders, loading, processingOrder, onConfirm, onDecline,
 }: {
   orders: Order[];
   loading: boolean;
   processingOrder: string | null;
-  onConfirm: (orderId: string) => void;
+  onConfirm: (orderId: string, method: PaymentMethodValue) => void;
   onDecline: (orderId: string) => void;
 }) {
   if (loading) {
@@ -156,14 +223,14 @@ function PendingOrdersList({
             >
               <Ban size={13} className="mr-1.5" />Recusar
             </Button>
-            <Button
-              size="sm"
-              className="h-8 text-xs"
+            <ConfirmOrderPopover
               disabled={processingOrder === order.id}
-              onClick={() => onConfirm(order.id)}
+              onConfirm={method => onConfirm(order.id, method)}
             >
-              <Check size={13} className="mr-1.5" />Confirmar
-            </Button>
+              <Button size="sm" className="h-8 text-xs" disabled={processingOrder === order.id}>
+                <Check size={13} className="mr-1.5" />Confirmar
+              </Button>
+            </ConfirmOrderPopover>
           </div>
         </motion.div>
       ))}
@@ -181,7 +248,7 @@ function SellerOrderCard({
 }: {
   order: Order;
   processing: boolean;
-  onConfirm: (orderId: string) => void;
+  onConfirm: (orderId: string, method: PaymentMethodValue) => void;
   onDecline: (orderId: string) => void;
 }) {
   return (
@@ -240,13 +307,11 @@ function SellerOrderCard({
         >
           <Ban size={15} className="mr-1.5" />Recusar
         </Button>
-        <Button
-          className="h-11 text-sm col-span-2"
-          disabled={processing}
-          onClick={() => onConfirm(order.id)}
-        >
-          <Check size={16} className="mr-1.5" />{processing ? "Confirmando..." : "Confirmar pedido"}
-        </Button>
+        <ConfirmOrderPopover disabled={processing} onConfirm={method => onConfirm(order.id, method)}>
+          <Button className="h-11 text-sm col-span-2" disabled={processing}>
+            <Check size={16} className="mr-1.5" />{processing ? "Confirmando..." : "Confirmar pedido"}
+          </Button>
+        </ConfirmOrderPopover>
       </div>
     </motion.div>
   );
@@ -332,6 +397,12 @@ export default function SalesPage() {
   const fetchPendingOrders = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
     if (!silent) setLoadingOrders(true);
+    // Carimba como 'expirada' o que passou das 24h antes de listar, senão
+    // pedido morto continuaria aqui pedindo uma decisão que não existe mais.
+    // O estoque dele já voltou ao catálogo sozinho (o cálculo do `available`
+    // ignora reserva vencida), então isto é só a limpeza da lista — se falhar,
+    // nada trava: no máximo um card a mais aparece até a próxima passagem.
+    await supabase.rpc("expire_stale_orders");
     const { data, error } = await supabase
       .from("orders")
       .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, flavor))")
@@ -367,18 +438,37 @@ export default function SalesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleConfirmOrder = async (orderId: string) => {
+  const handleConfirmOrder = async (orderId: string, method: PaymentMethodValue) => {
     if (processingOrder) return;
     setProcessingOrder(orderId);
     try {
-      const { error } = await supabase.rpc("confirm_order", { p_order_id: orderId });
+      const { error } = await supabase.rpc("confirm_order", {
+        p_order_id: orderId,
+        p_payment_method: method,
+      });
       if (error) throw error;
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
       await refreshSales();
-      toast({ title: "Pedido confirmado", description: "O pedido foi confirmado e o estoque atualizado." });
-
+      const paid = ORDER_PAYMENT_CHOICES.find(c => c.id === method)?.paid;
+      toast({
+        title: "Pedido confirmado",
+        description: paid
+          ? "Estoque atualizado e venda registrada como recebida."
+          : "Estoque atualizado. A venda entrou como falta receber.",
+      });
     } catch (err: any) {
-      toast({ title: "Erro ao confirmar", description: err?.message || "Tente novamente.", variant: "destructive" });
+      const raw = String(err?.message ?? "");
+      // Pedido vencido é o caso mais provável de dar erro aqui, e a mensagem
+      // crua do Postgres não diz nada para quem está com o celular na mão.
+      const description = raw.includes("pedido_expirado")
+        ? "Este pedido passou das 24h e a reserva já foi liberada. Peça ao cliente para refazer no catálogo."
+        : raw.includes("pedido_ja_processado")
+          ? "Este pedido já tinha sido confirmado ou recusado."
+          : raw.includes("estoque")
+            ? "Não há mais estoque suficiente para este pedido."
+            : raw || "Tente novamente.";
+      toast({ title: "Erro ao confirmar", description, variant: "destructive" });
+      fetchPendingOrders({ silent: true });
     } finally {
       setProcessingOrder(null);
     }

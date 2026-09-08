@@ -1196,6 +1196,10 @@ export default function SellerStorePage() {
         p_customer_name: customerName,
         p_customer_whatsapp: phoneDigits,
         p_freight_notes: freight.trim() || null,
+        // `unit_price` vai junto por compatibilidade, mas o servidor IGNORA:
+        // quem define o preço gravado é `products.sale_price`, lido dentro da
+        // function. Esta chamada é `anon` — o que sai daqui é palpite de quem
+        // está do outro lado, não fonte de verdade de dinheiro.
         p_items: cart.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
