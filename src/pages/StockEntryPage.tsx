@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
-import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
+import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRange } from "@/lib/date-utils";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PurchaseOrdersSection from "@/components/PurchaseOrdersSection";
@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, PeriodChips, Rule, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,7 @@ function parseFlavorLines(text: string) {
 type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
 
 /**
- * Os mesmos chips do Dashboard (`PeriodChips`), com os períodos que fazem
+ * Os mesmos chips do Dashboard (`SegmentedChips`), com os períodos que fazem
  * sentido para reposição. "custom" não está aqui de propósito: ele não é um
  * chip, é o que sobra quando a pessoa digita um intervalo à mão — e aí nenhum
  * chip fica aceso.
@@ -62,6 +62,15 @@ const PERIOD_OPTIONS: { value: DateRangePreset; label: string; short: string }[]
   { value: "month", label: "Este mês", short: "Mês" },
   { value: "lastMonth", label: "Mês passado", short: "Mês ant." },
 ];
+
+/**
+ * A tela abre no mês corrente, como a de Vendas. A lista monta uma linha por
+ * entrada, sem virtualização, e "Tudo" cresce para sempre — abrir no recorte
+ * que se usa todo dia é o paliativo enquanto a correção não vem (roadmap).
+ * "Limpar" volta para o mês pelo mesmo motivo: devolver a tela ao estado em que
+ * ela abre, e não ao mais pesado que ela tem.
+ */
+const DEFAULT_PRESET: DateRangePreset = "month";
 
 /** Quantos modelos cabem na lista do trilho antes de virar "+ N outros". */
 const MAX_TOP_MODELS = 6;
@@ -78,9 +87,9 @@ export default function StockEntryPage() {
   const [notes, setNotes] = useState("");
   const [flavorsText, setFlavorsText] = useState("");
   const [search, setSearch] = useState("");
-  const [fPreset, setFPreset] = useState<DateRangePreset>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [fPreset, setFPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
+  const [dateFrom, setDateFrom] = useState(() => currentMonthRange().from);
+  const [dateTo, setDateTo] = useState(() => currentMonthRange().to);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
@@ -171,16 +180,18 @@ export default function StockEntryPage() {
   const applyPreset = (p: DateRangePreset) => {
     setFPreset(p);
     const now = new Date();
-    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     if (p === "all") { setDateFrom(""); setDateTo(""); return; }
-    if (p === "today") { const t = fmt(now); setDateFrom(t); setDateTo(t); return; }
-    if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setDateFrom(fmt(past)); setDateTo(fmt(now)); return; }
-    if (p === "month") { setDateFrom(fmt(new Date(now.getFullYear(), now.getMonth(), 1))); setDateTo(fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0))); return; }
-    if (p === "lastMonth") { setDateFrom(fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setDateTo(fmt(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
+    if (p === "today") { const t = isoDay(now); setDateFrom(t); setDateTo(t); return; }
+    if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setDateFrom(isoDay(past)); setDateTo(isoDay(now)); return; }
+    if (p === "month") { const m = currentMonthRange(); setDateFrom(m.from); setDateTo(m.to); return; }
+    if (p === "lastMonth") { setDateFrom(isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setDateTo(isoDay(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
   };
 
-  const clearFilters = () => { setSearch(""); setFPreset("all"); setDateFrom(""); setDateTo(""); };
-  const hasActiveFilters = search !== "" || dateFrom !== "" || dateTo !== "";
+  const clearFilters = () => { setSearch(""); applyPreset(DEFAULT_PRESET); };
+
+  // O período só conta como filtro quando NÃO é o padrão da tela: senão o
+  // "Limpar" nasceria aceso, oferecendo limpar o estado em que a tela abriu.
+  const hasActiveFilters = search !== "" || fPreset !== DEFAULT_PRESET;
 
   /** Sobretítulo do cabeçalho: o período que está mandando na tela, como no Dashboard. */
   const periodLabel = PERIOD_OPTIONS.find(o => o.value === fPreset)?.label ?? "Período personalizado";
@@ -419,7 +430,7 @@ export default function StockEntryPage() {
               className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px]"
             />
           </div>
-          <PeriodChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
+          <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
           <div className="flex items-center gap-1.5">
             <input
               type="date"

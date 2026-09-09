@@ -1,17 +1,17 @@
 import { useStore } from "@/context/StoreContext";
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
-import { NcButton, NcSheetHeader, PeriodChips, Rule, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { Label } from "@/components/ui/label";
-import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRange } from "@/lib/date-utils";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Stagger } from "@/components/motion/Stagger";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { listItem, stagger, transitionBase } from "@/lib/motion";
+import { AnimatePresence, motion } from "motion/react";
+import { listItem, transitionBase } from "@/lib/motion";
 import { useConfirm } from "@/components/ConfirmProvider";
 import BatchSaleForm from "@/components/BatchSaleForm";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
@@ -61,7 +61,7 @@ const POPOVER_STYLE: React.CSSProperties = {
 type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
 
 /**
- * Os mesmos chips do Dashboard e da Entrada (`PeriodChips`). "custom" não está
+ * Os mesmos chips do Dashboard e da Entrada (`SegmentedChips`). "custom" não está
  * aqui de propósito: ele não é um chip, é o que sobra quando a pessoa digita um
  * intervalo à mão — e aí nenhum chip fica aceso.
  */
@@ -72,6 +72,20 @@ const PERIOD_OPTIONS: { value: DateRangePreset; label: string; short: string }[]
   { value: "month", label: "Este mês", short: "Mês" },
   { value: "lastMonth", label: "Mês passado", short: "Mês ant." },
 ];
+
+/**
+ * A tela abre no mês corrente, não em "Tudo".
+ *
+ * Motivo é desempenho, não gosto: a lista monta uma linha por venda, sem
+ * virtualização nem paginação, e "Tudo" cresce para sempre — hoje já trava
+ * perceptivelmente ao carregar. O recorte padrão é o paliativo; a correção de
+ * verdade está no roadmap (virtualizar a lista ou paginar no banco).
+ *
+ * Como consequência, "Limpar" volta para o mês, e não para "Tudo": o botão
+ * devolve a tela ao estado em que ela abre, senão limpar filtro seria a ação
+ * mais pesada da tela.
+ */
+const DEFAULT_PRESET: DateRangePreset = "month";
 
 /** Quantas linhas cabem na lista do trilho antes de virar "+ N outros". */
 const MAX_TOP_ROWS = 6;
@@ -88,49 +102,12 @@ const TABS: { value: TabValue; label: string }[] = [
 ];
 
 /**
- * Faixa de abas do Nocturne. O realce é PEÇA ÚNICA com `layoutId`: só a aba
- * ativa desenha o traço, e o motion desliza ele de uma para a outra em vez de
- * apagar aqui e acender ali — a mesma regra do `PeriodChips` e dos chips de
- * marca da loja.
- *
- * Fica local porque hoje só esta tela tem abas. Se uma segunda precisar, sobe
- * para `src/components/nocturne` e as duas importam.
+ * Faixa de abas desta tela. O desenho (e o traço accent que desliza com
+ * `layoutId`) mora no `NcTabsList` compartilhado desde que o Extrato do vendedor
+ * passou a precisar das mesmas abas; aqui só se decide o que cada uma conta.
  */
 function SalesTabs({ value, counts }: { value: TabValue; counts: Record<TabValue, number> }) {
-  const reduce = useReducedMotion();
-  const underlineId = useId();
-
-  return (
-    <TabsList
-      className="h-auto w-full justify-start gap-5 rounded-none bg-transparent p-0"
-      style={{ borderBottom: "1px solid var(--nc-track)" }}
-    >
-      {TABS.map(t => {
-        const active = t.value === value;
-        return (
-          <TabsTrigger
-            key={t.value}
-            value={t.value}
-            className="relative rounded-none bg-transparent px-0 pb-2.5 pt-0 text-[13px] shadow-none transition-colors data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-            style={{ color: active ? "var(--nc-accent)" : "var(--nc-text-3)" }}
-          >
-            {t.label}
-            <span className="nc-num ml-1.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-              {counts[t.value]}
-            </span>
-            {active && (
-              <motion.span
-                layoutId={reduce ? undefined : underlineId}
-                className="absolute inset-x-0 -bottom-px h-[2px]"
-                style={{ background: "var(--nc-accent)" }}
-                transition={transitionBase}
-              />
-            )}
-          </TabsTrigger>
-        );
-      })}
-    </TabsList>
-  );
+  return <NcTabsList value={value} tabs={TABS.map(t => ({ ...t, count: counts[t.value] }))} />;
 }
 
 /**
@@ -436,29 +413,30 @@ export default function SalesPage() {
   const [fSeller, setFSeller] = useState<string>("all"); // all | none | <id>
   const [fStatus, setFStatus] = useState<PaymentStatus>("all");
   const [fProduct, setFProduct] = useState("");
-  const [fPreset, setFPreset] = useState<DateRangePreset>("all");
-  const [fFrom, setFFrom] = useState("");
-  const [fTo, setFTo] = useState("");
+  const [fPreset, setFPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
+  const [fFrom, setFFrom] = useState(() => currentMonthRange().from);
+  const [fTo, setFTo] = useState(() => currentMonthRange().to);
   const [fSortKey, setFSortKey] = useState<SortKey>("date");
   const [fSortDir, setFSortDir] = useState<"asc" | "desc">("desc");
 
   const applyPreset = (p: DateRangePreset) => {
     setFPreset(p);
     const now = new Date();
-    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     if (p === "all") { setFFrom(""); setFTo(""); return; }
-    if (p === "today") { const t = fmt(now); setFFrom(t); setFTo(t); return; }
-    if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setFFrom(fmt(past)); setFTo(fmt(now)); return; }
-    if (p === "month") { setFFrom(fmt(new Date(now.getFullYear(), now.getMonth(), 1))); setFTo(fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0))); return; }
-    if (p === "lastMonth") { setFFrom(fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setFTo(fmt(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
+    if (p === "today") { const t = isoDay(now); setFFrom(t); setFTo(t); return; }
+    if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setFFrom(isoDay(past)); setFTo(isoDay(now)); return; }
+    if (p === "month") { const m = currentMonthRange(); setFFrom(m.from); setFTo(m.to); return; }
+    if (p === "lastMonth") { setFFrom(isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setFTo(isoDay(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
   };
 
   const clearFilters = () => {
-    setFSeller("all"); setFStatus("all"); setFProduct(""); setFPreset("all");
-    setFFrom(""); setFTo(""); setFSortKey("date"); setFSortDir("desc");
+    setFSeller("all"); setFStatus("all"); setFProduct(""); setFSortKey("date"); setFSortDir("desc");
+    applyPreset(DEFAULT_PRESET);
   };
 
-  const hasActiveFilters = fSeller !== "all" || fStatus !== "all" || fProduct !== "" || fFrom !== "" || fTo !== "" || fSortKey !== "date" || fSortDir !== "desc";
+  // O período só conta como filtro quando NÃO é o padrão da tela: senão o
+  // "Limpar" nasceria aceso, oferecendo limpar o estado em que a tela abriu.
+  const hasActiveFilters = fSeller !== "all" || fStatus !== "all" || fProduct !== "" || fPreset !== DEFAULT_PRESET || fSortKey !== "date" || fSortDir !== "desc";
 
   const periodLabel = PERIOD_OPTIONS.find(o => o.value === fPreset)?.label ?? "Intervalo personalizado";
 
@@ -727,8 +705,8 @@ export default function SalesPage() {
 
         <motion.div
           key={!form.sellerId ? "produto-off" : "produto-on"}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-1.5"
         >
@@ -1132,7 +1110,7 @@ export default function SalesPage() {
               </NcButton>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <PeriodChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
+              <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
               <div className="flex items-center gap-1.5">
                 <input
                   type="date"
@@ -1176,7 +1154,7 @@ export default function SalesPage() {
                       <th className="w-[70px] px-3 py-2" />
                     </tr>
                   </thead>
-                  <motion.tbody variants={stagger()} initial="hidden" animate="visible">
+                  <motion.tbody>
                     <AnimatePresence initial={false}>{sortedSales.map(renderRow)}</AnimatePresence>
                   </motion.tbody>
                 </table>
@@ -1203,7 +1181,7 @@ export default function SalesPage() {
                       <th className="w-[80px] px-3 py-2" />
                     </tr>
                   </thead>
-                  <motion.tbody variants={stagger()} initial="hidden" animate="visible">
+                  <motion.tbody>
                     <AnimatePresence initial={false}>{sortedRetiradas.map(renderRow)}</AnimatePresence>
                   </motion.tbody>
                 </table>

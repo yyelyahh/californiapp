@@ -9,7 +9,7 @@ import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import { listItem } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
-import { PeriodChips, Rule } from "@/components/nocturne";
+import { SegmentedChips, Rule } from "@/components/nocturne";
 import { computeModelStats, summarizeRestock, urgencyOf, HORIZON_DAYS, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
@@ -126,7 +126,18 @@ export default function Dashboard() {
       // Reposição de estoque (investimento — exibido separadamente, NÃO reduz lucro)
       const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
 
-      const ticket = salesInPeriod.length > 0 ? received / salesInPeriod.length : 0;
+      /**
+       * Ticket médio = quanto vale a venda média, e por isso é FATURAMENTO
+       * dividido pela contagem de vendas.
+       *
+       * Era `received / salesInPeriod.length`: misturava duas populações —
+       * dinheiro só das vendas quitadas, dividido por TODAS as vendas. Uma
+       * venda em aberto entrava no divisor com valor zero no numerador e
+       * derrubava a média, então o número caía quando o mês vendia bem e
+       * recebia devagar, que é o contrário do que ele deveria dizer. É a mesma
+       * conta da tela de Vendas (`totals.ticket`), e as duas não podem divergir.
+       */
+      const ticket = salesInPeriod.length > 0 ? revenue / salesInPeriod.length : 0;
 
       return { revenue, received, receivable, cogs, grossProfit, grossMargin, expenses, netProfit, netMargin, restock, ticket, salesCount: salesInPeriod.length, sales: salesInPeriod };
     };
@@ -382,7 +393,7 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            <PeriodChips options={periodOptions} value={filter} onChange={setFilter} />
+            <SegmentedChips options={periodOptions} value={filter} onChange={setFilter} />
             <button
               type="button"
               onClick={handleExport}
