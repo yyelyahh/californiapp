@@ -1,84 +1,104 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { Plus, Trash2, Truck, PackageCheck, History } from "lucide-react";
 import { todayDateString, formatDateBR } from "@/lib/date-utils";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { PurchaseOrder } from "@/types";
 import { sortNames } from "@/lib/catalog-order";
+import { NcButton, NcSheetHeader, EYEBROW } from "@/components/nocturne";
 
 type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string; unitPrice: string };
 type FlavorRow = { flavor: string; quantity: string };
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function OrderCard({ order, onReceive, onDelete }: {
+/** Caixa interna dos painéis: fundo do tema com o fio de 1px, como no cadastro rápido. */
+const INSET_BOX: React.CSSProperties = {
+  background: "var(--nc-bg)",
+  boxShadow: "inset 0 0 0 1px var(--nc-track)",
+};
+
+/**
+ * Uma compra, como linha de lista (`nc-row`) e não como card dentro de card: a
+ * seção já é um `nc-card`, e uma moldura dentro da outra era o que mais
+ * destoava do Dashboard nesta tela.
+ *
+ * Aguardando recebimento sai em `--nc-alert` — é o mesmo papel do "a receber"
+ * do painel: já saiu dinheiro, ainda não chegou a mercadoria.
+ */
+function OrderRow({ order, onReceive, onDelete }: {
   order: PurchaseOrder;
   onReceive?: (o: PurchaseOrder) => void;
   onDelete?: (id: string) => void;
 }) {
+  const isPending = order.status === "pending";
+  const total = order.items.reduce((s, it) => s + it.unitPrice * it.expectedQuantity, 0) + order.freightCost;
+
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
+    <div className="nc-row px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold mono">Compra #{order.number}</span>
-          <span className="text-[11px] text-muted-foreground">{formatDateBR(order.date)}</span>
-          <Badge variant={order.status === "pending" ? "secondary" : "outline"} className={cn("text-[10px]", order.status === "received" && "text-income border-income/40")}>
-            {order.status === "pending" ? "Aguardando recebimento" : "Recebida"}
-          </Badge>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="nc-num text-[13.5px]">Compra #{order.number}</span>
+          <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>{formatDateBR(order.date)}</span>
+          <span
+            className="rounded-full px-2 py-0.5 text-[10.5px]"
+            style={isPending
+              ? { color: "var(--nc-alert)", boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--nc-alert) 45%, transparent)" }
+              : { color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--nc-accent) 45%, transparent)" }}
+          >
+            {isPending ? "Aguardando" : "Recebida"}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          {order.status === "pending" && onReceive && onDelete ? (
+        <div className="flex flex-none items-center gap-1.5">
+          {isPending && onReceive && onDelete ? (
             <>
-              <Button size="sm" className="h-8" onClick={() => onReceive(order)}>
-                <Truck size={14} className="mr-1.5" />Receber
-              </Button>
-              <Button
-                variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => onDelete(order.id)}
-              >
+              <NcButton variant="outline" onClick={() => onReceive(order)}>
+                <Truck size={13} />Receber
+              </NcButton>
+              <NcButton variant="danger" size="icon" aria-label={`Excluir compra #${order.number}`} onClick={() => onDelete(order.id)}>
                 <Trash2 size={13} />
-              </Button>
+              </NcButton>
             </>
           ) : (
-            <span className="flex items-center gap-1.5 text-[11px] text-income">
+            <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--nc-accent)" }}>
               <PackageCheck size={13} />
               {order.receivedAt ? `Recebida em ${formatDateBR(order.receivedAt)}` : "Recebida"}
             </span>
           )}
         </div>
       </div>
+
       <div className="mt-2 space-y-1">
         {order.items.map(it => (
           <div key={it.id} className="text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{it.brand} {it.model}</span>
-              <span className="mono text-muted-foreground">
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate">{it.brand} {it.model}</span>
+              <span className="nc-num flex-none" style={{ color: "var(--nc-text-2)" }}>
                 {it.expectedQuantity} un.{it.unitPrice > 0 ? ` · ${brl(it.unitPrice)}` : ""}
               </span>
             </div>
             {it.receivedFlavors.length > 0 && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="mt-0.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
                 {it.receivedFlavors.map(f => `${f.flavor} ${f.quantity}`).join(" · ")}
               </p>
             )}
           </div>
         ))}
-        {(order.paidAmount > 0 || order.freightCost > 0) && (
-          <p className="text-[11px] text-muted-foreground pt-1 mono">
-            {order.paidAmount > 0 && `Pago ${order.paidAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+
+        <div className="nc-num flex items-center justify-between gap-3 pt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          <span>
+            {order.paidAmount > 0 && `Pago ${brl(order.paidAmount)}`}
             {order.paidAmount > 0 && order.freightCost > 0 && " · "}
-            {order.freightCost > 0 && `Frete ${order.freightCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
-          </p>
-        )}
-        {order.notes && <p className="text-[11px] text-muted-foreground pt-1">{order.notes}</p>}
+            {order.freightCost > 0 && `Frete ${brl(order.freightCost)}`}
+          </span>
+          {total > 0 && <span>total {brl(total)}</span>}
+        </div>
+        {order.notes && <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>{order.notes}</p>}
       </div>
     </div>
   );
@@ -203,53 +223,68 @@ export default function PurchaseOrdersSection() {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold">Compras aguardando recebimento</h2>
+    <>
+      {/* Mesmo cabeçalho do "Repor agora" do Dashboard: ícone no accent, título
+          de 15px e a pílula de contagem à direita. */}
+      <section className="nc-card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-3.5">
+          <div className="flex items-center gap-2">
+            <Truck size={16} style={{ color: "var(--nc-accent)" }} />
+            <h2 className="text-[15px]">Compras a caminho</h2>
+            {pending.length > 0 && (
+              <span
+                className="nc-num rounded-full px-2 py-0.5 text-[11px]"
+                style={{ color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }}
+              >
+                {pending.length} aguardando
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {received.length > 0 && (
+              <NcButton variant="ghost" onClick={() => setHistoryOpen(true)}>
+                <History size={13} />Histórico
+              </NcButton>
+            )}
+            <NcButton onClick={() => setNewOpen(true)}>
+              <Plus size={13} />Nova compra
+            </NcButton>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          {received.length > 0 && (
-            <Button size="sm" variant="ghost" className="h-9 text-muted-foreground" onClick={() => setHistoryOpen(true)}>
-              <History size={15} className="mr-1.5" />Histórico
-            </Button>
-          )}
-          <Button size="sm" variant="outline" className="h-9" onClick={() => setNewOpen(true)}>
-            <Plus size={15} className="mr-1.5" />Nova compra
-          </Button>
-        </div>
-      </div>
 
-      {pending.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-6 text-center">
-          <p className="text-xs text-muted-foreground">Nenhuma compra aguardando recebimento.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {pending.map(order => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              onReceive={openReceive}
-              onDelete={async (id) => { if (await confirm({ title: "Excluir compra", description: "Excluir esta compra aguardando recebimento?" })) deletePurchaseOrder(id); }}
-            />
-          ))}
-        </div>
-      )}
+        {pending.length === 0 ? (
+          <p className="px-4 pb-5 pt-1 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
+            Nenhuma compra aguardando recebimento.
+          </p>
+        ) : (
+          <div style={{ borderTop: "1px solid var(--nc-track)" }}>
+            {pending.map(order => (
+              <OrderRow
+                key={order.id}
+                order={order}
+                onReceive={openReceive}
+                onDelete={async (id) => { if (await confirm({ title: "Excluir compra", description: "Excluir esta compra aguardando recebimento?" })) deletePurchaseOrder(id); }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Histórico de compras recebidas */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
-          <SheetHeader className="px-6 py-4 border-b border-border">
-            <SheetTitle className="text-base font-semibold">Histórico de recebimentos</SheetTitle>
-          </SheetHeader>
-          <div className="flex-1 px-6 py-5 space-y-2">
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+          <NcSheetHeader
+            eyebrow="Compras"
+            title="Histórico de recebimentos"
+            description="Compras que já viraram estoque."
+          />
+          <div className="flex-1 overflow-y-auto">
             {received.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center">
-                <p className="text-xs text-muted-foreground">Nenhuma compra recebida ainda.</p>
-              </div>
+              <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
+                Nenhuma compra recebida ainda.
+              </p>
             ) : (
-              received.map(order => <OrderCard key={order.id} order={order} />)
+              received.map(order => <OrderRow key={order.id} order={order} />)
             )}
           </div>
         </SheetContent>
@@ -257,128 +292,156 @@ export default function PurchaseOrdersSection() {
 
       {/* Nova compra */}
       <Sheet open={newOpen} onOpenChange={(v) => { setNewOpen(v); if (!v) resetNew(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
-          <SheetHeader className="px-6 py-4 border-b border-border">
-            <SheetTitle className="text-base font-semibold">Nova compra</SheetTitle>
-          </SheetHeader>
-          <div className="flex-1 px-6 py-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Data</Label>
-                <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-9" />
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+          <NcSheetHeader
+            eyebrow="Compras"
+            title="Nova compra"
+            description="Registre o pedido agora; os sabores entram no recebimento."
+          />
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+            <section className="space-y-3">
+              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Pedido</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Data</Label>
+                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Frete (R$)</Label>
+                  <Input type="number" step="0.01" min={0} value={freightNew} onChange={e => setFreightNew(e.target.value)} placeholder="0,00" className="nc-num" />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Observações</Label>
-                <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" className="h-9" />
+                <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Frete (R$)</Label>
-                <Input type="number" step="0.01" min={0} value={freightNew} onChange={e => setFreightNew(e.target.value)} placeholder="0,00" className="h-9 mono" />
-              </div>
-            </div>
+            </section>
 
-            <div className="space-y-2.5">
+            <section className="space-y-3">
+              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Produtos esperados</p>
               {items.map((item, idx) => (
-                <div key={idx} className="rounded-lg border border-border p-3 space-y-2.5">
+                <div key={idx} className="space-y-2.5 rounded-lg p-3" style={INSET_BOX}>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Produto esperado {idx + 1}</Label>
+                    <Label className="text-xs">Produto {idx + 1}</Label>
                     {items.length > 1 && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}>
+                      <NcButton
+                        variant="danger"
+                        size="icon"
+                        aria-label={`Remover produto ${idx + 1}`}
+                        onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}
+                      >
                         <Trash2 size={12} />
-                      </Button>
+                      </NcButton>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Select value={item.brand} onValueChange={v => setItems(prev => prev.map((it, i) => i === idx ? { ...it, brand: v, model: "", modelNew: "" } : it))}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Marca" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectTrigger><SelectValue placeholder="Marca" /></SelectTrigger>
+                      <SelectContent className="nocturne">
                         {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                         <SelectItem value="__new__">+ Nova marca</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={item.model} onValueChange={v => setItems(prev => prev.map((it, i) => i === idx ? { ...it, model: v } : it))}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Modelo" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectTrigger><SelectValue placeholder="Modelo" /></SelectTrigger>
+                      <SelectContent className="nocturne">
                         {modelsFor(resolveBrand(item)).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                         <SelectItem value="__new__">+ Novo modelo</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   {item.brand === "__new__" && (
-                    <Input value={item.brandNew} placeholder="Nome da nova marca" className="h-9"
+                    <Input value={item.brandNew} placeholder="Nome da nova marca"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, brandNew: e.target.value } : it))} />
                   )}
                   {item.model === "__new__" && (
-                    <Input value={item.modelNew} placeholder="Nome do novo modelo" className="h-9"
+                    <Input value={item.modelNew} placeholder="Nome do novo modelo"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, modelNew: e.target.value } : it))} />
                   )}
                   <div className="grid grid-cols-2 gap-2">
-                    <Input type="number" min={1} value={item.quantity} placeholder="Qtd esperada" className="h-9 mono"
+                    <Input type="number" min={1} value={item.quantity} placeholder="Qtd esperada" className="nc-num"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))} />
-                    <Input type="number" step="0.01" min={0} value={item.unitPrice} placeholder="Valor unitário" className="h-9 mono"
+                    <Input type="number" step="0.01" min={0} value={item.unitPrice} placeholder="Valor unitário" className="nc-num"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, unitPrice: e.target.value } : it))} />
                   </div>
                 </div>
               ))}
-              <Button variant="outline" size="sm" className="w-full h-9" onClick={() => setItems(prev => [...prev, emptyItem()])}>
-                <Plus size={14} className="mr-1.5" />Adicionar produto
-              </Button>
-              <div className="rounded-lg border border-border px-3 py-2 space-y-1 text-xs">
-                <div className="flex justify-between"><span className="text-muted-foreground">Produtos</span><span className="mono">{brl(draftItemsTotal)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Frete</span><span className="mono">{brl(draftFreight)}</span></div>
-                <div className="flex justify-between font-semibold"><span>Total pago</span><span className="mono">{brl(draftItemsTotal + draftFreight)}</span></div>
+              <NcButton variant="quiet" size="md" className="w-full" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                <Plus size={14} />Adicionar produto
+              </NcButton>
+
+              <div className="space-y-1 rounded-lg px-3 py-2 text-xs" style={INSET_BOX}>
+                <div className="flex justify-between">
+                  <span style={{ color: "var(--nc-text-2)" }}>Produtos</span>
+                  <span className="nc-num">{brl(draftItemsTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: "var(--nc-text-2)" }}>Frete</span>
+                  <span className="nc-num">{brl(draftFreight)}</span>
+                </div>
+                <div className="nc-rule-top flex justify-between pt-1.5 font-medium">
+                  <span>Total pago</span>
+                  <span className="nc-num">{brl(draftItemsTotal + draftFreight)}</span>
+                </div>
               </div>
-            </div>
+            </section>
           </div>
-          <SheetFooter className="px-6 py-4 border-t border-border bg-card sticky bottom-0">
-            <Button className="w-full h-10" onClick={handleCreate} disabled={saving}>
-              {saving ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                  Salvando…
-                </span>
-              ) : "Registrar compra"}
-            </Button>
+          <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+            <div className="flex w-full items-center justify-between gap-3">
+              <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                Total <span className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>{brl(draftItemsTotal + draftFreight)}</span>
+              </p>
+              <NcButton variant="solid" size="md" onClick={handleCreate} disabled={saving}>
+                {saving ? "Salvando…" : "Registrar compra"}
+              </NcButton>
+            </div>
           </SheetFooter>
         </SheetContent>
       </Sheet>
 
       {/* Receber compra */}
       <Sheet open={!!receiving} onOpenChange={(v) => { if (!v) setReceiving(null); }}>
-        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
-          <SheetHeader className="px-6 py-4 border-b border-border">
-            <SheetTitle className="text-base font-semibold">Receber compra #{receiving?.number}</SheetTitle>
-          </SheetHeader>
-          <div className="flex-1 px-6 py-5 space-y-5">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Data do recebimento</Label>
-                <Input type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} className="h-9" />
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+          <NcSheetHeader
+            eyebrow="Compras"
+            title={`Receber compra #${receiving?.number ?? ""}`}
+            description="Some os sabores até bater com a quantidade esperada de cada produto."
+          />
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+            <section className="space-y-3">
+              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebimento</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Data do recebimento</Label>
+                  <Input type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Frete total (R$)</Label>
+                  <Input type="number" step="0.01" min={0} value={freight} onChange={e => setFreight(e.target.value)} placeholder="0,00" className="nc-num" />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Frete total (R$)</Label>
-                <Input type="number" step="0.01" min={0} value={freight} onChange={e => setFreight(e.target.value)} placeholder="0,00" className="h-9 mono" />
-              </div>
-            </div>
-            {freightValue > 0 && (
-              <p className="text-[11px] text-muted-foreground -mt-2">
-                Frete rateado: +{freightPerUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por unidade ({receiptUnits} un.)
-              </p>
-            )}
+              {freightValue > 0 && (
+                <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                  Frete rateado: +{brl(freightPerUnit)} por unidade ({receiptUnits} un.)
+                </p>
+              )}
+            </section>
+
             {receiving?.items.map(it => {
               const total = totalFor(it.id);
               const ok = total === it.expectedQuantity;
               return (
-                <div key={it.id} className="rounded-lg border border-border p-3 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{it.brand} {it.model}</span>
-                    <span className={cn("text-xs mono font-semibold", ok ? "text-income" : "text-warning")}>
+                <div key={it.id} className="space-y-2.5 rounded-lg p-3" style={INSET_BOX}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm">{it.brand} {it.model}</span>
+                    {/* Bateu vai para o accent; faltando ou sobrando fica no
+                        alerta — o mesmo vocabulário do resto do painel. */}
+                    <span className="nc-num flex-none text-xs font-semibold" style={{ color: ok ? "var(--nc-accent)" : "var(--nc-alert)" }}>
                       {total}/{it.expectedQuantity}
                     </span>
                   </div>
                   {!ok && (
-                    <p className="text-[11px] text-warning">
+                    <p className="text-[11px]" style={{ color: "var(--nc-alert)" }}>
                       {total < it.expectedQuantity
                         ? `Faltam ${it.expectedQuantity - total} unidades`
                         : `${total - it.expectedQuantity} unidades a mais que o esperado`}
@@ -386,47 +449,54 @@ export default function PurchaseOrdersSection() {
                   )}
                   <div className="space-y-1.5">
                     <Label className="text-xs">Custo unitário (R$)</Label>
-                    <Input type="number" step="0.01" className="h-9 mono" value={costs[it.id] ?? ""}
+                    <Input type="number" step="0.01" className="nc-num" value={costs[it.id] ?? ""}
                       onChange={e => setCosts(prev => ({ ...prev, [it.id]: e.target.value }))} placeholder="0,00" />
                     {freightPerUnit > 0 && (
-                      <p className="text-[11px] text-muted-foreground">
-                        Com frete: {(((Number(costs[it.id]) || 0) + freightPerUnit)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                        Com frete: {brl((Number(costs[it.id]) || 0) + freightPerUnit)}
                       </p>
                     )}
                   </div>
                   <div className="space-y-1.5">
                     {(flavors[it.id] ?? []).map((row, i) => (
                       <div key={i} className="flex items-center gap-1.5">
-                        <Input value={row.flavor} placeholder="Sabor" className="h-9 flex-1"
+                        <Input value={row.flavor} placeholder="Sabor" className="flex-1"
                           onChange={e => setRow(it.id, i, { flavor: e.target.value })} />
-                        <Input type="number" min={0} value={row.quantity} placeholder="Qtd" className="h-9 w-20 mono"
+                        <Input type="number" min={0} value={row.quantity} placeholder="Qtd" className="nc-num w-20"
                           onChange={e => setRow(it.id, i, { quantity: e.target.value })} />
-                        <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeRow(it.id, i)} disabled={(flavors[it.id] ?? []).length === 1}>
+                        <NcButton
+                          variant="danger"
+                          size="icon"
+                          aria-label={`Remover sabor ${i + 1}`}
+                          onClick={() => removeRow(it.id, i)}
+                          disabled={(flavors[it.id] ?? []).length === 1}
+                        >
                           <Trash2 size={13} />
-                        </Button>
+                        </NcButton>
                       </div>
                     ))}
-                    <Button variant="outline" size="sm" className="w-full h-9" onClick={() => addRow(it.id)}>
-                      <Plus size={14} className="mr-1.5" />Adicionar sabor
-                    </Button>
+                    <NcButton variant="quiet" size="md" className="w-full" onClick={() => addRow(it.id)}>
+                      <Plus size={14} />Adicionar sabor
+                    </NcButton>
                   </div>
                 </div>
               );
             })}
           </div>
-          <SheetFooter className="px-6 py-4 border-t border-border bg-card sticky bottom-0">
-            <Button className="w-full h-10" onClick={handleConfirmReceipt} disabled={!allMatch || confirming}>
-              {confirming ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                  Confirmando…
-                </span>
-              ) : "Confirmar recebimento"}
-            </Button>
+          <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+            <div className="flex w-full items-center justify-between gap-3">
+              <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                {allMatch
+                  ? <><span className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>{receiptUnits}</span> un. conferidas</>
+                  : "As quantidades ainda não batem"}
+              </p>
+              <NcButton variant="solid" size="md" onClick={handleConfirmReceipt} disabled={!allMatch || confirming}>
+                {confirming ? "Confirmando…" : "Confirmar recebimento"}
+              </NcButton>
+            </div>
           </SheetFooter>
         </SheetContent>
       </Sheet>
-    </div>
+    </>
   );
 }

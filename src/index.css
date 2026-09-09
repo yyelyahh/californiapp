@@ -192,9 +192,10 @@
 
   /* ------------------------------------------------------------------
    * Nocturne — sistema de design do ERP. O app-shell inteiro (sidebar, menu
-   * mobile e barra inferior do AppLayout) já é Nocturne; das telas, só o
-   * Dashboard. Tudo fica sob `.nocturne`: a classe entra em cada peça da
-   * navegação, na página migrada E no <main> do AppLayout (ver
+   * mobile e barra inferior do AppLayout) já é Nocturne; das telas, o
+   * Dashboard, Produtos e Entrada. Tudo fica sob `.nocturne`: a
+   * classe entra em cada peça da navegação, na página migrada E no <main> do
+   * AppLayout (ver
    * `fullBleedRoutes`), para o fundo cobrir a área de rolagem inteira.
    *
    * O chão de TODAS as telas, migradas ou não, já é esta paleta: o bloco
