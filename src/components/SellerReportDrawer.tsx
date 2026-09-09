@@ -1,28 +1,63 @@
 import { useEffect, useMemo, useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
-import { computeSellerCommission, computeClosedCommission, computePriorCommissionBalance, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
+import { computeClosedCommission, computePriorCommissionBalance, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
 import { formatDateBR } from "@/lib/date-utils";
-import { cn } from "@/lib/utils";
 import {
-  startOfDay, endOfDay, startOfMonth, endOfMonth, subDays, subMonths,
-  isWithinInterval, parseISO, format,
+  startOfDay, endOfDay, startOfMonth, endOfMonth, subDays, subMonths, parseISO, format,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageCircle, ArrowUpCircle, ArrowDownCircle, Package, Boxes, Trash2 } from "lucide-react";
+import { MessageCircle, Boxes, Trash2 } from "lucide-react";
+import { motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
+import { listItem } from "@/lib/motion";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { Sale } from "@/types";
 import { compareCatalog } from "@/lib/catalog-order";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
 
+/**
+ * Os mesmos chips das telas do painel. "custom" não está aqui de propósito: ele
+ * é o que sobra quando a pessoa digita um intervalo à mão, e aí nenhum chip
+ * fica aceso.
+ */
+const PERIOD_OPTIONS: { value: PeriodKey; label: string; short: string }[] = [
+  { value: "today", label: "Hoje", short: "Hoje" },
+  { value: "7d", label: "Últimos 7 dias", short: "7d" },
+  { value: "month", label: "Este mês", short: "Mês" },
+  { value: "lastMonth", label: "Mês passado", short: "Mês ant." },
+];
+
+const TABS = [
+  { value: "resumo", label: "Resumo" },
+  { value: "consumo", label: "Consumo" },
+  { value: "estoque", label: "Estoque" },
+  { value: "mov", label: "Movimentações" },
+];
+
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+}
+
+/** Sem centavos — para o número grande do topo, como nos trilhos das telas. */
+function fmtShort(v: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
+}
+
+/**
+ * Saldo em cor, com o MESMO vocabulário da tela de Distribuição: positivo é o
+ * que a casa deve ao vendedor (--nc-alert, "falta pagar"), negativo é dívida
+ * dele com a casa (--nc-crit, "não entrou nada"), zerado é neutro.
+ */
+function balanceTone(v: number) {
+  if (v > 0.01) return "var(--nc-alert)";
+  if (v < -0.01) return "var(--nc-crit)";
+  return undefined;
 }
 
 function computeAccrualAdjustments(sales: Sale[]) {
@@ -55,6 +90,7 @@ export default function SellerReportDrawer({
   const [periodKey, setPeriodKey] = useState<PeriodKey>(initialPeriod ?? "month");
   const [customStart, setCustomStart] = useState(initialCustomStart ?? format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [customEnd, setCustomEnd] = useState(initialCustomEnd ?? format(new Date(), "yyyy-MM-dd"));
+  const [tab, setTab] = useState("resumo");
 
   useEffect(() => {
     if (!open) return;
@@ -106,7 +142,6 @@ export default function SellerReportDrawer({
     } catch { return false; }
   };
 
-
   const report = useMemo(() => {
     if (!seller) return null;
     const sellerSalesPeriod = sales.filter(s => s.sellerId === seller.id && inPeriod(s.date) && !isLegacy(s.date));
@@ -126,13 +161,11 @@ export default function SellerReportDrawer({
     const consumoTotal = retiradasTotal + manualDebtsTotal;
     const debtPaymentsTotal = allDebtPayments.reduce((a, p) => a + p.amount, 0);
 
-    const legacyCredit = 0;
     // Saldo de consumo abate direto da comissão. Pagamentos de dívida no período somam de volta ao saldo (crédito).
     const saldoConsumo = consumoTotal;
 
     // Consumo do PERÍODO (para breakdown da mensagem)
     const consumo = retiradas.reduce((a, s) => a + s.totalPrice, 0);
-    const consumoUnits = retiradas.reduce((a, s) => a + s.quantity, 0);
     const consumoMap = new Map<string, { name: string; qty: number; total: number }>();
     retiradas.forEach(s => {
       const cur = consumoMap.get(s.productId) || { name: getProductName(s.productId), qty: 0, total: 0 };
@@ -150,9 +183,6 @@ export default function SellerReportDrawer({
     const vendasRecebidasPeriodo = closed.sales;
 
     const vendasChrono = [...vendas].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const modernVendas = vendasRecebidasPeriodo;
-    const modernUnitsTotal = closed.units;
-    const finalTier = closed.tier;
     const saleCommission = new Map<string, number>();
     closed.groups.forEach(g => {
       g.sales.forEach(s => saleCommission.set(s.id, s.totalPrice * g.tier.rate));
@@ -187,7 +217,7 @@ export default function SellerReportDrawer({
       .sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
     const allOpenAmount = allOpenSales.reduce((a, s) => a + s.open, 0);
 
-    // Current stock assigned to seller
+    // Estoque hoje na mão do vendedor
     const stockItems = productAssignments
       .filter(a => a.sellerId === seller.id && a.quantity > 0)
       .map(a => {
@@ -225,20 +255,21 @@ export default function SellerReportDrawer({
 
     type DeletableKind = "manual_debt" | "debt_payment" | "commission_payment";
     type Mov =
-      | { kind: "venda"; when: string; label: string; amount: number; sub: string }
+      // `saleTotal` é o valor da venda; `amount`, a comissão que ela gerou. A
+      // linha mostra os dois lado a lado — antes o valor vinha numa sublinha
+      // junto de "recebido" e "em aberto", que é assunto da tela de Vendas.
+      | { kind: "venda"; when: string; label: string; amount: number; saleTotal: number }
       | { kind: "retirada"; when: string; label: string; amount: number; sub: string; source?: { type: DeletableKind; id: string } }
       | { kind: "pagamento"; when: string; label: string; amount: number; sub?: string; source?: { type: DeletableKind; id: string } }
       | { kind: "ajuste"; when: string; label: string; amount: number; sub?: string };
 
     const movs: Mov[] = [];
     vendas.forEach(s => {
-      const op = Math.max(0, s.totalPrice - (s.paidAmount || 0));
-      const comm = saleCommission.get(s.id) || 0;
       movs.push({
         kind: "venda", when: s.date,
         label: `${s.quantity}x ${getProductName(s.productId)}`,
-        amount: comm,
-        sub: `Venda ${fmt(s.totalPrice)} · Recebido ${fmt(s.paidAmount || 0)} · Em aberto ${fmt(op)}`,
+        amount: saleCommission.get(s.id) || 0,
+        saleTotal: s.totalPrice,
       });
     });
 
@@ -249,10 +280,10 @@ export default function SellerReportDrawer({
         amount: s.totalPrice, sub: s.notes || "",
       });
     });
-    allManualDebts.filter(d => inPeriod(d.date)).forEach(d => {
+    allManualDebts.forEach(d => {
       movs.push({ kind: "retirada", when: d.date, label: "Dívida manual", amount: d.amount, sub: d.notes || "", source: { type: "manual_debt", id: d.id } });
     });
-    allDebtPayments.filter(p => inPeriod(p.date)).forEach(p => {
+    allDebtPayments.forEach(p => {
       movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes, source: { type: "debt_payment", id: p.id } });
     });
     commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).forEach(p => {
@@ -262,10 +293,10 @@ export default function SellerReportDrawer({
     movs.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
 
     return {
-      units, revenue, received, open, consumo, consumoUnits, consumoBreakdown,
+      units, revenue, received, open, consumo, consumoBreakdown,
       salesDetail, stockItems, stockTotalUnits,
       tier: c.tier, accrued: c.accrued, commPaidPeriod, commBalance, movs,
-      consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
+      consumoTotal, debtPaymentsTotal, saldoConsumo,
       allOpenSales, allOpenAmount,
       previousBalance, periodBalance,
     };
@@ -274,7 +305,7 @@ export default function SellerReportDrawer({
   if (!seller || !report) {
     return (
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent className="nocturne w-full sm:max-w-lg" />
+        <SheetContent className="nocturne w-full sm:max-w-xl" />
       </Sheet>
     );
   }
@@ -373,186 +404,228 @@ export default function SellerReportDrawer({
     window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsStock())}`, "_blank");
   };
 
-
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Relatório do Funcionário</SheetTitle>
-        </SheetHeader>
+      {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja: o
+          Radix porta o painel para o <body> e os tokens não chegam por herança. */}
+      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <NcSheetHeader
+          eyebrow={`Extrato · ${label}`}
+          title={
+            <span className="flex items-center gap-2">
+              {seller.name}
+              <span className="nc-pill nc-pill--mute">{report.tier.label}</span>
+            </span>
+          }
+        />
 
-        <div className="mt-4 space-y-4">
-          {/* Period filter */}
-          <div className="space-y-2">
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Período</Label>
-            <Select value={periodKey} onValueChange={(v: PeriodKey) => setPeriodKey(v)}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Hoje</SelectItem>
-                <SelectItem value="7d">Últimos 7 dias</SelectItem>
-                <SelectItem value="month">Este mês</SelectItem>
-                <SelectItem value="lastMonth">Mês passado</SelectItem>
-                <SelectItem value="custom">Personalizado</SelectItem>
-              </SelectContent>
-            </Select>
-            {periodKey === "custom" && (
-              <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-[10px]">Início</Label><Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9" /></div>
-                <div><Label className="text-[10px]">Fim</Label><Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9" /></div>
-              </div>
-            )}
-          </div>
-
-          {/* Header: identity + balance */}
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-base font-semibold leading-tight">{seller.name}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {label} · Faixa {report.tier.label}
-            </p>
-            <div className="mt-3 pt-3 border-t border-border/60">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo atual</p>
-              <p className={cn(
-                "mono text-2xl font-bold mt-0.5",
-                report.commBalance >= 0 ? "text-income" : "text-expense"
-              )}>
-                {fmt(report.commBalance)}
-              </p>
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          {/* ---- Período ---- */}
+          <div className="flex flex-wrap items-center gap-2">
+            <SegmentedChips options={PERIOD_OPTIONS} value={periodKey} onChange={v => setPeriodKey(v as PeriodKey)} />
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={customStart}
+                onChange={e => { setCustomStart(e.target.value); setPeriodKey("custom"); }}
+                aria-label="Data inicial"
+                className="nc-input nc-num h-8 w-[128px] px-2 text-[12px]"
+              />
+              <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={e => { setCustomEnd(e.target.value); setPeriodKey("custom"); }}
+                aria-label="Data final"
+                className="nc-input nc-num h-8 w-[128px] px-2 text-[12px]"
+              />
             </div>
           </div>
 
-          {/* Financial summary list */}
-          <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-[13px] space-y-1.5">
-            <SummaryRow label="Saldo anterior" value={fmt(report.previousBalance)} tone={report.previousBalance >= 0 ? "income" : "warning"} sign="+" />
-            <SummaryRow label="Comissão gerada" value={fmt(report.accrued)} tone="income" sign="+" />
-            <SummaryRow label="Consumo" value={fmt(report.saldoConsumo)} tone={report.saldoConsumo > 0 ? "warning" : "muted"} sign="−" />
-            {report.debtPaymentsTotal > 0 && (
-              <SummaryRow label="Pagamentos de dívida" value={fmt(report.debtPaymentsTotal)} tone="income" sign="+" />
-            )}
-            <SummaryRow label="Comissão paga" value={fmt(report.commPaidPeriod)} tone={report.commPaidPeriod > 0 ? "warning" : "muted"} sign="−" />
-            <div className="border-t border-border/40 pt-2 mt-1 flex items-center justify-between">
-              <span className="font-semibold">Saldo final</span>
-              <span className={cn("mono font-bold", report.commBalance >= 0 ? "text-income" : "text-expense")}>
-                {fmt(report.commBalance)}
+          {/* ---- Saldo ---- */}
+          <div>
+            <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Saldo do período</span>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span style={{ color: balanceTone(report.commBalance) }}>
+                <AnimatedNumber
+                  value={report.commBalance}
+                  format={fmtShort}
+                  duration={0.7}
+                  animateOnMount
+                  className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
+                />
               </span>
             </div>
+            <p className="nc-num mt-1.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+              {report.units} un. vendidas · faturamento {fmtShort(report.revenue)}
+            </p>
           </div>
 
-          {/* Actions */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Button size="sm" variant="outline" className="h-10 w-full" onClick={shareWhatsSales}>
-              <MessageCircle size={15} className="mr-2" /> Compartilhar Relatório
-            </Button>
-            <Button size="sm" variant="outline" className="h-10 w-full" onClick={shareWhatsStock}>
-              <Boxes size={15} className="mr-2" /> Compartilhar Estoque
-            </Button>
+          <Rule />
+
+          {/* ---- A conta ---- */}
+          <section className="space-y-1.5">
+            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Como se chega nesse saldo</p>
+            <Line label="Saldo anterior" value={fmt(report.previousBalance)} tone={report.previousBalance < -0.01 ? "var(--nc-crit)" : undefined} />
+            <Line label="Comissão gerada" value={`+${fmt(report.accrued)}`} tone="var(--nc-ok)" />
+            <Line label="Consumo" value={`−${fmt(report.saldoConsumo)}`} tone={report.saldoConsumo > 0.01 ? "var(--nc-alert)" : undefined} />
+            {report.debtPaymentsTotal > 0 && (
+              <Line label="Pagamentos de dívida" value={`+${fmt(report.debtPaymentsTotal)}`} tone="var(--nc-ok)" />
+            )}
+            <Line label="Comissão paga" value={`−${fmt(report.commPaidPeriod)}`} tone={report.commPaidPeriod > 0.01 ? "var(--nc-alert)" : undefined} />
+            <div className="nc-rule-top flex items-center justify-between gap-2 pt-2 text-[13px]">
+              <span>Saldo final</span>
+              <span className="nc-num font-medium" style={{ color: balanceTone(report.commBalance) }}>{fmt(report.commBalance)}</span>
+            </div>
+          </section>
+
+          <div className="flex flex-wrap gap-2">
+            <NcButton variant="quiet" size="md" onClick={shareWhatsSales}>
+              <MessageCircle size={14} />Enviar relatório
+            </NcButton>
+            <NcButton variant="quiet" size="md" onClick={shareWhatsStock}>
+              <Boxes size={14} />Enviar estoque
+            </NcButton>
           </div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="resumo" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="resumo">Resumo</TabsTrigger>
-              <TabsTrigger value="consumo">Consumo</TabsTrigger>
-              <TabsTrigger value="estoque">Estoque</TabsTrigger>
-              <TabsTrigger value="mov">Movim.</TabsTrigger>
-            </TabsList>
+          {/* ---- Abas ---- */}
+          <Tabs value={tab} onValueChange={setTab} className="w-full">
+            <NcTabsList value={tab} tabs={TABS} />
 
             {/* Resumo */}
             <TabsContent value="resumo" className="mt-3">
-              <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+              <div className="nc-card overflow-hidden">
                 <KV label="Unidades vendidas" value={String(report.units)} />
-                <KV label="Faturamento" value={fmt(report.revenue)} tone="income" />
-                <KV label="Valor em aberto" value={fmt(report.open)} tone="warning" />
-                <KV label="Faixa atual" value={report.tier.label} />
-                <KV label="Comissão acumulada" value={fmt(report.accrued)} tone="income" />
-                <KV label="Saldo final" value={fmt(report.commBalance)} tone={report.commBalance >= 0 ? "income" : "expense"} strong />
+                <KV label="Faturamento" value={fmt(report.revenue)} />
+                <KV label="Recebido" value={fmt(report.received)} tone="var(--nc-ok)" />
+                <KV label="Em aberto no período" value={fmt(report.open)} tone={report.open > 0.01 ? "var(--nc-alert)" : undefined} />
+                <KV label="Faixa de comissão" value={report.tier.label} />
+                <KV label="Comissão gerada" value={fmt(report.accrued)} />
+                <KV label="Saldo final" value={fmt(report.commBalance)} tone={balanceTone(report.commBalance)} />
               </div>
             </TabsContent>
 
             {/* Consumo */}
             <TabsContent value="consumo" className="mt-3">
               {report.consumoBreakdown.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">Sem consumo no período.</p>
+                <p className="py-10 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>Sem consumo no período.</p>
               ) : (
-                <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+                <Stagger className="nc-card overflow-hidden">
                   {report.consumoBreakdown.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2.5">
+                    <motion.div key={i} variants={listItem} className="nc-row flex items-center justify-between gap-3 px-3 py-2.5">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{c.name}</p>
-                        <p className="text-[11px] text-muted-foreground">Qtd: {c.qty}</p>
+                        <p className="truncate text-[13px]">{c.name}</p>
+                        <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>{c.qty} un.</p>
                       </div>
-                      <span className="mono text-sm font-semibold text-warning shrink-0 ml-2">{fmt(c.total)}</span>
-                    </div>
+                      <span className="nc-num flex-none text-[13px]" style={{ color: "var(--nc-alert)" }}>{fmt(c.total)}</span>
+                    </motion.div>
                   ))}
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-secondary/40">
-                    <span className="text-sm font-semibold">Total consumido</span>
-                    <span className="mono text-sm font-bold text-warning">{fmt(report.consumo)}</span>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-[13px]" style={{ background: "var(--nc-bg)" }}>
+                    <span>Total consumido</span>
+                    <span className="nc-num font-medium" style={{ color: "var(--nc-alert)" }}>{fmt(report.consumo)}</span>
                   </div>
-                </div>
+                </Stagger>
               )}
             </TabsContent>
 
             {/* Estoque */}
             <TabsContent value="estoque" className="mt-3">
               {report.stockItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">Sem produtos atribuídos.</p>
+                <p className="py-10 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>Sem produtos atribuídos.</p>
               ) : (
-                <div className="rounded-lg border border-border/60 divide-y divide-border/40">
-                  {report.stockItems.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between px-3 py-2.5">
-                      <p className="text-sm font-medium truncate">{s.name}</p>
-                      <span className="mono text-sm font-semibold text-primary shrink-0 ml-2">{s.qty}x</span>
-                    </div>
+                <Stagger className="nc-card overflow-hidden">
+                  {report.stockItems.map(s => (
+                    <motion.div key={s.id} variants={listItem} className="nc-row flex items-center justify-between gap-3 px-3 py-2.5">
+                      <p className="truncate text-[13px]">
+                        {s.flavor || s.name}
+                        {s.model && <span style={{ color: "var(--nc-text-3)" }}> · {s.brand} {s.model}</span>}
+                      </p>
+                      <span className="nc-num flex-none text-[13px]">{s.qty}</span>
+                    </motion.div>
                   ))}
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-secondary/40">
-                    <span className="text-sm font-semibold">Total em posse</span>
-                    <span className="mono text-sm font-bold text-primary">{report.stockTotalUnits} un.</span>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-[13px]" style={{ background: "var(--nc-bg)" }}>
+                    <span>Total em posse</span>
+                    <span className="nc-num font-medium">{report.stockTotalUnits} un.</span>
                   </div>
-                </div>
+                </Stagger>
               )}
             </TabsContent>
 
-            {/* Movimentações — extrato */}
+            {/* Movimentações */}
             <TabsContent value="mov" className="mt-3">
               {report.movs.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">Sem movimentações no período.</p>
+                <p className="py-10 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>Sem movimentações no período.</p>
               ) : (
-                <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+                <Stagger className="nc-card overflow-hidden">
                   {report.movs.map((m, i) => {
                     const credit = m.kind === "venda" || m.kind === "ajuste" || m.kind === "pagamento";
+                    // Venda e ajuste de faixa não se apagam daqui (a venda é da
+                    // tela de Vendas, o ajuste é calculado) — mas o lugar do
+                    // botão fica reservado nelas do mesmo jeito, senão a linha
+                    // que pode apagar nasce mais estreita e o número dela não
+                    // alinha com o das vizinhas.
+                    const source = "source" in m ? m.source : undefined;
                     return (
-                      <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] text-muted-foreground mono">{formatDateBR(m.when)}</p>
-                          <p className="text-sm font-medium truncate">{m.label}</p>
+                      <motion.div
+                        key={i}
+                        variants={i < 20 ? listItem : undefined}
+                        className="nc-row group flex items-center gap-3 px-3 py-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>{formatDateBR(m.when)}</p>
+                          <p className="truncate text-[13px]">{m.label}</p>
+                          {/* Sublinha só onde ela carrega observação escrita por
+                              alguém. A da venda saiu: repetia recebido e em
+                              aberto, que é assunto da tela de Vendas. */}
+                          {"sub" in m && m.sub && (
+                            <p className="truncate text-[11px]" style={{ color: "var(--nc-text-3)" }}>{m.sub}</p>
+                          )}
                         </div>
-                        <span className={cn(
-                          "mono text-sm font-semibold shrink-0",
-                          credit ? "text-income" : "text-warning"
-                        )}>
-                          {credit ? "+" : "−"} {fmt(m.amount)}
-                        </span>
-                        {"source" in m && m.source && (
-                          <Button
+                        {/* Uma coluna só de dinheiro, largura reservada: valor da
+                            venda em cima, comissão que ela gerou embaixo. Os dois
+                            lado a lado empurravam a comissão para uma posição
+                            diferente em cada linha, porque só a venda tem o
+                            número de cima. */}
+                        <div className="flex-none text-right" style={{ minWidth: 92 }}>
+                          {m.kind === "venda" && (
+                            <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                              {fmt(m.saleTotal)}
+                            </p>
+                          )}
+                          <p
+                            className="nc-num text-[13px]"
+                            style={{ color: credit ? "var(--nc-ok)" : "var(--nc-alert)" }}
+                          >
+                            {credit ? "+" : "−"}{fmt(m.amount)}
+                          </p>
+                        </div>
+                        {/* No desktop só aparece no hover; no toque não há hover,
+                            então fica sempre visível abaixo de sm. */}
+                        <div className="flex-none transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                          <NcButton
+                            variant="danger"
                             size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-expense"
+                            disabled={!source}
+                            aria-hidden={!source}
+                            tabIndex={source ? undefined : -1}
+                            className={source ? undefined : "invisible"}
+                            aria-label={source ? `Apagar ${m.label}` : undefined}
                             onClick={async () => {
+                              if (!source) return;
                               const ok = await confirm({ title: "Apagar movimentação?", description: `${m.label} · ${fmt(m.amount)}`, confirmText: "Apagar", destructive: true });
                               if (!ok) return;
-                              const src = m.source!;
-                              if (src.type === "manual_debt") await deleteSellerManualDebt(src.id);
-                              else if (src.type === "debt_payment") await deleteSellerDebtPayment(src.id);
-                              else if (src.type === "commission_payment") await deleteCommissionPayment(src.id);
+                              if (source.type === "manual_debt") await deleteSellerManualDebt(source.id);
+                              else if (source.type === "debt_payment") await deleteSellerDebtPayment(source.id);
+                              else if (source.type === "commission_payment") await deleteCommissionPayment(source.id);
                             }}
-                            aria-label="Apagar"
                           >
                             <Trash2 size={13} />
-                          </Button>
-                        )}
-                      </div>
+                          </NcButton>
+                        </div>
+                      </motion.div>
                     );
                   })}
-                </div>
+                </Stagger>
               )}
             </TabsContent>
           </Tabs>
@@ -562,33 +635,22 @@ export default function SellerReportDrawer({
   );
 }
 
-function SummaryRow({ label, value, tone, sign }: { label: string; value: string; tone: "income" | "warning" | "muted"; sign: "+" | "−" }) {
+/** Linha de conta: rótulo à esquerda, número tabular à direita. */
+function Line({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn(
-        "mono font-semibold",
-        tone === "income" && "text-income",
-        tone === "warning" && "text-warning",
-        tone === "muted" && "text-muted-foreground",
-      )}>
-        {sign}{value}
-      </span>
+    <div className="flex items-center justify-between gap-2 text-[12.5px]">
+      <span style={{ color: "var(--nc-text-2)" }}>{label}</span>
+      <span className="nc-num" style={{ color: tone }}>{value}</span>
     </div>
   );
 }
 
-function KV({ label, value, tone, strong }: { label: string; value: string; tone?: "income" | "warning" | "expense"; strong?: boolean }) {
+/** Linha de tabela do resumo, com a régua curta da lista. */
+function KV({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2.5">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={cn(
-        "mono text-sm font-semibold",
-        strong && "text-base font-bold",
-        tone === "income" && "text-income",
-        tone === "warning" && "text-warning",
-        tone === "expense" && "text-expense",
-      )}>{value}</span>
+    <div className="nc-row flex items-center justify-between gap-3 px-3 py-2.5">
+      <span className="text-[13px]" style={{ color: "var(--nc-text-2)" }}>{label}</span>
+      <span className="nc-num text-[13px]" style={{ color: tone }}>{value}</span>
     </div>
   );
 }

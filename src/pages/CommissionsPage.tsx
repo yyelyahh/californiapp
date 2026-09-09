@@ -1,51 +1,99 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Wallet, Sparkles, TrendingUp, Trash2, Plus, Clock, Crown, Inbox,
-  ArrowRight, Users, X, HandCoins, Receipt, Package, ArrowLeftRight, AlertTriangle, Share2,
+  Wallet, Trash2, Plus, Clock, Crown, ArrowRight, Users, X,
+  HandCoins, Receipt, Package, Share2,
 } from "lucide-react";
 import {
-  format, startOfMonth, endOfMonth, startOfYear,
-  endOfYear, isWithinInterval, parseISO, isToday, isYesterday, subMonths,
+  format, startOfMonth, endOfMonth, endOfYear,
+  isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
-import { StaggerAuto } from "@/components/motion/Stagger";
+import { AnimatePresence, motion } from "motion/react";
+import { Stagger } from "@/components/motion/Stagger";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
+import { listItem, transitionBase } from "@/lib/motion";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
-import {
-  getNextTier, unitsUntilNextTier, computeSellerBalance,
-} from "@/lib/commissions";
+import { getNextTier, unitsUntilNextTier, computeSellerBalance } from "@/lib/commissions";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 
+/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
+function formatCurrencyShort(v: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
+}
+
 type Period = "month" | "lastMonth" | "custom";
+
+/**
+ * Os mesmos chips das outras telas migradas (`SegmentedChips`). "custom" não
+ * está aqui de propósito: ele não é um chip, é o que sobra quando a pessoa
+ * digita um intervalo à mão — e aí nenhum chip fica aceso.
+ */
+const PERIOD_OPTIONS: { value: Period; label: string; short: string }[] = [
+  { value: "month", label: "Mês atual", short: "Mês" },
+  { value: "lastMonth", label: "Mês anterior", short: "Mês ant." },
+];
+
+const TIMELINE_OPTIONS = [
+  { value: "all", label: "Tudo", short: "Tudo" },
+  { value: "withdrawal", label: "Retiradas dos sócios", short: "Retiradas" },
+  { value: "commission", label: "Comissões pagas", short: "Comissões" },
+];
+
+/** Quantos vendedores cabem na lista do trilho antes de virar "+ N outros". */
+const MAX_TOP_SELLERS = 6;
+
+/**
+ * Saldo do vendedor em cor, com o MESMO vocabulário dos selos do painel:
+ * positivo é o que a casa ainda deve a ele (--nc-alert, "falta pagar");
+ * negativo é dívida dele com a casa (--nc-crit, "não entrou nada"); zerado não
+ * é notícia e fica neutro.
+ */
+function balanceTone(v: number) {
+  if (v > 0.01) return "var(--nc-alert)";
+  if (v < -0.01) return "var(--nc-crit)";
+  return "var(--nc-text-2)";
+}
+
+function balanceLabel(v: number) {
+  if (v > 0.01) return "Falta pagar ao vendedor";
+  if (v < -0.01) return "O vendedor deve à casa";
+  return "Sem saldo em aberto";
+}
+
+/** Modo do painel do vendedor: o resumo, ou um dos três formulários. */
+type PanelMode = "resumo" | "comissao" | "divida" | "lancar";
+
+const PANEL_TITLES: Record<Exclude<PanelMode, "resumo">, string> = {
+  comissao: "Pagar comissão",
+  divida: "Receber dívida",
+  lancar: "Lançar dívida",
+};
 
 export default function CommissionsPage() {
   const store = useStore();
   const confirm = useConfirm();
   const {
-    sellers, partners, sales, expenses, products, productAssignments, dividends, stockEntries,
+    sellers, partners, sales, expenses, products, productAssignments, dividends,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
-    addSellerDebtPayment, deleteSellerDebtPayment,
-    addSellerManualDebt, deleteSellerManualDebt,
+    addSellerDebtPayment, addSellerManualDebt,
     addProductAssignment, transferProductAssignment,
     getSellerName, deleteSeller,
-    getAccumulatedProfit, getDistributedProfit, getRetainedEarnings, getInventoryCostValue, getCash,
   } = store;
 
   // Retiradas dos sócios = proLaborePayments (apenas relabel semântico)
@@ -75,24 +123,16 @@ export default function CommissionsPage() {
       s = startOfMonth(prev); e = endOfMonth(prev);
       l = format(prev, "MMMM/yyyy", { locale: ptBR });
     } else {
-      // custom
       try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
       try { e = parseISO(customEnd); } catch { e = endOfMonth(now); }
       if (e < s) e = s;
       l = `${format(s, "dd/MM/yyyy")} – ${format(e, "dd/MM/yyyy")}`;
     }
     return { start: s, end: e, label: l };
-  }, [period, customStart, customEnd, PROJECT_START]);
+  }, [period, customStart, customEnd]);
 
   const inPeriod = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start, end }); } catch { return false; }
-  };
-  // Cumulativo desde 01/06/2026 até o fim do período selecionado — usado para Lucro e Retiradas
-  const inCumulative = (iso: string) => {
-    try {
-      const d = parseISO(iso);
-      return d >= PROJECT_START && d <= end;
-    } catch { return false; }
   };
   const inYear = (iso: string) => {
     try { return isWithinInterval(parseISO(iso), { start: PROJECT_START, end: endOfYear(new Date()) }); } catch { return false; }
@@ -106,8 +146,6 @@ export default function CommissionsPage() {
       return d >= closedStart && d <= closedEnd;
     } catch { return false; }
   };
-
-
 
   const periodMetrics = useMemo(() => {
     // Índice de produtos para lookups O(1) dentro dos loops.
@@ -142,7 +180,6 @@ export default function CommissionsPage() {
     const priorPayableSum = perSeller.reduce((a, x) => a + x.priorBalance, 0);
     const periodPayableSum = perSeller.reduce((a, x) => a + x.periodBalance, 0);
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
-    const leader = perSeller.find(r => r.vendasTotal > 0) || null;
 
     // === Distribuível aos sócios ===
     const distribuivel = Math.max(0, netProfit - totalSellerBalance);
@@ -163,192 +200,87 @@ export default function CommissionsPage() {
     });
     const totalWithdrawalsPeriod = perPartner.reduce((a, x) => a + x.periodAmt, 0);
 
-    const available = distribuivel;
-
     return {
       revenue, cogs, grossProfit, periodExpenses, periodInvestorPayments, netProfit,
-      perSeller, leader, totalSellerBalance, priorPayableSum, periodPayableSum,
+      perSeller, totalSellerBalance, priorPayableSum, periodPayableSum,
       perPartner, totalWithdrawalsPeriod, distribuivel,
-      available,
     };
   }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, closedStart, closedEnd, PROJECT_START]);
 
+  /** O que ainda cabe retirar sem furar o distribuível do período. */
+  const stillDistributable = Math.max(0, periodMetrics.distribuivel - periodMetrics.totalWithdrawalsPeriod);
 
+  const [timelineFilter, setTimelineFilter] = useState<"all" | "commission" | "withdrawal">("all");
 
   const timeline = useMemo(() => {
     const items = [
       ...commissionPayments.map(p => ({ kind: "commission" as const, id: p.id, when: p.date, amount: p.amount, who: getSellerName(p.sellerId), notes: p.notes })),
       ...withdrawals.map(p => ({ kind: "withdrawal" as const, id: p.id, when: p.date, amount: p.amount, who: partners.find(x => x.id === p.partnerId)?.name ?? "Sócio", notes: p.notes })),
-    ].sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime()).slice(0, 30);
-    const groups: Record<string, typeof items> = {};
+    ]
+      .filter(it => timelineFilter === "all" || it.kind === timelineFilter)
+      .sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime())
+      .slice(0, 30);
+
+    const groups: { day: string; items: typeof items }[] = [];
     items.forEach(it => {
       if (!it.when) return;
       const d = parseISO(it.when);
       if (isNaN(d.getTime())) return;
-      const k = isToday(d) ? "Hoje" : isYesterday(d) ? "Ontem" : format(d, "dd 'de' MMM", { locale: ptBR });
-      (groups[k] ||= []).push(it);
+      const day = isToday(d) ? "Hoje" : isYesterday(d) ? "Ontem" : format(d, "dd 'de' MMM", { locale: ptBR });
+      const last = groups[groups.length - 1];
+      if (last && last.day === day) last.items.push(it);
+      else groups.push({ day, items: [it] });
     });
     return groups;
-  }, [commissionPayments, withdrawals, partners, getSellerName]);
+  }, [commissionPayments, withdrawals, partners, getSellerName, timelineFilter]);
 
-  // ---- Drawers ----
-  const [payDrawer, setPayDrawer] = useState<{ sellerId: string } | null>(null);
-  const [payForm, setPayForm] = useState({ amount: "", date: todayDateString(), notes: "" });
-  const [wdDrawer, setWdDrawer] = useState<{ partnerId: string } | null>(null);
-  const [wdForm, setWdForm] = useState({ amount: "", date: todayDateString(), notes: "" });
+  /* ---------------- Painel do vendedor ----------------
+     Um painel só para tudo o que se faz com um vendedor. Antes eram quatro:
+     "Consultar" fechava para abrir "Pagar", que fechava para abrir "Pagar
+     dívida", que fechava para abrir o extrato — e o cabeçalho do vendedor era
+     redigitado em cada um. Aqui o resumo fica de pé e o formulário abre por
+     baixo dele, então dá para conferir o saldo enquanto se digita o valor. */
+  const [panelSellerId, setPanelSellerId] = useState<string | null>(null);
+  const [panelMode, setPanelMode] = useState<PanelMode>("resumo");
+  const [panelForm, setPanelForm] = useState({ amount: "", date: todayDateString(), notes: "" });
+  const [panelSubmitting, setPanelSubmitting] = useState(false);
   const [extractFor, setExtractFor] = useState<string | null>(null);
-  const [debtPayDrawer, setDebtPayDrawer] = useState<{ sellerId: string } | null>(null);
-  const [debtPayForm, setDebtPayForm] = useState({ amount: "", date: todayDateString(), notes: "" });
-  const [manualDebtDrawer, setManualDebtDrawer] = useState<boolean>(false);
-  const [manualDebtForm, setManualDebtForm] = useState({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignSubmitting, setAssignSubmitting] = useState(false);
-  const [assignForm, setAssignForm] = useState<{ sellerId: string; selectedProducts: Record<string, string> }>({ sellerId: "", selectedProducts: {} });
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [transferForm, setTransferForm] = useState<{ fromSellerId: string; assignmentId: string; toSellerId: string; quantity: string }>({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
-  const [timelineFilter, setTimelineFilter] = useState<"all" | "commission" | "withdrawal">("all");
 
-  const availableProducts = useMemo(() => {
-    return products
-      .map(p => {
-        const assigned = productAssignments.filter(a => a.productId === p.id).reduce((s, a) => s + a.quantity, 0);
-        return { ...p, availableToAssign: Math.max(0, p.stock - assigned) };
-      })
-      .filter(p => p.availableToAssign > 0);
-  }, [products, productAssignments]);
+  const panelRow = panelSellerId ? periodMetrics.perSeller.find(r => r.seller.id === panelSellerId) : null;
 
-  const toggleAssignProduct = (productId: string, checked: boolean) => {
-    setAssignForm(f => {
-      const next = { ...f.selectedProducts };
-      if (checked) next[productId] = "1"; else delete next[productId];
-      return { ...f, selectedProducts: next };
-    });
+  const openSeller = (sellerId: string) => {
+    setPanelSellerId(sellerId);
+    setPanelMode("resumo");
   };
 
-  const handleAssign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (assignSubmitting) return;
-    if (!assignForm.sellerId || Object.keys(assignForm.selectedProducts).length === 0) return;
-    setAssignSubmitting(true);
-    try {
-      for (const [productId, qty] of Object.entries(assignForm.selectedProducts)) {
-        const p = availableProducts.find(x => x.id === productId);
-        const quantity = Math.min(Number(qty), p?.availableToAssign ?? 0);
-        if (quantity > 0) await addProductAssignment({ sellerId: assignForm.sellerId, productId, quantity });
-      }
-      setAssignForm({ sellerId: "", selectedProducts: {} });
-      setAssignOpen(false);
-    } finally {
-      setAssignSubmitting(false);
-    }
+  /** Abre um dos formulários com o valor que a tela já sabe sugerir. */
+  const startMode = (mode: Exclude<PanelMode, "resumo">, suggested: number) => {
+    setPanelMode(mode);
+    setPanelForm({ amount: suggested > 0.01 ? suggested.toFixed(2) : "", date: todayDateString(), notes: "" });
   };
 
-  const assignSelectedCount = Object.keys(assignForm.selectedProducts).length;
-  const assignTotalUnits = Object.values(assignForm.selectedProducts).reduce((s, v) => s + (Number(v) || 0), 0);
+  const panelAmount = Number(panelForm.amount) || 0;
 
-  // Transfer logic
-  const transferFromAssignments = useMemo(() => {
-    if (!transferForm.fromSellerId) return [];
-    const productById = new Map(products.map(p => [p.id, p]));
-    // A lista vem de productAssignments, que está em ordem de criação — o
-    // produto ordenado do StoreContext não alcança aqui, então a ordem é
-    // reconstruída a partir dele.
-    return productAssignments
-      .filter(a => a.sellerId === transferForm.fromSellerId && a.quantity > 0)
-      .map(a => {
-        const p = productById.get(a.productId);
-        return {
-          ...a,
-          brand: p?.brand ?? "", model: p?.model ?? "", flavor: p?.flavor ?? "",
-          productLabel: p ? `${p.flavor} · ${p.model}` : "—",
-        };
-      })
-      .sort(compareCatalog);
-  }, [productAssignments, products, transferForm.fromSellerId]);
-
-  const transferSelected = transferFromAssignments.find(a => a.id === transferForm.assignmentId);
-  const transferMaxQty = transferSelected?.quantity ?? 0;
-
-  const submitTransfer = async () => {
-    const qty = Number(transferForm.quantity);
-    if (!transferForm.assignmentId || !transferForm.toSellerId || qty <= 0) return;
-    await transferProductAssignment(transferForm.assignmentId, transferForm.toSellerId, qty);
-    setTransferOpen(false);
-    setTransferForm({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" });
+  const submitPanel = async () => {
+    if (!panelRow || panelMode === "resumo" || panelAmount <= 0) return;
+    setPanelSubmitting(true);
+    const common = {
+      sellerId: panelRow.seller.id,
+      amount: panelAmount,
+      date: localDateToISO(panelForm.date),
+      notes: panelForm.notes || undefined,
+    };
+    if (panelMode === "comissao") await addCommissionPayment(common);
+    else if (panelMode === "divida") await addSellerDebtPayment(common);
+    else await addSellerManualDebt(common);
+    setPanelSubmitting(false);
+    // Volta ao resumo em vez de fechar: o saldo recalculado é a confirmação de
+    // que o lançamento entrou.
+    setPanelMode("resumo");
+    setPanelForm({ amount: "", date: todayDateString(), notes: "" });
   };
 
-  const openPay = (sellerId: string, suggested: number) => {
-    setPayDrawer({ sellerId });
-    setPayForm({ amount: suggested > 0 ? suggested.toFixed(2) : "", date: todayDateString(), notes: "" });
-  };
-  const openWd = (partnerId: string) => {
-    setWdDrawer({ partnerId });
-    setWdForm({ amount: "", date: todayDateString(), notes: "" });
-  };
-
-  const submitPay = async () => {
-    if (!payDrawer || !Number(payForm.amount)) return;
-    await addCommissionPayment({
-      sellerId: payDrawer.sellerId,
-      amount: Number(payForm.amount),
-      date: localDateToISO(payForm.date),
-      notes: payForm.notes || undefined,
-    });
-    setPayDrawer(null);
-  };
-  const submitWd = async () => {
-    if (!wdDrawer || !Number(wdForm.amount)) return;
-    const amt = Number(wdForm.amount);
-    if (amt > periodMetrics.available + 0.005) {
-      const ok = await confirm({
-        title: "Retirada acima do saldo disponível",
-        description: `Saldo disponível: ${formatCurrency(periodMetrics.available)}\nValor: ${formatCurrency(amt)}\n\nO saldo ficará negativo. Deseja continuar?`,
-        confirmText: "Registrar mesmo assim",
-        destructive: false,
-      });
-      if (!ok) return;
-    }
-    await addWithdrawal({
-      partnerId: wdDrawer.partnerId,
-      amount: amt,
-      date: localDateToISO(wdForm.date),
-      notes: wdForm.notes || undefined,
-    });
-    setWdDrawer(null);
-  };
-
-  const submitDebtPay = async () => {
-    if (!debtPayDrawer || !Number(debtPayForm.amount)) return;
-    await addSellerDebtPayment({
-      sellerId: debtPayDrawer.sellerId,
-      amount: Number(debtPayForm.amount),
-      date: localDateToISO(debtPayForm.date),
-      notes: debtPayForm.notes || undefined,
-    });
-    setDebtPayDrawer(null);
-  };
-
-  const submitManualDebt = async () => {
-    if (!manualDebtForm.sellerId || !Number(manualDebtForm.amount)) return;
-    await addSellerManualDebt({
-      sellerId: manualDebtForm.sellerId,
-      amount: Number(manualDebtForm.amount),
-      date: localDateToISO(manualDebtForm.date),
-      notes: manualDebtForm.notes || undefined,
-    });
-    setManualDebtDrawer(false);
-    setManualDebtForm({ sellerId: "", amount: "", date: todayDateString(), notes: "" });
-  };
-
-  const sellerRow = payDrawer ? periodMetrics.perSeller.find(r => r.seller.id === payDrawer.sellerId) : null;
-  const debtSellerRow = debtPayDrawer ? periodMetrics.perSeller.find(r => r.seller.id === debtPayDrawer.sellerId) : null;
-  const partnerRow = wdDrawer ? periodMetrics.perPartner.find(r => r.partner.id === wdDrawer.partnerId) : null;
-
-  const [consultOpen, setConsultOpen] = useState(false);
-  const [consultSellerId, setConsultSellerId] = useState<string | null>(null);
-  const consultRow = consultSellerId ? periodMetrics.perSeller.find(r => r.seller.id === consultSellerId) : null;
-
-  const shareSellerWhatsApp = (r: typeof periodMetrics.perSeller[number]) => {
+  const shareSellerWhatsApp = (r: NonNullable<typeof panelRow>) => {
     const lines = [
       `*${r.seller.name}* — ${label}`,
       ``,
@@ -366,627 +298,902 @@ export default function CommissionsPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   };
 
-  const maxVendas = Math.max(1, ...periodMetrics.perSeller.map(r => r.vendasTotal));
+  /* ---------------- Retirada do sócio ---------------- */
+  const [wdPartnerId, setWdPartnerId] = useState<string | null>(null);
+  const [wdForm, setWdForm] = useState({ amount: "", date: todayDateString(), notes: "" });
+  const [wdSubmitting, setWdSubmitting] = useState(false);
+  const partnerRow = wdPartnerId ? periodMetrics.perPartner.find(r => r.partner.id === wdPartnerId) : null;
+
+  const openWd = (partnerId: string, suggested: number) => {
+    setWdPartnerId(partnerId);
+    setWdForm({ amount: suggested > 0.01 ? suggested.toFixed(2) : "", date: todayDateString(), notes: "" });
+  };
+
+  const submitWd = async () => {
+    if (!wdPartnerId) return;
+    const amt = Number(wdForm.amount) || 0;
+    if (amt <= 0) return;
+    if (amt > stillDistributable + 0.005) {
+      const ok = await confirm({
+        title: "Retirada acima do que sobrou",
+        description: `Ainda cabia retirar: ${formatCurrency(stillDistributable)}\nValor: ${formatCurrency(amt)}\n\nO saldo do período fica negativo. Deseja continuar?`,
+        confirmText: "Registrar mesmo assim",
+        destructive: false,
+      });
+      if (!ok) return;
+    }
+    setWdSubmitting(true);
+    await addWithdrawal({
+      partnerId: wdPartnerId,
+      amount: amt,
+      date: localDateToISO(wdForm.date),
+      notes: wdForm.notes || undefined,
+    });
+    setWdSubmitting(false);
+    setWdPartnerId(null);
+  };
+
+  /* ---------------- Movimentar estoque ----------------
+     "Atribuir" e "Transferir" eram dois painéis para o mesmo movimento: uma
+     quantidade sai de um lugar e entra na mão de um vendedor. A única
+     diferença é de onde ela sai — e isso cabe num campo, do mesmo jeito que a
+     tela de Perdas já pergunta a origem. Com um painel só, transferir também
+     passou a aceitar vários produtos de uma vez, o que só o atribuir fazia. */
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveFrom, setMoveFrom] = useState("casa");
+  const [moveTo, setMoveTo] = useState("");
+  const [moveSelected, setMoveSelected] = useState<Record<string, string>>({});
+  const [moveSubmitting, setMoveSubmitting] = useState(false);
+
+  /** O que a origem escolhida tem para dar, já na ordem do catálogo. */
+  const moveItems = useMemo(() => {
+    const productById = new Map(products.map(p => [p.id, p]));
+    if (moveFrom === "casa") {
+      return products
+        .map(p => {
+          const assigned = productAssignments.filter(a => a.productId === p.id).reduce((s, a) => s + a.quantity, 0);
+          return {
+            key: `p:${p.id}`,
+            productId: p.id,
+            assignmentId: undefined as string | undefined,
+            brand: p.brand, model: p.model, flavor: p.flavor,
+            available: Math.max(0, p.stock - assigned),
+          };
+        })
+        .filter(p => p.available > 0)
+        .sort(compareCatalog);
+    }
+    return productAssignments
+      .filter(a => a.sellerId === moveFrom && a.quantity > 0)
+      .map(a => {
+        const p = productById.get(a.productId);
+        return {
+          key: `a:${a.id}`,
+          productId: a.productId,
+          assignmentId: a.id,
+          brand: p?.brand ?? "", model: p?.model ?? "", flavor: p?.flavor ?? "",
+          available: a.quantity,
+        };
+      })
+      .sort(compareCatalog);
+  }, [products, productAssignments, moveFrom]);
+
+  const moveCount = Object.keys(moveSelected).length;
+  const moveUnits = Object.values(moveSelected).reduce((s, v) => s + (Number(v) || 0), 0);
+  const canMove = !!moveTo && moveTo !== moveFrom && moveCount > 0;
+
+  const resetMove = () => {
+    setMoveFrom("casa"); setMoveTo(""); setMoveSelected({});
+  };
+
+  const toggleMoveItem = (key: string, checked: boolean) => {
+    setMoveSelected(prev => {
+      const next = { ...prev };
+      if (checked) next[key] = "1"; else delete next[key];
+      return next;
+    });
+  };
+
+  const submitMove = async () => {
+    if (!canMove || moveSubmitting) return;
+    setMoveSubmitting(true);
+    try {
+      for (const [key, qtyStr] of Object.entries(moveSelected)) {
+        const item = moveItems.find(i => i.key === key);
+        if (!item) continue;
+        const quantity = Math.min(Number(qtyStr) || 0, item.available);
+        if (quantity <= 0) continue;
+        if (item.assignmentId) await transferProductAssignment(item.assignmentId, moveTo, quantity);
+        else await addProductAssignment({ sellerId: moveTo, productId: item.productId, quantity });
+      }
+      resetMove();
+      setMoveOpen(false);
+    } finally {
+      setMoveSubmitting(false);
+    }
+  };
+
+  const periodLabel = PERIOD_OPTIONS.find(o => o.value === period)?.label ?? "Período personalizado";
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Distribuição</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
-            <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">Mês atual</SelectItem>
-              <SelectItem value="lastMonth">Mês anterior</SelectItem>
-              <SelectItem value="custom">Período personalizado</SelectItem>
-            </SelectContent>
-          </Select>
-          {period === "custom" && (
-            <div className="flex items-center gap-1.5">
-              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9 w-[150px]" />
-              <span className="text-xs text-muted-foreground">até</span>
-              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9 w-[150px]" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* KPIs — 3 métricas principais */}
-      <StaggerAuto className="grid gap-2 grid-cols-1 sm:grid-cols-3">
-        <KPI
-          icon={<TrendingUp size={14} />}
-          label="Lucro líquido no período"
-          value={formatCurrency(periodMetrics.netProfit)}
-          tone={periodMetrics.netProfit >= 0 ? "income" : "expense"}
-          sub={`Bruto ${formatCurrency(periodMetrics.grossProfit)} − despesas ${formatCurrency(periodMetrics.periodExpenses)} − investidores ${formatCurrency(periodMetrics.periodInvestorPayments)}`}
-        />
-        <KPI
-          icon={<Wallet size={14} />}
-          label="A pagar a vendedores"
-          value={formatCurrency(periodMetrics.totalSellerBalance)}
-          tone="warning"
-          sub={`Comissão gerada no período ${formatCurrency(periodMetrics.periodPayableSum)}`}
-        />
-        <KPI
-          icon={<Crown size={14} />}
-          label="Para distribuir aos sócios"
-          value={formatCurrency(periodMetrics.distribuivel)}
-          tone={periodMetrics.distribuivel > 0 ? "income" : "fixed"}
-          sub="Lucro líquido − a pagar a vendedores"
-        />
-      </StaggerAuto>
-
-
-
-
-
-      {/* Vendedores — resumo enxuto */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border pb-2">
+    // `/commissions` está em `fullBleedRoutes` (AppLayout): chega sem padding e
+    // sem max-width, e é a tela que cuida do próprio espaçamento.
+    <div className="nocturne flex flex-1 flex-col xl:flex-row xl:items-stretch">
+      {/* ---------------- Coluna principal ---------------- */}
+      <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
+        <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold tracking-tight">Vendedores</h2>
-            <p className="text-[11px] text-muted-foreground">{periodMetrics.perSeller.length} cadastrados · saldo a pagar {formatCurrency(periodMetrics.totalSellerBalance)}</p>
+            <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{label}</span>
+            <h1 className="mt-1 text-xl sm:text-[22px]">Distribuição</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" className="h-8 text-[11px]" onClick={() => { setConsultSellerId(periodMetrics.perSeller[0]?.seller.id ?? null); setConsultOpen(true); }}>
-              <Users size={12} className="mr-1" />Consultar vendedor
-            </Button>
-            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => setAssignOpen(true)}>
-              <Package size={12} className="mr-1" />Atribuir Estoque
-            </Button>
-            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => { setTransferForm({ fromSellerId: "", assignmentId: "", toSellerId: "", quantity: "" }); setTransferOpen(true); }}>
-              <ArrowLeftRight size={12} className="mr-1" />Transferir
-            </Button>
-            <Button size="sm" variant="outline" className="h-8 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => setManualDebtDrawer(true)}>
-              <HandCoins size={12} className="mr-1" />Dívida Manual
-            </Button>
+          <NcButton variant="solid" size="md" onClick={() => { resetMove(); setMoveOpen(true); }}>
+            <Package size={14} />Movimentar estoque
+          </NcButton>
+        </header>
+
+        {/* ---------------- Período ---------------- */}
+        <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
+          <SegmentedChips options={PERIOD_OPTIONS} value={period} onChange={v => setPeriod(v as Period)} />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={customStart}
+              onChange={e => { setCustomStart(e.target.value); setPeriod("custom"); }}
+              aria-label="Data inicial"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+            />
+            <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={e => { setCustomEnd(e.target.value); setPeriod("custom"); }}
+              aria-label="Data final"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+            />
           </div>
+          <span className="ml-auto text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+            {periodLabel} · comissão fecha por mês
+          </span>
         </div>
 
-        {periodMetrics.perSeller.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center text-xs text-muted-foreground">
-            Nenhum vendedor cadastrado.
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border bg-card divide-y divide-border/50">
-            {periodMetrics.perSeller.map((r, idx) => (
-              <button
-                key={r.seller.id}
-                onClick={() => { setConsultSellerId(r.seller.id); setConsultOpen(true); }}
-                className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-secondary/40 transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold mono shrink-0",
-                    periodMetrics.leader?.seller.id === r.seller.id ? "bg-gradient-to-br from-warning to-warning/60 text-warning-foreground" : "bg-secondary text-muted-foreground"
-                  )}>{idx + 1}</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{r.seller.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      <span className="mono">{r.units}</span> un. · <span className="mono">{formatCurrency(r.vendasTotal)}</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={cn("mono text-sm font-bold", r.balance > 0.01 ? "text-warning" : r.balance < -0.01 ? "text-income" : "text-foreground")}>
-                    {formatCurrency(r.balance)}
-                  </span>
-                  <ArrowRight size={13} className="text-muted-foreground" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Sidebar: Consultar vendedor */}
-      <Sheet open={consultOpen} onOpenChange={setConsultOpen}>
-        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Consultar vendedor</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 mt-4">
-            <div className="space-y-1.5">
-              <Label className="text-[11px]">Vendedor</Label>
-              <Select value={consultSellerId ?? ""} onValueChange={v => setConsultSellerId(v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Escolha um vendedor" /></SelectTrigger>
-                <SelectContent>
-                  {periodMetrics.perSeller.map(r => (
-                    <SelectItem key={r.seller.id} value={r.seller.id}>{r.seller.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* ---------------- Vendedores ---------------- */}
+        <section className="flex flex-col gap-2">
+          <SectionHead
+            title="Vendedores"
+            sub={`${periodMetrics.perSeller.length} no período · falta pagar ${formatCurrency(periodMetrics.totalSellerBalance)}`}
+          />
+          {periodMetrics.perSeller.length === 0 ? (
+            <div className="nc-card py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
+              Nenhum vendedor cadastrado.
             </div>
-
-            {consultRow && (
-              <>
-                <div className="rounded-xl border border-border bg-card p-3.5">
-                  <p className="text-[11px] text-muted-foreground mb-2">{label}</p>
-                  <div className="text-[12px] space-y-1">
-                    <Line label="Unidades" value={String(consultRow.units)} tone="muted" />
-                    <Line label="Vendas" value={formatCurrency(consultRow.vendasTotal)} tone="muted" />
-                    <Line label="Faixa" value={consultRow.tier.label} tone="muted" />
-                    <Line label="Saldo anterior" value={formatCurrency(consultRow.priorBalance)} tone={consultRow.priorBalance > 0.01 ? "income" : consultRow.priorBalance < -0.01 ? "warning" : "muted"} />
-                    <Line label="Comissão gerada" value={formatCurrency(consultRow.accrued)} tone="income" />
-                    <Line label="Consumo" value={`−${formatCurrency(consultRow.retiradasTotal)}`} tone={consultRow.retiradasTotal > 0 ? "warning" : "muted"} />
-                    <Line label="Dívidas" value={`−${formatCurrency(consultRow.manualDebtsTotal)}`} tone={consultRow.manualDebtsTotal > 0 ? "warning" : "muted"} />
-                    <Line label="Pago" value={`−${formatCurrency(consultRow.commPaid)}`} tone={consultRow.commPaid > 0 ? "warning" : "muted"} />
-                    {consultRow.debtPaymentsTotal > 0 && (
-                      <Line label="(+) Pgto. dívida" value={`+${formatCurrency(consultRow.debtPaymentsTotal)}`} tone="income" />
-                    )}
-                    <div className="flex items-center justify-between border-t border-border/40 pt-1.5">
-                      <span className="font-semibold">Saldo</span>
-                      <span className={cn("mono font-bold text-sm", consultRow.balance > 0.01 ? "text-warning" : consultRow.balance < -0.01 ? "text-income" : "text-foreground")}>
-                        {formatCurrency(consultRow.balance)}
+          ) : (
+            <Stagger className="nc-card overflow-hidden">
+              {periodMetrics.perSeller.map(r => {
+                const next = getNextTier(r.tier);
+                return (
+                  <motion.button
+                    key={r.seller.id}
+                    variants={listItem}
+                    type="button"
+                    onClick={() => openSeller(r.seller.id)}
+                    className="nc-row nc-hover block w-full px-4 py-3 text-left"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-[13px]">{r.seller.name}</span>
+                        {/* A faixa é o que o vendedor persegue e estava escondida
+                            dentro do painel. Selo neutro: faixa não é estado de
+                            dinheiro, é em qual degrau ele está. */}
+                        <span className="nc-pill nc-pill--mute flex-none">{r.tier.label}</span>
+                      </div>
+                      <div className="flex flex-none items-center gap-2">
+                        <span className="nc-num text-[13px]" style={{ color: balanceTone(r.balance) }}>
+                          {formatCurrency(r.balance)}
+                        </span>
+                        <ArrowRight size={13} style={{ color: "var(--nc-text-3)" }} />
+                      </div>
+                    </div>
+                    {/* Progresso de faixa: unidades de venda RECEBIDA sobre o
+                        que a próxima faixa exige. É o número que o vendedor
+                        acompanha — e é sempre venda recebida, porque a comissão
+                        só é apurada sobre venda quitada. Na faixa do topo não há
+                        meta seguinte, e a linha diz isso em vez de inventar
+                        uma. */}
+                    <div className="mt-1.5 flex items-center justify-between gap-3">
+                      <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                        {next ? (
+                          <>
+                            <span className="nc-num" style={{ color: "var(--nc-text-2)" }}>{r.units}/{next.min}</span>
+                            {" un. para "}
+                            <span style={{ color: "var(--nc-accent)" }}>{next.label}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="nc-num" style={{ color: "var(--nc-text-2)" }}>{r.units}</span>
+                            {" un. · já está na faixa do topo"}
+                          </>
+                        )}
+                      </span>
+                      <span className="nc-num flex-none text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                        {formatCurrencyShort(r.vendasTotal)}
                       </span>
                     </div>
+                  </motion.button>
+                );
+              })}
+            </Stagger>
+          )}
+        </section>
+
+        {/* ---------------- Sócios ---------------- */}
+        <section className="flex flex-col gap-2">
+          <SectionHead
+            title="Sócios"
+            sub={`retirado ${formatCurrency(periodMetrics.totalWithdrawalsPeriod)} de ${formatCurrency(periodMetrics.distribuivel)} no período`}
+          />
+          {periodMetrics.perPartner.length === 0 ? (
+            <div className="nc-card py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
+              Nenhum sócio cadastrado.
+            </div>
+          ) : (
+            <Stagger className="nc-card overflow-hidden">
+              {periodMetrics.perPartner.map(r => (
+                <motion.div key={r.partner.id} variants={listItem} className="nc-row px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px]">{r.partner.name}</p>
+                      <p className="truncate text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                        {r.partner.percentage}% da sociedade
+                        {r.last ? ` · última retirada ${formatDateBR(r.last.date)}` : " · nenhuma retirada"}
+                      </p>
+                    </div>
+                    <div className="flex flex-none items-center gap-3">
+                      <div className="text-right">
+                        <p className="nc-num text-[13px]">{formatCurrency(r.periodAmt)}</p>
+                        <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                          de {formatCurrencyShort(r.alvo)}
+                        </p>
+                      </div>
+                      <NcButton variant="quiet" onClick={() => openWd(r.partner.id, r.faltaPagar)}>
+                        <Plus size={13} />Retirada
+                      </NcButton>
+                    </div>
                   </div>
-                  {getNextTier(consultRow.tier) && (
-                    <p className="text-[11px] text-muted-foreground mt-2.5">
-                      Próxima faixa <span className="text-foreground font-semibold">{getNextTier(consultRow.tier)!.label}</span> · faltam <span className="mono text-foreground font-semibold">{unitsUntilNextTier(consultRow.units)}</span> un.
+                  {/* Divisão real de um total: o alvo do sócio se reparte em o
+                      que já saiu e o que ainda falta. Mesma gramática da barra
+                      do trilho. */}
+                  {r.alvo > 0.01 || r.periodAmt > 0.01 ? (
+                    <>
+                      <div className="mt-2 flex h-[5px] gap-0.5">
+                        <div style={{ flex: Math.max(Math.min(r.periodAmt, r.alvo), 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
+                        {r.faltaPagar > 0.01 && (
+                          <div style={{ flex: r.faltaPagar, background: "var(--nc-alert)", borderRadius: 2 }} />
+                        )}
+                        {r.excedente > 0.01 && (
+                          <div style={{ flex: r.excedente, background: "var(--nc-crit)", borderRadius: 2 }} />
+                        )}
+                      </div>
+                      <div className="nc-num mt-1.5 flex justify-between gap-2 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                        <span>retirado {formatCurrencyShort(Math.min(r.periodAmt, r.alvo))}</span>
+                        {r.excedente > 0.01 ? (
+                          <span style={{ color: "var(--nc-crit)" }}>excedente {formatCurrencyShort(r.excedente)}</span>
+                        ) : (
+                          <span style={{ color: "var(--nc-alert)" }}>falta {formatCurrencyShort(r.faltaPagar)}</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                      Sem lucro a distribuir no período.
                     </p>
                   )}
-                </div>
+                </motion.div>
+              ))}
+            </Stagger>
+          )}
+        </section>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button size="sm" variant="outline" className="h-9 text-[11px]" onClick={() => { setConsultOpen(false); setExtractFor(consultRow.seller.id); }}>
-                    Extrato <ArrowRight size={11} className="ml-1" />
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-9 text-[11px] border-warning/40 text-warning hover:text-warning hover:bg-warning/5" onClick={() => { setConsultOpen(false); setDebtPayDrawer({ sellerId: consultRow.seller.id }); setDebtPayForm({ amount: consultRow.saldoConsumo > 0 ? consultRow.saldoConsumo.toFixed(2) : "", date: todayDateString(), notes: "" }); }}>
-                    <Receipt size={11} className="mr-1" />Pagar Dívida
-                  </Button>
-                  <Button size="sm" className="h-9 text-[11px]" onClick={() => { setConsultOpen(false); openPay(consultRow.seller.id, Math.max(0, consultRow.balance)); }}>
-                    <Plus size={11} className="mr-1" />Pagar
-                  </Button>
-                  <Button size="sm" variant="secondary" className="h-9 text-[11px]" onClick={() => shareSellerWhatsApp(consultRow)}>
-                    <Share2 size={11} className="mr-1" />WhatsApp
-                  </Button>
-                </div>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="w-full h-8 text-[11px] text-muted-foreground hover:text-destructive"
-                  onClick={async () => {
-                    if (await confirm({ title: "Remover vendedor", description: `Remover ${consultRow.seller.name}?` })) {
-                      deleteSeller(consultRow.seller.id);
-                      setConsultOpen(false);
-                    }
-                  }}
-                >
-                  <X size={12} className="mr-1" />Remover vendedor
-                </Button>
-              </>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-
-
-      {/* Retiradas dos Sócios — cards individuais */}
-      <div className="space-y-3">
-        <div className="flex items-end justify-between gap-2 border-b border-border pb-2">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight">Retiradas dos Sócios</h2>
-          </div>
-        </div>
-        {periodMetrics.perPartner.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center text-xs text-muted-foreground">
-            Nenhum sócio cadastrado.
-          </div>
-        ) : (
-          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-            {periodMetrics.perPartner.map(r => (
-              <div key={r.partner.id} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{r.partner.name}</p>
-                    <p className="text-[11px] text-muted-foreground">Sócio · {r.partner.percentage}%</p>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-fixed/10 flex items-center justify-center shrink-0">
-                    <Users size={14} className="text-fixed" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Alvo no período</p>
-                    <p className="mono text-sm font-semibold text-primary">{formatCurrency(r.alvo)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Retirado</p>
-                    <p className={cn("mono text-sm font-semibold", r.periodAmt > 0 ? "text-fixed" : "text-muted-foreground")}>{formatCurrency(r.periodAmt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {r.excedente > 0.01 ? "Excedente" : "Falta pagar"}
-                    </p>
-                    <p className={cn("mono text-sm font-semibold", r.excedente > 0.01 ? "text-expense" : r.faltaPagar > 0.01 ? "text-warning" : "text-income")}>
-                      {formatCurrency(r.excedente > 0.01 ? r.excedente : r.faltaPagar)}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
-                  <p className="text-[11px] text-muted-foreground">
-                    {r.last ? `Última: ${formatDateBR(r.last.date)}` : "Nenhuma retirada"}
-                  </p>
-                  <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => openWd(r.partner.id)}>
-                    <Plus size={11} className="mr-1" />Registrar retirada
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Histórico Financeiro — timeline com filtros */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Clock size={14} className="text-muted-foreground" />
-            <h2 className="text-sm font-semibold tracking-tight">Histórico Financeiro</h2>
-          </div>
-          <div className="flex items-center gap-1 rounded-lg bg-secondary/60 p-0.5">
-            {([
-              { k: "all", label: "Tudo" },
-              { k: "withdrawal", label: "Retiradas" },
-              { k: "commission", label: "Comissões" },
-            ] as const).map(t => (
-              <button
-                key={t.k}
-                onClick={() => setTimelineFilter(t.k)}
-                className={cn(
-                  "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
-                  timelineFilter === t.k ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >{t.label}</button>
-            ))}
-          </div>
-        </div>
-        {(() => {
-          const filteredGroups: Record<string, any[]> = {};
-          Object.entries(timeline).forEach(([day, items]) => {
-            const filtered = items.filter(it => timelineFilter === "all" ? true : it.kind === timelineFilter);
-            if (filtered.length > 0) filteredGroups[day] = filtered;
-          });
-          if (Object.keys(filteredGroups).length === 0) {
-            return (
-              <div className="flex items-start gap-2.5 px-4 py-5">
-                <Inbox size={14} className="text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs text-foreground">Nenhum registro no filtro atual.</p>
-                  <p className="text-[11px] text-muted-foreground">Retiradas e comissões pagas aparecerão aqui.</p>
-                </div>
-              </div>
-            );
-          }
-          return (
-            <div className="divide-y divide-border/40">
-              {Object.entries(filteredGroups).map(([day, items]) => (
-                <div key={day} className="px-3.5 py-2.5">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">{day}</div>
-                  <div className="space-y-0.5">
-                    {items.map(it => {
+        {/* ---------------- Histórico ---------------- */}
+        <section className="flex flex-col gap-2">
+          <SectionHead
+            title="Histórico"
+            sub="Comissões pagas e retiradas dos sócios, as 30 mais recentes"
+            action={
+              <SegmentedChips
+                options={TIMELINE_OPTIONS}
+                value={timelineFilter}
+                onChange={v => setTimelineFilter(v as typeof timelineFilter)}
+              />
+            }
+          />
+          {timeline.length === 0 ? (
+            <div className="nc-card py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
+              Nenhum lançamento neste filtro.
+            </div>
+          ) : (
+            <Stagger className="nc-card overflow-hidden">
+              <AnimatePresence initial={false}>
+                {timeline.map(group => (
+                  <motion.div key={group.day} variants={listItem} layout className="nc-row px-4 py-2.5">
+                    <p className={cn(EYEBROW, "mb-1")} style={{ color: "var(--nc-text-3)" }}>{group.day}</p>
+                    {group.items.map(it => {
                       const isCommission = it.kind === "commission";
                       return (
-                        <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-secondary/40 transition-colors group/hist">
-                          <div className={cn(
-                            "w-6 h-6 rounded-full flex items-center justify-center shrink-0",
-                            isCommission ? "bg-warning/15 text-warning" : "bg-fixed/15 text-fixed"
-                          )}>
+                        <div key={`${it.kind}-${it.id}`} className="group flex items-center gap-3 py-1">
+                          <span
+                            className="flex h-6 w-6 flex-none items-center justify-center rounded-full"
+                            style={{
+                              color: isCommission ? "var(--nc-alert)" : "var(--nc-accent)",
+                              background: `color-mix(in srgb, ${isCommission ? "var(--nc-alert)" : "var(--nc-accent)"} 14%, transparent)`,
+                            }}
+                          >
                             {isCommission ? <Wallet size={12} /> : <Users size={12} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] truncate">
-                              <span className="text-muted-foreground">{isCommission ? "Comissão paga" : "Retirada"}</span>{" · "}
-                              <span className="font-medium">{it.who}</span>
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px]">
+                              <span style={{ color: "var(--nc-text-2)" }}>{isCommission ? "Comissão paga" : "Retirada"}</span>
+                              {" · "}{it.who}
                             </p>
-                            {it.notes && <p className="text-[11px] text-muted-foreground truncate">{it.notes}</p>}
+                            {it.notes && (
+                              <p className="truncate text-[11px]" style={{ color: "var(--nc-text-3)" }}>{it.notes}</p>
+                            )}
                           </div>
-                          <span className={cn("mono text-[13px] font-semibold", isCommission ? "text-warning" : "text-fixed")}>
+                          <span className="nc-num flex-none text-[13px]" style={{ color: isCommission ? "var(--nc-alert)" : "var(--nc-accent)" }}>
                             −{formatCurrency(it.amount)}
                           </span>
-                          <span className="text-[11px] text-muted-foreground mono shrink-0 hidden sm:inline">{formatDateBR(it.when)}</span>
-                          <button
-                            onClick={async () => {
-                              const ok = await confirm({ title: "Excluir registro", description: isCommission ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?" });
-                              if (!ok) return;
-                              isCommission ? deleteCommissionPayment(it.id) : deleteWithdrawal(it.id);
-                            }}
-                            className="text-muted-foreground hover:text-destructive transition-colors p-1 opacity-0 group-hover/hist:opacity-100"
-                            aria-label="Excluir"
-                          ><Trash2 size={12} /></button>
+                          <span className="nc-num hidden flex-none text-[11px] sm:inline" style={{ color: "var(--nc-text-3)" }}>
+                            {formatDateBR(it.when)}
+                          </span>
+                          <div className="flex-none transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                            <NcButton
+                              variant="danger"
+                              size="icon"
+                              aria-label={`Excluir ${isCommission ? "pagamento de comissão" : "retirada"} de ${it.who}`}
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: "Excluir registro",
+                                  description: isCommission ? "Excluir este pagamento de comissão?" : "Excluir esta retirada?",
+                                });
+                                if (!ok) return;
+                                if (isCommission) deleteCommissionPayment(it.id);
+                                else deleteWithdrawal(it.id);
+                              }}
+                            >
+                              <Trash2 size={12} />
+                            </NcButton>
+                          </div>
                         </div>
                       );
                     })}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </Stagger>
+          )}
+        </section>
+      </div>
+
+      {/* ---------------- Coluna direita: o que há para repartir ----------------
+          No celular ela vem ANTES das listas (`order-first`), como nas outras
+          telas migradas. */}
+      <aside
+        className="order-first flex w-full flex-none flex-col gap-3.5 p-4 md:p-6 xl:order-none xl:w-[312px]"
+        style={{ background: "var(--nc-rail)" }}
+      >
+        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Distribuição do período</span>
+
+        <div>
+          <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Para distribuir aos sócios</span>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <AnimatedNumber
+              value={periodMetrics.distribuivel}
+              format={formatCurrencyShort}
+              duration={0.7}
+              animateOnMount
+              className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
+            />
+          </div>
+          <p className="nc-num mt-1.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+            de um lucro líquido de{" "}
+            <span style={{ color: periodMetrics.netProfit < 0 ? "var(--nc-crit)" : undefined }}>
+              {formatCurrencyShort(periodMetrics.netProfit)}
+            </span>
+          </p>
+        </div>
+
+        <Rule />
+
+        {/* A divisão que dá nome à tela: o lucro do período se reparte entre
+            quem vendeu e quem é dono. É a única barra desta tela que divide um
+            total de verdade — por isso ela existe aqui, e não em cada card. */}
+        <div>
+          <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Como o lucro se reparte</span>
+          {periodMetrics.netProfit <= 0 ? (
+            <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>
+              Sem lucro no período para repartir.
+            </p>
+          ) : (
+            <>
+              <div className="mt-1.5 flex h-[5px] gap-0.5">
+                <div style={{ flex: Math.max(periodMetrics.totalSellerBalance, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
+                <div style={{ flex: Math.max(periodMetrics.distribuivel, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
+              </div>
+              <div className="nc-num mt-1.5 flex justify-between gap-2 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                <span style={{ color: "var(--nc-alert)" }}>vendedores {formatCurrencyShort(periodMetrics.totalSellerBalance)}</span>
+                <span>sócios {formatCurrencyShort(periodMetrics.distribuivel)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <Rule />
+
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Já retirado no período</span>
+            <span className="nc-num text-sm">{formatCurrencyShort(periodMetrics.totalWithdrawalsPeriod)}</span>
+          </div>
+          <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
+            <span className="text-[12.5px]">Ainda cabe retirar</span>
+            {/* "Falta pagar" é sempre o alerta, aqui como no Dashboard e em
+                Vendas — só que quem falta receber é o sócio. */}
+            <span style={{ color: stillDistributable > 0.01 ? "var(--nc-alert)" : undefined }}>
+              <AnimatedNumber
+                value={stillDistributable}
+                format={formatCurrencyShort}
+                duration={0.7}
+                animateOnMount
+                className="nc-num text-xl font-semibold"
+              />
+            </span>
+          </div>
+          <div className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+            <span>despesas e investidores no período</span>
+            <span>{formatCurrencyShort(periodMetrics.periodExpenses + periodMetrics.periodInvestorPayments)}</span>
+          </div>
+        </div>
+
+        <Rule />
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quem mais vendeu</span>
+            <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
+              {periodMetrics.perSeller.length} no período
+            </span>
+          </div>
+          {periodMetrics.perSeller.length === 0 ? (
+            <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
+              Nenhum vendedor cadastrado.
+            </p>
+          ) : (
+            <Stagger className="flex flex-col">
+              {periodMetrics.perSeller.slice(0, MAX_TOP_SELLERS).map(r => (
+                <motion.div key={r.seller.id} variants={listItem} className="nc-row flex items-center justify-between gap-2 py-1.5 text-xs">
+                  <span className="min-w-0 flex-1 truncate">
+                    {r.seller.name}
+                    <span style={{ color: "var(--nc-text-3)" }}> · {r.tier.label}</span>
+                  </span>
+                  <span className="nc-num flex-none">
+                    {formatCurrencyShort(r.vendasTotal)}
+                    <span style={{ color: "var(--nc-text-3)" }}> · {r.units} un.</span>
+                  </span>
+                </motion.div>
+              ))}
+              {periodMetrics.perSeller.length > MAX_TOP_SELLERS && (
+                <p className="pt-2 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                  + {periodMetrics.perSeller.length - MAX_TOP_SELLERS} outros vendedores
+                </p>
+              )}
+            </Stagger>
+          )}
+        </div>
+      </aside>
+
+      {/* ================= Painel do vendedor ================= */}
+      <Sheet open={!!panelSellerId} onOpenChange={v => { if (!v) { setPanelSellerId(null); setPanelMode("resumo"); } }}>
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+          {panelRow && (
+            <>
+              <NcSheetHeader
+                eyebrow={`Distribuição · ${label}`}
+                title={
+                  <span className="flex items-center gap-2">
+                    {panelRow.seller.name}
+                    <span className="nc-pill nc-pill--mute">{panelRow.tier.label}</span>
+                  </span>
+                }
+                description={balanceLabel(panelRow.balance)}
+              />
+
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+                {/* Saldo */}
+                <div>
+                  <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Saldo do vendedor</span>
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span style={{ color: balanceTone(panelRow.balance) }}>
+                      <AnimatedNumber
+                        value={panelRow.balance}
+                        format={formatCurrency}
+                        duration={0.7}
+                        animateOnMount
+                        className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
+                      />
+                    </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
 
-      {/* Insights */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingUp size={14} className="text-primary" />
-          <h2 className="text-sm font-semibold tracking-tight">Insights · {label}</h2>
-        </div>
-        <ul className="space-y-1.5 text-[13px]">
-          <li className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-income shrink-0" />
-            <span className="text-muted-foreground">Lucro líquido:</span>
-            <span className={cn("mono font-semibold", periodMetrics.netProfit >= 0 ? "text-income" : "text-expense")}>{formatCurrency(periodMetrics.netProfit)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" />
-            <span className="text-muted-foreground">A pagar a vendedores:</span>
-            <span className="mono font-semibold text-warning">{formatCurrency(periodMetrics.totalSellerBalance)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <Crown size={12} className="text-primary" />
-            <span className="text-muted-foreground">Distribuível aos sócios:</span>
-            <span className={cn("mono font-semibold", periodMetrics.distribuivel > 0 ? "text-income" : "text-muted-foreground")}>{formatCurrency(periodMetrics.distribuivel)}</span>
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-fixed shrink-0" />
-            <span className="text-muted-foreground">
-              {periodMetrics.totalWithdrawalsPeriod > 0.01
-                ? <>Sócios já retiraram <span className="mono font-semibold text-fixed">{formatCurrency(periodMetrics.totalWithdrawalsPeriod)}</span> no período</>
-                : <>Nenhuma retirada dos sócios no período.</>}
-            </span>
-          </li>
-        </ul>
-      </div>
+                <Rule />
 
+                {/* A conta inteira, na ordem em que ela acontece. */}
+                <section className="space-y-1.5">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Como se chega nesse saldo</p>
+                  <LedgerLine label="Unidades vendidas" value={String(panelRow.units)} />
+                  <LedgerLine label="Vendas no período" value={formatCurrency(panelRow.vendasTotal)} />
+                  <LedgerLine
+                    label="Saldo trazido dos meses anteriores"
+                    value={formatCurrency(panelRow.priorBalance)}
+                    tone={panelRow.priorBalance < -0.01 ? "var(--nc-crit)" : undefined}
+                  />
+                  <LedgerLine label="Comissão gerada" value={`+${formatCurrency(panelRow.accrued)}`} tone="var(--nc-ok)" />
+                  {panelRow.retiradasTotal > 0.01 && (
+                    <LedgerLine label="Consumo próprio" value={`−${formatCurrency(panelRow.retiradasTotal)}`} tone="var(--nc-alert)" />
+                  )}
+                  {panelRow.manualDebtsTotal > 0.01 && (
+                    <LedgerLine label="Dívidas lançadas" value={`−${formatCurrency(panelRow.manualDebtsTotal)}`} tone="var(--nc-alert)" />
+                  )}
+                  {panelRow.debtPaymentsTotal > 0.01 && (
+                    <LedgerLine label="Dívida já paga por ele" value={`+${formatCurrency(panelRow.debtPaymentsTotal)}`} tone="var(--nc-ok)" />
+                  )}
+                  <LedgerLine label="Comissão já paga a ele" value={`−${formatCurrency(panelRow.commPaid)}`} tone={panelRow.commPaid > 0.01 ? "var(--nc-alert)" : undefined} />
+                  <div className="nc-rule-top flex items-center justify-between gap-2 pt-2 text-[13px]">
+                    <span>Saldo</span>
+                    <span className="nc-num font-medium" style={{ color: balanceTone(panelRow.balance) }}>
+                      {formatCurrency(panelRow.balance)}
+                    </span>
+                  </div>
+                </section>
 
-
-      {/* Drawer Pagar Vendedor */}
-      <Sheet open={!!payDrawer} onOpenChange={(v) => !v && setPayDrawer(null)}>
-        <SheetContent className="nocturne w-full sm:max-w-md">
-          <SheetHeader><SheetTitle>Pagar Vendedor</SheetTitle></SheetHeader>
-          {sellerRow && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{sellerRow.seller.name}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Faturamento</span><span className="mono">{formatCurrency(sellerRow.vendasTotal)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Comissão acumulada ({sellerRow.tier.label})</span><span className="mono text-income">{formatCurrency(sellerRow.accrued)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Já pago</span><span className="mono">{formatCurrency(sellerRow.commPaid)}</span></div>
-                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo a pagar</span><span className={cn("mono font-semibold", sellerRow.balance > 0 ? "text-warning" : "text-income")}>{formatCurrency(sellerRow.balance)}</span></div>
-              </div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
-              <div><Label>Data</Label><Input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Label>Observação</Label><Input value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" /></div>
-              <Button className="w-full" onClick={submitPay}>Registrar Pagamento</Button>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {/* Drawer Retirada Sócio */}
-      <Sheet open={!!wdDrawer} onOpenChange={(v) => !v && setWdDrawer(null)}>
-        <SheetContent className="nocturne w-full sm:max-w-md">
-          <SheetHeader><SheetTitle>Registrar Retirada</SheetTitle></SheetHeader>
-          {partnerRow && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Sócio</span><span className="font-medium">{partnerRow.partner.name}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Retirado no período</span><span className="mono">{formatCurrency(partnerRow.periodAmt)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Retirado no ano</span><span className="mono">{formatCurrency(partnerRow.yearAmt)}</span></div>
-              </div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={wdForm.amount} onChange={e => setWdForm(f => ({ ...f, amount: e.target.value }))} /></div>
-              <div><Label>Data</Label><Input type="date" value={wdForm.date} onChange={e => setWdForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Label>Observação</Label><Input value={wdForm.notes} onChange={e => setWdForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" /></div>
-              <Button className="w-full" onClick={submitWd}>Registrar Retirada</Button>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {/* Drawer Pagar Dívida (consumo) */}
-      <Sheet open={!!debtPayDrawer} onOpenChange={(v) => !v && setDebtPayDrawer(null)}>
-        <SheetContent className="nocturne w-full sm:max-w-md">
-          <SheetHeader><SheetTitle>Pagar Dívida (consumo)</SheetTitle></SheetHeader>
-          {debtSellerRow && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{debtSellerRow.seller.name}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Consumo + dívidas</span><span className="mono text-warning">{formatCurrency(debtSellerRow.consumoTotal)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Já pago</span><span className="mono">{formatCurrency(debtSellerRow.debtPaymentsTotal)}</span></div>
-                {debtSellerRow.legacyCredit > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">Crédito legado (10%)</span><span className="mono text-income">{formatCurrency(debtSellerRow.legacyCredit)}</span></div>
+                {/* Próxima faixa */}
+                {getNextTier(panelRow.tier) && (
+                  <p className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+                    Próxima faixa{" "}
+                    <span style={{ color: "var(--nc-accent)" }}>{getNextTier(panelRow.tier)!.label}</span>
+                    {" · faltam "}
+                    <span className="nc-num">{unitsUntilNextTier(panelRow.units)}</span> un.
+                  </p>
                 )}
-                <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Saldo a abater</span><span className={cn("mono font-semibold", debtSellerRow.saldoConsumo > 0 ? "text-warning" : "text-income")}>{formatCurrency(debtSellerRow.saldoConsumo)}</span></div>
-              </div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={debtPayForm.amount} onChange={e => setDebtPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
-              <div><Label>Data</Label><Input type="date" value={debtPayForm.date} onChange={e => setDebtPayForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Label>Observação</Label><Input value={debtPayForm.notes} onChange={e => setDebtPayForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" /></div>
-              <Button className="w-full" onClick={submitDebtPay}>Registrar Pagamento</Button>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
 
-      {/* Drawer Dívida Manual */}
-      <Sheet open={manualDebtDrawer} onOpenChange={(v) => setManualDebtDrawer(v)}>
-        <SheetContent className="nocturne w-full sm:max-w-md">
-          <SheetHeader><SheetTitle>Adicionar Dívida Manual</SheetTitle></SheetHeader>
-          <div className="mt-4 space-y-4">
-            <div>
-              <Label>Funcionário</Label>
-              <Select value={manualDebtForm.sellerId} onValueChange={v => setManualDebtForm(f => ({ ...f, sellerId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={manualDebtForm.amount} onChange={e => setManualDebtForm(f => ({ ...f, amount: e.target.value }))} /></div>
-            <div><Label>Data</Label><Input type="date" value={manualDebtForm.date} onChange={e => setManualDebtForm(f => ({ ...f, date: e.target.value }))} /></div>
-            <div><Label>Observação</Label><Input value={manualDebtForm.notes} onChange={e => setManualDebtForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: adiantamento, empréstimo" /></div>
-            <Button className="w-full bg-warning hover:bg-warning/90 text-warning-foreground" onClick={submitManualDebt}>Adicionar Dívida</Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+                {/* Vendas dele ainda em aberto: o que pode mudar a faixa. */}
+                {panelRow.pendingToReceive > 0.01 && (
+                  <div className="rounded-lg p-3 text-xs" style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
+                    <div className="flex justify-between">
+                      <span style={{ color: "var(--nc-text-2)" }}>Vendas dele ainda a receber</span>
+                      <span className="nc-num" style={{ color: "var(--nc-alert)" }}>{formatCurrency(panelRow.pendingToReceive)}</span>
+                    </div>
+                    <div className="nc-rule-top mt-1.5 flex justify-between pt-1.5">
+                      <span style={{ color: "var(--nc-text-2)" }}>Saldo se tudo for recebido</span>
+                      <span className="nc-num">{formatCurrency(panelRow.projectedBalance)}</span>
+                    </div>
+                  </div>
+                )}
 
-      {/* Drawer Atribuir Estoque */}
-      <Sheet open={assignOpen} onOpenChange={setAssignOpen}>
-        <SheetContent className="nocturne w-full sm:max-w-lg overflow-y-auto p-0 flex flex-col">
-          <SheetHeader className="px-6 py-4 border-b border-border">
-            <SheetTitle className="text-base font-semibold">Atribuir Estoque</SheetTitle>
-          </SheetHeader>
-          <form onSubmit={handleAssign} className="flex-1 px-6 py-5 space-y-5">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Vendedor</Label>
-              <Select value={assignForm.sellerId} onValueChange={v => setAssignForm(f => ({ ...f, sellerId: v }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
-                <SelectContent>
-                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Produtos disponíveis</Label>
-                <span className="text-[10px] text-muted-foreground">{assignSelectedCount} selecionado{assignSelectedCount !== 1 ? "s" : ""}</span>
-              </div>
-              <div className="rounded-lg border border-border divide-y divide-border/60 max-h-72 overflow-y-auto">
-                {availableProducts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground p-4 text-center">Todos os produtos já estão totalmente atribuídos.</p>
-                ) : (
-                  availableProducts.map(p => {
-                    const isChecked = Object.prototype.hasOwnProperty.call(assignForm.selectedProducts, p.id);
-                    return (
-                      <div key={p.id} className={cn("px-3 py-2 transition-colors", isChecked && "bg-primary/5")}>
-                        <div className="flex items-center gap-2">
-                          <Checkbox id={`assign-${p.id}`} checked={isChecked} onCheckedChange={(c) => toggleAssignProduct(p.id, !!c)} />
-                          <label htmlFor={`assign-${p.id}`} className="text-xs cursor-pointer flex-1 flex items-center justify-between">
-                            <span className="font-medium">{p.flavor} <span className="text-muted-foreground font-normal">· {p.model}</span></span>
-                            <span className="mono text-[10px] text-muted-foreground">{p.availableToAssign} disp.</span>
-                          </label>
-                        </div>
-                        {isChecked && (
-                          <Input type="number" min="1" max={p.availableToAssign} placeholder="Qtd"
-                            value={assignForm.selectedProducts[p.id]}
-                            onChange={e => setAssignForm(f => ({
-                              ...f,
-                              selectedProducts: { ...f.selectedProducts, [p.id]: String(Math.max(1, Math.min(Number(e.target.value) || 1, p.availableToAssign))) }
-                            }))}
-                            className="ml-6 mt-1.5 w-24 h-7 text-xs mono" />
-                        )}
+                <Rule />
+
+                {/* ---- Formulário, quando um dos modos está ativo ----
+                    Sem `AnimatePresence`: a troca é só entre dois blocos e o
+                    `key` já refaz a entrada. Com `mode="wait"` aqui a fila
+                    travaria justamente no caminho mais comum — registrar um
+                    pagamento re-renderiza o painel inteiro (o saldo mudou) bem
+                    dentro da janela de saída, e o bloco novo ficaria parado no
+                    `initial`, invisível. É o mesmo defeito que o PageTransition
+                    já teve. */}
+                {panelMode === "resumo" ? (
+                  <motion.section
+                    key="acoes"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={transitionBase}
+                    className="space-y-3"
+                  >
+                      <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Registrar</p>
+                      <div className="flex flex-wrap gap-2">
+                        <NcButton variant="outline" size="md" onClick={() => startMode("comissao", Math.max(0, panelRow.balance))}>
+                          <Wallet size={14} />Pagar comissão
+                        </NcButton>
+                        <NcButton variant="quiet" size="md" onClick={() => startMode("divida", panelRow.saldoConsumo)}>
+                          <Receipt size={14} />Receber dívida
+                        </NcButton>
+                        <NcButton variant="quiet" size="md" onClick={() => startMode("lancar", 0)}>
+                          <HandCoins size={14} />Lançar dívida
+                        </NcButton>
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-            {assignSelectedCount > 0 && (
-              <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Resumo</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Produtos</span>
-                  <span className="mono font-medium">{assignSelectedCount}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Unidades</span>
-                  <span className="mono font-semibold">{assignTotalUnits}</span>
-                </div>
-              </div>
-            )}
-            <SheetFooter className="px-0">
-              <Button type="submit" className="w-full h-10" disabled={assignSubmitting || assignSelectedCount === 0 || availableProducts.length === 0}>
-                {assignSubmitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                    Atribuindo…
-                  </span>
+
+                      <p className={cn(EYEBROW, "pt-2")} style={{ color: "var(--nc-text-3)" }}>Ver</p>
+                      <div className="flex flex-wrap gap-2">
+                        <NcButton variant="ghost" size="md" onClick={() => setExtractFor(panelRow.seller.id)}>
+                          Extrato completo<ArrowRight size={13} />
+                        </NcButton>
+                        <NcButton variant="ghost" size="md" onClick={() => shareSellerWhatsApp(panelRow)}>
+                          <Share2 size={14} />Enviar no WhatsApp
+                        </NcButton>
+                      </div>
+                  </motion.section>
                 ) : (
-                  <>Atribuir {assignSelectedCount > 0 && `(${assignSelectedCount})`}</>
+                  <motion.section
+                    key={panelMode}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={transitionBase}
+                    className="space-y-3"
+                  >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{PANEL_TITLES[panelMode]}</p>
+                        <NcButton variant="ghost" onClick={() => setPanelMode("resumo")}>
+                          <X size={13} />Cancelar
+                        </NcButton>
+                      </div>
+                      <p className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+                        {panelMode === "comissao" && "Sai do caixa para a mão do vendedor e abate o saldo."}
+                        {panelMode === "divida" && "Dinheiro que o vendedor devolveu do que consumiu."}
+                        {panelMode === "lancar" && "Adiantamento, empréstimo ou acerto que ele passa a dever."}
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Valor (R$)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={panelForm.amount}
+                            onChange={e => setPanelForm(f => ({ ...f, amount: e.target.value }))}
+                            placeholder="0,00"
+                            className="nc-num"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Data</Label>
+                          <Input type="date" value={panelForm.date} onChange={e => setPanelForm(f => ({ ...f, date: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Observação</Label>
+                        <Input
+                          value={panelForm.notes}
+                          onChange={e => setPanelForm(f => ({ ...f, notes: e.target.value }))}
+                          placeholder={panelMode === "lancar" ? "Ex: adiantamento, empréstimo" : "Opcional"}
+                        />
+                      </div>
+                  </motion.section>
                 )}
-              </Button>
-            </SheetFooter>
-          </form>
+
+                {panelMode === "resumo" && (
+                  <>
+                    <Rule />
+                    <NcButton
+                      variant="danger"
+                      size="md"
+                      className="w-full"
+                      onClick={async () => {
+                        if (await confirm({ title: "Remover vendedor", description: `Remover ${panelRow.seller.name}?`, destructive: true })) {
+                          deleteSeller(panelRow.seller.id);
+                          setPanelSellerId(null);
+                        }
+                      }}
+                    >
+                      <Trash2 size={13} />Remover vendedor
+                    </NcButton>
+                  </>
+                )}
+              </div>
+
+              {panelMode !== "resumo" && (
+                <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                      {panelAmount > 0 ? (
+                        <>
+                          Saldo passa a{" "}
+                          <span className="nc-num font-medium">
+                            {formatCurrency(
+                              panelMode === "comissao" ? panelRow.balance - panelAmount
+                                : panelMode === "divida" ? panelRow.balance + panelAmount
+                                  : panelRow.balance - panelAmount,
+                            )}
+                          </span>
+                        </>
+                      ) : "Informe o valor"}
+                    </p>
+                    <NcButton variant="solid" size="md" onClick={submitPanel} disabled={panelAmount <= 0 || panelSubmitting}>
+                      {panelSubmitting ? "Registrando…" : "Registrar"}
+                    </NcButton>
+                  </div>
+                </SheetFooter>
+              )}
+            </>
+          )}
         </SheetContent>
       </Sheet>
 
+      {/* ================= Retirada do sócio ================= */}
+      <Sheet open={!!wdPartnerId} onOpenChange={v => { if (!v) setWdPartnerId(null); }}>
+        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col">
+          {partnerRow && (
+            <>
+              <NcSheetHeader
+                eyebrow={`Sócios · ${label}`}
+                title={`Retirada de ${partnerRow.partner.name}`}
+                description={`${partnerRow.partner.percentage}% da sociedade · alvo do período ${formatCurrency(partnerRow.alvo)}`}
+              />
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+                <section className="space-y-1.5">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde ele está</p>
+                  <LedgerLine label="Retirado no período" value={formatCurrency(partnerRow.periodAmt)} />
+                  <LedgerLine label="Retirado no ano" value={formatCurrency(partnerRow.yearAmt)} />
+                  <LedgerLine
+                    label="Falta para o alvo"
+                    value={formatCurrency(partnerRow.faltaPagar)}
+                    tone={partnerRow.faltaPagar > 0.01 ? "var(--nc-alert)" : undefined}
+                  />
+                </section>
+                <Rule />
+                <section className="space-y-3">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Registrar retirada</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Valor (R$)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={wdForm.amount}
+                        onChange={e => setWdForm(f => ({ ...f, amount: e.target.value }))}
+                        placeholder="0,00"
+                        className="nc-num"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Data</Label>
+                      <Input type="date" value={wdForm.date} onChange={e => setWdForm(f => ({ ...f, date: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Observação</Label>
+                    <Input value={wdForm.notes} onChange={e => setWdForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
+                  </div>
+                </section>
+              </div>
+              <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+                <div className="flex w-full items-center justify-between gap-3">
+                  <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                    Ainda cabe retirar{" "}
+                    <span className="nc-num font-medium" style={{ color: "var(--nc-alert)" }}>
+                      {formatCurrency(stillDistributable)}
+                    </span>
+                  </p>
+                  <NcButton variant="solid" size="md" onClick={submitWd} disabled={!Number(wdForm.amount) || wdSubmitting}>
+                    {wdSubmitting ? "Registrando…" : "Registrar retirada"}
+                  </NcButton>
+                </div>
+              </SheetFooter>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
+      {/* ================= Movimentar estoque ================= */}
+      <Sheet open={moveOpen} onOpenChange={v => { setMoveOpen(v); if (!v) resetMove(); }}>
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+          <NcSheetHeader
+            eyebrow="Consignação"
+            title="Movimentar estoque"
+            description="Da casa para um vendedor, ou de um vendedor para outro. A quantidade sai de quem tem e entra na mão de quem vai vender."
+          />
 
-      {/* Drawer Transferir Estoque */}
-      <Sheet open={transferOpen} onOpenChange={setTransferOpen}>
-        <SheetContent className="nocturne w-full sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle className="text-base font-semibold">Transferir Estoque</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">De (vendedor origem)</Label>
-              <Select value={transferForm.fromSellerId} onValueChange={v => setTransferForm(f => ({ ...f, fromSellerId: v, assignmentId: "", quantity: "" }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
-                <SelectContent>
-                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {transferForm.fromSellerId && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Produto a transferir</Label>
-                {transferFromAssignments.length === 0 ? (
-                  <p className="text-xs text-muted-foreground rounded-lg border border-border p-3 text-center">Este vendedor não possui estoque atribuído.</p>
-                ) : (
-                  <Select value={transferForm.assignmentId} onValueChange={v => setTransferForm(f => ({ ...f, assignmentId: v, quantity: "" }))}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
-                    <SelectContent>
-                      {transferFromAssignments.map(a => (
-                        <SelectItem key={a.id} value={a.id}>{a.productLabel} — {a.quantity} un.</SelectItem>
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+            <section className="space-y-3">
+              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De onde sai e para quem vai</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Origem</Label>
+                  <Select value={moveFrom} onValueChange={v => { setMoveFrom(v); setMoveSelected({}); if (v === moveTo) setMoveTo(""); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="nocturne">
+                      <SelectItem value="casa">Estoque da casa</SelectItem>
+                      {sellers.map(s => {
+                        const held = productAssignments
+                          .filter(a => a.sellerId === s.id)
+                          .reduce((sum, a) => sum + a.quantity, 0);
+                        return (
+                          <SelectItem key={s.id} value={s.id} disabled={held <= 0}>
+                            {s.name} ({held} un.)
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Destino</Label>
+                  <Select value={moveTo} onValueChange={setMoveTo}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
+                    <SelectContent className="nocturne">
+                      {sellers.filter(s => s.id !== moveFrom).map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                </div>
               </div>
-            )}
+            </section>
 
-            {transferForm.assignmentId && (
-              <>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Para (vendedor destino)</Label>
-                  <Select value={transferForm.toSellerId} onValueChange={v => setTransferForm(f => ({ ...f, toSellerId: v }))}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
-                    <SelectContent>
-                      {sellers.filter(s => s.id !== transferForm.fromSellerId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Quantidade (máx. {transferMaxQty})</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max={transferMaxQty}
-                    value={transferForm.quantity}
-                    onChange={e => setTransferForm(f => ({ ...f, quantity: String(Math.max(1, Math.min(Number(e.target.value) || 1, transferMaxQty))) }))}
-                    className="h-9 mono"
-                  />
-                </div>
-              </>
-            )}
-
-            <Button
-              className="w-full"
-              onClick={submitTransfer}
-              disabled={!transferForm.assignmentId || !transferForm.toSellerId || !Number(transferForm.quantity)}
-            >
-              <ArrowLeftRight size={14} className="mr-1.5" />Transferir
-            </Button>
+            <section className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que mover</p>
+                <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
+                  {moveCount} selecionado{moveCount === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="max-h-80 overflow-y-auto rounded-lg" style={{ boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
+                {moveItems.length === 0 ? (
+                  <p className="p-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
+                    {moveFrom === "casa"
+                      ? "Todo o estoque da casa já está atribuído."
+                      : "Este vendedor não tem estoque para passar adiante."}
+                  </p>
+                ) : moveItems.map(item => {
+                  const checked = Object.prototype.hasOwnProperty.call(moveSelected, item.key);
+                  return (
+                    <div key={item.key} className="nc-row px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Checkbox id={`move-${item.key}`} checked={checked} onCheckedChange={c => toggleMoveItem(item.key, !!c)} />
+                        <label htmlFor={`move-${item.key}`} className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-xs">
+                          <span className="truncate">
+                            {item.flavor}
+                            <span style={{ color: "var(--nc-text-3)" }}> · {item.brand} {item.model}</span>
+                          </span>
+                          <span className="nc-num flex-none text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
+                            {item.available} disp.
+                          </span>
+                        </label>
+                      </div>
+                      {checked && (
+                        <Input
+                          type="number"
+                          min="1"
+                          max={item.available}
+                          value={moveSelected[item.key]}
+                          onChange={e => setMoveSelected(prev => ({
+                            ...prev,
+                            [item.key]: String(Math.max(1, Math.min(Number(e.target.value) || 1, item.available))),
+                          }))}
+                          aria-label={`Quantidade de ${item.flavor}`}
+                          className="nc-num ml-6 mt-1.5 h-7 w-24 text-xs"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           </div>
+
+          <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+            <div className="flex w-full items-center justify-between gap-3">
+              <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                {moveCount > 0
+                  ? <>Movendo <span className="nc-num font-medium">{moveUnits}</span> un. em {moveCount} produto{moveCount === 1 ? "" : "s"}</>
+                  : "Escolha a origem, o destino e os produtos"}
+              </p>
+              <NcButton variant="solid" size="md" onClick={submitMove} disabled={!canMove || moveSubmitting}>
+                {moveSubmitting ? "Movendo…" : "Mover"}
+              </NcButton>
+            </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
-      {/* Relatório do Vendedor */}
+      {/* Extrato completo do vendedor */}
       <SellerReportDrawer
         sellerId={extractFor}
         open={!!extractFor}
@@ -999,110 +1206,29 @@ export default function CommissionsPage() {
   );
 }
 
-function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: "income" | "expense" | "warning" | "fixed" }) {
+/**
+ * Cabeçalho de seção da coluna principal: sobretítulo terciário, uma linha de
+ * contexto e, se houver, um controle à direita. As três seções desta tela usam
+ * o mesmo, senão cada uma inventaria o próprio peso.
+ */
+function SectionHead({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-3 min-w-0">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-        <span className={cn(
-          tone === "income" && "text-income",
-          tone === "expense" && "text-expense",
-          tone === "warning" && "text-warning",
-          tone === "fixed" && "text-fixed",
-        )}>{icon}</span>
-        {label}
+    <div className="flex flex-wrap items-end justify-between gap-2">
+      <div className="min-w-0">
+        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>{title}</span>
+        {sub && <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>{sub}</p>}
       </div>
-      <p className={cn(
-        "mt-1 text-lg sm:text-xl font-semibold mono break-all",
-        tone === "expense" && "text-expense",
-        tone === "income" && "text-income",
-        tone === "warning" && "text-warning",
-        tone === "fixed" && "text-fixed",
-      )}>{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</p>}
+      {action}
     </div>
   );
 }
 
-function ProfitDistribution({ operatingProfit, stockReinvestment, freeCash, pendingCommissions, withdrawals, available }: {
-  operatingProfit: number; stockReinvestment: number; freeCash: number;
-  pendingCommissions: number; withdrawals: number; available: number;
-}) {
-  const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+/** Linha de conta: rótulo à esquerda, número tabular à direita. */
+function LedgerLine({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-4 gap-2">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">Distribuição do Lucro</h2>
-        </div>
-      </div>
-      <div className="space-y-1.5 text-[13px] max-w-xl">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Lucro Operacional</span>
-          <span className={cn("mono font-semibold", operatingProfit >= 0 ? "text-income" : "text-expense")}>{fmt(operatingProfit)}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">(−) Reinvestido em estoque</span>
-          <span className="mono text-fixed">−{fmt(stockReinvestment)}</span>
-        </div>
-        <div className="flex items-center justify-between border-t border-border/60 pt-1.5 mt-1.5">
-          <span className="font-medium">= Caixa Livre</span>
-          <span className={cn("mono font-semibold", freeCash >= 0 ? "text-income" : "text-expense")}>{fmt(freeCash)}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">(−) Comissões pendentes</span>
-          <span className="mono text-warning">−{fmt(pendingCommissions)}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">(−) Retiradas dos sócios</span>
-          <span className="mono text-fixed">−{fmt(withdrawals)}</span>
-        </div>
-        <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
-          <span className="font-semibold">Saldo disponível</span>
-          <span className={cn("mono font-bold text-base", available >= 0 ? "text-income" : "text-expense")}>{fmt(available)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function LegendItem({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-1.5">
-        <span className={cn("w-2 h-2 rounded-full shrink-0", color)} />
-        <span className="text-muted-foreground truncate">{label}</span>
-      </div>
-      <p className="mono font-semibold text-[12px] mt-0.5 truncate">{value}</p>
-    </div>
-  );
-}
-
-
-function Line({ label, value, tone }: { label: string; value: string; tone?: "income" | "warning" | "muted" }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn(
-        "mono font-semibold",
-        tone === "income" && "text-income",
-        tone === "warning" && "text-warning",
-        tone === "muted" && "text-muted-foreground",
-      )}>{value}</span>
-    </div>
-  );
-}
-
-function Mini({ label, value, tone, strong }: { label: string; value: string; tone?: "income" | "warning"; strong?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={cn(
-        "text-sm mono truncate",
-        strong && "font-semibold",
-        tone === "income" && "text-income",
-        tone === "warning" && "text-warning font-semibold",
-      )}>{value}</p>
+    <div className="flex items-center justify-between gap-2 text-[12.5px]">
+      <span style={{ color: "var(--nc-text-2)" }}>{label}</span>
+      <span className="nc-num" style={{ color: tone }}>{value}</span>
     </div>
   );
 }
