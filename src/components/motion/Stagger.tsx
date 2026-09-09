@@ -1,62 +1,45 @@
-import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
-import { Children } from "react";
-import { listItem, stagger, MAX_STAGGER_ITEMS } from "@/lib/motion";
+import { motion, type HTMLMotionProps } from "motion/react";
 
 type StaggerProps = HTMLMotionProps<"div"> & {
   children?: React.ReactNode;
-  /** intervalo entre filhos, em segundos */
+  /**
+   * Intervalo entre filhos, em segundos. Continua aceito para não quebrar as
+   * chamadas antigas, e é ignorado — ver o comentário abaixo.
+   */
   gap?: number;
 };
 
-/** Container que faz os filhos entrarem em cascata. */
-export function Stagger({ children, gap = 0.045, ...props }: StaggerProps) {
-  const reduce = useReducedMotion();
-  if (reduce) return <motion.div {...props}>{children}</motion.div>;
-
-  return (
-    <motion.div variants={stagger(gap)} initial="hidden" animate="visible" {...props}>
-      {children}
-    </motion.div>
-  );
+/**
+ * Container de lista.
+ *
+ * Já foi uma cascata: cada filho subia 8px no seu tempo, um atrás do outro. Não
+ * é mais. Ao abrir uma tela, quem sobe é o BLOCO INTEIRO, uma vez só — é o que
+ * o `PageTransition` faz com a página. Texto e card subindo cada um por conta
+ * faziam a tela parecer montar aos pedaços, e numa lista longa pareciam
+ * carregamento lento de um dado que já estava na mão.
+ *
+ * O componente continua existindo (e continua sendo um `motion.div`) porque ele
+ * carrega o `className` das listas e porque os filhos ainda animam a SAÍDA por
+ * dentro do `AnimatePresence` — o que sai quando alguém exclui uma linha.
+ */
+export function Stagger({ children, gap: _gap, ...props }: StaggerProps) {
+  return <motion.div {...props}>{children}</motion.div>;
 }
 
-/** Item de uma cascata. Deve estar dentro de <Stagger>. */
+/** Item de uma lista. Sem entrada própria; ver `Stagger`. */
 export function StaggerItem({ children, ...props }: HTMLMotionProps<"div"> & { children?: React.ReactNode }) {
-  const reduce = useReducedMotion();
-  if (reduce) return <motion.div {...props}>{children}</motion.div>;
-
-  return (
-    <motion.div variants={listItem} {...props}>
-      {children}
-    </motion.div>
-  );
+  return <motion.div {...props}>{children}</motion.div>;
 }
 
 /**
- * Container em cascata que embrulha automaticamente cada filho direto.
- * Útil quando os filhos são elementos simples (divs/cards) já existentes.
- * Só os primeiros `max` filhos animam, para não pesar em listas longas.
+ * Mesma coisa do `Stagger` para quem passa filhos soltos. `max` continua na
+ * assinatura pelo mesmo motivo do `gap`: era o limite de itens animados.
  */
 export function StaggerAuto({
   children,
-  gap = 0.045,
-  max = MAX_STAGGER_ITEMS,
+  gap: _gap,
+  max: _max,
   ...props
 }: StaggerProps & { max?: number }) {
-  const reduce = useReducedMotion();
-  if (reduce) return <motion.div {...props}>{children}</motion.div>;
-
-  return (
-    <motion.div variants={stagger(gap)} initial="hidden" animate="visible" {...props}>
-      {Children.toArray(children).map((child, i) =>
-        i < max ? (
-          <motion.div key={i} variants={listItem}>
-            {child}
-          </motion.div>
-        ) : (
-          child
-        ),
-      )}
-    </motion.div>
-  );
+  return <motion.div {...props}>{children}</motion.div>;
 }

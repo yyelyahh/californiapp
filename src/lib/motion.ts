@@ -46,9 +46,18 @@ export const stagger = (staggerChildren = 0.045, delayChildren = 0.02): Variants
 
 export const staggerContainer: Variants = stagger();
 
+/**
+ * Item de lista. A ENTRADA é neutra de propósito: quem sobe ao abrir uma tela é
+ * o bloco inteiro (`PageTransition`), uma vez só. Linha e card subindo cada um
+ * no seu tempo davam a impressão de a tela montar aos pedaços — e, numa lista
+ * de vinte linhas, de estar carregando devagar quando o dado já estava lá.
+ *
+ * A SAÍDA continua: ela não é entrada de tela, é a resposta a um clique. A
+ * linha excluída precisa sumir de onde estava para a exclusão ser visível.
+ */
 export const listItem: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: transitionBase },
+  hidden: { opacity: 1, y: 0 },
+  visible: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -4, height: 0, marginTop: 0, transition: transitionFast },
 };
 
