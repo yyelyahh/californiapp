@@ -12,6 +12,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { transitionBase } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type NcButtonVariant = "solid" | "outline" | "quiet" | "ghost" | "danger";
 type NcButtonSize = "sm" | "md" | "icon";
@@ -100,17 +101,21 @@ export function NcSheetHeader({
 }
 
 /**
- * Chips de período com o realce accent como peça única: em vez de cada chip
- * desenhar a própria moldura, só o ativo renderiza o `motion.span` com
- * `layoutId`, então o motion anima o realce deslizando do chip antigo pro novo.
- * Mesmo padrão do `SegmentedToggle` / `BrandChips` da loja.
+ * Escolha de UMA opção entre poucas, com o realce accent como peça única: em vez
+ * de cada chip desenhar a própria moldura, só o ativo renderiza o `motion.span`
+ * com `layoutId`, então o motion anima o realce deslizando do chip antigo pro
+ * novo. Mesmo padrão do `SegmentedToggle` / `BrandChips` da loja.
  *
- * Nasceu dentro do Dashboard; virou peça compartilhada quando a tela de Entrada
- * precisou do mesmo filtro. Nenhum chip ativo (`value` fora da lista, como o
- * intervalo personalizado da Entrada) é estado válido: o realce simplesmente
- * não aparece.
+ * Nasceu dentro do Dashboard como `PeriodChips` e virou peça compartilhada
+ * quando a Entrada precisou do mesmo filtro. Ganhou o nome atual quando a
+ * Distribuição usou a mesma peça para filtrar o histórico por TIPO de
+ * lançamento: o desenho nunca foi sobre período, e um nome que promete data
+ * mandaria a próxima tela desenhar o seu.
+ *
+ * Nenhum chip ativo (`value` fora da lista, como o intervalo personalizado da
+ * Entrada) é estado válido: o realce simplesmente não aparece.
  */
-export function PeriodChips({
+export function SegmentedChips({
   options,
   value,
   onChange,
@@ -152,5 +157,66 @@ export function PeriodChips({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Abas do painel: sem cápsula, só o rótulo e um fio accent embaixo do ativo. O
+ * fio é um `motion.span` com `layoutId` — a mesma mecânica do realce dos chips,
+ * pelo mesmo motivo: ele desliza de uma aba à outra em vez de apagar aqui e
+ * acender ali.
+ *
+ * Nasceu dentro da SalesPage (Vendas / Retiradas / Pedidos) e virou peça quando
+ * o Extrato do vendedor precisou das mesmas abas. `count` é opcional: a Sales
+ * mostra quantos itens tem cada aba, o Extrato não tem número que valha o
+ * espaço.
+ *
+ * Vai dentro de um `<Tabs>` do Radix, que é quem guarda o estado — este
+ * componente só precisa saber qual é o ativo para pintar.
+ */
+export function NcTabsList({
+  tabs,
+  value,
+  className,
+}: {
+  tabs: { value: string; label: string; count?: number }[];
+  value: string;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  const underlineId = useId();
+
+  return (
+    <TabsList
+      className={cn("h-auto w-full justify-start gap-5 rounded-none bg-transparent p-0", className)}
+      style={{ borderBottom: "1px solid var(--nc-track)" }}
+    >
+      {tabs.map(t => {
+        const active = t.value === value;
+        return (
+          <TabsTrigger
+            key={t.value}
+            value={t.value}
+            className="relative rounded-none bg-transparent px-0 pb-2.5 pt-0 text-[13px] shadow-none transition-colors data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+            style={{ color: active ? "var(--nc-accent)" : "var(--nc-text-3)" }}
+          >
+            {t.label}
+            {t.count !== undefined && (
+              <span className="nc-num ml-1.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                {t.count}
+              </span>
+            )}
+            {active && (
+              <motion.span
+                layoutId={reduce ? undefined : underlineId}
+                className="absolute inset-x-0 -bottom-px h-[2px]"
+                style={{ background: "var(--nc-accent)" }}
+                transition={transitionBase}
+              />
+            )}
+          </TabsTrigger>
+        );
+      })}
+    </TabsList>
   );
 }
