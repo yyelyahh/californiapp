@@ -122,13 +122,23 @@ function AuthGate() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/loja/:sellerId" element={<SellerStorePage />} />
+        <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
         {/* Já logado em /login vai direto para a tela do próprio papel. Mandar
             todo mundo para /dashboard funcionava (o vendedor ricocheteava de
             lá para a tela dele), mas era um redirect a mais no caminho de quem
             acabou de entrar. */}
         <Route
           path="/login"
-          element={user ? <Navigate to={role === "seller" ? "/minhas-vendas" : "/dashboard"} replace /> : <LoginPage />}
+          element={
+            user ? (
+              <Navigate
+                to={safeNextPath() ?? (role === "seller" ? "/minhas-vendas" : "/dashboard")}
+                replace
+              />
+            ) : (
+              <LoginPage />
+            )
+          }
         />
         <Route path="/*" element={<ProtectedRoutes />} />
       </Routes>
