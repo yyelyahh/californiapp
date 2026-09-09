@@ -20,7 +20,6 @@ import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
 import InsightsPage from "@/pages/InsightsPage";
 import LoginPage from "@/pages/LoginPage";
-import LandingPage from "@/pages/LandingPage";
 import SellerStorePage from "@/pages/SellerStorePage";
 import OAuthConsent from "@/pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
@@ -119,8 +118,11 @@ function AuthGate() {
 
   return (
     <Suspense fallback={<PageFallback />}>
+      {/* `/` não tem tela própria: a raiz cai em `ProtectedRoutes` pelo `/*`
+          abaixo, que manda para o login ou para a tela do papel de quem já está
+          logado. Havia ali um catálogo público (`LandingPage`), removido por
+          não ser usado — a loja de verdade é `/loja/:sellerId`, e essa fica. */}
       <Routes>
-        <Route path="/" element={<LandingPage />} />
         <Route path="/loja/:sellerId" element={<SellerStorePage />} />
         <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
         {/* Já logado em /login vai direto para a tela do próprio papel. Mandar
