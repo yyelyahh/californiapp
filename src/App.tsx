@@ -22,6 +22,7 @@ import InsightsPage from "@/pages/InsightsPage";
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
 import SellerStorePage from "@/pages/SellerStorePage";
+import OAuthConsent from "@/pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
 
 const PageFallback = () => null;
@@ -93,6 +94,18 @@ function ProtectedRoutes() {
   );
 }
 
+/**
+ * Destino de retorno preservado em `?next=`. Só aceita caminho relativo do
+ * próprio app — assim o link de autorização não vira um redirecionamento
+ * aberto para fora.
+ */
+function safeNextPath(): string | null {
+  const raw = new URLSearchParams(window.location.search).get("next");
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 function AuthGate() {
   const { user, loading, role } = useAuth();
 
@@ -109,13 +122,23 @@ function AuthGate() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/loja/:sellerId" element={<SellerStorePage />} />
+        <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
         {/* Já logado em /login vai direto para a tela do próprio papel. Mandar
             todo mundo para /dashboard funcionava (o vendedor ricocheteava de
             lá para a tela dele), mas era um redirect a mais no caminho de quem
             acabou de entrar. */}
         <Route
           path="/login"
-          element={user ? <Navigate to={role === "seller" ? "/minhas-vendas" : "/dashboard"} replace /> : <LoginPage />}
+          element={
+            user ? (
+              <Navigate
+                to={safeNextPath() ?? (role === "seller" ? "/minhas-vendas" : "/dashboard")}
+                replace
+              />
+            ) : (
+              <LoginPage />
+            )
+          }
         />
         <Route path="/*" element={<ProtectedRoutes />} />
       </Routes>

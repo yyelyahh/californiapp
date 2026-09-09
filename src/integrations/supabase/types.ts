@@ -973,7 +973,11 @@ export type Database = {
     }
     Functions: {
       confirm_order: {
-        Args: { p_notes?: string; p_order_id: string; p_payment_method?: string }
+        Args: {
+          p_notes?: string
+          p_order_id: string
+          p_payment_method?: string
+        }
         Returns: undefined
       }
       create_pending_order: {
@@ -1085,6 +1089,7 @@ export type Database = {
         Args: { p_product_id: string; p_quantity: number }
         Returns: number
       }
+      order_reservation_ttl: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin" | "seller"
