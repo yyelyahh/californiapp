@@ -26,8 +26,13 @@ export default defineTool({
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
 
     const needle = seller_name?.trim().toLowerCase();
+    const sellerNameOf = (row: { sellers: unknown }) => {
+      const rel = row.sellers as { name?: string } | { name?: string }[] | null;
+      const first = Array.isArray(rel) ? rel[0] : rel;
+      return first?.name ?? "";
+    };
     const rows = (data ?? []).filter((r) =>
-      needle ? (r.sellers?.name ?? "").toLowerCase().includes(needle) : true,
+      needle ? sellerNameOf(r).toLowerCase().includes(needle) : true,
     );
     return {
       content: [{ type: "text", text: JSON.stringify(rows) }],

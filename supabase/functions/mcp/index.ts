@@ -198,8 +198,13 @@ var seller_stock_default = defineTool4({
     const { data, error } = await supabase.from("product_assignments").select("quantity, sellers(name), products(brand, model, flavor, sale_price)").gt("quantity", 0).limit(Math.min(Math.max(limit ?? 200, 1), 500));
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
     const needle = seller_name?.trim().toLowerCase();
+    const sellerNameOf = (row) => {
+      const rel = row.sellers;
+      const first = Array.isArray(rel) ? rel[0] : rel;
+      return first?.name ?? "";
+    };
     const rows = (data ?? []).filter(
-      (r) => needle ? (r.sellers?.name ?? "").toLowerCase().includes(needle) : true
+      (r) => needle ? sellerNameOf(r).toLowerCase().includes(needle) : true
     );
     return {
       content: [{ type: "text", text: JSON.stringify(rows) }],
