@@ -22,6 +22,7 @@ import InsightsPage from "@/pages/InsightsPage";
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
 import SellerStorePage from "@/pages/SellerStorePage";
+import OAuthConsent from "@/pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
 
 const PageFallback = () => null;
@@ -91,6 +92,18 @@ function ProtectedRoutes() {
       </AppLayout>
     </StoreProvider>
   );
+}
+
+/**
+ * Destino de retorno preservado em `?next=`. Só aceita caminho relativo do
+ * próprio app — assim o link de autorização não vira um redirecionamento
+ * aberto para fora.
+ */
+function safeNextPath(): string | null {
+  const raw = new URLSearchParams(window.location.search).get("next");
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
 }
 
 function AuthGate() {
