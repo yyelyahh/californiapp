@@ -43,7 +43,7 @@ const allNavItems = [
  *
  * Ao migrar uma tela nova para o Nocturne, adicione a rota dela aqui.
  */
-const fullBleedRoutes = new Set(["/dashboard", "/products", "/stock", "/losses"]);
+const fullBleedRoutes = new Set(["/dashboard", "/products", "/stock", "/losses", "/sales"]);
 
 /** Atalhos da barra inferior no celular. */
 const bottomBarRoutes = ["/dashboard", "/products", "/sales", "/commissions"];

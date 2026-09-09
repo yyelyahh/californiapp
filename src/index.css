@@ -222,6 +222,13 @@
     --nc-alert: #EF9F27;   /* alerta: a receber, deltas negativos */
     --nc-crit: #F09595;    /* crítico: estoque prestes a acabar */
     --nc-profit: #9184d9;  /* série de lucro no gráfico */
+    /* Dinheiro que JÁ entrou: venda quitada, valor recebido. O accent também é
+     * dinheiro, mas é o dinheiro todo (receita) — o verde é o pedaço dele que
+     * já está na mão, e ao lado do --nc-alert ("falta receber") a leitura fica
+     * imediata. Mesma matiz do --income que o app já usava (hsl 152), só que
+     * trazida para o peso pastel dos outros tokens daqui: o #33CC7A original
+     * grita ao lado de um #85B7EB. */
+    --nc-ok: #81CFA8;
   }
 
   .nocturne {
@@ -406,6 +413,51 @@
   .nc-btn--danger:hover:not(:disabled) {
     color: var(--nc-crit);
     background: color-mix(in srgb, var(--nc-crit) 12%, transparent);
+  }
+
+  /* Selo de situação: pílula de 10,5px com preenchimento a 12% da própria cor.
+     Serve tanto para estado (Pago/Parcial/Aberto) quanto para forma de
+     pagamento, que são a mesma coisa vista de dois ângulos. A cor vem da
+     modificadora, não de quem usa — dois selos com o mesmo tom têm que
+     significar a mesma coisa em qualquer tela. */
+  .nc-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 10.5px;
+    line-height: 1.5;
+    white-space: nowrap;
+    transition: color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+  }
+  .nc-pill--paid {
+    color: var(--nc-ok);
+    background: color-mix(in srgb, var(--nc-ok) 14%, transparent);
+  }
+  .nc-pill--partial {
+    color: var(--nc-alert);
+    background: color-mix(in srgb, var(--nc-alert) 12%, transparent);
+  }
+  .nc-pill--open {
+    color: var(--nc-crit);
+    background: color-mix(in srgb, var(--nc-crit) 12%, transparent);
+  }
+  .nc-pill--mute {
+    color: var(--nc-text-3);
+    background: color-mix(in srgb, var(--nc-text) 7%, transparent);
+  }
+
+  /* O selo "Aberto" da SalesPage também é o botão que dá baixa na venda. Ele
+     não muda de forma no hover: vira exatamente o selo "Pago" que o clique vai
+     produzir, então o hover é a pré-visualização do resultado. `data-state` é
+     do PopoverTrigger do Radix — enquanto o popover de forma de pagamento está
+     aberto o ponteiro já saiu do selo, e sem isto ele voltaria a "Aberto" no
+     meio da escolha. */
+  .nc-pill--action:hover,
+  .nc-pill--action[data-state="open"] {
+    color: var(--nc-ok);
+    background: color-mix(in srgb, var(--nc-ok) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nc-ok) 45%, transparent);
   }
 
   /* Campo de texto. O foco não ganha anel próprio: `.nocturne :focus-visible`
