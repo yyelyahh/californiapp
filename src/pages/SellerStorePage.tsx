@@ -107,6 +107,18 @@ interface Loyalty {
   loyalty_tier: string;
 }
 
+/**
+ * A foto do modelo. Todas as linhas do mesmo modelo devolvem a MESMA url —
+ * `get_seller_catalog` lê a foto de `product_model_images`, que é a tabela com
+ * a chave certa (marca+modelo), e só cai em `products.image_url` quando não há
+ * foto cadastrada.
+ *
+ * Enquanto a foto vinha da coluna por sabor, esta função era um sorteio: ela
+ * pega o primeiro sabor COM imagem, na ordem (brand, flavor) que a function
+ * devolve, e bastava um sabor com url velha em ordem alfabética anterior para
+ * ele mandar na foto do modelo inteiro. Ver a migration
+ * 20260909140000_foto_do_modelo_manda_no_catalogo.
+ */
 function firstModelImage(rows: CatalogRow[]) {
   for (const r of rows) if (r.image_url) return r.image_url;
   return null;
