@@ -1053,17 +1053,6 @@ export type Database = {
           purchase_price: number
         }[]
       }
-      get_public_catalog: {
-        Args: never
-        Returns: {
-          brand: string
-          flavor: string
-          id: string
-          model: string
-          name: string
-          stock: number
-        }[]
-      }
       get_seller_catalog: {
         Args: { p_seller_id: string }
         Returns: {
