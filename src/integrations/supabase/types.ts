@@ -1079,6 +1079,10 @@ export type Database = {
         Returns: number
       }
       order_reservation_ttl: { Args: never; Returns: string }
+      set_model_image: {
+        Args: { p_brand: string; p_image_url: string; p_model: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "seller"
