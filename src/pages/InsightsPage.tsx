@@ -9,6 +9,7 @@ import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
 import { SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { currentMonthRange } from "@/lib/date-utils";
+import { formatCurrency as fmtCurrency, formatCurrencyShort as fmtCurrencyShort } from "@/lib/currency";
 
 type Period = "month" | "lastMonth" | "custom";
 type ProfitSort = "abs" | "margin";
@@ -38,13 +39,6 @@ const MAX_RANK_ROWS = 10;
 
 /** Quantas marcas cabem na lista do trilho. */
 const MAX_RAIL_ROWS = 6;
-
-const fmtCurrency = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-const fmtCurrencyShort = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
 
 const fmtPct = (v: number) => `${(v * 100).toFixed(0)}%`;
 

@@ -11,6 +11,7 @@ import { todayDateString, localDateToISO } from "@/lib/date-utils";
 import { AnimatePresence, motion } from "motion/react";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
+import { formatCurrency } from "@/lib/currency";
 
 type PaymentMethodValue =
   | "pix"
@@ -19,10 +20,6 @@ type PaymentMethodValue =
   | "dinheiro_pendente"
   | "dinheiro_com_vendedor"
   | "pendente";
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
 
 interface Line {
   key: string;

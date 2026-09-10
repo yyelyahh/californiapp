@@ -16,6 +16,16 @@ import { toast } from "sonner";
 import { compareCatalog } from "@/lib/catalog-order";
 import { NcButton } from "@/components/nocturne";
 
+/**
+ * A MESMA chave que get_seller_catalog usa para casar a foto com o sabor: sem
+ * espaço nas pontas e sem caixa. Enquanto a tela agrupava por igualdade exata
+ * e o banco casava normalizado, "Ignite" e "ignite" eram um modelo só para a
+ * loja e dois para quem cadastra — e a foto que a pessoa apagava não era a que
+ * a loja estava mostrando.
+ */
+const modelKey = (brand?: string | null, model?: string | null) =>
+  `${(brand ?? "").trim().toLowerCase()}|||${(model ?? "").trim().toLowerCase()}`;
+
 export default function ModelImagesDialog() {
   const { products } = useStore();
   const [open, setOpen] = useState(false);
@@ -29,7 +39,7 @@ export default function ModelImagesDialog() {
     products.forEach(p => {
       const brand = (p.brand || "").trim();
       const model = (p.model || "").trim();
-      const key = `${brand}|||${model}`;
+      const key = modelKey(brand, model);
       const cur = map.get(key);
       if (cur) cur.flavors += 1;
       else map.set(key, { brand, model, flavors: 1 });
@@ -44,14 +54,22 @@ export default function ModelImagesDialog() {
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const { data, error } = await supabase.from("product_model_images").select("*");
+      // Mais recente primeiro, e a primeira vence: é o desempate que
+      // get_seller_catalog faz (ORDER BY created_at DESC). Sem ele, com linha
+      // duplicada a tela mostrava uma foto e a loja outra, sem nada explicando.
+      const { data, error } = await supabase
+        .from("product_model_images")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (cancelled) return;
       if (error) {
         toast.error("Erro ao carregar fotos", { description: error.message });
       } else {
         const next: Record<string, string> = {};
         (data ?? []).forEach(r => {
-          next[`${(r.brand || "").trim()}|||${(r.model || "").trim()}`] = r.image_url || "";
+          const key = modelKey(r.brand, r.model);
+          if (key in next) return;
+          next[key] = r.image_url || "";
         });
         setUrls(next);
         setInitial(next);
@@ -66,21 +84,17 @@ export default function ModelImagesDialog() {
     if (url === (initial[key] ?? "")) return;
     setSavingKey(key);
     try {
-      if (!url) {
-        const { error } = await supabase
-          .from("product_model_images")
-          .delete()
-          .eq("brand", brand)
-          .eq("model", model);
-        if (error) throw error;
-        toast.success("Foto removida");
-      } else {
-        const { error } = await supabase
-          .from("product_model_images")
-          .upsert({ brand, model, image_url: url }, { onConflict: "brand,model" });
-        if (error) throw error;
-        toast.success("Foto salva");
-      }
+      // Porta única de escrita (migration 20260910120000): ela resolve
+      // marca+modelo pela mesma chave normalizada da leitura, apaga o que casa
+      // e deixa UMA linha. O delete/upsert por igualdade exata que estava aqui
+      // errava a linha quando a caixa não batia — e ainda avisava "Foto
+      // removida" com a foto continuando no ar. URL vazia = remover.
+      // O cast sai quando `set_model_image` aparecer no types.ts regerado.
+      const { error } = await (supabase.rpc as unknown as
+        (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+      )("set_model_image", { p_brand: brand, p_model: model, p_image_url: url });
+      if (error) throw error;
+      toast.success(url ? "Foto salva" : "Foto removida");
       setInitial(prev => ({ ...prev, [key]: url }));
     } catch (e) {
       toast.error("Erro ao salvar foto", { description: e instanceof Error ? e.message : undefined });

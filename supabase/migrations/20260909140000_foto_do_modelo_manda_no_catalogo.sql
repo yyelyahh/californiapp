@@ -30,9 +30,8 @@
 --     marca+modelo (o upsert usa onConflict "brand,model" e depende dessa
 --     unicidade existir no banco), vale a mais recente, não uma qualquer.
 --
--- ANTES DE APLICAR: product_model_images nunca apareceu em migration nenhuma —
--- foi criada direto no SQL Editor. Confirme que o corpo vivo desta função é o
--- mesmo em que este arquivo se baseia (20260908103500) antes de substituir:
+-- ANTES DE APLICAR: confirme que o corpo vivo desta função é o mesmo em que
+-- este arquivo se baseia (20260908103500) antes de substituir:
 --   SELECT prosrc FROM pg_proc WHERE proname = 'get_seller_catalog';
 -- Só a expressão de image_url muda aqui; o resto do corpo é cópia.
 --
@@ -52,6 +51,44 @@
 --         AND lower(btrim(coalesce(pmi.model,''))) = lower(btrim(coalesce(p.model,'')))
 --    );
 -- ============================================================
+
+-- ------------------------------------------------------------
+-- A tabela vem ANTES da função que a lê
+-- ------------------------------------------------------------
+-- product_model_images nasceu no SQL Editor e nunca teve migration nenhuma.
+-- O corpo desta função é validado na hora do CREATE (check_function_bodies vem
+-- ligado), então um banco novo — `supabase db reset`, CI, ambiente novo —
+-- parava exatamente aqui, com
+--     relation "public.product_model_images" does not exist
+-- e junto com ele parava toda migration posterior. No banco que já existe o
+-- IF NOT EXISTS não encosta em nada.
+CREATE TABLE IF NOT EXISTS public.product_model_images (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand      text NOT NULL,
+  model      text NOT NULL DEFAULT '',
+  image_url  text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- O upsert do diálogo (onConflict "brand,model") depende desta unicidade
+-- existir. Quem já tem a tabela viva já tem a restrição — é ela que faz o
+-- upsert funcionar hoje.
+CREATE UNIQUE INDEX IF NOT EXISTS product_model_images_brand_model_key
+  ON public.product_model_images (brand, model);
+
+ALTER TABLE public.product_model_images ENABLE ROW LEVEL SECURITY;
+
+-- Só o admin cadastra foto — o diálogo vive dentro da tela de Produtos. A loja
+-- não lê esta tabela direto: quem lê é get_seller_catalog, que é SECURITY
+-- DEFINER e por isso passa por cima da RLS.
+DROP POLICY IF EXISTS "Admins manage product_model_images" ON public.product_model_images;
+CREATE POLICY "Admins manage product_model_images" ON public.product_model_images
+  FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.product_model_images TO authenticated;
+GRANT ALL ON public.product_model_images TO service_role;
 
 CREATE OR REPLACE FUNCTION public.get_seller_catalog(p_seller_id uuid)
 RETURNS TABLE(

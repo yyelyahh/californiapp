@@ -12,15 +12,7 @@ import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
 import { NcButton, NcSheetHeader, Rule, EYEBROW } from "@/components/nocturne";
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
-}
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /** Quantos modelos cabem na lista do trilho antes de virar "+ N outros". */
 const MAX_TOP_MODELS = 6;

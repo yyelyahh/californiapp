@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useStore } from "@/context/StoreContext";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { Users, Landmark, Plus, Trash2, Wallet } from "lucide-react";
+import { Plus, Trash2, Wallet } from "lucide-react";
 import { formatDateBR, todayDateString, localDateToISO } from "@/lib/date-utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,15 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { NcButton, NcSheetHeader, Rule, EYEBROW } from "@/components/nocturne";
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
-}
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /** Quantos sócios cabem na lista do trilho antes de virar "+ N outros". */
 const MAX_RAIL_ROWS = 6;
@@ -34,7 +26,6 @@ export default function FinancePage() {
     addPartnerContribution, deletePartnerContribution,
     addLoan, deleteLoan, addLoanPayment,
     getPartnerCapital, getLoansOutstanding,
-    getLoanPaid, getLoanRemaining,
     getCash, getInventoryCostValue, getReceivables,
   } = useStore();
   const confirm = useConfirm();
@@ -43,13 +34,15 @@ export default function FinancePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const partnerCapital = getPartnerCapital();
-  const loansOutstanding = getLoansOutstanding();
+  /** Só o PRINCIPAL que ainda não voltou — é o que o razão carrega em `loan_delta`. */
+  const principalOutstanding = getLoansOutstanding();
   const cash = getCash();
   const inventory = getInventoryCostValue();
   const receivables = getReceivables();
 
-  /** De onde veio o dinheiro que não é venda: sócio ou credor. */
-  const funding = partnerCapital + loansOutstanding;
+  /** De onde veio o dinheiro que não é venda: sócio ou credor. Principal, não
+   *  o total com juros — juro nenhum entrou como dinheiro. */
+  const funding = partnerCapital + principalOutstanding;
 
   const sortedContributions = useMemo(
     () => [...partnerContributions].sort((a, b) => b.date.localeCompare(a.date)),
@@ -71,19 +64,50 @@ export default function FinancePage() {
   const loanRows = useMemo(() => {
     return loans
       .map(l => {
-        const total = l.principal + l.interestAmount;
-        const paid = getLoanPaid(l.id);
-        const remaining = getLoanRemaining(l.id);
-        return { ...l, total, paid, remaining, settled: remaining <= 0.01, payments: loanPayments.filter(p => p.loanId === l.id).length };
+        const mine = loanPayments.filter(p => p.loanId === l.id);
+        const principalPaid = mine.reduce((s, p) => s + p.principalAmount, 0);
+        const interestPaidHere = mine.reduce((s, p) => s + p.interestAmount, 0);
+        // Principal e juro andam separados porque o razão os trata assim
+        // (`loan_delta` x `accumulated_profit_delta`). Subtrair a soma dos dois
+        // de um total único deixava um pagamento só de juro abatendo dívida que
+        // ainda existe — e era daí que saía a sugestão errada do formulário.
+        const principalRemaining = Math.max(0, l.principal - principalPaid);
+        const interestRemaining = Math.max(0, l.interestAmount - interestPaidHere);
+        const remaining = principalRemaining + interestRemaining;
+        return {
+          ...l,
+          total: l.principal + l.interestAmount,
+          paid: principalPaid + interestPaidHere,
+          principalRemaining,
+          interestRemaining,
+          remaining,
+          settled: remaining <= 0.01,
+          payments: mine.length,
+        };
       })
       // Em aberto primeiro: quitado é histórico, não é decisão de hoje.
       .sort((a, b) => Number(a.settled) - Number(b.settled) || b.remaining - a.remaining);
-  }, [loans, loanPayments, getLoanPaid, getLoanRemaining]);
+  }, [loans, loanPayments]);
 
   const interestPaid = useMemo(
     () => loanPayments.reduce((s, p) => s + p.interestAmount, 0),
     [loanPayments],
   );
+
+  /** Juro combinado que ainda não foi pago — a metade que o razão não carrega. */
+  const interestRemaining = useMemo(
+    () => loanRows.reduce((s, l) => s + l.interestRemaining, 0),
+    [loanRows],
+  );
+
+  /**
+   * "Ainda a devolver" da tela inteira: o principal do razão MAIS o juro que
+   * falta. O cabeçalho da seção e o trilho liam só o principal enquanto cada
+   * linha mostrava principal + juro, então a mesma frase valia dois números na
+   * mesma tela — e dava para um empréstimo aparecer "Quitado" com saldo vivo
+   * na coluna do lado.
+   */
+  const loansRemaining = principalOutstanding + interestRemaining;
 
   /* ---------------- Formulários ---------------- */
   const [contribForm, setContribForm] = useState({ partnerId: "", amount: "", date: todayDateString(), notes: "" });
@@ -95,11 +119,18 @@ export default function FinancePage() {
 
   const closePanel = () => setPanel(null);
 
-  const openPay = (loanId: string, remaining: number) => {
-    setPanel({ loanId });
-    // Sugere quitar: o principal recebe o que falta, os juros ficam com a
-    // pessoa, porque só ela sabe quanto do acerto é juro.
-    setPayForm({ principalAmount: remaining > 0.01 ? remaining.toFixed(2) : "", interestAmount: "", date: todayDateString(), notes: "" });
+  const openPay = (loan: { id: string; principalRemaining: number; interestRemaining: number }) => {
+    setPanel({ loanId: loan.id });
+    // Sugere quitar, com cada metade no seu campo. Antes o principal vinha com
+    // o que falta INTEIRO, juro incluído: aceitar a sugestão lançava juro como
+    // abatimento de principal, o razão via -1100 contra +1000, "Ainda a
+    // devolver" ia a negativo e o juro nunca abatia o lucro acumulado.
+    setPayForm({
+      principalAmount: loan.principalRemaining > 0.01 ? loan.principalRemaining.toFixed(2) : "",
+      interestAmount: loan.interestRemaining > 0.01 ? loan.interestRemaining.toFixed(2) : "",
+      date: todayDateString(),
+      notes: "",
+    });
   };
 
   const contribAmount = Number(contribForm.amount) || 0;
@@ -107,7 +138,8 @@ export default function FinancePage() {
   const loanInterest = Number(loanForm.interestAmount) || 0;
   const payTotal = (Number(payForm.principalAmount) || 0) + (Number(payForm.interestAmount) || 0);
 
-  const submitContrib = async () => {
+  const submitContrib = async (e: FormEvent) => {
+    e.preventDefault();
     if (!contribForm.partnerId || contribAmount <= 0) return;
     setSubmitting(true);
     await addPartnerContribution({
@@ -121,7 +153,8 @@ export default function FinancePage() {
     closePanel();
   };
 
-  const submitLoan = async () => {
+  const submitLoan = async (e: FormEvent) => {
+    e.preventDefault();
     if (!loanForm.lenderName.trim() || loanPrincipal <= 0) return;
     setSubmitting(true);
     await addLoan({
@@ -136,7 +169,8 @@ export default function FinancePage() {
     closePanel();
   };
 
-  const submitPay = async () => {
+  const submitPay = async (e: FormEvent) => {
+    e.preventDefault();
     if (!openLoanId || payTotal <= 0) return;
     setSubmitting(true);
     await addLoanPayment({
@@ -232,7 +266,7 @@ export default function FinancePage() {
         <section className="flex flex-col gap-2">
           <SectionHead
             title="Empréstimos"
-            sub={loansOutstanding > 0.01 ? `${formatCurrency(loansOutstanding)} ainda a devolver` : "Nada em aberto"}
+            sub={loansRemaining > 0.01 ? `${formatCurrency(loansRemaining)} ainda a devolver` : "Nada em aberto"}
           />
           {loanRows.length === 0 ? (
             <div className="nc-card py-12 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
@@ -263,7 +297,7 @@ export default function FinancePage() {
                           {formatCurrency(l.remaining)}
                         </span>
                         {!l.settled && (
-                          <NcButton variant="quiet" onClick={() => openPay(l.id, l.remaining)}>
+                          <NcButton variant="quiet" onClick={() => openPay(l)}>
                             Pagamento
                           </NcButton>
                         )}
@@ -363,13 +397,13 @@ export default function FinancePage() {
             <>
               <div className="flex h-[5px] gap-0.5">
                 <div style={{ flex: Math.max(partnerCapital, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
-                {loansOutstanding > 0.01 && (
-                  <div style={{ flex: loansOutstanding, background: "var(--nc-alert)", borderRadius: 2 }} />
+                {principalOutstanding > 0.01 && (
+                  <div style={{ flex: principalOutstanding, background: "var(--nc-alert)", borderRadius: 2 }} />
                 )}
               </div>
               <div className="nc-num mt-1.5 flex justify-between gap-2 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
                 <span>sócios {formatCurrencyShort(partnerCapital)}</span>
-                <span style={{ color: "var(--nc-alert)" }}>emprestado {formatCurrencyShort(loansOutstanding)}</span>
+                <span style={{ color: "var(--nc-alert)" }}>principal {formatCurrencyShort(principalOutstanding)}</span>
               </div>
             </>
           )}
@@ -384,15 +418,21 @@ export default function FinancePage() {
           </div>
           <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
             <span className="text-[12.5px]">Ainda a devolver</span>
-            <span style={{ color: loansOutstanding > 0.01 ? "var(--nc-alert)" : undefined }}>
+            <span style={{ color: loansRemaining > 0.01 ? "var(--nc-alert)" : undefined }}>
               <AnimatedNumber
-                value={loansOutstanding}
+                value={loansRemaining}
                 format={formatCurrencyShort}
                 duration={0.7}
                 animateOnMount
                 className="nc-num text-xl font-semibold"
               />
             </span>
+          </div>
+          {/* As duas metades, porque só uma delas aparece na barra acima: lá
+              está o principal, que é o dinheiro que de fato entrou. */}
+          <div className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+            <span>principal {formatCurrencyShort(principalOutstanding)}</span>
+            <span>juros {formatCurrencyShort(interestRemaining)}</span>
           </div>
           <div className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
             <span>juros já pagos</span>
@@ -442,7 +482,7 @@ export default function FinancePage() {
             title="Aporte de sócio"
             description="Dinheiro que o sócio põe na operação. Não volta como dívida — vira capital."
           />
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <form id="form-aporte" onSubmit={submitContrib} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quem e quanto</p>
               <div className="space-y-1.5">
@@ -469,7 +509,7 @@ export default function FinancePage() {
                 <Input value={contribForm.notes} onChange={e => setContribForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
               </div>
             </section>
-          </div>
+          </form>
           <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
             <div className="flex w-full items-center justify-between gap-3">
               <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
@@ -477,7 +517,7 @@ export default function FinancePage() {
                   ? <>Capital passa a <span className="nc-num font-medium">{formatCurrency(partnerCapital + contribAmount)}</span></>
                   : "Escolha o sócio e o valor"}
               </p>
-              <NcButton variant="solid" size="md" onClick={submitContrib} disabled={!contribForm.partnerId || contribAmount <= 0 || submitting}>
+              <NcButton type="submit" form="form-aporte" variant="solid" size="md" disabled={!contribForm.partnerId || contribAmount <= 0 || submitting}>
                 {submitting ? "Registrando…" : "Registrar aporte"}
               </NcButton>
             </div>
@@ -493,7 +533,7 @@ export default function FinancePage() {
             title="Empréstimo recebido"
             description="Dinheiro que entrou e vai ter de voltar. Os juros são o total combinado, não a taxa."
           />
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <form id="form-emprestimo" onSubmit={submitLoan} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De quem veio</p>
               <div className="space-y-1.5">
@@ -522,7 +562,7 @@ export default function FinancePage() {
                 <Input value={loanForm.notes} onChange={e => setLoanForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
               </div>
             </section>
-          </div>
+          </form>
           <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
             <div className="flex w-full items-center justify-between gap-3">
               <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
@@ -530,7 +570,7 @@ export default function FinancePage() {
                   ? <>A devolver <span className="nc-num font-medium" style={{ color: "var(--nc-alert)" }}>{formatCurrency(loanPrincipal + loanInterest)}</span></>
                   : "Preencha o credor e o principal"}
               </p>
-              <NcButton variant="solid" size="md" onClick={submitLoan} disabled={!loanForm.lenderName.trim() || loanPrincipal <= 0 || submitting}>
+              <NcButton type="submit" form="form-emprestimo" variant="solid" size="md" disabled={!loanForm.lenderName.trim() || loanPrincipal <= 0 || submitting}>
                 {submitting ? "Registrando…" : "Registrar empréstimo"}
               </NcButton>
             </div>
@@ -548,7 +588,7 @@ export default function FinancePage() {
                 title={`Pagamento a ${payingLoan.lenderName}`}
                 description="Separe quanto do valor abate o principal e quanto é juro — o razão trata os dois de forma diferente."
               />
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              <form id="form-pagamento" onSubmit={submitPay} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
                 <section className="space-y-1.5">
                   <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde este empréstimo está</p>
                   <LedgerLine label="Total com juros" value={formatCurrency(payingLoan.total)} />
@@ -582,7 +622,7 @@ export default function FinancePage() {
                     <Input value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
                   </div>
                 </section>
-              </div>
+              </form>
               <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
                 <div className="flex w-full items-center justify-between gap-3">
                   <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
@@ -590,7 +630,7 @@ export default function FinancePage() {
                       ? <>Falta passa a <span className="nc-num font-medium">{formatCurrency(Math.max(0, payingLoan.remaining - payTotal))}</span></>
                       : "Informe o valor"}
                   </p>
-                  <NcButton variant="solid" size="md" onClick={submitPay} disabled={payTotal <= 0 || submitting}>
+                  <NcButton type="submit" form="form-pagamento" variant="solid" size="md" disabled={payTotal <= 0 || submitting}>
                     {submitting ? "Registrando…" : "Registrar"}
                   </NcButton>
                 </div>

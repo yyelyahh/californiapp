@@ -16,15 +16,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { listItem, transitionBase } from "@/lib/motion";
 import { NcButton, Rule, EYEBROW } from "@/components/nocturne";
 import { sortNames, sortCatalog, compareText } from "@/lib/catalog-order";
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
-}
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /** Abaixo disso a coluna de estoque do sabor sai em --nc-alert na tabela. */
 const LOW_STOCK = 3;

@@ -13,6 +13,7 @@ import { EASE_OUT, fadeUp, stagger } from "@/lib/motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { Sale } from "@/types";
+import { formatCurrency as fmt } from "@/lib/currency";
 
 /**
  * Visão do vendedor — tema da loja (`.storefront`), não o Nocturne do ERP.
@@ -28,8 +29,6 @@ import type { Sale } from "@/types";
  *
  * Convenções de estilo (tokens, escala, movimento): ver src/pages/CLAUDE.md.
  */
-
-const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
 const COLUMN = "mx-auto w-full max-w-[480px]";
 

@@ -8,6 +8,7 @@ import { sortNames } from "@/lib/catalog-order";
 import { useStore } from "@/context/StoreContext";
 import { toast } from "sonner";
 import { NcButton, NcSheetHeader } from "@/components/nocturne";
+import { formatCurrency } from "@/lib/currency";
 
 const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }> = {
   Ignite: { purchasePrice: 68.5, salePrice: 149 },
@@ -16,10 +17,6 @@ const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }
 };
 
 const DEFAULT_BRANDS = Object.keys(BRAND_PRESETS);
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
 
 export default function AddProductDialog() {
   const { products, addProduct } = useStore();

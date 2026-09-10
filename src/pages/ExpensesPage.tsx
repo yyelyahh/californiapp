@@ -14,6 +14,7 @@ import { listItem, transitionBase } from "@/lib/motion";
 import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /**
  * Categorias sugeridas. Não são vocabulário fechado — a coluna é texto livre e
@@ -23,15 +24,6 @@ import { cn } from "@/lib/utils";
  */
 const CATEGORY_PRESETS = ["Frete", "Embalagem", "Marketing", "Aluguel"];
 const CATEGORY_FALLBACK = "Outros";
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
-}
 
 type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
 

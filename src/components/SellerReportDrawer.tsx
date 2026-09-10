@@ -18,6 +18,7 @@ import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW } fr
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { Sale } from "@/types";
 import { compareCatalog } from "@/lib/catalog-order";
+import { formatCurrency as fmt, formatCurrencyShort as fmtShort } from "@/lib/currency";
 
 type PeriodKey = "today" | "7d" | "month" | "lastMonth" | "custom";
 
@@ -39,15 +40,6 @@ const TABS = [
   { value: "estoque", label: "Estoque" },
   { value: "mov", label: "Movimentações" },
 ];
-
-function fmt(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-}
-
-/** Sem centavos — para o número grande do topo, como nos trilhos das telas. */
-function fmtShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
-}
 
 /**
  * Saldo em cor, com o MESMO vocabulário da tela de Distribuição: positivo é o

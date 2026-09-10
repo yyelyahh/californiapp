@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   X,
 } from "lucide-react";
+import { formatCurrency as fmt } from "@/lib/currency";
 
 interface CatalogRow {
   seller_name: string;
@@ -46,8 +47,6 @@ interface CartItem {
   quantity: number;
   image_url?: string | null;
 }
-
-const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
 function friendlyError(message: string) {
   if (message.includes("nome_invalido")) return "Informe seu nome";

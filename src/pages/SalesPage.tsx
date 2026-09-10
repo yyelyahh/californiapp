@@ -24,6 +24,7 @@ import {
   type Order,
   type PaymentMethodValue,
 } from "@/hooks/usePendingOrders";
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -35,15 +36,6 @@ function timeAgo(dateStr: string) {
   if (hours < 24) return `há ${hours}h`;
   if (days === 1) return "há 1 dia";
   return `há ${days} dias`;
-}
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
 }
 
 /**
@@ -414,8 +406,13 @@ export default function SalesPage() {
   const [fStatus, setFStatus] = useState<PaymentStatus>("all");
   const [fProduct, setFProduct] = useState("");
   const [fPreset, setFPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
-  const [fFrom, setFFrom] = useState(() => currentMonthRange().from);
-  const [fTo, setFTo] = useState(() => currentMonthRange().to);
+  // Uma leitura só do relógio alimenta os dois campos. Com `currentMonthRange()`
+  // chamado duas vezes, uma montagem em cima da virada da meia-noite do último
+  // dia do mês devolve o "de" de um mês e o "até" de outro — e o helper existe
+  // justamente para o estado inicial e o chip "Mês" produzirem o MESMO intervalo.
+  const [defaultRange] = useState(currentMonthRange);
+  const [fFrom, setFFrom] = useState(defaultRange.from);
+  const [fTo, setFTo] = useState(defaultRange.to);
   const [fSortKey, setFSortKey] = useState<SortKey>("date");
   const [fSortDir, setFSortDir] = useState<"asc" | "desc">("desc");
 
@@ -1154,9 +1151,9 @@ export default function SalesPage() {
                       <th className="w-[70px] px-3 py-2" />
                     </tr>
                   </thead>
-                  <motion.tbody>
+                  <tbody>
                     <AnimatePresence initial={false}>{sortedSales.map(renderRow)}</AnimatePresence>
-                  </motion.tbody>
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -1181,9 +1178,9 @@ export default function SalesPage() {
                       <th className="w-[80px] px-3 py-2" />
                     </tr>
                   </thead>
-                  <motion.tbody>
+                  <tbody>
                     <AnimatePresence initial={false}>{sortedRetiradas.map(renderRow)}</AnimatePresence>
-                  </motion.tbody>
+                  </tbody>
                 </table>
               </div>
             </div>

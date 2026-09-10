@@ -13,15 +13,7 @@ import { SegmentedChips, Rule } from "@/components/nocturne";
 import { computeModelStats, summarizeRestock, urgencyOf, HORIZON_DAYS, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-/** Sem centavos — usado nos números grandes do painel, como no design. */
-function formatCurrencyShort(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
-}
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 function formatPct(value: number, digits = 1) {
   return `${value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;

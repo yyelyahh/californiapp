@@ -25,15 +25,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
 import { getNextTier, unitsUntilNextTier, computeSellerBalance } from "@/lib/commissions";
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
-}
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 type Period = "month" | "lastMonth" | "custom";
 

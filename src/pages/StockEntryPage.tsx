@@ -16,6 +16,7 @@ import { listItem, transitionBase } from "@/lib/motion";
 import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
+import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 const BRAND_PRESETS: Record<string, number> = {
   Ignite: 68.5,
@@ -23,15 +24,6 @@ const BRAND_PRESETS: Record<string, number> = {
   Nikbar: 0,
 };
 const DEFAULT_BRANDS = Object.keys(BRAND_PRESETS);
-
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-/** Sem centavos — para os números grandes do trilho, como no Dashboard. */
-function formatCurrencyShort(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
-}
 
 function parseFlavorLines(text: string) {
   return text
@@ -88,8 +80,13 @@ export default function StockEntryPage() {
   const [flavorsText, setFlavorsText] = useState("");
   const [search, setSearch] = useState("");
   const [fPreset, setFPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
-  const [dateFrom, setDateFrom] = useState(() => currentMonthRange().from);
-  const [dateTo, setDateTo] = useState(() => currentMonthRange().to);
+  // Uma leitura só do relógio alimenta os dois campos. Com `currentMonthRange()`
+  // chamado duas vezes, uma montagem em cima da virada da meia-noite do último
+  // dia do mês devolve o "de" de um mês e o "até" de outro — e o helper existe
+  // justamente para o estado inicial e o chip "Mês" produzirem o MESMO intervalo.
+  const [defaultRange] = useState(currentMonthRange);
+  const [dateFrom, setDateFrom] = useState(defaultRange.from);
+  const [dateTo, setDateTo] = useState(defaultRange.to);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
