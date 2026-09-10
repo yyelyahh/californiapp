@@ -89,10 +89,11 @@ export default function ModelImagesDialog() {
       // e deixa UMA linha. O delete/upsert por igualdade exata que estava aqui
       // errava a linha quando a caixa não batia — e ainda avisava "Foto
       // removida" com a foto continuando no ar. URL vazia = remover.
-      // O cast sai quando `set_model_image` aparecer no types.ts regerado.
-      const { error } = await (supabase.rpc as unknown as
-        (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      )("set_model_image", { p_brand: brand, p_model: model, p_image_url: url });
+      const { error } = await supabase.rpc("set_model_image", {
+        p_brand: brand,
+        p_model: model,
+        p_image_url: url,
+      });
       if (error) throw error;
       toast.success(url ? "Foto salva" : "Foto removida");
       setInitial(prev => ({ ...prev, [key]: url }));
