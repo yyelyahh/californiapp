@@ -39,7 +39,7 @@ componente com hex na mão fica ilegível e ninguém descobre até ver a tela.
 | `--sf-accent-ink` | texto escuro sobre o accent |
 | `--sf-accent-tint` / `--sf-accent-line` | realce do item selecionado (fundo / borda) |
 | `--sf-accent-soft` | preenchimento de botão desabilitado |
-| `--sf-warn` | "só restam N" — está acabando |
+| `--sf-warn` | valor em aberto, ainda a receber (SellerSalesPage) |
 | `--sf-danger` | recusa, erro de pedido — não deu |
 
 `--sf-warn` e `--sf-danger` são separados de propósito. Não troque um pelo outro.
@@ -146,6 +146,10 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
 - `PillButton` — botão primário. Não reaproveita o `Button` do shadcn de propósito:
   o shadcn aplica `disabled:opacity-50` no botão inteiro, e aqui o desabilitado
   esmaece só o **preenchimento** (`--sf-accent-soft`), mantendo o texto legível.
+  Com `href` ele vira uma âncora com a mesma cara: navegador embutido do
+  Instagram e do Facebook bloqueia `window.open`, e é de lá que vem boa parte
+  dos links colados. Ação que SAI da página (compartilhar no WhatsApp) usa
+  `href`; ação que muda a própria tela continua botão.
 - `AddToCartButton` — a confirmação por varredura de tinta com fumaça. Peça cara e
   específica; não replique em outra tela sem motivo forte.
 - `QtyStepper` — quantidade em pílula, com variante `compact` para lista.
@@ -156,6 +160,10 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   grande (as URLs são coladas à mão e vêm em qualquer proporção); `cover` em
   miniatura. Link quebrado cai no ícone `Package`, não no ícone quebrado do navegador.
 - `DrawnCheck` — check que se desenha, para confirmação.
+- `DiscountLine` — a linha do desconto de fidelidade acima do total. Some
+  quando não há desconto: "R$ 0,00 de desconto" só lembra o que a pessoa não
+  ganhou. Aparece no carrinho E no checkout, a mesma peça nos dois, porque é o
+  mesmo número e ele não pode ser escrito de dois jeitos.
 
 Campos de texto usam sempre as duas constantes juntas:
 
@@ -215,8 +223,18 @@ pt-BR, segunda pessoa, direta e curta. Frase de ação no infinitivo no botão
 ("Finalizar pedido", "Confirmar pedido", "Tentar de novo"). Sem ponto final em
 rótulo; ponto final em frase de estado. Exclamação só na confirmação.
 
-Erro de banco **nunca** aparece cru: passa por um mapa tipo `friendlyError`, que
-traduz o código (`estoque_insuficiente`) numa frase que diz o que fazer.
+Erro de banco **nunca** aparece cru, e o mapa (`friendlyError`) é uma lista de
+**permissão**, não de tradução: o que não está nele vira a frase genérica.
+Enquanto ele terminava em `return message`, qualquer erro fora do mapa chegava
+literal no cliente — `produto_nao_encontrado:8f3c1a2e-…`, `TypeError: Failed to
+fetch`. Quando o código carrega um dado útil, use-o: `estoque_insuficiente:<id>`
+vira o nome do sabor que acabou (`orderErrorMessage`), em vez de "um dos itens".
+
+Ação que depende da rede tem **teto de espera** (`ORDER_TIMEOUT_MS`, via
+`AbortController` + `.abortSignal()`) e o desfecho dela nunca pendura só num
+`onAnimationComplete` — aba em segundo plano congela o `requestAnimationFrame`,
+e trocar para o WhatsApp no meio do envio é o que a pessoa faz neste fluxo. A
+`FloodLayer` tem um `setTimeout` de mesma duração chamando o mesmo callback.
 
 ---
 

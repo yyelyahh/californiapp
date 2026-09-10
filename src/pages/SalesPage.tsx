@@ -25,6 +25,7 @@ import {
   type PaymentMethodValue,
 } from "@/hooks/usePendingOrders";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
+import { orderRef } from "@/lib/order-ref";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -275,6 +276,10 @@ function PendingOrdersList({
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
                   <span className="nc-num">{order.customers?.whatsapp ?? "—"}</span>
+                  <span>·</span>
+                  {/* A mesma referência que a loja manda na mensagem do
+                      cliente e que vira o começo da nota da venda. */}
+                  <span className="nc-num">{orderRef(order.id)}</span>
                   <span>·</span>
                   <span className="flex items-center gap-1"><Clock size={11} />{timeAgo(order.created_at)}</span>
                 </div>

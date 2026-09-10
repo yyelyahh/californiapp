@@ -2,8 +2,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
-import { formatPhoneDisplay, onlyDigits } from "@/lib/phone";
+import { formatPhoneDisplay, isValidPhone, onlyDigits } from "@/lib/phone";
+import { orderRef } from "@/lib/order-ref";
+import { previewLoyaltyDiscount } from "@/lib/loyalty-discount";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,30 +35,149 @@ interface CatalogRow {
   model: string;
   flavor: string;
   sale_price: number;
+  /** Quanto esta unidade custa quando é a premiada pela fidelidade. */
+  loyalty_price: number;
   available: number;
   image_url?: string | null;
 }
 
-interface CartItem {
-  product_id: string;
-  name: string;
-  brand: string;
-  model: string;
-  flavor: string;
-  sale_price: number;
-  available: number;
+interface CartItem extends CatalogRow {
   quantity: number;
-  image_url?: string | null;
 }
 
+/** O que `create_pending_order` devolve — o pedido como ele ficou GRAVADO. */
+interface OrderReceipt {
+  order_id: string;
+  total: number;
+  discount_total: number;
+  discount_units: number;
+}
+
+/**
+ * O comprovante já mastigado para a tela.
+ *
+ * Os números vêm todos do retorno do banco, não do carrinho: a function grava
+ * `unit_price` lendo `products.sale_price` por dentro, então um preço alterado
+ * entre abrir a loja e confirmar fazia o cliente mandar um total no WhatsApp e
+ * o vendedor cobrar outro.
+ */
+interface SuccessOrder {
+  ref: string;
+  total: number;
+  discountTotal: number;
+  discountUnits: number;
+  message: string;
+}
+
+/**
+ * Erro de pedido em frase de gente.
+ *
+ * É uma lista de PERMISSÃO, não de tradução: o que não está aqui vira a frase
+ * genérica. Enquanto o fim era `return message`, qualquer erro fora do mapa
+ * chegava cru no cliente — `produto_nao_encontrado:8f3c1a2e-…` num dia ruim do
+ * banco, `TypeError: Failed to fetch` numa queda de sinal.
+ */
 function friendlyError(message: string) {
+  if (!navigator.onLine) return "Você está sem internet. Reconecte e tente de novo.";
   if (message.includes("nome_invalido")) return "Informe seu nome";
-  if (message.includes("whatsapp_invalido")) return "Informe seu WhatsApp";
+  if (message.includes("whatsapp_invalido")) return "Confira seu WhatsApp: DDD + número";
   if (message.includes("carrinho_vazio")) return "Seu carrinho está vazio";
   if (message.includes("quantidade_invalida")) return "Quantidade inválida";
+  if (message.includes("pedido_muito_grande")) return "Pedido grande demais. Fale direto com o vendedor pelo WhatsApp.";
+  if (message.includes("muitos_pedidos_pendentes"))
+    return "Você já tem pedidos esperando resposta do vendedor. Fale com ele antes de mandar outro.";
   if (message.includes("estoque_insuficiente"))
-    return "Um dos itens não tem mais estoque suficiente, atualize a página e tente novamente";
-  return message || "Não foi possível enviar o pedido. Tente novamente.";
+    return "Um dos itens não tem mais estoque suficiente. Ajustei seu carrinho — confira e confirme de novo.";
+  return "Não foi possível enviar o pedido. Tente novamente.";
+}
+
+/**
+ * A mesma frase, mas dizendo QUAL item acabou.
+ *
+ * O banco levanta `estoque_insuficiente:<product_id>` e essa metade depois dos
+ * dois-pontos era jogada fora — a pessoa descobria que algo deu errado, não o
+ * quê, e era mandada recarregar a página, que é justamente o gesto que apagava
+ * o carrinho dela.
+ */
+function orderErrorMessage(message: string, cart: CartItem[]) {
+  const productId = message.split("estoque_insuficiente:")[1]?.trim();
+  const item = productId ? cart.find(i => i.product_id === productId) : undefined;
+  if (item) {
+    return `Acabou o estoque de ${item.flavor || item.model || "um item"}. Ajustei seu carrinho — confira e confirme de novo.`;
+  }
+  return friendlyError(message);
+}
+
+/**
+ * Teto da espera pela resposta do banco.
+ *
+ * Sem ele o `fetch` fica pendurado para sempre quando o sinal cai no meio do
+ * envio: a água cobre a tela, o rótulo "Enviando pedido..." não sai mais, o
+ * sheet fica trancado pelo `submitting` e a camada engole os toques. A única
+ * saída era recarregar a página — que apaga o carrinho.
+ *
+ * O timeout é do lado de cá: o pedido PODE ter sido gravado. Quem resolve isso
+ * é o `p_client_token`, que faz o reenvio devolver o mesmo pedido em vez de
+ * criar um segundo.
+ */
+const ORDER_TIMEOUT_MS = 20_000;
+
+/** Teto da observação de entrega. Espelha o `left(..., 300)` do banco. */
+const FREIGHT_MAX = 300;
+
+/**
+ * Token do reenvio. `crypto.randomUUID` só existe em contexto seguro, e abrir
+ * a loja no celular pelo IP da rede local (http://192.168…) não é um — sem o
+ * fallback a página quebraria exatamente no ensaio.
+ */
+function newClientToken() {
+  const c = globalThis.crypto as Crypto | undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  const b = new Uint8Array(16);
+  if (c?.getRandomValues) c.getRandomValues(b);
+  else for (let i = 0; i < 16; i += 1) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/* ---------------- Carrinho que sobrevive ao reload ---------------- */
+
+/**
+ * O carrinho vivia só em `useState`: fechar sem querer, girar a tela num
+ * navegador ruim ou voltar do WhatsApp apagava tudo. Ele volta do
+ * `localStorage`, e o efeito de reconciliação conserta o que envelheceu
+ * (preço, estoque, item que saiu do catálogo) contra o catálogo recém-lido.
+ *
+ * Por vendedor, porque a atribuição de estoque é por vendedor. O telefone é
+ * global: é da pessoa, não da loja.
+ */
+const CART_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const cartKey = (sellerId?: string) => `loja:${sellerId ?? ""}:carrinho`;
+const PHONE_KEY = "loja:whatsapp";
+
+function readStoredCart(sellerId?: string): CartItem[] {
+  try {
+    const raw = localStorage.getItem(cartKey(sellerId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { savedAt?: number; items?: CartItem[] };
+    if (!Array.isArray(parsed?.items) || parsed.items.length === 0) return [];
+    if (Date.now() - (parsed.savedAt ?? 0) > CART_TTL_MS) return [];
+    return parsed.items;
+  } catch {
+    // Aba anônima, cota cheia, navegador bloqueando site data: o carrinho só
+    // não sobrevive ao reload. Nada aqui pode derrubar a loja.
+    return [];
+  }
+}
+
+function readStoredPhone() {
+  try {
+    return localStorage.getItem(PHONE_KEY) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -96,13 +218,21 @@ interface BrandGroup {
   models: ModelGroup[];
 }
 
+/**
+ * O que `get_customer_loyalty` devolve. Só o primeiro nome: a function é
+ * aberta a anon e devolvia nome completo, id e o telefone de volta — nada
+ * disso era lido aqui.
+ *
+ * `cycle_units` (hoje 6) vem do banco de propósito: é ele que deixa esta tela
+ * prever quantas unidades do carrinho saem premiadas sem repetir o número da
+ * regra do lado de cá.
+ */
 interface Loyalty {
-  customer_id: string;
   customer_name: string;
-  whatsapp: string;
   total_units: number;
-  units_until_next_gift: number;
-  gifts_earned: number;
+  cycle_units: number;
+  units_until_next_discount: number;
+  discounts_used: number;
   loyalty_tier: string;
 }
 
@@ -154,27 +284,38 @@ function PillButton({
   children,
   onClick,
   disabled,
+  href,
   height = PILL_HEIGHT,
   className = "",
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  /** Quando existe, a pílula vira um link de verdade — ver abaixo. */
+  href?: string;
   height?: number;
   className?: string;
 }) {
+  const style = {
+    height,
+    background: disabled ? "var(--sf-accent-soft)" : "var(--sf-accent)",
+    color: "var(--sf-accent-ink)",
+  };
+  const cls = `flex w-full items-center justify-center gap-2 rounded-full text-sm font-extrabold transition-opacity ${className}`;
+
+  // Um `window.open` em `onClick` é bloqueado pelo navegador embutido do
+  // Instagram e do Facebook — de onde vem boa parte dos links colados. Âncora
+  // não é: ela é navegação, não popup. Só o compartilhar usa isto.
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} style={style} className={cls}>
+        {children}
+      </a>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        height,
-        background: disabled ? "var(--sf-accent-soft)" : "var(--sf-accent)",
-        color: "var(--sf-accent-ink)",
-      }}
-      className={`flex w-full items-center justify-center gap-2 rounded-full text-sm font-extrabold transition-opacity ${className}`}
-    >
+    <button type="button" onClick={onClick} disabled={disabled} style={style} className={cls}>
       {children}
     </button>
   );
@@ -553,8 +694,34 @@ function FloodLayer({
   onCovered: () => void;
   onGone: () => void;
 }) {
-  if (phase === "idle") return null;
   const draining = phase === "draining";
+
+  /**
+   * Rede de segurança do desfecho.
+   *
+   * Todo o fim do pedido — mostrar o comprovante, limpar o carrinho, destrancar
+   * o sheet — pendura no `onAnimationComplete` lá embaixo. E ele pode não
+   * chegar: aba em segundo plano congela o `requestAnimationFrame`, e trocar
+   * para o WhatsApp logo depois de confirmar é justamente o que a pessoa faz
+   * neste fluxo. O pedido ficaria gravado no banco sem ninguém ver.
+   *
+   * O timer é o MESMO desfecho por um caminho que o navegador não congela. Os
+   * dois callbacks são seguros de chamar duas vezes (`settleFlood` reconfere as
+   * condições), então disparar junto com a animação não faz mal.
+   *
+   * O callback fica num ref porque ele nasce de novo a cada render da página:
+   * como dependência do efeito, reiniciaria o timer para sempre.
+   */
+  const done = useRef<() => void>(() => {});
+  done.current = draining ? onGone : onCovered;
+  useEffect(() => {
+    if (phase === "idle" || phase === "waiting") return;
+    const ms = ((draining ? FLOOD_DRAIN + FLOOD_HOLD : FLOOD_RISE) + 0.4) * 1000;
+    const t = setTimeout(() => done.current(), ms);
+    return () => clearTimeout(t);
+  }, [phase, draining]);
+
+  if (phase === "idle") return null;
 
   return (
     // A moldura que recorta. As cristas têm o DOBRO da largura da tela e moram
@@ -701,6 +868,28 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 }
 
 /** Cabeçalho comum aos sheets de carrinho e checkout. */
+/**
+ * A linha do desconto da fidelidade, acima do total.
+ *
+ * Aparece no carrinho e no checkout — a mesma peça nos dois, porque é o mesmo
+ * número e ele não pode ser escrito de dois jeitos. Some quando não há
+ * desconto: linha de "R$ 0,00 de desconto" só ocupa espaço lembrando o que a
+ * pessoa não ganhou.
+ */
+function DiscountLine({ units, amount }: { units: number; amount: number }) {
+  if (amount <= 0) return null;
+  return (
+    <div className="flex items-center justify-between text-[13px]">
+      <span style={{ color: "var(--sf-text-muted)" }}>
+        🎁 Fidelidade · {units === 1 ? "1 unidade" : `${units} unidades`}
+      </span>
+      <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>
+        −{fmt(amount)}
+      </span>
+    </div>
+  );
+}
+
 function SheetTopBar({ title, onClose }: { title: string; onClose: () => void }) {
   return (
     <div
@@ -836,7 +1025,11 @@ function ProductCard({ model, onOpen }: { model: ModelGroup; onOpen: () => void 
   const prices = (inStock.length ? inStock : allRows).map(r => r.sale_price);
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const samePrice = prices.every(p => p === prices[0]);
-  const flavorCount = allRows.length;
+  // Conta o que dá para comprar, não o que existe: um modelo de oito sabores
+  // com seis zerados anunciava "8 sabores" e abria com seis desabilitados.
+  // Quando não sobrou nenhum, a foto já está marcada como esgotada e o número
+  // volta a ser o do catálogo inteiro.
+  const flavorCount = inStock.length || allRows.length;
   const allOut = inStock.length === 0;
 
   return (
@@ -921,12 +1114,15 @@ export default function SellerStorePage() {
   const [query, setQuery] = useState("");
   const [activeBrand, setActiveBrand] = useState<string>(ALL);
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => readStoredCart(sellerId));
+  /** O que a reconciliação com o catálogo mexeu no carrinho guardado. */
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
   const [freight, setFreight] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  /** O pedido que o banco gravou. Enquanto existe, a tela é o comprovante. */
+  const [success, setSuccess] = useState<SuccessOrder | null>(null);
 
   // A onda de confirmação e o encontro dela com a resposta do banco.
   //
@@ -938,10 +1134,19 @@ export default function SellerStorePage() {
   const floodCovered = useRef(false);
   /** `null` = banco ainda não respondeu. */
   const orderAccepted = useRef<boolean | null>(null);
-  /** Mensagem pronta do pedido aceito, esperando a água escoar para virar tela. */
-  const pendingMessage = useRef<string | null>(null);
+  /** Pedido aceito, pronto, esperando a água escoar para virar tela. */
+  const pendingSuccess = useRef<SuccessOrder | null>(null);
   /** Erro a mostrar depois que a água sair da frente. */
   const pendingError = useRef<string | null>(null);
+  /**
+   * O token que faz "tentar de novo" continuar sendo O MESMO pedido.
+   *
+   * Nasce no primeiro envio e só é trocado depois de um pedido aceito. É ele
+   * que impede o timeout de virar pedido duplicado: se a primeira tentativa
+   * chegou no banco e a resposta é que se perdeu, a segunda devolve o pedido
+   * que já existe em vez de criar outro.
+   */
+  const clientToken = useRef<string | null>(null);
   /** Recusa do pedido, mostrada dentro do checkout — a água devolve a pessoa nele. */
   const [orderError, setOrderError] = useState<string | null>(null);
 
@@ -957,14 +1162,19 @@ export default function SellerStorePage() {
   //
   // O nome só é perguntado quando o WhatsApp não acha cadastro; se acha, ele
   // vem de lá junto com a fidelidade e o campo nem aparece.
-  const [phoneInput, setPhoneInput] = useState("");
+  //
+  // O telefone volta do `localStorage`: quem já comprou uma vez abre o
+  // checkout com o campo preenchido, a fidelidade dele carrega sozinha e não
+  // sobra nada para digitar.
+  const [phoneInput, setPhoneInput] = useState(readStoredPhone);
   const [nameInput, setNameInput] = useState("");
   const [loyalty, setLoyalty] = useState<Loyalty | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupDone, setLookupDone] = useState(false);
 
   const phoneDigits = onlyDigits(phoneInput);
-  const phoneComplete = phoneDigits.length >= 10 && phoneDigits.length <= 11;
+  // A mesma régua do banco e do resto do app, de um lugar só.
+  const phoneComplete = isValidPhone(phoneDigits);
   const customerName = (loyalty?.customer_name ?? nameInput).trim();
 
   useEffect(() => {
@@ -975,7 +1185,9 @@ export default function SellerStorePage() {
     }
     let cancelled = false;
     setLookupLoading(true);
-    (async () => {
+    // Espera a digitação parar. Um telefone de 11 dígitos ficava completo aos
+    // 10 e de novo aos 11: duas consultas por número digitado.
+    const t = setTimeout(async () => {
       const { data } = await supabase.rpc("get_customer_loyalty", { p_whatsapp: phoneDigits });
       if (cancelled) return;
       // Sem aviso de erro aqui: a busca é um extra, e a falha já tem saída
@@ -984,10 +1196,21 @@ export default function SellerStorePage() {
       setLoyalty(row);
       setLookupDone(true);
       setLookupLoading(false);
-    })();
+    }, 350);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
+  }, [phoneDigits, phoneComplete]);
+
+  /** O telefone é da pessoa, não da loja: fica guardado para a próxima visita. */
+  useEffect(() => {
+    if (!phoneComplete) return;
+    try {
+      localStorage.setItem(PHONE_KEY, phoneDigits);
+    } catch {
+      // Ver readStoredCart: guardar é conveniência, nunca requisito.
+    }
   }, [phoneDigits, phoneComplete]);
 
   const load = useCallback(async () => {
@@ -1005,6 +1228,54 @@ export default function SellerStorePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * O carrinho segue o catálogo.
+   *
+   * Cada item guardava a foto do momento em que entrou — preço e estoque
+   * congelados. Como a function grava `unit_price` lendo a tabela, o total na
+   * tela podia divergir do que ficava gravado; e a quantidade só era conferida
+   * contra o estoque no último toque, virando `estoque_insuficiente` em cima
+   * do "Confirmar". Aqui o carrinho é reconciliado toda vez que o catálogo
+   * chega: no primeiro load, no recarregar depois de um pedido e no
+   * `load()` que a recusa por estoque dispara.
+   *
+   * É também o que torna seguro devolver um carrinho de ontem do
+   * `localStorage`: o que envelheceu é corrigido antes de a pessoa ver.
+   */
+  useEffect(() => {
+    if (rows.length === 0 || cart.length === 0) return;
+    const saiu: string[] = [];
+    let mudou = false;
+    const next = cart.flatMap<CartItem>(item => {
+      const fresh = rows.find(r => r.product_id === item.product_id);
+      if (!fresh || fresh.available <= 0) {
+        saiu.push(item.flavor || item.model || "um item");
+        mudou = true;
+        return [];
+      }
+      const quantity = Math.min(item.quantity, fresh.available);
+      if (quantity !== item.quantity || fresh.sale_price !== item.sale_price) mudou = true;
+      return [{ ...fresh, quantity }];
+    });
+    if (!mudou) return;
+    setCart(next);
+    setCartNotice(
+      saiu.length > 0
+        ? `Tiramos do carrinho: ${saiu.join(", ")} — acabou o estoque.`
+        : "Ajustamos as quantidades do seu carrinho ao estoque de agora.",
+    );
+  }, [rows, cart]);
+
+  /** Guarda o carrinho para a próxima visita. Ver readStoredCart. */
+  useEffect(() => {
+    try {
+      if (cart.length === 0) localStorage.removeItem(cartKey(sellerId));
+      else localStorage.setItem(cartKey(sellerId), JSON.stringify({ savedAt: Date.now(), items: cart }));
+    } catch {
+      // Nada a fazer: o carrinho só não sobrevive ao reload.
+    }
+  }, [cart, sellerId]);
 
   const sellerName = rows[0]?.seller_name ?? "";
 
@@ -1055,8 +1326,23 @@ export default function SellerStorePage() {
     return Array.from(brandMap.values()).sort((a, b) => compareBrands(a.brand, b.brand));
   }, [rows, query, activeBrand]);
 
-  const total = useMemo(() => cart.reduce((a, i) => a + i.sale_price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((a, i) => a + i.quantity, 0), [cart]);
+
+  /**
+   * O total com o desconto da fidelidade já dentro. A conta (e o porquê de ela
+   * precisar bater com a do banco) mora em `src/lib/loyalty-discount.ts`.
+   *
+   * Sem cadastro encontrado não há prévia: a posição do cliente no ciclo é o
+   * que decide, e ela só existe depois que o WhatsApp acha alguém.
+   */
+  const { total, fullTotal, discountTotal, discountUnits } = useMemo(
+    () =>
+      previewLoyaltyDiscount(
+        cart,
+        loyalty ? { historyUnits: loyalty.total_units, cycleUnits: loyalty.cycle_units } : null,
+      ),
+    [cart, loyalty],
+  );
 
   /** Modelo aberto no sheet de detalhe, achado entre os grupos já montados. */
   const detailModel = useMemo(() => {
@@ -1107,9 +1393,20 @@ export default function SellerStorePage() {
 
   const removeItem = (productId: string) => setCart(prev => prev.filter(i => i.product_id !== productId));
 
-  const buildMessage = () => {
+  /**
+   * A mensagem que o cliente encaminha ao vendedor.
+   *
+   * O TOTAL e o DESCONTO vêm do recibo do banco, não do carrinho: é o pedido
+   * gravado que o vendedor vai confirmar. Os itens continuam saindo do
+   * carrinho, que é de onde vêm as quantidades.
+   *
+   * A referência curta é o que amarra esta mensagem ao card em /minhas-vendas
+   * e à nota da venda ("Pedido via catálogo #<uuid>", da qual ela é o começo).
+   * Sem ela, cliente que pede duas vezes no mesmo dia virava adivinhação.
+   */
+  const buildMessage = (recibo: Pick<SuccessOrder, "ref" | "total" | "discountTotal" | "discountUnits">) => {
     const lines: string[] = [];
-    lines.push(`🛒 Novo pedido`);
+    lines.push(`🛒 Novo pedido ${recibo.ref}`);
     lines.push(``);
     if (sellerName) lines.push(`👤 Vendedor: ${sellerName}`);
     lines.push(`🙋 Cliente: ${customerName}`);
@@ -1121,7 +1418,11 @@ export default function SellerStorePage() {
       );
     });
     lines.push(`──────────────────────────────`);
-    lines.push(`💰 Total: ${fmt(total)}`);
+    if (recibo.discountTotal > 0) {
+      const un = recibo.discountUnits === 1 ? "unidade" : "unidades";
+      lines.push(`🎁 Fidelidade (${recibo.discountUnits} ${un}): -${fmt(recibo.discountTotal)}`);
+    }
+    lines.push(`💰 Total: ${fmt(recibo.total)}`);
     if (freight.trim()) {
       lines.push(``);
       lines.push(`🚚 Frete/Entrega: ${freight.trim()}`);
@@ -1138,10 +1439,14 @@ export default function SellerStorePage() {
 
   /** Troca a página para o comprovante. Roda com a tela coberta pela água. */
   const revealSuccess = () => {
-    setSuccessMessage(pendingMessage.current);
+    setSuccess(pendingSuccess.current);
     setCart([]);
+    setCartNotice(null);
     setCheckout(false);
     setFreight("");
+    // Pedido aceito fecha o ciclo do token: o PRÓXIMO pedido tem que ser um
+    // pedido novo, não um reenvio deste.
+    clientToken.current = null;
     load();
   };
 
@@ -1201,26 +1506,48 @@ export default function SellerStorePage() {
     setSubmitting(true);
     if (!reduceMotion) setFlood("rising");
 
+    // O token nasce no primeiro envio e sobrevive às tentativas seguintes: é
+    // ele que faz "tentar de novo" ser o MESMO pedido do lado do banco.
+    if (!clientToken.current) clientToken.current = newClientToken();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ORDER_TIMEOUT_MS);
+
     try {
-      const { error } = await supabase.rpc("create_pending_order", {
-        p_seller_id: sellerId,
-        p_customer_name: customerName,
-        p_customer_whatsapp: phoneDigits,
-        p_freight_notes: freight.trim() || null,
-        p_items: cart.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.sale_price,
-        })) as any,
-      });
+      const { data, error } = await supabase
+        .rpc("create_pending_order", {
+          p_seller_id: sellerId,
+          p_customer_name: customerName,
+          p_customer_whatsapp: phoneDigits,
+          p_freight_notes: freight.trim() || null,
+          // Sem `unit_price`: quem precifica é a function, lendo
+          // products.sale_price por dentro. Mandar um preço daqui só fingia
+          // que o carrinho tinha voz nisso.
+          p_items: cart.map(item => ({ product_id: item.product_id, quantity: item.quantity })) as unknown as Json,
+          p_client_token: clientToken.current,
+        })
+        .abortSignal(controller.signal);
       if (error) throw error;
-      pendingMessage.current = buildMessage();
+
+      const recibo = (data ?? {}) as unknown as OrderReceipt;
+      const resumo = {
+        ref: orderRef(recibo.order_id),
+        total: Number(recibo.total ?? 0),
+        discountTotal: Number(recibo.discount_total ?? 0),
+        discountUnits: Number(recibo.discount_units ?? 0),
+      };
+      pendingSuccess.current = { ...resumo, message: buildMessage(resumo) };
       orderAccepted.current = true;
-    } catch (err: any) {
-      const msg = String(err?.message ?? "");
-      pendingError.current = friendlyError(msg);
+    } catch (err) {
+      const msg = String((err as { message?: string } | null)?.message ?? "");
+      // `signal.aborted` em vez de ler o texto do erro: a mensagem do
+      // AbortError muda entre navegador e versão do supabase-js, o sinal não.
+      pendingError.current = controller.signal.aborted
+        ? "A conexão demorou demais. Toque em confirmar de novo — se o pedido já tiver entrado, ele não duplica."
+        : orderErrorMessage(msg, cart);
       if (msg.includes("estoque_insuficiente")) load();
       orderAccepted.current = false;
+    } finally {
+      clearTimeout(timer);
     }
 
     if (reduceMotion) {
@@ -1254,7 +1581,7 @@ export default function SellerStorePage() {
    * um corte seco.
    */
   const leaveSuccess = () => {
-    setSuccessMessage(null);
+    setSuccess(null);
     if (!reduceMotion) setFlood("draining");
   };
 
@@ -1279,7 +1606,7 @@ export default function SellerStorePage() {
 
   /* ---------------- 6. Sucesso (tela cheia) ---------------- */
 
-  if (successMessage) {
+  if (success) {
     return (
       // `storefront-flooded` troca os tokens de cor: esta tela é a loja do lado
       // avesso, de fundo accent — a mesma cor em que a onda encheu a tela. É o
@@ -1308,18 +1635,39 @@ export default function SellerStorePage() {
             <DrawnCheck size={30} strokeWidth={2.6} />
           </motion.div>
           <motion.div variants={fadeUp}>
-            <h2 className="mb-2 text-[21px] font-extrabold">Pedido confirmado!</h2>
+            {/* "Confirmado" era mentira: o pedido nasce PENDENTE e o vendedor
+                ainda pode recusar. Quem lia isso e depois recebia uma recusa
+                tinha recebido uma confirmação que nunca existiu. */}
+            <h2 className="mb-2 text-[21px] font-extrabold">Pedido enviado!</h2>
             {/* O WhatsApp NÃO abre sozinho: em celular isso troca de aplicativo
                 sem aviso, e quem só queria conferir o resumo se perde. O envio
                 é um toque, e o botão fica aqui até a pessoa querer. */}
             <p className="text-[13.5px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
-              Falta mandar para o vendedor: toque abaixo e escolha a conversa dele no WhatsApp.
+              Seu pedido <span className="font-bold">{success.ref}</span> está reservado. Toque abaixo e escolha a
+              conversa do vendedor no WhatsApp — ele confirma e fala com você.
             </p>
           </motion.div>
-          <motion.div variants={fadeUp} className="mt-2.5 flex w-full flex-col gap-2.5">
-            <PillButton
-              onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(successMessage)}`, "_blank")}
+
+          {/* O prêmio da fidelidade aparece no momento em que ele acontece.
+              Antes, a pessoa completava o ciclo e nada dizia nada. */}
+          {success.discountTotal > 0 && (
+            <motion.div
+              variants={fadeUp}
+              className="w-full rounded-2xl px-4 py-3 text-[13px]"
+              style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
             >
+              <p className="font-bold">
+                🎁 Fidelidade: {success.discountUnits === 1 ? "uma unidade saiu" : `${success.discountUnits} unidades saíram`}{" "}
+                com desconto
+              </p>
+              <p className="mt-0.5" style={{ color: "var(--sf-text-muted)" }}>
+                Você economizou {fmt(success.discountTotal)} neste pedido.
+              </p>
+            </motion.div>
+          )}
+
+          <motion.div variants={fadeUp} className="mt-2.5 flex w-full flex-col gap-2.5">
+            <PillButton href={`https://wa.me/?text=${encodeURIComponent(success.message)}`}>
               <MessageCircle size={15} />
               Compartilhar no WhatsApp
             </PillButton>
@@ -1401,6 +1749,17 @@ export default function SellerStorePage() {
       </header>
 
       <main className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-[100px] pt-1.5`}>
+        {/* Quando a reconciliação esvazia o carrinho, a barra de baixo some
+            junto e o aviso ficaria escondido num sheet que a pessoa não tem
+            mais motivo para abrir. Aqui ele encontra quem precisa dele. */}
+        {cartNotice && cart.length === 0 && (
+          <p
+            className="mb-1 mt-2 rounded-2xl px-3.5 py-2.5 text-[12.5px]"
+            style={{ background: "var(--sf-surface)", color: "var(--sf-text-muted)" }}
+          >
+            {cartNotice}
+          </p>
+        )}
         {loading ? (
           <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
             Carregando catálogo...
@@ -1526,7 +1885,6 @@ export default function SellerStorePage() {
                   {detailModel.flavors.map(f => {
                     const out = f.available <= 0;
                     const active = f.product_id === (selectedFlavor?.product_id ?? "");
-                    const urgent = !out && f.available <= 2;
                     return (
                       <button
                         key={f.product_id}
@@ -1579,15 +1937,9 @@ export default function SellerStorePage() {
                             <p className="truncate text-sm font-semibold">{f.flavor || "Sem sabor"}</p>
                             <p
                               className="mt-0.5 text-[11.5px]"
-                              style={{
-                                color: out
-                                  ? "var(--sf-text-dim)"
-                                  : urgent
-                                    ? "var(--sf-warn)"
-                                    : "var(--sf-text-faint)",
-                              }}
+                              style={{ color: out ? "var(--sf-text-dim)" : "var(--sf-text-faint)" }}
                             >
-                              {out ? "Esgotado" : urgent ? `Só restam ${f.available}` : `${f.available} em estoque`}
+                              {out ? "Esgotado" : `${f.available} em estoque`}
                             </p>
                           </span>
                         </div>
@@ -1624,7 +1976,15 @@ export default function SellerStorePage() {
       </Sheet>
 
       {/* ---------------- 4. Carrinho ---------------- */}
-      <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+      <Sheet
+        open={cartOpen}
+        onOpenChange={o => {
+          // O aviso já foi lido quando o carrinho fecha: mantê-lo faria a
+          // próxima abertura falar de uma correção de dias atrás.
+          if (!o) setCartNotice(null);
+          setCartOpen(o);
+        }}
+      >
         <SheetContent
           side="bottom"
           hideClose
@@ -1635,6 +1995,17 @@ export default function SellerStorePage() {
           <SheetDescription className="sr-only">{cartCount} item(ns) selecionado(s).</SheetDescription>
 
           <div className="flex-1 overflow-y-auto px-5 pt-2">
+            {/* O carrinho volta do localStorage e é reconciliado com o catálogo
+                antes de a pessoa ver. Mexer no carrinho de alguém em silêncio
+                seria pior que o estoque velho: o aviso diz o que mudou. */}
+            {cartNotice && (
+              <p
+                className="mb-1 mt-1 rounded-2xl px-3.5 py-2.5 text-[12.5px]"
+                style={{ background: "var(--sf-surface)", color: "var(--sf-text-muted)" }}
+              >
+                {cartNotice}
+              </p>
+            )}
             {cart.length === 0 ? (
               <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
                 Seu carrinho está vazio.
@@ -1687,12 +2058,20 @@ export default function SellerStorePage() {
             className="flex flex-shrink-0 flex-col gap-3 px-5 pb-7 pt-4"
             style={{ borderTop: "1px solid var(--sf-hairline)" }}
           >
+            <DiscountLine units={discountUnits} amount={discountTotal} />
             <div className="flex items-center justify-between">
               <span className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
                 Total
               </span>
-              <span className="text-[19px] font-extrabold" style={{ color: "var(--sf-accent)" }}>
-                {fmt(total)}
+              <span className="flex items-baseline gap-2">
+                {discountTotal > 0 && (
+                  <span className="text-[13px] line-through" style={{ color: "var(--sf-text-dim)" }}>
+                    {fmt(fullTotal)}
+                  </span>
+                )}
+                <span className="text-[19px] font-extrabold" style={{ color: "var(--sf-accent)" }}>
+                  {fmt(total)}
+                </span>
               </span>
             </div>
             <PillButton
@@ -1771,27 +2150,51 @@ export default function SellerStorePage() {
                   Nível <span style={{ color: "var(--sf-accent)" }}>{loyalty.loyalty_tier}</span> ·{" "}
                   {loyalty.total_units} {loyalty.total_units === 1 ? "unidade" : "unidades"} compradas
                 </p>
+                {/* Três frases possíveis, e a ordem importa: o desconto que JÁ
+                    entrou neste carrinho vem antes do que ainda falta. Quem
+                    acabou de ganhar não quer ler quanto falta para o próximo. */}
                 <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                  {loyalty.units_until_next_gift === 0
-                    ? `Você já garantiu ${loyalty.gifts_earned > 1 ? `${loyalty.gifts_earned} brindes` : "um brinde"}! 🎁`
-                    : `Faltam ${loyalty.units_until_next_gift} ${
-                        loyalty.units_until_next_gift === 1 ? "unidade" : "unidades"
-                      } para o próximo brinde`}
+                  {discountUnits > 0 ? (
+                    <>
+                      🎁{" "}
+                      <span className="font-bold" style={{ color: "var(--sf-accent)" }}>
+                        {discountUnits === 1 ? "Uma unidade" : `${discountUnits} unidades`} deste pedido
+                        {discountUnits === 1 ? " sai" : " saem"} com desconto!
+                      </span>
+                    </>
+                  ) : loyalty.units_until_next_discount === 1 ? (
+                    "Falta 1 unidade para a próxima sair com desconto 🎁"
+                  ) : (
+                    `Faltam ${loyalty.units_until_next_discount} unidades para a próxima sair com desconto`
+                  )}
                 </p>
               </div>
             )}
 
             {!lookupLoading && lookupDone && !loyalty && (
-              <Field id="cliente-nome" label="Seu nome">
-                <Input
-                  id="cliente-nome"
-                  value={nameInput}
-                  onChange={e => setNameInput(e.target.value)}
-                  placeholder="ex: Jordan Lee"
-                  className={`h-[50px] px-4 ${FIELD_CLASS}`}
-                  style={FIELD_STYLE}
-                />
-              </Field>
+              <>
+                {/* Quem ainda não é cliente é exatamente quem a fidelidade
+                    precisa convencer, e para essa pessoa ela era invisível: o
+                    cartão só existia para quem já tinha cadastro. */}
+                <p
+                  className="rounded-2xl px-4 py-3 text-[13px]"
+                  style={{ background: "var(--sf-surface)", color: "var(--sf-text-muted)" }}
+                >
+                  🎁 <span className="font-bold" style={{ color: "var(--sf-text)" }}>Primeira compra?</span> A cada 6
+                  unidades compradas, uma sai com metade do preço.
+                </p>
+                <Field id="cliente-nome" label="Seu nome">
+                  <Input
+                    id="cliente-nome"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    placeholder="ex: Jordan Lee"
+                    maxLength={80}
+                    className={`h-[50px] px-4 ${FIELD_CLASS}`}
+                    style={FIELD_STYLE}
+                  />
+                </Field>
+              </>
             )}
 
             <Field id="cliente-frete" label="Observações de entrega">
@@ -1801,21 +2204,31 @@ export default function SellerStorePage() {
                 onChange={e => setFreight(e.target.value)}
                 placeholder="Opcional — horário, endereço, etc."
                 rows={3}
+                // Espelha o left(..., 300) do banco: cortar só lá deixaria a
+                // pessoa escrever o endereço inteiro e perder metade sem aviso.
+                maxLength={FREIGHT_MAX}
                 className={`resize-none px-3.5 py-3 text-sm ${FIELD_CLASS}`}
                 style={FIELD_STYLE}
               />
             </Field>
 
-            <div
-              className="flex items-center justify-between pt-3.5"
-              style={{ borderTop: "1px solid var(--sf-hairline)" }}
-            >
-              <span className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                Total
-              </span>
-              <span className="text-lg font-extrabold" style={{ color: "var(--sf-accent)" }}>
-                {fmt(total)}
-              </span>
+            <div className="flex flex-col gap-2 pt-3.5" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
+              <DiscountLine units={discountUnits} amount={discountTotal} />
+              <div className="flex items-center justify-between">
+                <span className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  Total
+                </span>
+                <span className="flex items-baseline gap-2">
+                  {discountTotal > 0 && (
+                    <span className="text-[13px] line-through" style={{ color: "var(--sf-text-dim)" }}>
+                      {fmt(fullTotal)}
+                    </span>
+                  )}
+                  <span className="text-lg font-extrabold" style={{ color: "var(--sf-accent)" }}>
+                    {fmt(total)}
+                  </span>
+                </span>
+              </div>
             </div>
           </div>
 

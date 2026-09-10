@@ -9,6 +9,7 @@ import { usePendingOrders, ORDER_PAYMENT_CHOICES, ORDER_NOTE_MAX, type Order, ty
 import { computeSellerBalance, computeSellerConsumption, PROJECT_START, type ConsumptionEntry } from "@/lib/commissions";
 import { buildSellerStock } from "@/lib/seller-stock";
 import { formatDateBR } from "@/lib/date-utils";
+import { orderRef } from "@/lib/order-ref";
 import { EASE_OUT, fadeUp, stagger } from "@/lib/motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -414,6 +415,10 @@ function OrderCard({
           <p className="mt-2 truncate text-base font-bold leading-tight">{order.customers?.name ?? "Sem cliente"}</p>
           <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--sf-text-muted)" }}>
             {order.customers?.whatsapp ?? "—"}
+            {/* A mesma referência que vai na mensagem que o cliente encaminha:
+                é ela que casa o WhatsApp com o card quando a mesma pessoa faz
+                dois pedidos no mesmo dia. */}
+            <span className="ml-1.5" style={{ color: "var(--sf-text-faint)" }}>{orderRef(order.id)}</span>
           </p>
         </div>
         <div className="flex-none text-right">

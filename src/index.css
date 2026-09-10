@@ -529,7 +529,7 @@
     --sf-accent-soft: rgba(143, 193, 227, 0.3); /* botão desabilitado */
     --sf-accent-line: rgba(143, 193, 227, 0.5); /* borda do sabor escolhido */
     --sf-accent-ink: #1a1a1a; /* texto escuro sobre o accent */
-    --sf-warn: #d98c6b;       /* "só restam N" */
+    --sf-warn: #d98c6b;       /* valor em aberto, ainda a receber */
     /* Recusa: o pedido não passou. Separado do --sf-warn de propósito — um
      * avisa que está acabando, o outro diz que não deu. */
     --sf-danger: #e07a6b;

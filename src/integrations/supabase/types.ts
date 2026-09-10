@@ -326,6 +326,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          client_token: string | null
           confirmed_at: string | null
           created_at: string
           customer_id: string
@@ -982,13 +983,14 @@ export type Database = {
       }
       create_pending_order: {
         Args: {
+          p_client_token?: string
           p_customer_name: string
           p_customer_whatsapp: string
           p_freight_notes: string
           p_items: Json
           p_seller_id: string
         }
-        Returns: string
+        Returns: Json
       }
       create_sale: {
         Args: {
@@ -1036,13 +1038,12 @@ export type Database = {
       get_customer_loyalty: {
         Args: { p_whatsapp: string }
         Returns: {
-          customer_id: string
           customer_name: string
-          gifts_earned: number
+          cycle_units: number
+          discounts_used: number
           loyalty_tier: string
           total_units: number
-          units_until_next_gift: number
-          whatsapp: string
+          units_until_next_discount: number
         }[]
       }
       get_my_seller_id: { Args: never; Returns: string }
@@ -1060,6 +1061,7 @@ export type Database = {
           brand: string
           flavor: string
           image_url: string
+          loyalty_price: number
           model: string
           name: string
           product_id: string
