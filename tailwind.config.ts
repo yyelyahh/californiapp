@@ -82,6 +82,12 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
+      // Mesma curva do EASE_OUT em src/lib/motion.ts. Precisa de nome porque
+      // ease-[cubic-bezier(...)] arbitrário é ambíguo (core = transition,
+      // tailwindcss-animate = animation) e o Tailwind não gera nada.
+      transitionTimingFunction: {
+        "out-soft": "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
