@@ -1130,8 +1130,16 @@ function BrandChips({
 /* Avisos da loja                                                       */
 /* ------------------------------------------------------------------ */
 
-/** Quanto cada aviso fica na frente antes de o próximo entrar. */
+/**
+ * Quanto cada aviso fica na frente antes de o próximo entrar.
+ *
+ * O tempo é POR AVISO, não do trilho: a promoção tem três linhas de texto e um
+ * número que a pessoa precisa guardar ("R$ 7,00, dois do mesmo modelo"), e
+ * três segundos é o tempo de ler uma vez sem terminar. O aviso do tira-dúvidas
+ * é uma frase que se lê de relance e não muda nada se for relida depois.
+ */
 const NOTICE_MS = 3000;
+const NOTICE_MS_FEATURED = 6000;
 /** Largura do card no trilho. O resto é a espiada do próximo. */
 const NOTICE_WIDTH = "86%";
 const NOTICE_GAP = "10px";
@@ -1144,6 +1152,8 @@ interface Notice {
   body: string;
   /** O primeiro aviso é a promoção: fundo accent e a luz correndo na borda. */
   featured?: boolean;
+  /** Quanto ESTE aviso fica na frente. Sem isto, `NOTICE_MS`. */
+  ms?: number;
 }
 
 /** Raio do card de aviso, e a espessura da luz que corre nele. */
@@ -1256,9 +1266,12 @@ function StoreNotices({ notices, active = true }: { notices: Notice[]; active?: 
   // toque — um card por vez, e a pessoa passa quando quiser.
   useEffect(() => {
     if (total < 2 || reduce || !active) return;
-    const t = window.setTimeout(() => setI(v => (v + 1) % total), NOTICE_MS);
+    // O tempo é do aviso que está na frente AGORA — por isso o efeito depende
+    // de `i` e não de um intervalo fixo do trilho.
+    const espera = notices[i]?.ms ?? NOTICE_MS;
+    const t = window.setTimeout(() => setI(v => (v + 1) % total), espera);
     return () => window.clearTimeout(t);
-  }, [i, total, reduce, active]);
+  }, [i, total, reduce, active, notices]);
 
   // O catálogo muda e o aviso some (a promoção depende das regras do banco):
   // sem isto o índice ficaria apontando para um card que não existe mais.
@@ -1765,6 +1778,7 @@ export default function SellerStorePage() {
         title: "Combo de modelo",
         body: `Leve ${rules.combo_min_units} ou mais unidades do mesmo modelo — pode misturar os sabores — e cada uma sai ${fmt(rules.combo_discount)} mais barata.`,
         featured: true,
+        ms: NOTICE_MS_FEATURED,
       });
     }
     list.push({

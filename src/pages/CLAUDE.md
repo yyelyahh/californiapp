@@ -198,7 +198,7 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   Recolhido, ele para de girar e volta ao primeiro card. Quem escuta o scroll é
   uma **ref de callback**, não um efeito com `[]`: a tela de comprovante troca
   a árvore inteira e na volta o `<main>` é outro elemento. Cards a 86% da largura
-  com o próximo aparecendo pela borda; anda sozinho a cada 3s e passa NO
+  com o próximo aparecendo pela borda; anda sozinho (6s na promoção, 3s nos demais: `Notice.ms`) e passa NO
   TOQUE, nunca no arraste (a tela já rola na vertical, e um trilho arrastável
   disputaria esse gesto e o de voltar do iOS). É a única peça que anima por
   `transition` do CSS em vez do motion — o passo é `calc(86% + 10px)` e o
