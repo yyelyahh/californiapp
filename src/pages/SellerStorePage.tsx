@@ -1142,8 +1142,79 @@ interface Notice {
   eyebrow: string;
   title: string;
   body: string;
-  /** O primeiro aviso é a promoção e usa o fundo accent. */
+  /** O primeiro aviso é a promoção: fundo accent e a luz correndo na borda. */
   featured?: boolean;
+}
+
+/** Raio do card de aviso, e a espessura da luz que corre nele. */
+const NOTICE_RADIUS = 18;
+const TRACE_STROKE = 2;
+/** Quanto do contorno a luz ocupa. Curta demais vira cursor, longa vira borda. */
+const TRACE_SHARE = 0.24;
+
+/** O contorno do card como um caminho só, para a luz ter por onde correr. */
+function roundedRectPath(w: number, h: number, r: number, inset: number) {
+  const x = inset;
+  const y = inset;
+  const ww = w - inset * 2;
+  const hh = h - inset * 2;
+  const rr = Math.min(r - inset, ww / 2, hh / 2);
+  return `M${x + rr},${y} H${x + ww - rr} A${rr},${rr} 0 0 1 ${x + ww},${y + rr} V${y + hh - rr} A${rr},${rr} 0 0 1 ${x + ww - rr},${y + hh} H${x + rr} A${rr},${rr} 0 0 1 ${x},${y + hh - rr} V${y + rr} A${rr},${rr} 0 0 1 ${x + rr},${y}Z`;
+}
+
+/**
+ * A luz que dá a volta na borda do card da promoção.
+ *
+ * É um traço só — `stroke-dasharray` com UM risco e um vão do tamanho do
+ * resto do contorno — andando por `stroke-dashoffset`. O caminho é medido
+ * (ResizeObserver), não desenhado em porcentagem: `pathLength` em `<rect>`
+ * ainda é irregular no WebKit, e esticar um viewBox quadrado num card
+ * retangular deixaria os cantos ovais e o traço mais grosso nas laterais.
+ *
+ * Fica fora do fluxo (`pointer-events-none`, `aria-hidden`): quem lê por
+ * leitor de tela já recebe o "Promoção" no sobretítulo, e para o toque o alvo
+ * continua sendo o card inteiro.
+ */
+function NoticeTrace() {
+  const ref = useRef<SVGSVGElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const r = entries[0]?.contentRect;
+      if (r && r.width > 0 && r.height > 0) setBox({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const inset = TRACE_STROKE / 2;
+  const rr = Math.max(0, NOTICE_RADIUS - inset);
+  // Perímetro do retângulo arredondado: os quatro lados retos mais o círculo
+  // que os quatro cantos formam juntos.
+  const perimeter = box
+    ? 2 * (box.w - 2 * inset - 2 * rr) + 2 * (box.h - 2 * inset - 2 * rr) + 2 * Math.PI * rr
+    : 0;
+  const risco = perimeter * TRACE_SHARE;
+
+  return (
+    <svg ref={ref} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full">
+      {box && perimeter > 0 && (
+        <path
+          className="sf-trace"
+          d={roundedRectPath(box.w, box.h, NOTICE_RADIUS, inset)}
+          fill="none"
+          stroke="var(--sf-accent)"
+          strokeWidth={TRACE_STROKE}
+          strokeLinecap="round"
+          strokeDasharray={`${risco} ${perimeter - risco}`}
+          style={{ ["--sf-trace-end" as string]: `${-perimeter}px` }}
+        />
+      )}
+    </svg>
+  );
 }
 
 /**
@@ -1220,13 +1291,18 @@ function StoreNotices({ notices, active = true }: { notices: Notice[]; active?: 
               <article
                 key={n.key}
                 aria-hidden={k !== i}
-                className="flex flex-none flex-col gap-0.5 rounded-[18px] px-3.5 py-3"
+                className="relative flex flex-none flex-col gap-0.5 rounded-[18px] px-3.5 py-3"
                 style={{
                   width: NOTICE_WIDTH,
                   background: n.featured ? "var(--sf-accent-tint)" : "var(--sf-surface)",
                   border: `1px solid ${n.featured ? "var(--sf-accent-line)" : "var(--sf-hairline)"}`,
                 }}
               >
+                {/* Só na promoção, só enquanto ela está na frente e o trilho
+                    está de pé: luz correndo num card que ninguém está vendo é
+                    bateria gasta, e em dois cards ao mesmo tempo vira enfeite.
+                    Com movimento reduzido a borda accent parada já basta. */}
+                {n.featured && k === i && active && !reduce && <NoticeTrace />}
                 <span
                   className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]"
                   style={{ color: "var(--sf-accent)" }}

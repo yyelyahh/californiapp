@@ -624,6 +624,33 @@
     }
   }
 
+  /* A luz que dá a volta na borda do card da promoção (ver NoticeTrace).
+   *
+   * O caminho e o tamanho do risco são medidos no componente; aqui só anda o
+   * `stroke-dashoffset` até o perímetro inteiro, que é o que faz o traço dar
+   * uma volta completa e recomeçar sem emenda. `linear` de propósito: é
+   * percurso longo em velocidade constante, o mesmo motivo do EASE_IN_OUT da
+   * varredura do botão — uma curva de saída faria a luz disparar e travar a
+   * cada volta. */
+  .storefront .sf-trace {
+    animation: sf-trace 2.8s linear infinite;
+  }
+
+  @keyframes sf-trace {
+    to {
+      stroke-dashoffset: var(--sf-trace-end, 0);
+    }
+  }
+
+  /* Cinto e suspensório: o componente já não renderiza a luz com movimento
+   * reduzido (useReducedMotion), mas se algum dia ela for usada em outro
+   * lugar, o CSS sozinho a deixa parada. */
+  @media (prefers-reduced-motion: reduce) {
+    .storefront .sf-trace {
+      animation: none;
+    }
+  }
+
   /* Foco dos elementos sem anel próprio (chips, botões-pílula). Nos campos do
    * shadcn não aparece: eles trazem `focus-visible:outline-none` e ficam só
    * com o anel acima. */
