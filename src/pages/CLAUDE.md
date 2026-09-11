@@ -190,7 +190,14 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   sem desconto — "R$ 0,00 de desconto" só lembra o que a pessoa não ganhou.
   Aparece no carrinho E no checkout, a mesma peça nos dois, porque é o mesmo
   número e ele não pode ser escrito de dois jeitos.
-- `StoreNotices` — o trilho de avisos acima da busca. Cards a 86% da largura
+- `StoreNotices` — o trilho de avisos acima da busca. **Só fica de pé no topo
+  da lista:** o cabeçalho não rola, então ele ocuparia ~105px do celular para
+  sempre; recolhe (altura → 0, não só opacidade — o espaço tem que voltar para
+  a lista) quando o `<main>` passa de 40px e volta abaixo de 8px. Dois limites
+  de propósito: com um só, parar o dedo em cima dele faz o aviso piscar.
+  Recolhido, ele para de girar e volta ao primeiro card. Quem escuta o scroll é
+  uma **ref de callback**, não um efeito com `[]`: a tela de comprovante troca
+  a árvore inteira e na volta o `<main>` é outro elemento. Cards a 86% da largura
   com o próximo aparecendo pela borda; anda sozinho a cada 3s e passa NO
   TOQUE, nunca no arraste (a tela já rola na vertical, e um trilho arrastável
   disputaria esse gesto e o de voltar do iOS). É a única peça que anima por

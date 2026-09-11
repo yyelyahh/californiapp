@@ -1163,10 +1163,17 @@ interface Notice {
  * porcentagem, e a porcentagem aqui é indispensável (ela é da largura do
  * trilho, então o mesmo código serve de 320px a 480px sem medir nada em JS).
  */
-function StoreNotices({ notices }: { notices: Notice[] }) {
+function StoreNotices({ notices, active = true }: { notices: Notice[]; active?: boolean }) {
   const reduce = useReducedMotion();
   const [i, setI] = useState(0);
   const total = notices.length;
+
+  // Recolhido (a lista rolou), o trilho para de girar e volta ao primeiro
+  // card: quem sobe de novo lá no topo recebe a promoção, não o aviso do meio
+  // de uma volta que aconteceu fora da tela.
+  useEffect(() => {
+    if (!active) setI(0);
+  }, [active]);
 
   // Um `setTimeout` por índice, não um `setInterval`: assim o toque também
   // reinicia a contagem, em vez de o próximo aviso entrar logo depois de a
@@ -1177,10 +1184,10 @@ function StoreNotices({ notices }: { notices: Notice[] }) {
   // nem sequer há o rastro que explica a troca. Ali ele vira o que já é no
   // toque — um card por vez, e a pessoa passa quando quiser.
   useEffect(() => {
-    if (total < 2 || reduce) return;
+    if (total < 2 || reduce || !active) return;
     const t = window.setTimeout(() => setI(v => (v + 1) % total), NOTICE_MS);
     return () => window.clearTimeout(t);
-  }, [i, total, reduce]);
+  }, [i, total, reduce, active]);
 
   // O catálogo muda e o aviso some (a promoção depende das regras do banco):
   // sem isto o índice ficaria apontando para um card que não existe mais.
@@ -1368,6 +1375,38 @@ export default function SellerStorePage() {
   const [activeBrand, setActiveBrand] = useState<string>(ALL);
   /** Os números das promoções, vindos do banco. Ver StoreRules. */
   const [rules, setRules] = useState<StoreRules | null>(null);
+
+  /**
+   * O trilho de avisos só fica de pé no TOPO da lista.
+   *
+   * O cabeçalho não rola (só o `<main>` rola, ver o app-shell), então o aviso
+   * ficava na tela para sempre: ~105px do celular ocupados por promoção
+   * enquanto a pessoa procura produto lá embaixo. Ele recolhe assim que a
+   * lista anda e volta quando ela volta ao topo — a busca e os chips, que são
+   * ferramenta e não recado, continuam parados onde estavam.
+   *
+   * Os dois números são diferentes de propósito (histerese): recolhe passando
+   * de 40px, só volta abaixo de 8px. Com um limite só, parar o dedo em cima
+   * dele faria o aviso piscar abrindo e fechando.
+   */
+  const [noticesOpen, setNoticesOpen] = useState(true);
+  const scrollWatch = useRef<{ el: HTMLElement; fn: () => void } | null>(null);
+  // Ref de callback em vez de efeito: a tela de comprovante troca a árvore
+  // inteira, e na volta o <main> é outro elemento. O efeito com `[]` ficaria
+  // ouvindo um nó que não existe mais.
+  const mainRef = useCallback((el: HTMLElement | null) => {
+    if (scrollWatch.current) {
+      scrollWatch.current.el.removeEventListener("scroll", scrollWatch.current.fn);
+      scrollWatch.current = null;
+    }
+    if (!el) return;
+    const fn = () => setNoticesOpen(open => (open ? el.scrollTop <= 40 : el.scrollTop < 8));
+    el.addEventListener("scroll", fn, { passive: true });
+    scrollWatch.current = { el, fn };
+    // A lista pode nascer rolada (voltar do comprovante, restaurar posição):
+    // o estado tem que sair certo já na montagem.
+    fn();
+  }, []);
 
   const [cart, setCart] = useState<CartItem[]>(() => readStoredCart(sellerId));
   /** O que a reconciliação com o catálogo mexeu no carrinho guardado. */
@@ -2110,7 +2149,17 @@ export default function SellerStorePage() {
           </div>
         </div>
 
-        <StoreNotices notices={notices} />
+        {/* A altura é que anima, não a opacidade sozinha: o espaço precisa
+            devolver os px para a lista subir junto, senão o aviso some e fica
+            um buraco onde ele estava. */}
+        <motion.div
+          initial={false}
+          animate={{ height: noticesOpen ? "auto" : 0, opacity: noticesOpen ? 1 : 0 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: EASE_OUT }}
+          style={{ overflow: "hidden" }}
+        >
+          <StoreNotices notices={notices} active={noticesOpen} />
+        </motion.div>
 
         <div className="relative mt-3.5">
           <Search
@@ -2131,7 +2180,10 @@ export default function SellerStorePage() {
         </div>
       </header>
 
-      <main className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-[100px] pt-1.5`}>
+      <main
+        ref={mainRef}
+        className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-[100px] pt-1.5`}
+      >
         {/* Quando a reconciliação esvazia o carrinho, a barra de baixo some
             junto e o aviso ficaria escondido num sheet que a pessoa não tem
             mais motivo para abrir. Aqui ele encontra quem precisa dele. */}
