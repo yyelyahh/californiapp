@@ -6,6 +6,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { CSS_EASE_OUT, EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
 import { formatPhoneDisplay, isValidPhone, onlyDigits } from "@/lib/phone";
 import { orderRef } from "@/lib/order-ref";
+import { proxiedImage } from "@/lib/image-proxy";
 import { previewCartDiscount, type DiscountPreview } from "@/lib/cart-discount";
 
 import { Input } from "@/components/ui/input";
@@ -841,6 +842,7 @@ function ProductMedia({
   iconSize,
   fit = "contain",
   priority = false,
+  cssWidth = 440,
 }: {
   src: string | null;
   alt: string;
@@ -848,13 +850,23 @@ function ProductMedia({
   fit?: "contain" | "cover";
   /** Foto que a pessoa já está olhando: entra na frente da fila, sem lazy. */
   priority?: boolean;
+  /** Quanto o elemento ocupa na tela — é o que decide o tamanho pedido ao proxy. */
+  cssWidth?: number;
 }) {
   // Link quebrado cai no mesmo placeholder do produto sem foto, em vez de
   // mostrar o ícone de imagem partida do navegador.
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // O proxy falhou (fora do ar, recusou aquela URL, formato que ele não abre):
+  // a foto original vira o plano B ANTES de desistir e mostrar o ícone. Sem
+  // isso, um dia ruim do serviço seria uma loja inteira sem foto.
+  const [rawFallback, setRawFallback] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const reduce = useReducedMotion();
+
+  const proxied = useMemo(() => proxiedImage(src, cssWidth), [src, cssWidth]);
+  const shown = rawFallback ? src : proxied;
+  const temPlanoB = !rawFallback && !!src && !!proxied && proxied !== src;
 
   // Num 4G ruim a foto demora, e o que ficava no lugar dela era o mesmo bloco
   // de `--sf-surface` do card: nada dizia se estava vindo, se tinha falhado ou
@@ -867,6 +879,7 @@ function ProductMedia({
   // pronta. Roda também na troca de `src`, depois de o DOM já ter a nova.
   useEffect(() => {
     setFailed(false);
+    setRawFallback(false);
     setLoaded(imgRef.current?.complete ?? false);
   }, [src]);
 
@@ -877,7 +890,7 @@ function ProductMedia({
       className="relative flex h-full w-full items-center justify-center overflow-hidden"
       style={{ background: "var(--sf-surface)" }}
     >
-      {src && !failed ? (
+      {shown && !failed ? (
         <>
           {fit === "contain" && loaded && (
             // Decoração: o alt de verdade está na imagem da frente. É a mesma
@@ -888,7 +901,7 @@ function ProductMedia({
             // Só entra DEPOIS de a foto carregar: antes disso ela disputaria a
             // mesma rede e a mesma decodificação com a imagem que importa.
             <img
-              src={src}
+              src={shown}
               alt=""
               aria-hidden
               className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
@@ -899,10 +912,15 @@ function ProductMedia({
           )}
           <img
             ref={imgRef}
-            src={src}
+            src={shown}
             alt={alt}
             onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
+            onError={() => {
+              // Primeiro tenta a original; só depois dela falhar é que o
+              // produto passa a não ter foto.
+              if (temPlanoB) setRawFallback(true);
+              else setFailed(true);
+            }}
             className={`relative h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"}`}
             style={{
               opacity: loaded ? 1 : 0,
@@ -2444,7 +2462,9 @@ export default function SellerStorePage() {
                   style={{ borderBottom: "1px solid var(--sf-hairline)" }}
                 >
                   <div className="h-14 w-14 flex-none overflow-hidden rounded-xl">
-                    <ProductMedia src={i.image_url ?? null} alt={i.model} iconSize={22} fit="cover" />
+                    {/* 56px na tela: sem o `cssWidth` a miniatura baixaria a
+                        mesma foto de 3000px que o card usa. */}
+                    <ProductMedia src={i.image_url ?? null} alt={i.model} iconSize={22} fit="cover" cssWidth={56} />
                   </div>
 
                   <div className="min-w-0 flex-1">

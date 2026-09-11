@@ -175,6 +175,14 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   `priority` tira o `lazy` e manda `fetchpriority="high"` — vale para as DUAS
   primeiras fotos da lista e para o hero do detalhe. `loading="lazy"` na foto que
   está na tela atrasa justamente o que a pessoa está olhando.
+  **A foto não vem mais da URL crua:** ela passa por `proxiedImage`
+  (`src/lib/image-proxy.ts`), que pede ao redimensionador público a versão do
+  tamanho da tela — `cssWidth` é quanto o elemento ocupa, e o proxy recebe o
+  dobro por causa do retina (440 no card e no hero, 56 na miniatura do
+  carrinho; sem isso a miniatura baixava a mesma foto de 3000px do card). Se o
+  proxy falhar, o `onError` cai na URL ORIGINAL antes de desistir e mostrar o
+  ícone: serviço fora do ar deixa a loja lenta como era, nunca sem foto. Para
+  desligar tudo (quando o Storage entrar), `PROXY_HOST = null` na lib.
 - `DrawnCheck` — check que se desenha, para confirmação.
 - `DiscountLines` — as linhas de desconto acima do total, **uma por REGRA**
   (combo de modelo, fidelidade), nunca as duas somadas num número só: quem
