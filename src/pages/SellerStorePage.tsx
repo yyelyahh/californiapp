@@ -2548,7 +2548,7 @@ export default function SellerStorePage() {
                     id="cliente-nome"
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
-                    placeholder="ex: Jordan Lee"
+                    placeholder="ex: Pedro"
                     maxLength={80}
                     className={`h-[50px] px-4 ${FIELD_CLASS}`}
                     style={FIELD_STYLE}
