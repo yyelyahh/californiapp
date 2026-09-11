@@ -3,10 +3,10 @@ import { useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-import { EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
+import { CSS_EASE_OUT, EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
 import { formatPhoneDisplay, isValidPhone, onlyDigits } from "@/lib/phone";
 import { orderRef } from "@/lib/order-ref";
-import { previewLoyaltyDiscount } from "@/lib/loyalty-discount";
+import { previewCartDiscount, type DiscountPreview } from "@/lib/cart-discount";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,8 @@ import {
   Check,
   ArrowLeft,
   X,
+  Info,
+  Tag,
 } from "lucide-react";
 import { formatCurrency as fmt } from "@/lib/currency";
 
@@ -37,6 +39,8 @@ interface CatalogRow {
   sale_price: number;
   /** Quanto esta unidade custa quando é a premiada pela fidelidade. */
   loyalty_price: number;
+  /** Quanto esta unidade custa dentro de um combo do modelo. */
+  combo_price: number;
   available: number;
   image_url?: string | null;
 }
@@ -164,7 +168,20 @@ function readStoredCart(sellerId?: string): CartItem[] {
     const parsed = JSON.parse(raw) as { savedAt?: number; items?: CartItem[] };
     if (!Array.isArray(parsed?.items) || parsed.items.length === 0) return [];
     if (Date.now() - (parsed.savedAt ?? 0) > CART_TTL_MS) return [];
-    return parsed.items;
+    // Duas linhas do MESMO produto não nascem mais aqui (o `addToCart` soma por
+    // `product_id`), mas o que volta do storage pode ter sido gravado por uma
+    // versão antiga — e duas linhas iguais viram dois blocos com a mesma `key`
+    // no sheet, o mesmo sabor repetido e a quantidade partida ao meio.
+    // Consolida antes de devolver: o carrinho tem uma linha por produto.
+    const merged = new Map<string, CartItem>();
+    parsed.items.forEach(item => {
+      if (!item?.product_id) return;
+      const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
+      const prev = merged.get(item.product_id);
+      if (prev) prev.quantity += qty;
+      else merged.set(item.product_id, { ...item, quantity: qty });
+    });
+    return Array.from(merged.values()).filter(i => i.quantity > 0);
   } catch {
     // Aba anônima, cota cheia, navegador bloqueando site data: o carrinho só
     // não sobrevive ao reload. Nada aqui pode derrubar a loja.
@@ -234,6 +251,23 @@ interface Loyalty {
   units_until_next_discount: number;
   discounts_used: number;
   loyalty_tier: string;
+}
+
+/**
+ * Os números das promoções, lidos do banco (`get_store_rules`).
+ *
+ * Nenhum deles é digitado aqui pelo mesmo motivo que o ciclo 6 nunca foi: o
+ * card da promoção e o tira-dúvidas FALAM esses números, e no dia em que a
+ * regra mudar ela muda numa função SQL — a loja passa a dizer o valor novo
+ * sozinha, sem tocar em .tsx. Enquanto a consulta não volta (ou se ela
+ * falhar), a loja não promete desconto nenhum: o banco continua aplicando o
+ * combo no pedido, e o comprovante mostra a economia que a prévia não previu.
+ */
+interface StoreRules {
+  loyalty_cycle: number;
+  combo_min_units: number;
+  combo_discount: number;
+  reservation_hours: number;
 }
 
 /**
@@ -876,16 +910,36 @@ function Field({ id, label, children }: { id: string; label: string; children: R
  * desconto: linha de "R$ 0,00 de desconto" só ocupa espaço lembrando o que a
  * pessoa não ganhou.
  */
-function DiscountLine({ units, amount }: { units: number; amount: number }) {
-  if (amount <= 0) return null;
+/**
+ * As linhas de desconto acima do total — UMA POR REGRA, nunca as duas somadas
+ * num número só. Quem leva 6 unidades do mesmo modelo ganha pelos dois lados,
+ * e "−R$ 44,00" sem dizer de onde veio é um número que ninguém confere; com as
+ * duas linhas a pessoa vê o que o combo deu e o que a fidelidade deu.
+ *
+ * Some a linha que não tem desconto: "R$ 0,00 de desconto" só lembra o que a
+ * pessoa não ganhou. A mesma peça serve o carrinho e o checkout, porque é o
+ * mesmo número e ele não pode ser escrito de dois jeitos.
+ */
+function DiscountLines({ preview }: { preview: DiscountPreview }) {
+  const linhas = [
+    { key: "combo", icon: "🏷️", label: "Combo de modelo", units: preview.comboUnits, amount: preview.comboTotal },
+    { key: "fidelidade", icon: "🎁", label: "Fidelidade", units: preview.loyaltyUnits, amount: preview.loyaltyTotal },
+  ].filter(l => l.amount > 0);
+
+  if (linhas.length === 0) return null;
+
   return (
-    <div className="flex items-center justify-between text-[13px]">
-      <span style={{ color: "var(--sf-text-muted)" }}>
-        🎁 Fidelidade · {units === 1 ? "1 unidade" : `${units} unidades`}
-      </span>
-      <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>
-        −{fmt(amount)}
-      </span>
+    <div className="flex flex-col gap-1.5">
+      {linhas.map(l => (
+        <div key={l.key} className="flex items-center justify-between text-[13px]">
+          <span style={{ color: "var(--sf-text-muted)" }}>
+            {l.icon} {l.label} · {l.units === 1 ? "1 unidade" : `${l.units} unidades`}
+          </span>
+          <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>
+            −{fmt(l.amount)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1016,6 +1070,135 @@ function BrandChips({
 }
 
 /* ------------------------------------------------------------------ */
+/* Avisos da loja                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Quanto cada aviso fica na frente antes de o próximo entrar. */
+const NOTICE_MS = 3000;
+/** Largura do card no trilho. O resto é a espiada do próximo. */
+const NOTICE_WIDTH = "86%";
+const NOTICE_GAP = "10px";
+
+interface Notice {
+  key: string;
+  icon: typeof Tag;
+  eyebrow: string;
+  title: string;
+  body: string;
+  /** O primeiro aviso é a promoção e usa o fundo accent. */
+  featured?: boolean;
+}
+
+/**
+ * O trilho de avisos acima da busca.
+ *
+ * Ele ANDA SOZINHO a cada 3s e passa ao próximo NO TOQUE — não no arraste. A
+ * loja inteira é uma coluna que rola na vertical; um trilho que responde ao
+ * arraste horizontal roubaria o gesto de rolar sempre que o dedo encostasse
+ * torto, e no iOS ainda disputaria o gesto de voltar. A espiada do próximo
+ * card (os 14% que sobram) é o que conta que há mais coisa ali — é ela que faz
+ * o toque acontecer, e o pontinho embaixo confirma quantos são.
+ *
+ * Um aviso só não gira nem mostra pontinho: não há para onde ir.
+ *
+ * O passo é `calc(86% + 10px)` — a largura do card mais o vão. Por isso quem
+ * anima é o CSS e não o motion: `x` do motion não interpola `calc` com
+ * porcentagem, e a porcentagem aqui é indispensável (ela é da largura do
+ * trilho, então o mesmo código serve de 320px a 480px sem medir nada em JS).
+ */
+function StoreNotices({ notices }: { notices: Notice[] }) {
+  const reduce = useReducedMotion();
+  const [i, setI] = useState(0);
+  const total = notices.length;
+
+  // Um `setTimeout` por índice, não um `setInterval`: assim o toque também
+  // reinicia a contagem, em vez de o próximo aviso entrar logo depois de a
+  // pessoa ter acabado de trocar na mão.
+  //
+  // Com movimento reduzido o trilho NÃO anda sozinho: trocar o texto embaixo
+  // do olho de quem pediu menos movimento é pior que animar: sem transição
+  // nem sequer há o rastro que explica a troca. Ali ele vira o que já é no
+  // toque — um card por vez, e a pessoa passa quando quiser.
+  useEffect(() => {
+    if (total < 2 || reduce) return;
+    const t = window.setTimeout(() => setI(v => (v + 1) % total), NOTICE_MS);
+    return () => window.clearTimeout(t);
+  }, [i, total, reduce]);
+
+  // O catálogo muda e o aviso some (a promoção depende das regras do banco):
+  // sem isto o índice ficaria apontando para um card que não existe mais.
+  useEffect(() => {
+    setI(v => (v < total ? v : 0));
+  }, [total]);
+
+  if (total === 0) return null;
+
+  return (
+    <div className="mt-3.5">
+      <button
+        type="button"
+        onClick={() => setI(v => (v + 1) % total)}
+        aria-label={total > 1 ? `Ver o próximo aviso (${i + 1} de ${total})` : undefined}
+        disabled={total < 2}
+        className="block w-full overflow-hidden text-left"
+      >
+        <div
+          className="flex"
+          style={{
+            gap: NOTICE_GAP,
+            transform: `translateX(calc(${-i} * (${NOTICE_WIDTH} + ${NOTICE_GAP})))`,
+            transition: reduce ? undefined : `transform 0.42s ${CSS_EASE_OUT}`,
+          }}
+        >
+          {notices.map((n, k) => {
+            const Icon = n.icon;
+            return (
+              <article
+                key={n.key}
+                aria-hidden={k !== i}
+                className="flex flex-none flex-col gap-0.5 rounded-[18px] px-3.5 py-3"
+                style={{
+                  width: NOTICE_WIDTH,
+                  background: n.featured ? "var(--sf-accent-tint)" : "var(--sf-surface)",
+                  border: `1px solid ${n.featured ? "var(--sf-accent-line)" : "var(--sf-hairline)"}`,
+                }}
+              >
+                <span
+                  className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]"
+                  style={{ color: "var(--sf-accent)" }}
+                >
+                  <Icon size={12} />
+                  {n.eyebrow}
+                </span>
+                <span className="text-[13.5px] font-extrabold">{n.title}</span>
+                <span className="text-xs leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+                  {n.body}
+                </span>
+              </article>
+            );
+          })}
+        </div>
+      </button>
+
+      {total > 1 && (
+        <div className="mt-2 flex justify-center gap-1.5">
+          {notices.map((n, k) => (
+            <span
+              key={n.key}
+              className="h-[5px] rounded-full transition-all duration-300"
+              style={{
+                width: k === i ? 14 : 5,
+                background: k === i ? "var(--sf-accent)" : "var(--sf-text-dim)",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Card do catálogo                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -1113,11 +1296,14 @@ export default function SellerStorePage() {
   const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
   const [activeBrand, setActiveBrand] = useState<string>(ALL);
+  /** Os números das promoções, vindos do banco. Ver StoreRules. */
+  const [rules, setRules] = useState<StoreRules | null>(null);
 
   const [cart, setCart] = useState<CartItem[]>(() => readStoredCart(sellerId));
   /** O que a reconciliação com o catálogo mexeu no carrinho guardado. */
   const [cartNotice, setCartNotice] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
   const [freight, setFreight] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1230,6 +1416,24 @@ export default function SellerStorePage() {
   }, [load]);
 
   /**
+   * As regras das promoções. Consulta separada do catálogo de propósito: ela
+   * não depende do vendedor, não muda entre um load e outro, e uma falha aqui
+   * não pode derrubar a lista de produtos — sem elas a loja só deixa de
+   * PROMETER o desconto na tela; o banco continua aplicando no pedido.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc("get_store_rules");
+      if (cancelled) return;
+      setRules(((data as unknown as StoreRules[] | null) ?? [])[0] ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
    * O carrinho segue o catálogo.
    *
    * Cada item guardava a foto do momento em que entrou — preço e estoque
@@ -1329,20 +1533,106 @@ export default function SellerStorePage() {
   const cartCount = useMemo(() => cart.reduce((a, i) => a + i.quantity, 0), [cart]);
 
   /**
-   * O total com o desconto da fidelidade já dentro. A conta (e o porquê de ela
-   * precisar bater com a do banco) mora em `src/lib/loyalty-discount.ts`.
+   * Quanto de cada produto JÁ está no carrinho.
    *
-   * Sem cadastro encontrado não há prévia: a posição do cliente no ciclo é o
-   * que decide, e ela só existe depois que o WhatsApp acha alguém.
+   * O sheet de detalhe abria sempre em "1" e não dizia nada sobre o que já
+   * tinha sido escolhido: a pessoa apertava "Adicionar" de novo achando que
+   * não tinha funcionado. Com o estoque cheio no carrinho o toque virava
+   * confirmação (a varredura de tinta e o check) sem mexer em nada, porque o
+   * `addToCart` trava a soma no estoque — parecia que o item entrava toda vez.
    */
-  const { total, fullTotal, discountTotal, discountUnits } = useMemo(
+  const cartQtyById = useMemo(() => new Map(cart.map(i => [i.product_id, i.quantity] as const)), [cart]);
+
+  /**
+   * O total com os dois descontos já dentro. A conta (e o porquê de ela
+   * precisar bater com a do banco) mora em `src/lib/cart-discount.ts`.
+   *
+   * O COMBO não espera ninguém: ele depende só do que está no carrinho, então
+   * aparece antes de o WhatsApp ser digitado. A FIDELIDADE só entra quando o
+   * cadastro é encontrado — é a posição do cliente no ciclo que decide, e ela
+   * não existe antes disso.
+   */
+  const preview = useMemo(
     () =>
-      previewLoyaltyDiscount(
-        cart,
-        loyalty ? { historyUnits: loyalty.total_units, cycleUnits: loyalty.cycle_units } : null,
-      ),
-    [cart, loyalty],
+      previewCartDiscount(cart, {
+        comboMinUnits: rules?.combo_min_units,
+        loyalty: loyalty ? { historyUnits: loyalty.total_units, cycleUnits: loyalty.cycle_units } : null,
+      }),
+    [cart, loyalty, rules],
   );
+  const { total, fullTotal, discountTotal } = preview;
+
+  /**
+   * Os avisos que giram acima da busca.
+   *
+   * A promoção só entra quando as regras chegam do banco: é dali que saem o
+   * "2 ou mais" e o valor do desconto, e um card que anuncia promoção sem
+   * dizer o tamanho dela não vale a tela que ocupa. O tira-dúvidas não depende
+   * de nada e está sempre lá — é ele que apresenta o botão novo.
+   */
+  const notices = useMemo<Notice[]>(() => {
+    const list: Notice[] = [];
+    if (rules && rules.combo_discount > 0 && rules.combo_min_units > 1) {
+      list.push({
+        key: "combo",
+        icon: Tag,
+        eyebrow: "Promoção",
+        title: "Combo de modelo",
+        body: `Leve ${rules.combo_min_units} ou mais unidades do mesmo modelo — pode misturar os sabores — e cada uma sai ${fmt(rules.combo_discount)} mais barata.`,
+        featured: true,
+      });
+    }
+    list.push({
+      key: "ajuda",
+      icon: Info,
+      eyebrow: "Tira-dúvidas",
+      title: "Ficou com dúvida?",
+      body: "Toque no i ao lado do carrinho: fidelidade, combo e como o pedido chega ao vendedor.",
+    });
+    return list;
+  }, [rules]);
+
+  /**
+   * As perguntas do tira-dúvidas.
+   *
+   * Resposta que precisa de número só aparece com as regras carregadas — é
+   * preferível uma pergunta a menos a uma frase com buraco no meio. O texto é
+   * daqui mesmo, sem banco: mudar uma resposta é mudar uma string.
+   */
+  const faq = useMemo(() => {
+    const list: { q: string; a: string }[] = [];
+    if (rules) {
+      list.push({
+        q: "Como funciona a fidelidade?",
+        a: `A cada ${rules.loyalty_cycle} unidades compradas, uma sai pela metade do preço. O desconto já entra no total do pedido — não precisa pedir.`,
+      });
+      if (rules.combo_discount > 0 && rules.combo_min_units > 1) {
+        list.push({
+          q: "O que é o combo de modelo?",
+          a: `Levando ${rules.combo_min_units} ou mais unidades do mesmo modelo, misturando os sabores ou não, cada uma sai ${fmt(rules.combo_discount)} mais barata. O desconto aparece no carrinho, antes de você confirmar.`,
+        });
+        list.push({
+          q: "Dá para juntar o combo com a fidelidade?",
+          a: "Na unidade premiada vale o melhor dos dois preços, nunca os dois somados. As outras unidades do modelo continuam com o desconto do combo.",
+        });
+      }
+    }
+    list.push({
+      q: "Como o pedido é confirmado?",
+      a: rules
+        ? `Você finaliza aqui e manda a mensagem no WhatsApp. O estoque fica guardado para você por ${rules.reservation_hours} horas, até o vendedor confirmar.`
+        : "Você finaliza aqui e manda a mensagem no WhatsApp. O estoque fica guardado para você até o vendedor confirmar.",
+    });
+    list.push({
+      q: "Como eu pago?",
+      a: "Pix ou dinheiro, direto com o vendedor na entrega. Nada é cobrado por aqui.",
+    });
+    list.push({
+      q: "O preço pode mudar depois que eu enviar?",
+      a: "Não. Vale o valor do pedido gravado — é ele que aparece no comprovante e na mensagem do WhatsApp.",
+    });
+    return list;
+  }, [rules]);
 
   /** Modelo aberto no sheet de detalhe, achado entre os grupos já montados. */
   const detailModel = useMemo(() => {
@@ -1360,7 +1650,10 @@ export default function SellerStorePage() {
     detailModel?.flavors[0] ??
     null;
   const available = selectedFlavor?.available ?? 0;
-  const clampedQty = Math.min(Math.max(1, qty), Math.max(available, 1));
+  /** O que esse sabor já ocupa no carrinho, e o que ainda cabe além disso. */
+  const inCart = selectedFlavor ? cartQtyById.get(selectedFlavor.product_id) ?? 0 : 0;
+  const room = Math.max(0, available - inCart);
+  const clampedQty = Math.min(Math.max(1, qty), Math.max(room, 1));
 
   const openDetail = (model: ModelGroup) => {
     const first = model.flavors.find(f => f.available > 0) ?? model.flavors[0];
@@ -1419,8 +1712,11 @@ export default function SellerStorePage() {
     });
     lines.push(`──────────────────────────────`);
     if (recibo.discountTotal > 0) {
+      // "Desconto", não "Fidelidade": o recibo do banco devolve UM número, que
+      // hoje pode ser fidelidade, combo de modelo ou os dois juntos. Nomear a
+      // regra errada na mensagem que vai para o vendedor é pior que não nomear.
       const un = recibo.discountUnits === 1 ? "unidade" : "unidades";
-      lines.push(`🎁 Fidelidade (${recibo.discountUnits} ${un}): -${fmt(recibo.discountTotal)}`);
+      lines.push(`🎁 Desconto (${recibo.discountUnits} ${un}): -${fmt(recibo.discountTotal)}`);
     }
     lines.push(`💰 Total: ${fmt(recibo.total)}`);
     if (freight.trim()) {
@@ -1657,8 +1953,8 @@ export default function SellerStorePage() {
               style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
             >
               <p className="font-bold">
-                🎁 Fidelidade: {success.discountUnits === 1 ? "uma unidade saiu" : `${success.discountUnits} unidades saíram`}{" "}
-                com desconto
+                🎁 {success.discountUnits === 1 ? "Uma unidade saiu" : `${success.discountUnits} unidades saíram`} com
+                desconto
               </p>
               <p className="mt-0.5" style={{ color: "var(--sf-text-muted)" }}>
                 Você economizou {fmt(success.discountTotal)} neste pedido.
@@ -1710,24 +2006,41 @@ export default function SellerStorePage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setCartOpen(true)}
-            aria-label={`Abrir carrinho${cartCount > 0 ? ` com ${cartCount} item(ns)` : ""}`}
-            className="relative flex h-10 w-10 flex-none items-center justify-center rounded-full"
-            style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" }}
-          >
-            <ShoppingCart size={17} />
-            {cartCount > 0 && (
-              <span
-                className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold"
-                style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
-              >
-                {cartCount}
-              </span>
-            )}
-          </button>
+          {/* O tira-dúvidas mora ao LADO do carrinho, com o mesmo desenho: são
+              as duas coisas que a pessoa procura no alto da tela. O aviso que
+              gira logo abaixo é quem conta que ele existe. */}
+          <div className="flex flex-none gap-2">
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              aria-label="Tira-dúvidas: fidelidade, combo e pedidos"
+              className="flex h-10 w-10 flex-none items-center justify-center rounded-full"
+              style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" }}
+            >
+              <Info size={17} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              aria-label={`Abrir carrinho${cartCount > 0 ? ` com ${cartCount} item(ns)` : ""}`}
+              className="relative flex h-10 w-10 flex-none items-center justify-center rounded-full"
+              style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" }}
+            >
+              <ShoppingCart size={17} />
+              {cartCount > 0 && (
+                <span
+                  className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold"
+                  style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+                >
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
+        <StoreNotices notices={notices} />
 
         <div className="relative mt-3.5">
           <Search
@@ -1885,6 +2198,7 @@ export default function SellerStorePage() {
                   {detailModel.flavors.map(f => {
                     const out = f.available <= 0;
                     const active = f.product_id === (selectedFlavor?.product_id ?? "");
+                    const noCarrinho = cartQtyById.get(f.product_id) ?? 0;
                     return (
                       <button
                         key={f.product_id}
@@ -1939,7 +2253,11 @@ export default function SellerStorePage() {
                               className="mt-0.5 text-[11.5px]"
                               style={{ color: out ? "var(--sf-text-dim)" : "var(--sf-text-faint)" }}
                             >
-                              {out ? "Esgotado" : `${f.available} em estoque`}
+                              {out
+                                ? "Esgotado"
+                                : noCarrinho > 0
+                                  ? `${noCarrinho} no carrinho · ${f.available} em estoque`
+                                  : `${f.available} em estoque`}
                             </p>
                           </span>
                         </div>
@@ -1955,16 +2273,25 @@ export default function SellerStorePage() {
                 style={{ borderTop: "1px solid var(--sf-hairline)", background: "var(--sf-bg)" }}
               >
                 <QtyStepper
-                  qty={available <= 0 ? 0 : clampedQty}
+                  qty={room <= 0 ? 0 : clampedQty}
                   onDec={() => setQty(Math.max(1, clampedQty - 1))}
-                  onInc={() => setQty(Math.min(available, clampedQty + 1))}
-                  decDisabled={available <= 0 || clampedQty <= 1}
-                  incDisabled={clampedQty >= available}
+                  onInc={() => setQty(Math.min(room, clampedQty + 1))}
+                  decDisabled={room <= 0 || clampedQty <= 1}
+                  incDisabled={clampedQty >= room}
                 />
+                {/* O botão fala do que ainda cabe, não do estoque cru: com tudo
+                    já no carrinho ele desliga em vez de confirmar um toque que
+                    não muda nada, e com o item já escolhido ele diz "mais". */}
                 <AddToCartButton
-                  disabled={!selectedFlavor || available <= 0}
+                  disabled={!selectedFlavor || available <= 0 || room <= 0}
                   label={
-                    available <= 0 ? "Esgotado" : `Adicionar · ${fmt((selectedFlavor?.sale_price ?? 0) * clampedQty)}`
+                    available <= 0
+                      ? "Esgotado"
+                      : room <= 0
+                        ? `${inCart} no carrinho`
+                        : `${inCart > 0 ? "Adicionar mais" : "Adicionar"} · ${fmt(
+                            (selectedFlavor?.sale_price ?? 0) * clampedQty,
+                          )}`
                   }
                   onPress={() => selectedFlavor && addToCart(selectedFlavor, clampedQty)}
                   onDone={() => setDetailKey(null)}
@@ -1972,6 +2299,39 @@ export default function SellerStorePage() {
               </div>
             </>
           )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ---------------- 3b. Tira-dúvidas ---------------- */}
+      {/* Sheet de leitura, sem ação nenhuma no rodapé: quem abre aqui quer
+          entender uma regra e voltar para o catálogo. Por isso ele é mais
+          baixo que o carrinho (64vh) e fecha só pelo X. */}
+      <Sheet open={helpOpen} onOpenChange={setHelpOpen}>
+        <SheetContent
+          side="bottom"
+          hideClose
+          className={`storefront ${COLUMN} inset-x-0 flex h-[64vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
+          style={{ background: "var(--sf-bg)" }}
+        >
+          <SheetTopBar title="Tira-dúvidas" onClose={() => setHelpOpen(false)} />
+          <SheetDescription className="sr-only">
+            Como funcionam os descontos, o pedido e o pagamento nesta loja.
+          </SheetDescription>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-7">
+            {faq.map((f, k) => (
+              <div
+                key={f.q}
+                className="py-3.5"
+                style={{ borderBottom: k === faq.length - 1 ? undefined : "1px solid var(--sf-hairline)" }}
+              >
+                <p className="text-[13.5px] font-bold">{f.q}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+                  {f.a}
+                </p>
+              </div>
+            ))}
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -2058,7 +2418,7 @@ export default function SellerStorePage() {
             className="flex flex-shrink-0 flex-col gap-3 px-5 pb-7 pt-4"
             style={{ borderTop: "1px solid var(--sf-hairline)" }}
           >
-            <DiscountLine units={discountUnits} amount={discountTotal} />
+            <DiscountLines preview={preview} />
             <div className="flex items-center justify-between">
               <span className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
                 Total
@@ -2154,12 +2514,12 @@ export default function SellerStorePage() {
                     entrou neste carrinho vem antes do que ainda falta. Quem
                     acabou de ganhar não quer ler quanto falta para o próximo. */}
                 <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                  {discountUnits > 0 ? (
+                  {preview.loyaltyUnits > 0 ? (
                     <>
                       🎁{" "}
                       <span className="font-bold" style={{ color: "var(--sf-accent)" }}>
-                        {discountUnits === 1 ? "Uma unidade" : `${discountUnits} unidades`} deste pedido
-                        {discountUnits === 1 ? " sai" : " saem"} com desconto!
+                        {preview.loyaltyUnits === 1 ? "Uma unidade" : `${preview.loyaltyUnits} unidades`} deste
+                        pedido{preview.loyaltyUnits === 1 ? " sai" : " saem"} com desconto!
                       </span>
                     </>
                   ) : loyalty.units_until_next_discount === 1 ? (
@@ -2213,7 +2573,7 @@ export default function SellerStorePage() {
             </Field>
 
             <div className="flex flex-col gap-2 pt-3.5" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
-              <DiscountLine units={discountUnits} amount={discountTotal} />
+              <DiscountLines preview={preview} />
               <div className="flex items-center justify-between">
                 <span className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
                   Total

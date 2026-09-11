@@ -4,7 +4,17 @@ import type { Transition, Variants } from "motion/react";
  * Linguagem de movimento única do app.
  * Rápido, curvas suaves, deslocamentos curtos.
  */
-export const EASE_OUT: Transition["ease"] = [0.22, 1, 0.36, 1];
+const EASE_OUT_POINTS = [0.22, 1, 0.36, 1] as const;
+export const EASE_OUT: Transition["ease"] = [...EASE_OUT_POINTS];
+
+/**
+ * A MESMA curva, no formato que o CSS entende — para o punhado de lugares que
+ * animam por `transition` e não pelo motion (o trilho de avisos da loja anda em
+ * `translateX` com `calc`, que o motion não interpola). Derivada dos mesmos
+ * números de propósito: duas escritas da mesma curva sairiam do compasso no
+ * primeiro ajuste.
+ */
+export const CSS_EASE_OUT = `cubic-bezier(${EASE_OUT_POINTS.join(", ")})`;
 
 /**
  * Só para percurso longo que precisa de velocidade constante — barra que

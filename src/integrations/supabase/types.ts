@@ -1059,6 +1059,7 @@ export type Database = {
         Returns: {
           available: number
           brand: string
+          combo_price: number
           flavor: string
           image_url: string
           loyalty_price: number
@@ -1067,6 +1068,15 @@ export type Database = {
           product_id: string
           sale_price: number
           seller_name: string
+        }[]
+      }
+      get_store_rules: {
+        Args: never
+        Returns: {
+          combo_discount: number
+          combo_min_units: number
+          loyalty_cycle: number
+          reservation_hours: number
         }[]
       }
       has_role: {

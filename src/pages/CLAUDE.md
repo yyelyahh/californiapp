@@ -136,7 +136,8 @@ Alturas: pílula primária `50` (`PILL_HEIGHT`), pílula da barra fixa `52`, bot
 texto secundário `h-11`, input `h-[50px]`, busca `h-[42px]`. Botões-ícone:
 `h-10 w-10` no header, `h-9 w-9` sobre foto, `h-8 w-8` no topo do sheet.
 Sheets: detalhe `88vh`, carrinho `76vh`, checkout `84vh` (mais alto porque tem
-formulário e o teclado do celular sobe por cima).
+formulário e o teclado do celular sobe por cima), tira-dúvidas `64vh` (é só
+leitura: quem abre quer entender uma regra e voltar para o catálogo).
 
 ## 6. Peças prontas — reutilize, não reescreva
 
@@ -151,7 +152,12 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   dos links colados. Ação que SAI da página (compartilhar no WhatsApp) usa
   `href`; ação que muda a própria tela continua botão.
 - `AddToCartButton` — a confirmação por varredura de tinta com fumaça. Peça cara e
-  específica; não replique em outra tela sem motivo forte.
+  específica; não replique em outra tela sem motivo forte. **Quem chama subtrai o
+  que já está no carrinho** (`cartQtyById`) antes de decidir o teto e o rótulo: o
+  sheet abria sempre em "1" sem dizer que o sabor já tinha sido escolhido, e com o
+  estoque todo no carrinho o toque virava varredura + check sem mexer em nada
+  (o `addToCart` trava a soma no estoque), como se o item entrasse de novo a cada
+  toque. Confirmação que não confirma nada é pior que botão desligado.
 - `QtyStepper` — quantidade em pílula, com variante `compact` para lista.
 - `Field` — rótulo + controle, com `htmlFor` amarrado.
 - `SheetTopBar` — título + botão de fechar, com `border-bottom` hairline.
@@ -160,10 +166,22 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   grande (as URLs são coladas à mão e vêm em qualquer proporção); `cover` em
   miniatura. Link quebrado cai no ícone `Package`, não no ícone quebrado do navegador.
 - `DrawnCheck` — check que se desenha, para confirmação.
-- `DiscountLine` — a linha do desconto de fidelidade acima do total. Some
-  quando não há desconto: "R$ 0,00 de desconto" só lembra o que a pessoa não
-  ganhou. Aparece no carrinho E no checkout, a mesma peça nos dois, porque é o
-  mesmo número e ele não pode ser escrito de dois jeitos.
+- `DiscountLines` — as linhas de desconto acima do total, **uma por REGRA**
+  (combo de modelo, fidelidade), nunca as duas somadas num número só: quem
+  ganha pelos dois lados não confere um "−R$ 44,00" sem origem. Some a linha
+  sem desconto — "R$ 0,00 de desconto" só lembra o que a pessoa não ganhou.
+  Aparece no carrinho E no checkout, a mesma peça nos dois, porque é o mesmo
+  número e ele não pode ser escrito de dois jeitos.
+- `StoreNotices` — o trilho de avisos acima da busca. Cards a 86% da largura
+  com o próximo aparecendo pela borda; anda sozinho a cada 3s e passa NO
+  TOQUE, nunca no arraste (a tela já rola na vertical, e um trilho arrastável
+  disputaria esse gesto e o de voltar do iOS). É a única peça que anima por
+  `transition` do CSS em vez do motion — o passo é `calc(86% + 10px)` e o
+  motion não interpola `calc` com porcentagem; a curva vem de `CSS_EASE_OUT`
+  em `@/lib/motion`, que é o MESMO `EASE_OUT` de todo mundo, derivado dos
+  mesmos números. Com `useReducedMotion()` ele para de andar sozinho em vez de
+  trocar o texto sem transição nenhuma debaixo do olho de quem pediu menos
+  movimento.
 
 Campos de texto usam sempre as duas constantes juntas:
 
