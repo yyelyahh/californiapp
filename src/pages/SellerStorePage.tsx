@@ -827,21 +827,50 @@ function FloodLayer({
  * `cover` é para miniatura: em 56px não cabe tarja, e o corte central não
  * atrapalha o reconhecimento.
  */
+/**
+ * `fetchpriority` não está nos tipos do React 18 (entrou no 19) — o atributo
+ * passa assim mesmo para o DOM, que é quem o entende. É ele que tira a foto
+ * do topo da fila de trás das outras.
+ */
+const EAGER_ATTRS = { loading: "eager", fetchpriority: "high" } as Record<string, string>;
+const LAZY_ATTRS = { loading: "lazy" } as Record<string, string>;
+
 function ProductMedia({
   src,
   alt,
   iconSize,
   fit = "contain",
+  priority = false,
 }: {
   src: string | null;
   alt: string;
   iconSize: number;
   fit?: "contain" | "cover";
+  /** Foto que a pessoa já está olhando: entra na frente da fila, sem lazy. */
+  priority?: boolean;
 }) {
   // Link quebrado cai no mesmo placeholder do produto sem foto, em vez de
   // mostrar o ícone de imagem partida do navegador.
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const reduce = useReducedMotion();
+
+  // Num 4G ruim a foto demora, e o que ficava no lugar dela era o mesmo bloco
+  // de `--sf-surface` do card: nada dizia se estava vindo, se tinha falhado ou
+  // se aquele produto simplesmente não tem foto. O esqueleto responde isso
+  // enquanto a rede não responde.
+  //
+  // A verificação de `complete` é para a foto que JÁ está no cache (voltar do
+  // sheet, segunda visita): ali o `onLoad` pode ter disparado antes de o React
+  // pendurar o handler, e o esqueleto ficaria para sempre por cima de uma foto
+  // pronta. Roda também na troca de `src`, depois de o DOM já ter a nova.
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(imgRef.current?.complete ?? false);
+  }, [src]);
+
+  const attrs = priority ? EAGER_ATTRS : LAZY_ATTRS;
 
   return (
     <div
@@ -850,11 +879,14 @@ function ProductMedia({
     >
       {src && !failed ? (
         <>
-          {fit === "contain" && (
+          {fit === "contain" && loaded && (
             // Decoração: o alt de verdade está na imagem da frente. É a mesma
             // URL da outra <img>, então o navegador serve do cache em vez de
             // baixar duas vezes. `scale-110` cobre o halo transparente que o
             // blur deixa na borda.
+            //
+            // Só entra DEPOIS de a foto carregar: antes disso ela disputaria a
+            // mesma rede e a mesma decodificação com a imagem que importa.
             <img
               src={src}
               alt=""
@@ -866,13 +898,20 @@ function ProductMedia({
             />
           )}
           <img
+            ref={imgRef}
             src={src}
             alt={alt}
+            onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
             className={`relative h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"}`}
-            loading="lazy"
+            style={{
+              opacity: loaded ? 1 : 0,
+              transition: reduce ? undefined : `opacity 0.3s ${CSS_EASE_OUT}`,
+            }}
             decoding="async"
+            {...attrs}
           />
+          {!loaded && <span aria-hidden className="sf-shimmer absolute inset-0" />}
         </>
       ) : (
         <Package size={iconSize} style={{ color: "var(--sf-text-dim)" }} />
@@ -1202,7 +1241,15 @@ function StoreNotices({ notices }: { notices: Notice[] }) {
 /* Card do catálogo                                                     */
 /* ------------------------------------------------------------------ */
 
-function ProductCard({ model, onOpen }: { model: ModelGroup; onOpen: () => void }) {
+function ProductCard({
+  model,
+  onOpen,
+  priority = false,
+}: {
+  model: ModelGroup;
+  onOpen: () => void;
+  priority?: boolean;
+}) {
   const allRows = model.flavors;
   const inStock = allRows.filter(r => r.available > 0);
   const prices = (inStock.length ? inStock : allRows).map(r => r.sale_price);
@@ -1230,7 +1277,12 @@ function ProductCard({ model, onOpen }: { model: ModelGroup; onOpen: () => void 
       style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
     >
       <div className="relative w-full" style={{ aspectRatio: MEDIA_RATIO }}>
-        <ProductMedia src={firstModelImage(allRows)} alt={model.model || "Produto"} iconSize={56} />
+        <ProductMedia
+          src={firstModelImage(allRows)}
+          alt={model.model || "Produto"}
+          iconSize={56}
+          priority={priority}
+        />
 
         {allOut && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[2px]">
@@ -2099,7 +2151,7 @@ export default function SellerStorePage() {
             {query.trim() ? `Nenhum produto encontrado para "${query.trim()}".` : "Nenhum produto encontrado."}
           </p>
         ) : (
-          groups.map(g => (
+          groups.map((g, gi) => (
             <section key={g.key} className="mt-5">
               <h2
                 className="mb-3 text-[15px] font-extrabold uppercase tracking-[0.06em]"
@@ -2108,8 +2160,18 @@ export default function SellerStorePage() {
                 {g.brand || "Sem marca"}
               </h2>
               <div className="flex flex-col gap-4">
-                {g.models.map(m => (
-                  <ProductCard key={m.key} model={m} onOpen={() => openDetail(m)} />
+                {g.models.map((m, mi) => (
+                  // As duas primeiras fotos são as que estão na tela quando a
+                  // página abre: `loading="lazy"` nelas atrasa justamente o que
+                  // a pessoa está olhando, porque o navegador só começa a
+                  // baixar depois de calcular o layout. Da terceira em diante o
+                  // lazy volta a valer e segura o resto da lista.
+                  <ProductCard
+                    key={m.key}
+                    model={m}
+                    onOpen={() => openDetail(m)}
+                    priority={gi === 0 && mi < 2}
+                  />
                 ))}
               </div>
             </section>
@@ -2158,6 +2220,10 @@ export default function SellerStorePage() {
                   src={firstModelImage(detailModel.flavors)}
                   alt={detailModel.model || "Produto"}
                   iconSize={72}
+                  // O sheet abre por cima da foto que a pessoa acabou de tocar:
+                  // ou ela já está no cache, ou é a única coisa que importa
+                  // agora. Nos dois casos não é hora de esperar na fila.
+                  priority
                 />
                 <button
                   type="button"

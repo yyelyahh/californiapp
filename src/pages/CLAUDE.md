@@ -165,6 +165,16 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
 - `ProductMedia` — foto com fallback. `contain` + cópia borrada por trás para foto
   grande (as URLs são coladas à mão e vêm em qualquer proporção); `cover` em
   miniatura. Link quebrado cai no ícone `Package`, não no ícone quebrado do navegador.
+  **Três estados, não dois:** enquanto a rede não responde entra o esqueleto
+  (`.sf-shimmer`, em `src/index.css` — a única animação em laço da loja, porque é
+  a única espera que dura dez segundos num 4G ruim), a foto entra com fade no
+  `onLoad`, e a cópia borrada só nasce DEPOIS disso, para não disputar rede e
+  decodificação com a imagem que importa. Foto em cache pode ficar `complete`
+  antes de o React pendurar o `onLoad`: o efeito relê `imgRef.current.complete`,
+  senão o esqueleto fica para sempre por cima de uma foto pronta.
+  `priority` tira o `lazy` e manda `fetchpriority="high"` — vale para as DUAS
+  primeiras fotos da lista e para o hero do detalhe. `loading="lazy"` na foto que
+  está na tela atrasa justamente o que a pessoa está olhando.
 - `DrawnCheck` — check que se desenha, para confirmação.
 - `DiscountLines` — as linhas de desconto acima do total, **uma por REGRA**
   (combo de modelo, fidelidade), nunca as duas somadas num número só: quem

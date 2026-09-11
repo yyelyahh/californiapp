@@ -589,6 +589,41 @@
     color: var(--sf-text-dim);
   }
 
+  /* Esqueleto da foto que ainda está vindo (ver ProductMedia).
+   *
+   * É a ÚNICA animação em laço da loja, e ela existe porque é a única espera
+   * que pode durar dez segundos numa rede ruim: o resto do app só anima em
+   * resposta a um toque. Baixo contraste de propósito — um brilho forte
+   * atravessando a lista inteira de cards viraria o assunto da tela.
+   * Sai do ar assim que o `onLoad` acontece. */
+  .storefront .sf-shimmer {
+    background: linear-gradient(
+      100deg,
+      var(--sf-surface) 38%,
+      var(--sf-surface-2) 50%,
+      var(--sf-surface) 62%
+    );
+    background-size: 240% 100%;
+    animation: sf-shimmer 1.4s linear infinite;
+  }
+
+  @keyframes sf-shimmer {
+    from {
+      background-position: 190% 0;
+    }
+    to {
+      background-position: -30% 0;
+    }
+  }
+
+  /* Quem pediu menos movimento fica com o bloco parado — ele continua dizendo
+   * "aqui vem uma foto", que é o trabalho da peça. */
+  @media (prefers-reduced-motion: reduce) {
+    .storefront .sf-shimmer {
+      animation: none;
+    }
+  }
+
   /* Foco dos elementos sem anel próprio (chips, botões-pílula). Nos campos do
    * shadcn não aparece: eles trazem `focus-visible:outline-none` e ficam só
    * com o anel acima. */
