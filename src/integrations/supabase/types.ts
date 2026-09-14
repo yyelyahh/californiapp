@@ -26,6 +26,7 @@ export type Database = {
           entity: string
           entity_id: string | null
           id: string
+          old_data: Json | null
           row_data: Json
           tx: number
         }
@@ -40,6 +41,7 @@ export type Database = {
           entity: string
           entity_id?: string | null
           id?: string
+          old_data?: Json | null
           row_data: Json
           tx?: number
         }
@@ -54,6 +56,7 @@ export type Database = {
           entity?: string
           entity_id?: string | null
           id?: string
+          old_data?: Json | null
           row_data?: Json
           tx?: number
         }
@@ -976,6 +979,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_display_names: {
+        Row: {
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

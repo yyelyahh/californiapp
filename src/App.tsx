@@ -19,6 +19,7 @@ import FinancePage from "@/pages/FinancePage";
 import LossesPage from "@/pages/LossesPage";
 import CommissionsPage from "@/pages/CommissionsPage";
 import InsightsPage from "@/pages/InsightsPage";
+import AuditPage from "@/pages/AuditPage";
 import LoginPage from "@/pages/LoginPage";
 import SellerStorePage from "@/pages/SellerStorePage";
 import OAuthConsent from "@/pages/OAuthConsent";
@@ -84,6 +85,7 @@ function ProtectedRoutes() {
             <Route path="/losses" element={<LossesPage />} />
             <Route path="/commissions" element={<CommissionsPage />} />
             <Route path="/insights" element={<InsightsPage />} />
+            <Route path="/audit" element={<AuditPage />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

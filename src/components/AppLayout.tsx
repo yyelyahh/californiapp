@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  SquaresFour, Tag, Package, TrendDown, Receipt, FileText, HandCoins, ChartLine, Coins,
+  SquaresFour, Tag, Package, TrendDown, Receipt, FileText, HandCoins, ChartLine, Coins, ClockCounterClockwise,
   CaretLeft, CaretRight, SignOut, List, X,
 } from "@phosphor-icons/react";
 import { useState } from "react";
@@ -15,7 +15,8 @@ import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
  * Os glifos são os mesmos do mockup Nocturne: Phosphor Regular, um a um
  * (squares-four, tag, package, trend-down, receipt, file-text, hand-coins,
  * chart-line, coins) — antes eram equivalentes aproximados do lucide, com peso
- * de traço e desenho diferentes.
+ * de traço e desenho diferentes. A Auditoria nasceu depois do mockup e usa o
+ * clock-counter-clockwise, o glifo de "o que já aconteceu" da mesma família.
  *
  * Cada item já teve uma `color` própria, usada só pelo flash em tela cheia que
  * existia ao trocar de página. O flash saiu (ver PageTransition) e a cor saiu
@@ -33,6 +34,7 @@ const allNavItems = [
   { to: "/commissions", icon: HandCoins, label: "Distribuição", adminOnly: true },
   { to: "/insights", icon: ChartLine, label: "Insights", adminOnly: true },
   { to: "/finance", icon: Coins, label: "Financeiro", adminOnly: true },
+  { to: "/audit", icon: ClockCounterClockwise, label: "Auditoria", adminOnly: true },
 ];
 
 /**
@@ -42,7 +44,7 @@ const allNavItems = [
  *
  * Ao migrar uma tela nova para o Nocturne, adicione a rota dela aqui.
  */
-const fullBleedRoutes = new Set(["/dashboard", "/products", "/stock", "/losses", "/sales", "/expenses", "/commissions", "/insights", "/finance"]);
+const fullBleedRoutes = new Set(["/dashboard", "/products", "/stock", "/losses", "/sales", "/expenses", "/commissions", "/insights", "/finance", "/audit"]);
 
 /** Atalhos da barra inferior no celular. */
 const bottomBarRoutes = ["/dashboard", "/products", "/sales", "/commissions"];
