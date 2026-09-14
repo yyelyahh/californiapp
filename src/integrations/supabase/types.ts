@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          actor_name: string | null
+          actor_source: string
+          at: string
+          changed_fields: string[] | null
+          entity: string
+          entity_id: string | null
+          id: string
+          row_data: Json
+          tx: number
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_source: string
+          at?: string
+          changed_fields?: string[] | null
+          entity: string
+          entity_id?: string | null
+          id?: string
+          row_data: Json
+          tx?: number
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_source?: string
+          at?: string
+          changed_fields?: string[] | null
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          row_data?: Json
+          tx?: number
+        }
+        Relationships: []
+      }
       commission_payments: {
         Row: {
           amount: number
