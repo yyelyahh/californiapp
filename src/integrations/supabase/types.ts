@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          actor_name: string | null
+          actor_source: string
+          at: string
+          changed_fields: string[] | null
+          entity: string
+          entity_id: string | null
+          id: string
+          row_data: Json
+          tx: number
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_source: string
+          at?: string
+          changed_fields?: string[] | null
+          entity: string
+          entity_id?: string | null
+          id?: string
+          row_data: Json
+          tx?: number
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_source?: string
+          at?: string
+          changed_fields?: string[] | null
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          row_data?: Json
+          tx?: number
+        }
+        Relationships: []
+      }
       commission_payments: {
         Row: {
           amount: number
@@ -337,6 +382,7 @@ export type Database = {
           total_amount: number
         }
         Insert: {
+          client_token?: string | null
           confirmed_at?: string | null
           created_at?: string
           customer_id: string
@@ -347,6 +393,7 @@ export type Database = {
           total_amount?: number
         }
         Update: {
+          client_token?: string | null
           confirmed_at?: string | null
           created_at?: string
           customer_id?: string
@@ -973,6 +1020,12 @@ export type Database = {
       }
     }
     Functions: {
+      combo_discount: { Args: never; Returns: number }
+      combo_min_units: { Args: never; Returns: number }
+      combo_unit_price: {
+        Args: { p_purchase_price: number; p_sale_price: number }
+        Returns: number
+      }
       confirm_order: {
         Args: {
           p_notes?: string
@@ -1028,6 +1081,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      customer_units: { Args: { p_whatsapp: string }; Returns: number }
       decline_order: { Args: { p_order_id: string }; Returns: undefined }
       decrement_product_stock: {
         Args: { p_product_id: string; p_quantity: number }
@@ -1090,7 +1144,17 @@ export type Database = {
         Args: { p_product_id: string; p_quantity: number }
         Returns: number
       }
+      loyalty_cycle: { Args: never; Returns: number }
+      loyalty_unit_price: {
+        Args: { p_purchase_price: number; p_sale_price: number }
+        Returns: number
+      }
+      order_receipt: { Args: { p_order_id: string }; Returns: Json }
       order_reservation_ttl: { Args: never; Returns: string }
+      product_model_key: {
+        Args: { p_brand: string; p_id: string; p_model: string }
+        Returns: string
+      }
       set_model_image: {
         Args: { p_brand: string; p_image_url: string; p_model: string }
         Returns: undefined
