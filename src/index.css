@@ -483,26 +483,50 @@
   }
 
   /* Marca da casa dentro do app-shell Nocturne. Mesmo movimento do
-     .text-rgb-cascade (que continua roxo na landing e no login, fora do tema),
-     só que percorrendo accent → lucro → accent, as duas cores do painel. */
+     wordmark roxo antigo (.text-rgb-cascade, removido junto com a landing), só
+     que percorrendo accent → lucro → accent, as duas cores do painel. O login
+     usa esta mesma classe: a casa tem uma marca só. */
+  /* Três cuidados para o degradê não sair DURO — todos se viam no tamanho
+     grande do login, onde a letra tem espaço para mostrar a emenda:
+     1. meios-tons de color-mix entre o accent e o lucro. Duas matizes cruas em
+        sequência se encontram numa faixa estreita, e essa faixa é a emenda;
+     2. percurso só na horizontal. A diagonal movia o degradê nos dois eixos ao
+        mesmo tempo e o passo aparecia como um solavanco de lado;
+     3. 12s em vez de 6s, num degradê duas vezes mais largo: o mesmo caminho,
+        devagar, é o que faz a cor parecer escorrer em vez de trocar. */
   .nc-wordmark {
+    --nc-wordmark-mix: color-mix(in oklab, var(--nc-accent), var(--nc-profit));
     background-image: linear-gradient(
-      135deg,
-      var(--nc-accent), var(--nc-profit), var(--nc-accent),
-      var(--nc-profit), var(--nc-accent)
+      100deg,
+      var(--nc-accent),
+      var(--nc-wordmark-mix),
+      var(--nc-profit),
+      var(--nc-wordmark-mix),
+      var(--nc-accent),
+      var(--nc-wordmark-mix),
+      var(--nc-profit),
+      var(--nc-wordmark-mix),
+      var(--nc-accent)
     );
-    background-size: 300% 300%;
+    background-size: 400% 100%;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
-    animation: rgb-cascade 6s linear infinite;
+    animation: nc-wordmark-flow 12s linear infinite;
+  }
+
+  /* O passo é a largura INTEIRA do degradê: como o fundo se repete, deslocar um
+     período cai exatamente sobre si mesmo e o laço não tem emenda. */
+  @keyframes nc-wordmark-flow {
+    from { background-position: 0% 50%; }
+    to { background-position: -400% 50%; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .nc-wordmark {
       animation: none;
-      background-position: 0% 0%;
+      background-position: 0% 50%;
     }
   }
 
@@ -682,14 +706,24 @@
   .bg-investment { background-color: hsl(var(--investment)); }
   .bg-fixed { background-color: hsl(var(--fixed)); }
 
-  .text-rgb-cascade {
-    background-image: linear-gradient(135deg, #8e24aa, #9c27b0, #ab47bc, #ba68c8, #c880ff, #d8a5ff, #e1bee7, #d8a5ff, #c880ff, #ba68c8, #ab47bc, #9c27b0, #8e24aa);
-    background-size: 300% 300%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
-    animation: rgb-cascade 4s linear infinite;
+  /* Ondas do fundo do login (src/components/LoginWaves.tsx). O passo é UM
+   * período da onda, vindo por variável de cada linha, porque só um múltiplo
+   * exato do período fecha o laço sem emenda. Quem pediu menos movimento não
+   * recebe a classe — a textura fica, o movimento não. */
+  .login-wave {
+    animation: login-wave var(--login-wave-duration, 24s) linear infinite;
+    will-change: transform;
+  }
+
+  @keyframes login-wave {
+    from { transform: translateX(0); }
+    to { transform: translateX(var(--login-wave-shift, -520px)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .login-wave {
+      animation: none;
+    }
   }
 
   @keyframes rgb-cascade {

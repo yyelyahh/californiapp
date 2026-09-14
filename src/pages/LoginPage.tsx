@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Mail } from "lucide-react";
 import { motion } from "motion/react";
 import { scaleIn, fadeUp } from "@/lib/motion";
+import { cn } from "@/lib/utils";
+import { EYEBROW } from "@/components/nocturne";
+import LoginWaves from "@/components/LoginWaves";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,66 +30,73 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4 overflow-x-hidden">
-      <motion.div className="w-full max-w-sm" initial="hidden" animate="visible" variants={scaleIn}>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      <LoginWaves />
+      <motion.div className="relative z-10 w-full max-w-sm" initial="hidden" animate="visible" variants={scaleIn}>
         <motion.div className="text-center mb-8" variants={fadeUp}>
-          <h1 className="text-4xl font-bold tracking-tight mb-1 text-rgb-cascade">
+          <h1 className="nc-wordmark text-4xl font-bold tracking-tight">
             California
           </h1>
+          <p className={cn(EYEBROW, "mt-1")} style={{ color: "var(--nc-text-3)" }}>
+            Contabilidade
+          </p>
         </motion.div>
 
-        <Card className="glass-card">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2 font-medium">
-              <Lock size={16} className="text-muted-foreground" />
-              Entrar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
-                <div className="relative">
-                  <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-9 h-10"
-                    required
-                  />
-                </div>
+        {/* Sem card: o formulário flutua sobre as ondas atrás de um vidro. A
+            borda dura empilhava duas molduras (título fora, caixa dentro) e
+            espremia o fundo nas beiradas. */}
+        <div
+          className="rounded-2xl border border-border/25 p-6 backdrop-blur-xl"
+          style={{
+            background: "color-mix(in srgb, hsl(var(--card)) 55%, transparent)",
+            boxShadow: "var(--shadow-card)",
+          }}
+        >
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className={cn(EYEBROW, "text-muted-foreground")}>Email</Label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-9 h-10"
+                  required
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Senha</Label>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className={cn(EYEBROW, "text-muted-foreground")}>Senha</Label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="password"
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-10"
+                  className="pl-9 h-10"
                   required
                 />
               </div>
-              {error && (
-                <motion.p
-                  className="text-sm text-destructive"
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {error}
-                </motion.p>
-              )}
-              <Button type="submit" className="w-full h-10" disabled={loading}>
-                {loading ? "Entrando..." : "Entrar"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
+            </div>
+            {error && (
+              <motion.p
+                className="text-sm text-destructive"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                {error}
+              </motion.p>
+            )}
+            <Button type="submit" className="w-full h-10" disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+        </div>
       </motion.div>
     </div>
   );
