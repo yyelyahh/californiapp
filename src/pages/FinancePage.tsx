@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { NcButton, NcSheetHeader, Rule, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /** Quantos sócios cabem na lista do trilho antes de virar "+ N outros". */
@@ -190,7 +191,7 @@ export default function FinancePage() {
     <div className="nocturne flex flex-1 flex-col xl:flex-row xl:items-stretch">
       {/* ---------------- Coluna principal ---------------- */}
       <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+        <header className={cn(STICKY_HEAD, "flex flex-wrap items-end justify-between gap-4")}>
           <div>
             <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>Capital e dívida</span>
             <h1 className="mt-1 text-xl sm:text-[22px]">Financeiro</h1>
@@ -357,7 +358,7 @@ export default function FinancePage() {
           A tela ignorava o razão (`financial_events`) por completo, embora ele
           já estivesse calculado no StoreContext. É dele que sai tudo aqui. */}
       <aside
-        className="order-first flex w-full flex-none flex-col gap-3.5 p-4 md:p-6 xl:order-none xl:w-[312px]"
+        className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
         <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Posição de hoje</span>

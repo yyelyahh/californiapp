@@ -11,7 +11,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, Rule, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /** Quantos modelos cabem na lista do trilho antes de virar "+ N outros". */
@@ -129,7 +130,7 @@ export default function LossesPage() {
     <div className="nocturne flex flex-1 flex-col xl:flex-row xl:items-stretch">
       {/* ---------------- Coluna principal ---------------- */}
       <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+        <header className={cn(STICKY_HEAD, "flex flex-wrap items-end justify-between gap-4")}>
           <div>
             <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>Baixas de estoque</span>
             <h1 className="mt-1 text-xl sm:text-[22px]">Perdas</h1>
@@ -319,7 +320,7 @@ export default function LossesPage() {
           telas migradas: a lista rola por telas e um resumo embaixo dela não
           seria lido. */}
       <aside
-        className="order-first flex w-full flex-none flex-col gap-3.5 p-4 md:p-6 xl:order-none xl:w-[312px]"
+        className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
         <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Estoque perdido</span>

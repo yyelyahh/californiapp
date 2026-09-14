@@ -14,7 +14,8 @@ import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { AnimatePresence, motion } from "motion/react";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, Rule, EYEBROW } from "@/components/nocturne";
+import { NcButton, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { sortNames, sortCatalog, compareText } from "@/lib/catalog-order";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
@@ -273,7 +274,7 @@ export default function ProductsPage() {
     <div className="nocturne flex flex-1 flex-col xl:flex-row xl:items-stretch">
       {/* ---------------- Coluna principal ---------------- */}
       <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+        <header className={cn(STICKY_HEAD, "flex flex-wrap items-end justify-between gap-4")}>
           <div>
             <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>Catálogo interno</span>
             <h1 className="mt-1 text-xl sm:text-[22px]">Produtos</h1>
@@ -463,7 +464,7 @@ export default function ProductsPage() {
           deixar o trilho no fim porque a coluna dele é curta; aqui a lista de
           produtos rola por telas, e um resumo embaixo dela não seria lido. */}
       <aside
-        className="order-first flex w-full flex-none flex-col gap-3.5 p-4 md:p-6 xl:order-none xl:w-[312px]"
+        className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
         <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Capital em estoque</span>

@@ -9,7 +9,8 @@ import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import { listItem } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
-import { SegmentedChips, Rule } from "@/components/nocturne";
+import { SegmentedChips, Rule, RAIL, STICKY_HEAD } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { computeModelStats, summarizeRestock, urgencyOf, HORIZON_DAYS, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
@@ -376,7 +377,7 @@ export default function Dashboard() {
     <div className="nocturne flex flex-1 flex-col xl:flex-row xl:items-stretch">
       {/* ---------------- Coluna principal ---------------- */}
       <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+        <header className={cn(STICKY_HEAD, "flex flex-wrap items-end justify-between gap-4")}>
           <div>
             <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-accent)" }}>
               {isGeral ? "Todo o período" : filterLabel}
@@ -596,7 +597,7 @@ export default function Dashboard() {
 
       {/* ---------------- Coluna direita: Dinheiro do mês ---------------- */}
       <aside
-        className="w-full flex-none p-4 md:p-6 xl:w-[312px] flex flex-col gap-3.5"
+        className={RAIL}
         style={{ background: "var(--nc-rail)" }}
       >
         <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>

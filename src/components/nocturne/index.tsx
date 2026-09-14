@@ -69,6 +69,43 @@ export function Rule({ className }: { className?: string }) {
 export const EYEBROW = "text-[10px] uppercase tracking-[0.1em]";
 
 /**
+ * Trilho lateral de 312px — o `<aside>` de toda tela migrada. Quem rola é o
+ * `<main>` do AppLayout, e coluna e trilho rolavam juntos: no fim de uma lista
+ * longa o resumo já tinha saído da tela, justamente onde ele serve. A partir do
+ * `xl` ele gruda no topo e só a coluna do meio rola.
+ *
+ * `self-start` é parte da regra, não enfeite: o esqueleto tem `xl:items-stretch`
+ * na raiz, que estica o aside até a altura da linha inteira — e elemento
+ * esticado não tem para onde grudar, o `sticky` não faz nada. `h-screen` com
+ * rolagem própria cobre o trilho que fica mais alto que a janela.
+ */
+export const RAIL =
+  "flex w-full flex-none flex-col gap-3.5 p-4 md:p-6 xl:sticky xl:top-0 xl:h-screen xl:w-[312px] xl:self-start xl:overflow-y-auto";
+
+/**
+ * O mesmo trilho, vindo ANTES da lista no celular. É o padrão de toda tela cuja
+ * lista rola por telas: resumo embaixo de lista longa não é lido. Só o Dashboard
+ * usa o `RAIL` cru, porque a coluna dele é gráfico, não lista.
+ */
+export const RAIL_FIRST = cn(RAIL, "order-first xl:order-none");
+
+/**
+ * Cabeçalho da coluna do meio, travado no topo enquanto a lista rola — o par do
+ * `RAIL`: um fica de pé à direita, o outro em cima, e só a lista anda.
+ *
+ * As margens negativas não são gambiarra de espaçamento: a coluna tem `p-4
+ * md:p-6`, e sem elas o bloco gruda na borda INTERNA do padding, deixando uma
+ * faixa transparente por cima por onde a lista passa à vista. Ele sai do
+ * padding (`-mx-4 -mt-4`) e o repõe por dentro (`px-4 pt-4`), assim o fundo que
+ * ele pinta cobre a faixa inteira. Fundo opaco é obrigatório pelo mesmo motivo.
+ *
+ * Numa tela com abas, envolva cabeçalho E abas no mesmo bloco: a aba diz o que
+ * se está lendo, e some junto com o título se ficar de fora.
+ */
+export const STICKY_HEAD =
+  "sticky top-0 z-20 -mx-4 -mt-4 bg-[var(--nc-bg)] px-4 pb-3 pt-4 md:-mx-6 md:-mt-6 md:px-6 md:pt-6";
+
+/**
  * Cabeçalho de painel deslizante: sobretítulo accent, título e descrição, com a
  * régua embaixo. Existe para os painéis pararem de cada um inventar o seu — o
  * "Novo produto" e o "Nova venda" tinham espaçamento e peso diferentes.

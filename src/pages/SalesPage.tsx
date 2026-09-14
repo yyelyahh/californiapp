@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, S
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
-import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRange } from "@/lib/date-utils";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -979,74 +979,80 @@ export default function SalesPage() {
         onValueChange={(v) => setTab(v as TabValue)}
         className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6"
       >
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{headerEyebrow}</span>
-            <h1 className="mt-1 text-xl sm:text-[22px]">Vendas</h1>
-          </div>
+        {/* Cabeçalho e abas no MESMO bloco travado: a aba diz o que se está
+            lendo, e sumiria junto com o título se ficasse de fora. O card de
+            filtros continua rolando — preso, ele comeria meia tela de notebook
+            e sobraria pouco da lista, que é o que a pessoa veio ler. */}
+        <div className={cn(STICKY_HEAD, "flex flex-col gap-3")}>
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{headerEyebrow}</span>
+              <h1 className="mt-1 text-xl sm:text-[22px]">Vendas</h1>
+            </div>
 
-          <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
-            <SheetTrigger asChild>
-              <NcButton onClick={openNew} variant="solid" size="md"><Plus size={14} />Nova venda</NcButton>
-            </SheetTrigger>
-            {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
-                o Radix porta o painel para o <body> e os tokens não chegam por
-                herança. */}
-            <SheetContent side="right" className="nocturne flex w-full flex-col p-0 sm:max-w-xl">
-              <NcSheetHeader
-                eyebrow="Vendas"
-                title={editingSale ? "Editar registro" : "Novo registro"}
-                description={editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}
-              />
+            <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
+              <SheetTrigger asChild>
+                <NcButton onClick={openNew} variant="solid" size="md"><Plus size={14} />Nova venda</NcButton>
+              </SheetTrigger>
+              {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
+                  o Radix porta o painel para o <body> e os tokens não chegam por
+                  herança. */}
+              <SheetContent side="right" className="nocturne flex w-full flex-col p-0 sm:max-w-xl">
+                <NcSheetHeader
+                  eyebrow="Vendas"
+                  title={editingSale ? "Editar registro" : "Novo registro"}
+                  description={editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}
+                />
 
-              <div className="flex-1 overflow-y-auto px-5 py-5">
-                {editingSale ? saleForm : (
-                  <div className="space-y-5">
-                    <SegmentedToggle
-                      value={modalTab}
-                      onChange={(v) => setModalTab(v)}
-                      options={[
-                        { id: "unica" as const, label: "Registro único" },
-                        { id: "lote" as const, label: "Em lote" },
-                      ]}
-                    />
-                    {modalTab === "unica" ? saleForm : <BatchSaleForm onDone={() => setOpen(false)} />}
-                  </div>
+                <div className="flex-1 overflow-y-auto px-5 py-5">
+                  {editingSale ? saleForm : (
+                    <div className="space-y-5">
+                      <SegmentedToggle
+                        value={modalTab}
+                        onChange={(v) => setModalTab(v)}
+                        options={[
+                          { id: "unica" as const, label: "Registro único" },
+                          { id: "lote" as const, label: "Em lote" },
+                        ]}
+                      />
+                      {modalTab === "unica" ? saleForm : <BatchSaleForm onDone={() => setOpen(false)} />}
+                    </div>
+                  )}
+                </div>
+
+                {/* O lote traz o próprio botão (o rótulo dele conta as linhas
+                    válidas), então o rodapé é só do registro único. */}
+                {(editingSale || modalTab === "unica") && (
+                  <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+                    <div className="flex w-full items-center justify-between gap-3">
+                      <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
+                        {formTotal > 0 ? (
+                          isRetirada
+                            ? <>Vai para o saldo devedor <span className="nc-num font-medium" style={{ color: "var(--nc-alert)" }}>{formatCurrency(formTotal)}</span></>
+                            : <>Total <span className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>{formatCurrency(formTotal)}</span> · falta <span className="nc-num font-medium" style={{ color: formRemaining > 0 ? "var(--nc-alert)" : "var(--nc-ok)" }}>{formatCurrency(formRemaining)}</span></>
+                        ) : "Escolha o produto e a quantidade"}
+                      </p>
+                      <NcButton
+                        type="submit"
+                        form={SALE_FORM_ID}
+                        variant="solid"
+                        size="md"
+                        disabled={submitting || !form.productId || !form.quantity}
+                      >
+                        {submitting ? "Salvando…" : editingSale ? "Salvar alterações" : isRetirada ? "Registrar retirada" : "Registrar venda"}
+                      </NcButton>
+                    </div>
+                  </SheetFooter>
                 )}
-              </div>
+              </SheetContent>
+            </Sheet>
+          </header>
 
-              {/* O lote traz o próprio botão (o rótulo dele conta as linhas
-                  válidas), então o rodapé é só do registro único. */}
-              {(editingSale || modalTab === "unica") && (
-                <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
-                  <div className="flex w-full items-center justify-between gap-3">
-                    <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
-                      {formTotal > 0 ? (
-                        isRetirada
-                          ? <>Vai para o saldo devedor <span className="nc-num font-medium" style={{ color: "var(--nc-alert)" }}>{formatCurrency(formTotal)}</span></>
-                          : <>Total <span className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>{formatCurrency(formTotal)}</span> · falta <span className="nc-num font-medium" style={{ color: formRemaining > 0 ? "var(--nc-alert)" : "var(--nc-ok)" }}>{formatCurrency(formRemaining)}</span></>
-                      ) : "Escolha o produto e a quantidade"}
-                    </p>
-                    <NcButton
-                      type="submit"
-                      form={SALE_FORM_ID}
-                      variant="solid"
-                      size="md"
-                      disabled={submitting || !form.productId || !form.quantity}
-                    >
-                      {submitting ? "Salvando…" : editingSale ? "Salvar alterações" : isRetirada ? "Registrar retirada" : "Registrar venda"}
-                    </NcButton>
-                  </div>
-                </SheetFooter>
-              )}
-            </SheetContent>
-          </Sheet>
-        </header>
-
-        <SalesTabs
-          value={tab}
-          counts={{ vendas: baseSales.length, retiradas: sortedRetiradas.length, pedidos: pendingOrders.length }}
-        />
+          <SalesTabs
+            value={tab}
+            counts={{ vendas: baseSales.length, retiradas: sortedRetiradas.length, pedidos: pendingOrders.length }}
+          />
+        </div>
 
         {/* ---------------- Vendas ---------------- */}
         <TabsContent value="vendas" className="mt-0 flex flex-col gap-4">
@@ -1213,7 +1219,7 @@ export default function SalesPage() {
           telas migradas: a lista rola por telas e um resumo embaixo dela não
           seria lido. */}
       <aside
-        className="order-first flex w-full flex-none flex-col gap-3.5 p-4 md:p-6 xl:order-none xl:w-[312px]"
+        className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
         {tab === "vendas" && (
