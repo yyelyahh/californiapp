@@ -27,8 +27,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { localDateToISO } from "@/lib/date-utils";
+import { localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { sortCatalog, sortByName } from "@/lib/catalog-order";
+import { numberPurchaseOrders, type UnnumberedOrder } from "@/lib/purchase-order-number";
 
 // Columns readable by every authenticated user (purchase_price is admin-only via RPC)
 const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,image_url,created_at";
@@ -161,7 +162,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [partnerContributions, setPartnerContributions] = useState<PartnerContribution[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [purchaseOrdersRaw, setPurchaseOrdersRaw] = useState<UnnumberedOrder[]>([]);
+  /** Quem é exposto (e quem as ações leem) é sempre o numerado — ver `numberPurchaseOrders`. */
+  const purchaseOrders = useMemo(() => numberPurchaseOrders(purchaseOrdersRaw), [purchaseOrdersRaw]);
   const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
@@ -302,7 +305,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
       if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
       if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
-      if (poRes?.data) setPurchaseOrders((poRes.data as any[]).map(mapPurchaseOrder));
+      if (poRes?.data) setPurchaseOrdersRaw((poRes.data as any[]).map(mapPurchaseOrder));
     };
 
     const fetchAll = async () => {
@@ -616,9 +619,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     notes: r.notes ?? undefined,
   });
 
-  const mapPurchaseOrder = (r: any): PurchaseOrder => ({
+  const mapPurchaseOrder = (r: any): UnnumberedOrder => ({
     id: r.id,
-    number: Number(r.number),
     status: r.status === "received" ? "received" : "pending",
     date: r.date,
     notes: r.notes ?? undefined,
@@ -694,7 +696,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         toast.error("Erro ao salvar itens da compra");
         return;
       }
-      setPurchaseOrders((prev) => [
+      setPurchaseOrdersRaw((prev) => [
         mapPurchaseOrder({ ...(data as any), purchase_order_items: itemRows ?? [] }),
         ...prev,
       ]);
@@ -712,7 +714,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toast.error("Erro ao excluir compra");
       return;
     }
-    setPurchaseOrders((prev) => prev.filter((o) => o.id !== id));
+    setPurchaseOrdersRaw((prev) => prev.filter((o) => o.id !== id));
     toast.success("Compra excluída");
   }, []);
 
@@ -809,7 +811,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               unit_cost: unitCost,
               total_cost: totalCost,
               date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? localDateToISO(date) : date,
-              notes: `Compra #${order.number}`,
+              // A data, e não o "#N": o número é posicional e muda quando uma
+              // compra anterior é excluída. Gravado num texto que fica para
+              // sempre, ele passaria a apontar para a compra errada — a data da
+              // compra não se mexe. (Entradas antigas guardam o "#N" de antes.)
+              notes: `Compra de ${formatDateBR(order.date)}`,
             })
             .select()
             .single();
@@ -831,7 +837,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       setProducts(productList);
       setStockEntries((prev) => [...prev, ...newEntries]);
-      setPurchaseOrders((prev) =>
+      setPurchaseOrdersRaw((prev) =>
         prev.map((o) =>
           o.id === id
             ? {
