@@ -71,6 +71,9 @@ const ENTITY: Record<string, EntityInfo> = {
   investors: { thing: "um investidor", area: "Financeiro" },
   loans: { thing: "um empréstimo", area: "Financeiro" },
   loan_payments: { thing: "um pagamento de empréstimo", area: "Financeiro" },
+  product_branch: { thing: "o preço ou o estoque de um produto numa filial", area: "Produtos" },
+  branches: { thing: "uma filial", area: "Acessos" },
+  user_branches: { thing: "um acesso a filial", area: "Acessos" },
   user_roles: { thing: "um acesso", area: "Acessos" },
   user_display_names: { thing: "um nome de exibição", area: "Acessos" },
 };
@@ -125,7 +128,12 @@ const PRIORITY = [
   "sellers",
   "user_roles",
   "user_display_names",
+  "branches",
+  "user_branches",
   "product_assignments",
+  // `product_branch` acompanha `products` no fim da fila, e pelo mesmo motivo:
+  // toda venda mexe nele, e quase nunca é ELE o motivo do movimento.
+  "product_branch",
   "products",
 ];
 
@@ -258,8 +266,17 @@ export function describe(main: AuditRow): Phrase {
 
   // Ajuste de estoque na mão, na tela de Produtos: o grupo tem uma linha só e
   // a única coluna mexida é o estoque. É o movimento que mais interessa
-  // rastrear em products, e "alterou um produto" o esconderia no meio.
-  if (main.entity === "products" && main.action === "update" && changed.length === 1 && changed[0] === "stock") {
+  // rastrear, e "alterou um produto" o esconderia no meio.
+  //
+  // A tabela mudou de `products` para `product_branch` quando o estoque passou
+  // a ser da cidade; o caso antigo fica porque o log guarda o que aconteceu
+  // ANTES da migração, e reescrever histórico é o que a auditoria não faz.
+  if (
+    (main.entity === "product_branch" || main.entity === "products") &&
+    main.action === "update" &&
+    changed.length === 1 &&
+    changed[0] === "stock"
+  ) {
     return { text: "ajustou o estoque de um produto" };
   }
 
@@ -273,6 +290,7 @@ export function describe(main: AuditRow): Phrase {
 const FIELD_LABEL: Record<string, string> = {
   amount: "valor",
   brand: "marca",
+  branch_id: "filial",
   category: "categoria",
   confirmed_at: "confirmado em",
   customer_id: "cliente",
@@ -349,8 +367,8 @@ const DATE = new Set([
 
 /** Campos cujo valor é o id de outra linha — a tela resolve para nome. */
 const REFERENCE = new Set([
-  "customer_id", "investor_id", "loan_id", "order_id", "partner_id", "product_id",
-  "purchase_order_id", "sale_id", "seller_id", "user_id",
+  "branch_id", "customer_id", "investor_id", "loan_id", "order_id", "partner_id",
+  "product_id", "purchase_order_id", "sale_id", "seller_id", "user_id",
 ]);
 
 /**
@@ -366,7 +384,7 @@ const HIDDEN = new Set(["id", "created_at", "updated_at", "client_token", "origi
  * que a pessoa quer ler primeiro.
  */
 const FIELD_ORDER = [
-  "date", "status", "name", "description", "brand", "model", "flavor", "category",
+  "date", "status", "branch_id", "name", "description", "brand", "model", "flavor", "category",
   "product_id", "seller_id", "partner_id", "investor_id", "customer_id", "user_id", "role",
   "quantity", "stock", "min_stock",
   "unit_price", "sale_price", "purchase_price", "unit_cost",

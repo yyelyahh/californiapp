@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 
 /**
  * Pedidos do catálogo esperando decisão.
@@ -81,7 +82,8 @@ export const ORDER_NOTE_MAX = 80;
 
 export function usePendingOrders(options?: { storefront?: boolean }) {
   const storefront = options?.storefront === true;
-  const { refreshSales } = useStore();
+  const { refreshSales, sellers } = useStore();
+  const { branchId } = useBranch();
   const confirm = useConfirm();
 
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
@@ -200,8 +202,23 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
     }
   };
 
+  /**
+   * `orders` não tem `branch_id`: a cidade dela vem do vendedor, como em toda
+   * tabela de vendedor. A RLS já corta pelo que a pessoa ALCANÇA; o recorte
+   * pela filial ATIVA é feito aqui, contra a lista de `sellers` do contexto —
+   * que já chega filtrada pela cidade.
+   *
+   * Em "Todas" (branchId nulo) não há recorte: a lista mostra os pedidos das
+   * duas cidades, e o card já diz de quem é cada um.
+   */
+  const branchSellerIds = useMemo(() => new Set(sellers.map(s => s.id)), [sellers]);
+  const visibleOrders = useMemo(
+    () => (branchId ? pendingOrders.filter(o => branchSellerIds.has(o.seller_id)) : pendingOrders),
+    [branchId, branchSellerIds, pendingOrders],
+  );
+
   return {
-    pendingOrders,
+    pendingOrders: visibleOrders,
     loadingOrders,
     processingOrder,
     fetchPendingOrders,

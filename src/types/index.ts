@@ -10,6 +10,12 @@ export interface Product {
   minStock: number;
   imageUrl?: string;
   createdAt: string;
+  /**
+   * Só em "Todas as filiais": o `salePrice` acima é o MAIOR entre as cidades,
+   * e as cidades não cobram o mesmo. A tela avisa em vez de mostrar um preço
+   * que não é cobrado em lugar nenhum. Com uma filial escolhida vem `false`.
+   */
+  priceVaries?: boolean;
 }
 
 export interface StockEntry {
@@ -20,6 +26,13 @@ export interface StockEntry {
   totalCost: number;
   date: string;
   notes?: string;
+  /**
+   * A cidade onde estas unidades entraram. Carimbada na ESCRITA, e é dela que
+   * a exclusão tira o estoque de volta — não da filial ativa. As duas quase
+   * sempre coincidem (a lista é filtrada), mas "quase sempre" não serve para
+   * quem devolve estoque.
+   */
+  branchId?: string;
 }
 
 export type SaleType = "venda" | "retirada_funcionario";
@@ -40,7 +53,8 @@ export interface StockLoss {
   reason?: string;
   sellerId?: string;
   date: string;
-
+  /** A cidade de onde a unidade saiu — mesma regra do `branchId` de StockEntry. */
+  branchId?: string;
 }
 
 export interface Sale {
@@ -140,6 +154,13 @@ export interface Seller {
   name: string;
   debtPercentage: number;
   createdAt: string;
+  /**
+   * A cidade do vendedor — a segunda âncora da filial. Tudo o que é dele
+   * (atribuições, pedidos, comissões, dívidas) herda a filial daqui, e por isso
+   * ela NÃO se troca: quem muda de cidade ganha cadastro novo, senão o passado
+   * seria reescrito junto.
+   */
+  branchId?: string;
 }
 
 export interface ProductAssignment {
@@ -219,6 +240,17 @@ export type PurchaseOrderStatus = "pending" | "received";
 export interface ReceivedFlavor {
   flavor: string;
   quantity: number;
+  /**
+   * Em qual cidade esta parte da caixa foi guardada. A compra é CENTRAL (o
+   * fornecedor entrega uma vez, o frete é da compra inteira) e a divisão
+   * acontece no recebimento — por isso o mesmo sabor pode aparecer em duas
+   * linhas, uma por filial, exatamente como `order_items` já aceita duas
+   * linhas do mesmo produto.
+   *
+   * Opcional porque `received_flavors` é jsonb: linha gravada antes das
+   * filiais não tem o campo, e é lida como matriz.
+   */
+  branchId?: string;
 }
 
 export interface PurchaseOrderItem {

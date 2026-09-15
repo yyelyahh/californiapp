@@ -65,6 +65,30 @@ export function Rule({ className }: { className?: string }) {
   return <div className={cn("nc-rule-top h-px", className)} />;
 }
 
+/**
+ * O aviso de "Todas as filiais": aqui só se lê.
+ *
+ * "Todas" é um consolidado, e consolidado serve para olhar número, não para
+ * lançar — toda escrita exige uma cidade concreta. As telas que OPERAM
+ * (Produtos, Entrada, Perdas, Movimentar estoque, venda manual) desabilitam a
+ * ação primária nesse modo e mostram esta linha ao lado dela.
+ *
+ * Desabilitado, e não escondido: o botão que some muda a largura da linha a
+ * cada troca de filial, que é o mesmo solavanco que o projeto já recusou no
+ * card de filtro. O `NcButton` desabilitado esmaece o preenchimento mas mantém
+ * o rótulo legível, então a pessoa continua lendo o que aquele botão faria.
+ *
+ * A frase é a MESMA do guard do StoreContext, de propósito: se um caminho
+ * escapar da tela, a pessoa lê exatamente o mesmo texto no toast.
+ */
+export function BranchReadOnly({ className }: { className?: string }) {
+  return (
+    <p className={cn("text-[11.5px] leading-tight", className)} style={{ color: "var(--nc-text-3)" }}>
+      Escolha uma filial para lançar
+    </p>
+  );
+}
+
 /** Sobretítulo: 10px, caixa alta, entreletra larga. A cor vem de quem usa. */
 export const EYEBROW = "text-[10px] uppercase tracking-[0.1em]";
 

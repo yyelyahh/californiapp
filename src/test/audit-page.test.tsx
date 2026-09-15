@@ -72,6 +72,19 @@ vi.mock("@/context/StoreContext", () => ({
   }),
 }));
 
+// A tela resolve o uuid da filial para o nome, como já faz com produto e
+// vendedor. Aqui ela só precisa não explodir sem o provider.
+vi.mock("@/context/BranchContext", () => ({
+  useBranch: () => ({
+    branches: [{ id: "b1", name: "Matriz", active: true, createdAt: AT }],
+    branchId: "b1",
+    setBranchId: () => {},
+    canSeeAll: false,
+    loading: false,
+    branchName: () => "Matriz",
+  }),
+}));
+
 const { default: AuditPage } = await import("@/pages/AuditPage");
 
 describe("tela de auditoria", () => {

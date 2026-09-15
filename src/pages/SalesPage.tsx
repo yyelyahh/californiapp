@@ -1,10 +1,11 @@
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 import { useMemo, useState, type ReactNode } from "react";
 import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
-import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRange } from "@/lib/date-utils";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -363,6 +364,7 @@ export default function SalesPage() {
   const {
     products, sales, sellers, productAssignments, addSale, updateSale, deleteSale, getProductName, getSellerName,
   } = useStore();
+  const { branchId } = useBranch();
   const confirm = useConfirm();
 
   // Pedidos do catálogo esperando decisão. O vendedor decide os dele na
@@ -990,9 +992,17 @@ export default function SalesPage() {
               <h1 className="mt-1 text-xl sm:text-[22px]">Vendas</h1>
             </div>
 
+            <div className="flex items-center gap-3">
+              {!branchId && <BranchReadOnly className="text-right" />}
             <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditingSale(null); }}>
               <SheetTrigger asChild>
-                <NcButton onClick={openNew} variant="solid" size="md"><Plus size={14} />Nova venda</NcButton>
+                {/* Venda manual e retirada de funcionário não têm vendedor de
+                    quem derivar a cidade: só existem com uma filial escolhida.
+                    Confirmar pedido do catálogo continua funcionando em
+                    "Todas" — ali a filial vem do vendedor do pedido. */}
+                <NcButton onClick={openNew} variant="solid" size="md" disabled={!branchId}>
+                  <Plus size={14} />Nova venda
+                </NcButton>
               </SheetTrigger>
               {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
                   o Radix porta o painel para o <body> e os tokens não chegam por
@@ -1046,6 +1056,7 @@ export default function SalesPage() {
                 )}
               </SheetContent>
             </Sheet>
+            </div>
           </header>
 
           <SalesTabs

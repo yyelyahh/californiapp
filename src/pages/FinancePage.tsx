@@ -379,6 +379,15 @@ export default function FinancePage() {
           <p className="nc-num mt-1.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
             estoque a custo {formatCurrencyShort(inventory)} · a receber {formatCurrencyShort(receivables)}
           </p>
+          {/* No formato do "A caminho" da Entrada e do "Ritmo do mês" das
+              Despesas: bloco que não obedece ao recorte da tela diz isso na
+              própria linha. Aqui o recorte é a filial — a operação é da cidade,
+              mas o caixa, os sócios, os empréstimos e os aportes são do negócio
+              inteiro, e repartir isso por praça seria inventar uma divisão que
+              não existe em lugar nenhum. */}
+          <p className="mt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+            Não segue a filial: o caixa e a sociedade são do negócio inteiro.
+          </p>
         </div>
 
         <Rule />

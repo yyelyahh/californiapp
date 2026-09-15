@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import PageTransition from "@/components/motion/PageTransition";
+import BranchSwitcher from "@/components/BranchSwitcher";
 import { EYEBROW } from "@/components/nocturne";
 import { springSoft, transitionBase, transitionFast } from "@/lib/motion";
 
@@ -114,6 +115,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* Logo abaixo do wordmark, antes da navegação: a filial é o escopo de
+            TUDO o que vem depois dela na tela, e ler o escopo antes da lista é
+            a ordem em que a pessoa pensa. Recolhida, sobra a inicial — mesma
+            saída do bloco de identidade no rodapé. */}
+        <div style={{ borderBottom: "1px solid var(--nc-track)" }}>
+          {collapsed ? (
+            <div className="py-2.5">
+              <BranchSwitcher collapsed />
+            </div>
+          ) : (
+            <BranchSwitcher />
+          )}
+        </div>
+
         <nav className="flex-1 space-y-0.5 px-2 py-3">
           {navItems.map(item => {
             const isActive = location.pathname === item.to;
@@ -208,9 +223,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             className="nocturne flex items-center justify-between px-4 py-2.5"
             style={{ background: "var(--nc-rail)", borderBottom: "1px solid var(--nc-track)" }}
           >
-            <div>
+            <div className="min-w-0">
               <h1 className="nc-wordmark text-[15px] font-medium leading-tight tracking-tight">California</h1>
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Contabilidade</p>
+            </div>
+            {/* Entre o wordmark e o hambúrguer: no celular não há trilho, e a
+                filial precisa estar visível na mesma faixa que já está fixa. */}
+            <div className="ml-auto mr-2 min-w-0">
+              <BranchSwitcher compact />
             </div>
             <button
               onClick={() => setMobileMenuOpen(v => !v)}

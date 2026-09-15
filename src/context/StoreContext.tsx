@@ -26,13 +26,87 @@ import {
 } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useBranch } from "@/context/BranchContext";
 import { toast } from "sonner";
 import { localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { sortCatalog, sortByName } from "@/lib/catalog-order";
 import { numberPurchaseOrders, type UnnumberedOrder } from "@/lib/purchase-order-number";
 
-// Columns readable by every authenticated user (purchase_price is admin-only via RPC)
-const PRODUCT_COLS = "id,name,brand,model,flavor,sale_price,stock,min_stock,image_url,created_at";
+/**
+ * Escrever exige uma filial concreta.
+ *
+ * "Todas as filiais" é somente leitura, e essa é a regra que apaga a pergunta
+ * "em qual filial isso entrou?" de todo caminho de escrita. As telas que
+ * operam já desabilitam a ação primária nesse modo; este guard é a rede por
+ * baixo — um caminho novo que esqueça a regra falha aqui, com aviso, em vez de
+ * gravar numa cidade escolhida por acaso.
+ */
+function requireBranch(branchId: string | null): branchId is string {
+  if (!branchId) {
+    toast.error("Escolha uma filial para lançar");
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Soma (ou subtrai, com `quantity` negativo) unidades ao estoque de um sabor
+ * NUMA cidade, criando a linha de `product_branch` quando aquela cidade ainda
+ * não vendia esse sabor.
+ *
+ * A tabela é esparsa de propósito — produto sem linha é produto que a cidade
+ * não vende —, então toda entrada de estoque precisa saber criar a linha. É
+ * aqui que `sale_price` e `min_stock` de referência entram: linha nova sem
+ * preço venderia de graça, que é exatamente o que a esparsidade existe para
+ * impedir.
+ *
+ * Leitura-e-escrita, como era em `products.stock`: quem precisa de atomicidade
+ * é a venda, e essa passa por `create_sale`/`decrement_product_stock`, onde o
+ * UPDATE é condicional.
+ */
+async function addBranchStock(
+  productId: string,
+  branchId: string,
+  quantity: number,
+  seed: { unitCost?: number; salePrice?: number; minStock?: number } = {},
+): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from("product_branch" as any)
+    .select("stock")
+    .eq("product_id", productId)
+    .eq("branch_id", branchId)
+    .maybeSingle();
+
+  if (existing) {
+    const next = Math.max(0, Number((existing as any).stock ?? 0) + quantity);
+    const updates: Record<string, unknown> = { stock: next };
+    if (seed.unitCost !== undefined) updates.purchase_price = seed.unitCost;
+    const { error } = await supabase
+      .from("product_branch" as any)
+      .update(updates as any)
+      .eq("product_id", productId)
+      .eq("branch_id", branchId);
+    if (error) {
+      toast.error("Erro ao atualizar o estoque da filial");
+      return false;
+    }
+    return true;
+  }
+
+  const { error } = await supabase.from("product_branch" as any).insert({
+    product_id: productId,
+    branch_id: branchId,
+    stock: Math.max(0, quantity),
+    purchase_price: seed.unitCost ?? 0,
+    sale_price: seed.salePrice ?? 0,
+    min_stock: seed.minStock ?? 0,
+  } as any);
+  if (error) {
+    toast.error("Erro ao cadastrar o produto nesta filial");
+    return false;
+  }
+  return true;
+}
 
 interface StoreContextType {
   products: Product[];
@@ -169,20 +243,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
   const isAdmin = role === "admin";
+  const { branchId } = useBranch();
 
+  /**
+   * A lista de produtos vem de `get_branch_products`, não mais de um SELECT em
+   * `products`: preço, estoque e mínimo passaram para `product_branch`, e é a
+   * function que junta identidade e números da cidade na FORMA que o front já
+   * consumia. É por isso que o tipo `Product` não mudou — `ProductsPage`,
+   * `InsightsPage`, `restock.ts` e `seller-stock.ts` continuam lendo
+   * `product.stock` e `product.salePrice` como sempre.
+   *
+   * Com `branchId` nulo ("Todas") a function agrega: estoque somado, preço o
+   * maior, mais `price_varies` avisando que aquele preço é um teto, não uma
+   * etiqueta.
+   */
   const fetchProductsList = useCallback(async (): Promise<Product[]> => {
-    const { data, error } = await supabase
-      .from("products")
-      .select(PRODUCT_COLS)
-      .order("created_at", { ascending: true });
+    const { data, error } = await supabase.rpc("get_branch_products" as any, {
+      p_branch_id: branchId,
+    } as any);
     if (error) throw error;
     if (!data) return [];
     let costs: Record<string, number> = {};
     if (isAdmin) {
-      const { data: c } = await supabase.rpc("get_product_costs");
+      const { data: c } = await supabase.rpc("get_product_costs" as any, { p_branch_id: branchId } as any);
       if (c) costs = Object.fromEntries((c as any[]).map((r) => [r.product_id, Number(r.purchase_price)]));
     }
-    return data.map((r: any) => ({
+    return (data as any[]).map((r: any) => ({
       id: r.id,
       name: r.name,
       brand: r.brand,
@@ -190,34 +276,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       flavor: r.flavor,
       purchasePrice: costs[r.id] ?? 0,
       salePrice: Number(r.sale_price),
-      stock: r.stock,
+      stock: Number(r.stock ?? 0),
       minStock: Number(r.min_stock ?? 0),
       imageUrl: r.image_url || undefined,
       createdAt: r.created_at,
+      priceVaries: r.price_varies === true,
     }));
-  }, [isAdmin]);
+  }, [isAdmin, branchId]);
+
+  /**
+   * O filtro de filial na consulta, para as tabelas que têm `branch_id`
+   * próprio. Com `branchId` nulo ("Todas") nada é acrescentado e a RLS já
+   * garante que só vem o que a pessoa alcança — "todas" quer dizer "todas as
+   * minhas", nunca "todas as do banco".
+   */
+  const scoped = useCallback(
+    <T,>(q: T): T => (branchId ? ((q as any).eq("branch_id", branchId) as T) : q),
+    [branchId],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     // Wave 1: dados essenciais para as telas de operação (produtos, vendas, estoque, vendedores).
+    //
+    // `product_assignments` NÃO leva filtro na consulta: ela não tem
+    // `branch_id` — a filial dela vem do vendedor. A RLS já corta pelo que a
+    // pessoa alcança, e o recorte pela filial ATIVA é feito em memória, pelo
+    // conjunto de `seller_id` da cidade (ver `branchSellerIds` mais abaixo).
+    // A tabela vem inteira hoje e é pequena; consultar por uma lista de ids
+    // seria uma consulta a mais para o mesmo resultado.
     const fetchCore = async () => {
       const [prodList, stockRes, salesRes, selRes, paRes, slRes] = (await Promise.all([
         fetchProductsList(),
-        supabase.from("stock_entries").select("*").order("created_at", { ascending: true }),
-        supabase.from("sales").select("*").order("created_at", { ascending: true }),
-        supabase
-          .from("sellers" as any)
-          .select("*")
-          .order("created_at", { ascending: true }),
+        scoped(supabase.from("stock_entries").select("*")).order("created_at", { ascending: true }),
+        scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }),
+        scoped(supabase.from("sellers" as any).select("*")).order("created_at", { ascending: true }),
         supabase
           .from("product_assignments" as any)
           .select("*")
           .order("created_at", { ascending: true }),
-        supabase
-          .from("stock_losses" as any)
-          .select("*")
-          .order("created_at", { ascending: true }),
+        scoped(supabase.from("stock_losses" as any).select("*")).order("created_at", { ascending: true }),
       ])) as any;
       if (cancelled) return;
       setProducts(prodList);
@@ -246,7 +345,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         feRes,
         poRes,
       ] = (await Promise.all([
-        supabase.from("expenses").select("*").order("created_at", { ascending: true }),
+        scoped(supabase.from("expenses").select("*")).order("created_at", { ascending: true }),
         supabase.from("investors").select("*").order("created_at", { ascending: true }),
         supabase.from("dividends").select("*").order("created_at", { ascending: true }),
         supabase.from("partners").select("*").order("created_at", { ascending: true }),
@@ -359,6 +458,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       );
     };
 
+    // Só chega evento da filial ativa. O `filter` do realtime é do Postgres,
+    // não do cliente: sem ele, a venda feita na outra cidade entraria na lista
+    // desta — e o `patch` acrescenta a linha sem perguntar de onde ela veio.
+    const onBranch = (table: string) =>
+      branchId
+        ? { event: "*" as const, schema: "public", table, filter: `branch_id=eq.${branchId}` }
+        : { event: "*" as const, schema: "public", table };
+
+    const reloadProducts = async () => {
+      const list = await fetchProductsList();
+      if (!cancelled) setProducts(list);
+    };
+
     let channel = supabase
       .channel(isAdmin ? "admin:store-sync" : "store-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, async (payload: any) => {
@@ -366,26 +478,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (payload.eventType === "DELETE") {
           setProducts((prev) => prev.filter((p) => p.id !== payload.old?.id));
         } else {
-          const list = await fetchProductsList();
-          if (!cancelled) setProducts(list);
+          await reloadProducts();
         }
         refetchFinancialEvents();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, (payload: any) => {
+      // Estoque e preço não moram mais em `products`: sem esta assinatura a
+      // tela pararia de reagir à venda feita em outra aba, que é justamente o
+      // que o realtime existe para cobrir. Recarrega a lista inteira pelo mesmo
+      // motivo de sempre — o custo vem de outra RPC, e remendar meia linha aqui
+      // deixaria a margem da tela mentindo.
+      .on("postgres_changes", onBranch("product_branch"), () => {
+        void reloadProducts();
+        refetchFinancialEvents();
+      })
+      .on("postgres_changes", onBranch("sales"), (payload: any) => {
         patch(setSales, payload, mapSale);
         refetchFinancialEvents();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "stock_entries" }, (payload: any) => {
+      .on("postgres_changes", onBranch("stock_entries"), (payload: any) => {
         patch(setStockEntries, payload, mapStockEntry);
         refetchFinancialEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "product_assignments" }, (payload: any) => {
         patch(setProductAssignments, payload, mapProductAssignment);
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "sellers" }, (payload: any) => {
+      .on("postgres_changes", onBranch("sellers"), (payload: any) => {
         patch(setSellers, payload, mapSeller);
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "stock_losses" }, (payload: any) => {
+      .on("postgres_changes", onBranch("stock_losses"), (payload: any) => {
         patch(setStockLosses, payload, mapStockLoss);
         refetchFinancialEvents();
       });
@@ -393,7 +513,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // Tabelas financeiras são restritas a administradores: só assinamos quando o usuário é admin.
     if (isAdmin) {
       channel = channel
-        .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, refetchFinancialEvents)
+        .on("postgres_changes", onBranch("expenses"), refetchFinancialEvents)
         .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
         .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
         .on(
@@ -418,21 +538,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (feTimer) clearTimeout(feTimer);
       supabase.removeChannel(channel);
     };
-  }, [fetchProductsList, isAdmin]);
-
-  const mapProduct = (r: any): Product => ({
-    id: r.id,
-    name: r.name,
-    brand: r.brand,
-    model: r.model || "",
-    flavor: r.flavor,
-    purchasePrice: Number(r.purchase_price ?? 0),
-    salePrice: Number(r.sale_price),
-    stock: r.stock,
-    minStock: Number(r.min_stock ?? 0),
-    imageUrl: r.image_url || undefined,
-    createdAt: r.created_at,
-  });
+  }, [fetchProductsList, isAdmin, branchId, scoped]);
 
   const mapStockEntry = (r: any): StockEntry => ({
     id: r.id,
@@ -442,6 +548,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     totalCost: Number(r.total_cost),
     date: r.date,
     notes: r.notes,
+    branchId: r.branch_id ?? undefined,
   });
 
   const mapSale = (r: any): Sale => ({
@@ -474,6 +581,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     name: r.name,
     createdAt: r.created_at,
     debtPercentage: r.debt_percentage != null ? Number(r.debt_percentage) : 10,
+    branchId: r.branch_id ?? undefined,
   });
 
   const mapProductAssignment = (r: any): ProductAssignment => ({
@@ -511,6 +619,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     reason: r.reason || undefined,
     date: r.date,
     sellerId: r.seller_id || undefined,
+    branchId: r.branch_id ?? undefined,
   });
 
   const mapExpense = (r: any): Expense => ({
@@ -720,6 +829,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // Recebimento: só aqui o estoque é movimentado. A troca de status é atômica
   // (só ocorre se a compra ainda estiver "pending"), impedindo entrada duplicada.
+  //
+  // A compra é CENTRAL — `purchase_orders` não tem filial, porque o fornecedor
+  // entrega uma vez e o frete é da compra inteira, não de uma cidade. Quem
+  // divide é o recebimento, que já era a única porta que mexia em estoque por
+  // aqui: cada linha de sabor diz para qual filial aquelas unidades foram.
+  // A validação que existe (soma === esperado) continua valendo sobre a SOMA
+  // das linhas, então dividir 10 em 6/4 passa e 6/3 não.
   const receivePurchaseOrder = useCallback(
     async (id: string, receiptItems: PurchaseReceiptItemInput[], date: string): Promise<boolean> => {
       const order = purchaseOrders.find((o) => o.id === id);
@@ -739,10 +855,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           toast.error("Verifique os sabores e quantidades informados");
           return false;
         }
+        // Filial por linha, e a checagem vem ANTES do claim atômico: recusar
+        // depois de carimbar a compra como recebida deixaria estoque pela
+        // metade e a compra fechada.
+        if ((input?.flavors ?? []).some((f) => !(f.branchId ?? branchId))) {
+          toast.error("Escolha a filial de cada sabor recebido");
+          return false;
+        }
         if (total !== item.expectedQuantity) {
           toast.error(`${item.brand} ${item.model}: recebido ${total} de ${item.expectedQuantity}`);
           return false;
         }
+      }
+
+      // O catálogo é COMPARTILHADO, e a identidade do sabor é procurada no
+      // catálogo INTEIRO — não na lista da tela. A lista vem filtrada pela
+      // filial ativa, e um sabor que hoje só existe na outra cidade não estaria
+      // nela: cadastrar de novo criaria uma segunda linha do mesmo sabor em
+      // `products` (não há unique em marca+modelo+sabor), e a partir daí o
+      // catálogo teria duas identidades para o mesmo produto.
+      //
+      // Vem ANTES do claim de propósito: falhar aqui depois de carimbar a
+      // compra como recebida deixaria a compra fechada e o estoque não lançado.
+      const { data: catalog, error: catalogErr } = await supabase
+        .from("products")
+        .select("id,brand,model,flavor");
+      if (catalogErr) {
+        toast.error("Erro ao ler o catálogo");
+        return false;
+      }
+      const identity = new Map<string, { id: string; salePrice: number; minStock: number }>();
+      for (const row of (catalog ?? []) as any[]) {
+        const known = products.find((p) => p.id === row.id);
+        identity.set(`${row.brand}|${row.model || ""}|${row.flavor}`.toLowerCase(), {
+          id: row.id,
+          // Preço e mínimo são DA CIDADE: só chegam aqui quando o sabor já é
+          // vendido na filial ATIVA. Zero significa "não sei ainda", e quem
+          // resolve isso é o `seedPrice` lá embaixo — linha de
+          // `product_branch` criada com preço zero venderia de graça.
+          salePrice: known?.salePrice ?? 0,
+          minStock: known?.minStock ?? 0,
+        });
       }
 
       // Claim atômico do recebimento
@@ -757,7 +910,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      let productList = [...products];
       const newEntries: StockEntry[] = [];
 
       for (const item of order.items) {
@@ -767,20 +919,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         for (const f of input.flavors) {
           const flavor = f.flavor.trim();
           const qty = Number(f.quantity) || 0;
-          if (!flavor || qty <= 0) continue;
-          let product = productList.find(
+          const lineBranch = f.branchId ?? branchId;
+          if (!flavor || qty <= 0 || !lineBranch) continue;
+
+          const key = `${item.brand}|${item.model}|${flavor}`.toLowerCase();
+          // Um sabor do mesmo modelo serve de referência para preço e mínimo —
+          // é o que evita a linha nova de `product_branch` nascer valendo zero,
+          // que na loja é vender de graça.
+          const reference = products.find(
             (p) =>
               p.brand.toLowerCase() === item.brand.toLowerCase() &&
-              (p.model || "").toLowerCase() === item.model.toLowerCase() &&
-              p.flavor.toLowerCase() === flavor.toLowerCase(),
+              (p.model || "").toLowerCase() === item.model.toLowerCase(),
           );
+          let product = identity.get(key);
           if (!product) {
-            const reference = productList.find(
-              (p) =>
-                p.brand.toLowerCase() === item.brand.toLowerCase() &&
-                (p.model || "").toLowerCase() === item.model.toLowerCase(),
-            );
-            const salePrice = input.salePrice ?? reference?.salePrice ?? 0;
             const { data: created, error: prodErr } = await supabase
               .from("products")
               .insert({
@@ -788,20 +940,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 brand: item.brand,
                 model: item.model,
                 flavor,
-                purchase_price: unitCost,
-                sale_price: salePrice,
-                stock: 0,
-                min_stock: reference?.minStock ?? 0,
-              })
-              .select(PRODUCT_COLS)
+              } as any)
+              .select("id")
               .single();
             if (prodErr || !created) {
               toast.error(`Erro ao criar produto ${item.model} · ${flavor}`);
               continue;
             }
-            product = mapProduct({ ...(created as any), purchase_price: unitCost });
-            productList = [...productList, product];
+            product = {
+              id: (created as any).id,
+              salePrice: input.salePrice ?? reference?.salePrice ?? 0,
+              minStock: reference?.minStock ?? 0,
+            };
+            identity.set(key, product);
           }
+
           const totalCost = qty * unitCost;
           const { data: entry, error: entryErr } = await supabase
             .from("stock_entries")
@@ -810,32 +963,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               quantity: qty,
               unit_cost: unitCost,
               total_cost: totalCost,
+              branch_id: lineBranch,
               date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? localDateToISO(date) : date,
               // A data, e não o "#N": o número é posicional e muda quando uma
               // compra anterior é excluída. Gravado num texto que fica para
               // sempre, ele passaria a apontar para a compra errada — a data da
               // compra não se mexe. (Entradas antigas guardam o "#N" de antes.)
               notes: `Compra de ${formatDateBR(order.date)}`,
-            })
+            } as any)
             .select()
             .single();
           if (entryErr || !entry) {
             toast.error(`Erro ao registrar entrada de ${flavor}`);
             continue;
           }
-          newEntries.push(mapStockEntry(entry));
-          const newStock = product.stock + qty;
-          await supabase.from("products").update({ stock: newStock, purchase_price: unitCost }).eq("id", product.id);
-          const updated = { ...product, stock: newStock, purchasePrice: unitCost };
-          productList = productList.map((p) => (p.id === product!.id ? updated : p));
+          if (lineBranch === branchId || !branchId) newEntries.push(mapStockEntry(entry));
+
+          // Só é USADO quando a linha de `product_branch` ainda não existe
+          // naquela cidade. O preço da própria filial ativa manda; depois o
+          // que a tela informou no recebimento; depois o de outro sabor do
+          // mesmo modelo. Zero é o último recurso e significa que ninguém
+          // sabia — e é por isso que existe o aviso de preço na tela.
+          const seedPrice = product.salePrice || input.salePrice || reference?.salePrice || 0;
+          await addBranchStock(product.id, lineBranch, qty, {
+            unitCost,
+            salePrice: seedPrice,
+            minStock: product.minStock || reference?.minStock || 0,
+          });
         }
         await supabase
           .from("purchase_order_items" as any)
-          .update({ received_flavors: input.flavors.filter((f) => f.flavor.trim()) } as any)
+          .update({
+            received_flavors: input.flavors
+              .filter((f) => f.flavor.trim())
+              .map((f) => ({ ...f, branchId: f.branchId ?? branchId })),
+          } as any)
           .eq("id", item.id);
       }
 
-      setProducts(productList);
+      // A lista inteira, e não um remendo linha a linha: o recebimento pode
+      // ter tocado uma cidade que nem está na tela, e o custo vem de outra RPC.
+      setProducts(await fetchProductsList());
       setStockEntries((prev) => [...prev, ...newEntries]);
       setPurchaseOrdersRaw((prev) =>
         prev.map((o) =>
@@ -857,57 +1025,104 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toast.success(`Compra #${order.number} recebida e estoque atualizado`);
       return true;
     },
-    [purchaseOrders, products],
+    [purchaseOrders, products, branchId, fetchProductsList],
   );
 
   // ---- Products ----
-  const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
-    const { data, error } = await supabase
-      .from("products")
-      .insert({
-        name: p.name,
-        brand: p.brand,
-        model: p.model,
-        flavor: p.flavor,
+  // Cadastrar um sabor passa a escrever em DUAS tabelas: a identidade em
+  // `products` (compartilhada pela rede) e o dinheiro em `product_branch` (da
+  // cidade ativa). O produto nasce existindo só onde foi cadastrado — é a
+  // esparsidade funcionando: a outra cidade não vende o que não recebeu preço.
+  const addProduct = useCallback(
+    async (p: Omit<Product, "id" | "createdAt" | "stock">) => {
+      if (!requireBranch(branchId)) return;
+      const { data, error } = await supabase
+        .from("products")
+        .insert({
+          name: p.name,
+          brand: p.brand,
+          model: p.model,
+          flavor: p.flavor,
+          image_url: p.imageUrl || null,
+        } as any)
+        .select("id")
+        .single();
+      if (error || !data) {
+        toast.error("Erro ao adicionar produto");
+        return;
+      }
+      const { error: pbErr } = await supabase.from("product_branch" as any).insert({
+        product_id: (data as any).id,
+        branch_id: branchId,
         purchase_price: p.purchasePrice,
         sale_price: p.salePrice,
         stock: 0,
         min_stock: p.minStock ?? 0,
-        image_url: p.imageUrl || null,
-      })
-      .select(PRODUCT_COLS)
-      .single();
-    if (error) {
-      toast.error("Erro ao adicionar produto");
-      return;
-    }
-    setProducts((prev) => [...prev, mapProduct({ ...data, purchase_price: p.purchasePrice })]);
-  }, []);
+      } as any);
+      if (pbErr) {
+        // A identidade sem preço é um produto que não existe em cidade
+        // nenhuma: desfaz, em vez de deixar um sabor fantasma no catálogo.
+        await supabase.from("products").delete().eq("id", (data as any).id);
+        toast.error("Erro ao cadastrar o produto nesta filial");
+        return;
+      }
+      setProducts(await fetchProductsList());
+    },
+    [branchId, fetchProductsList],
+  );
 
-  const updateProduct = useCallback(async (id: string, updates: Partial<Product>) => {
-    const dbUpdates: any = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
-    if (updates.flavor !== undefined) dbUpdates.flavor = updates.flavor;
-    if (updates.model !== undefined) dbUpdates.model = updates.model;
-    if (updates.purchasePrice !== undefined) dbUpdates.purchase_price = updates.purchasePrice;
-    if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
-    if (updates.stock !== undefined) dbUpdates.stock = updates.stock;
-    if (updates.minStock !== undefined) dbUpdates.min_stock = updates.minStock;
-    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl || null;
-    const { error } = await supabase.from("products").update(dbUpdates).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar produto");
-      return;
-    }
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
-  }, []);
+  const updateProduct = useCallback(
+    async (id: string, updates: Partial<Product>) => {
+      // Identidade vai para `products` (vale na rede); dinheiro e estoque vão
+      // para `product_branch` da cidade ativa. Em "Todas" a edição nem é
+      // oferecida pela tela — mudar um preço ali significaria mudar dois.
+      const identity: any = {};
+      if (updates.name !== undefined) identity.name = updates.name;
+      if (updates.brand !== undefined) identity.brand = updates.brand;
+      if (updates.flavor !== undefined) identity.flavor = updates.flavor;
+      if (updates.model !== undefined) identity.model = updates.model;
+      if (updates.imageUrl !== undefined) identity.image_url = updates.imageUrl || null;
+
+      const branchFields: any = {};
+      if (updates.purchasePrice !== undefined) branchFields.purchase_price = updates.purchasePrice;
+      if (updates.salePrice !== undefined) branchFields.sale_price = updates.salePrice;
+      if (updates.stock !== undefined) branchFields.stock = updates.stock;
+      if (updates.minStock !== undefined) branchFields.min_stock = updates.minStock;
+
+      if (Object.keys(identity).length > 0) {
+        const { error } = await supabase.from("products").update(identity).eq("id", id);
+        if (error) {
+          toast.error("Erro ao atualizar produto");
+          return;
+        }
+      }
+
+      if (Object.keys(branchFields).length > 0) {
+        if (!requireBranch(branchId)) return;
+        const { error } = await supabase
+          .from("product_branch" as any)
+          .update(branchFields)
+          .eq("product_id", id)
+          .eq("branch_id", branchId);
+        if (error) {
+          toast.error("Erro ao atualizar produto");
+          return;
+        }
+      }
+
+      setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+    },
+    [branchId],
+  );
 
   const deleteProduct = useCallback(
     async (id: string) => {
       const product = products.find((p) => p.id === id);
       if (product) {
         const { data: userData } = await supabase.auth.getUser();
+        // A fotografia é dos números DA FILIAL ATIVA — que é o que estava na
+        // tela quando alguém apertou excluir. Em "Todas" seriam os somados, e
+        // a tela não oferece exclusão nesse modo.
         await supabase.from("deleted_products").insert({
           original_id: product.id,
           name: product.name,
@@ -935,6 +1150,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Stock Entries ----
   const addStockEntry = useCallback(
     async (e: Omit<StockEntry, "id" | "totalCost">) => {
+      if (!requireBranch(branchId)) return;
       const totalCost = e.quantity * e.unitCost;
       const { data, error } = await supabase
         .from("stock_entries")
@@ -943,9 +1159,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           quantity: e.quantity,
           unit_cost: e.unitCost,
           total_cost: totalCost,
+          branch_id: branchId,
           date: e.date,
           notes: e.notes,
-        })
+        } as any)
         .select()
         .single();
       if (error) {
@@ -954,14 +1171,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       setStockEntries((prev) => [...prev, mapStockEntry(data)]);
       const product = products.find((p) => p.id === e.productId);
-      if (product) {
-        await supabase
-          .from("products")
-          .update({
-            stock: product.stock + e.quantity,
-            purchase_price: e.unitCost,
-          })
-          .eq("id", e.productId);
+      const ok = await addBranchStock(e.productId, branchId, e.quantity, {
+        unitCost: e.unitCost,
+        salePrice: product?.salePrice ?? 0,
+        minStock: product?.minStock ?? 0,
+      });
+      if (ok) {
         setProducts((prev) =>
           prev.map((p) =>
             p.id === e.productId ? { ...p, stock: p.stock + e.quantity, purchasePrice: e.unitCost } : p,
@@ -969,7 +1184,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         );
       }
     },
-    [products],
+    [products, branchId],
   );
 
   const deleteStockEntry = useCallback(
@@ -982,20 +1197,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       setStockEntries((prev) => prev.filter((e) => e.id !== id));
       if (entry) {
-        const product = products.find((p) => p.id === entry.productId);
-        if (product) {
-          const newStock = Math.max(0, product.stock - entry.quantity);
-          await supabase.from("products").update({ stock: newStock }).eq("id", entry.productId);
-          setProducts((prev) => prev.map((p) => (p.id === entry.productId ? { ...p, stock: newStock } : p)));
+        // A filial DA ENTRADA, não a ativa: em "Todas" a lista mostra as duas
+        // cidades, e tirar estoque da filial errada é a única forma de esta
+        // exclusão corromper um número em silêncio.
+        const entryBranch = entry.branchId ?? branchId;
+        if (!requireBranch(entryBranch)) return;
+        const ok = await addBranchStock(entry.productId, entryBranch, -entry.quantity);
+        if (ok) {
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.id === entry.productId ? { ...p, stock: Math.max(0, p.stock - entry.quantity) } : p,
+            ),
+          );
         }
       }
     },
-    [stockEntries, products],
+    [stockEntries, branchId],
   );
 
   // ---- Stock Losses ----
   const addStockLoss = useCallback(
     async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => {
+      if (!requireBranch(branchId)) return;
       const product = products.find((p) => p.id === l.productId);
       if (!product) {
         toast.error("Produto não encontrado");
@@ -1038,6 +1261,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           total_cost: totalCost,
           reason: l.reason,
           date: l.date,
+          branch_id: branchId,
           seller_id: l.sellerId ?? null,
         })
         .select()
@@ -1048,7 +1272,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       setStockLosses((prev) => [...prev, mapStockLoss(data)]);
       const newStock = Math.max(0, product.stock - l.quantity);
-      await supabase.from("products").update({ stock: newStock }).eq("id", l.productId);
+      await addBranchStock(l.productId, branchId, -l.quantity);
       setProducts((prev) => prev.map((p) => (p.id === l.productId ? { ...p, stock: newStock } : p)));
 
       if (l.sellerId) {
@@ -1076,7 +1300,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       toast.success("Perda registrada");
     },
-    [products],
+    [products, branchId],
   );
 
   const deleteStockLoss = useCallback(
@@ -1092,11 +1316,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       setStockLosses((prev) => prev.filter((l) => l.id !== id));
       if (loss) {
-        const product = products.find((p) => p.id === loss.productId);
-        if (product) {
-          const newStock = product.stock + loss.quantity;
-          await supabase.from("products").update({ stock: newStock }).eq("id", loss.productId);
-          setProducts((prev) => prev.map((p) => (p.id === loss.productId ? { ...p, stock: newStock } : p)));
+        // A filial DA PERDA, não a ativa — a mesma leitura de
+        // `deleteStockEntry`: devolver estoque na cidade errada corrompe dois
+        // números de uma vez e não deixa rastro na tela.
+        const lossBranch = loss.branchId ?? branchId;
+        if (lossBranch) {
+          const ok = await addBranchStock(loss.productId, lossBranch, loss.quantity);
+          if (ok) {
+            setProducts((prev) =>
+              prev.map((p) => (p.id === loss.productId ? { ...p, stock: p.stock + loss.quantity } : p)),
+            );
+          }
         }
         // Devolve a unidade para o vendedor, se a perda estava vinculada a ele
         if (loss.sellerId) {
@@ -1126,7 +1356,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [stockLosses, products],
+    [stockLosses, branchId],
   );
 
   const getTotalLossValue = useCallback(() => {
@@ -1134,61 +1364,65 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [stockLosses]);
 
   // ---- Sales ----
-  const addSale = useCallback(async (s: Omit<Sale, "id" | "totalPrice">) => {
-    const saleType = s.type || "venda";
+  const addSale = useCallback(
+    async (s: Omit<Sale, "id" | "totalPrice">) => {
+      const saleType = s.type || "venda";
+      if (!requireBranch(branchId)) return;
 
-    const { data, error } = await supabase.rpc("create_sale", {
-      p_product_id: s.productId,
-      p_quantity: s.quantity,
-      p_unit_price: s.unitPrice,
-      p_date: s.date,
-      p_notes: s.notes ?? null,
-      p_installments: s.installments || 1,
-      p_paid_amount: s.paidAmount || 0,
-      p_type: saleType,
-      p_seller_id: s.sellerId ?? null,
-      p_payment_method: saleType === "venda" ? (s.paymentMethod ?? null) : null,
-    });
+      const { data, error } = await supabase.rpc("create_sale" as any, {
+        p_product_id: s.productId,
+        p_quantity: s.quantity,
+        p_unit_price: s.unitPrice,
+        p_date: s.date,
+        p_notes: s.notes ?? null,
+        p_installments: s.installments || 1,
+        p_paid_amount: s.paidAmount || 0,
+        p_type: saleType,
+        p_seller_id: s.sellerId ?? null,
+        p_payment_method: saleType === "venda" ? (s.paymentMethod ?? null) : null,
+        // Com vendedor a filial é derivada dele no banco e este valor só é
+        // CONFERIDO; sem vendedor (venda manual, retirada) é este aqui que
+        // manda. Nos dois casos quem decide é o banco.
+        p_branch_id: branchId,
+      } as any);
 
-    if (error) {
-      if (error.message.includes("estoque_insuficiente")) {
-        toast.error(`Estoque insuficiente`);
-      } else if (error.message.includes("estoque_vendedor_insuficiente")) {
-        toast.error("Vendedor não possui estoque suficiente deste produto");
-      } else if (error.message.includes("nao_autorizado")) {
-        toast.error("Você não tem permissão para registrar essa venda");
-      } else if (error.message.includes("quantidade_invalida")) {
-        toast.error("Quantidade inválida");
-      } else {
-        toast.error("Erro ao registrar venda");
+      if (error) {
+        if (error.message.includes("estoque_insuficiente")) {
+          toast.error(`Estoque insuficiente`);
+        } else if (error.message.includes("estoque_vendedor_insuficiente")) {
+          toast.error("Vendedor não possui estoque suficiente deste produto");
+        } else if (error.message.includes("filial_divergente")) {
+          toast.error("Este vendedor é de outra filial");
+        } else if (error.message.includes("filial_obrigatoria")) {
+          toast.error("Escolha uma filial para lançar");
+        } else if (error.message.includes("nao_autorizado")) {
+          toast.error("Você não tem permissão para registrar essa venda");
+        } else if (error.message.includes("quantidade_invalida")) {
+          toast.error("Quantidade inválida");
+        } else {
+          toast.error("Erro ao registrar venda");
+        }
+        throw error;
       }
-      throw error;
-    }
 
-    const newSale = mapSale(data);
-    setSales((prev) => [...prev, newSale]);
+      const newSale = mapSale(data);
+      setSales((prev) => [...prev, newSale]);
 
-    // A function já debitou o estoque no banco; aqui só sincronizamos
-    // o estado local (products / product_assignments) com o que ficou.
-    const { data: refreshedProduct } = await supabase
-      .from("products")
-      .select(PRODUCT_COLS)
-      .eq("id", s.productId)
-      .single();
-    if (refreshedProduct) {
-      const updated = mapProduct(refreshedProduct);
-      setProducts((prev) => prev.map((p) => (p.id === s.productId ? updated : p)));
-    }
-    if (s.sellerId) {
-      const { data: refreshedAssignments } = await supabase
-        .from("product_assignments")
-        .select("*")
-        .order("created_at", { ascending: true });
-      if (refreshedAssignments) {
-        setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
+      // A function já debitou o estoque no banco; aqui só sincronizamos
+      // o estado local (products / product_assignments) com o que ficou.
+      setProducts(await fetchProductsList());
+      if (s.sellerId) {
+        const { data: refreshedAssignments } = await supabase
+          .from("product_assignments")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (refreshedAssignments) {
+          setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
+        }
       }
-    }
-  }, []);
+    },
+    [branchId, fetchProductsList],
+  );
 
   const updateSale = useCallback(
     async (id: string, updates: Partial<Sale>) => {
@@ -1245,15 +1479,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setSales((prev) => prev.filter((s) => s.id !== id));
 
       if (sale) {
-        const { data: refreshedProduct } = await supabase
-          .from("products")
-          .select(PRODUCT_COLS)
-          .eq("id", sale.productId)
-          .single();
-        if (refreshedProduct) {
-          const updated = mapProduct(refreshedProduct);
-          setProducts((prev) => prev.map((p) => (p.id === sale.productId ? updated : p)));
-        }
+        // `delete_sale` devolveu o estoque na filial GRAVADA NA VENDA, que não
+        // é necessariamente a do vendedor hoje. Recarregar a lista é o jeito de
+        // a tela ver o que o banco de fato fez.
+        setProducts(await fetchProductsList());
         if (sale.sellerId) {
           const { data: refreshedAssignments } = await supabase
             .from("product_assignments")
@@ -1265,11 +1494,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [sales],
+    [sales, fetchProductsList],
   );
 
   // ---- Expenses ----
   const addExpense = useCallback(async (e: Omit<Expense, "id">) => {
+    if (!requireBranch(branchId)) return;
     const { data, error } = await supabase
       .from("expenses")
       .insert({
@@ -1277,7 +1507,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         category: e.category,
         amount: e.amount,
         date: e.date,
-      })
+        branch_id: branchId,
+      } as any)
       .select()
       .single();
     if (error) {
@@ -1285,7 +1516,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setExpenses((prev) => [...prev, mapExpense(data)]);
-  }, []);
+  }, [branchId]);
 
   const deleteExpense = useCallback(async (id: string) => {
     const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -1466,21 +1697,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [partnerPayments]);
 
   // ---- Sellers ----
-  const addSeller = useCallback(async (s: Omit<Seller, "id" | "createdAt">) => {
-    const { data, error } = await supabase
-      .from("sellers" as any)
-      .insert({
-        name: s.name,
-        debt_percentage: s.debtPercentage ?? 10,
-      } as any)
-      .select()
-      .single();
-    if (error) {
-      toast.error("Erro ao adicionar vendedor");
-      return;
-    }
-    setSellers((prev) => [...prev, mapSeller(data)]);
-  }, []);
+  // O vendedor nasce na filial ativa, e não troca de filial depois: tudo o que
+  // é dele (atribuições, pedidos, comissões) herda a cidade desta linha, então
+  // mudá-la reescreveria o passado. Quem muda de cidade ganha cadastro novo.
+  const addSeller = useCallback(
+    async (s: Omit<Seller, "id" | "createdAt">) => {
+      if (!requireBranch(branchId)) return;
+      const { data, error } = await supabase
+        .from("sellers" as any)
+        .insert({
+          name: s.name,
+          debt_percentage: s.debtPercentage ?? 10,
+          branch_id: branchId,
+        } as any)
+        .select()
+        .single();
+      if (error) {
+        toast.error("Erro ao adicionar vendedor");
+        return;
+      }
+      setSellers((prev) => [...prev, mapSeller(data)]);
+    },
+    [branchId],
+  );
 
   const updateSeller = useCallback(async (id: string, updates: Partial<Seller>) => {
     const dbUpdates: any = {};
@@ -1855,7 +2094,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const refreshSales = useCallback(async () => {
     const [salesRes, paRes, prodList] = await Promise.all([
-      supabase.from("sales").select("*").order("created_at", { ascending: true }),
+      scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }),
       supabase
         .from("product_assignments" as any)
         .select("*")
@@ -1865,7 +2104,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (salesRes.data) setSales((salesRes.data as any[]).map(mapSale));
     if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
     if (prodList) setProducts(prodList);
-  }, [fetchProductsList]);
+  }, [fetchProductsList, scoped]);
 
   const addPartnerContribution = useCallback(
     async (c: Omit<PartnerContribution, "id" | "createdAt">) => {
@@ -2086,6 +2325,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const sortedSellers = useMemo(() => sortByName(sellers), [sellers]);
   const sortedPartners = useMemo(() => sortByName(partners), [partners]);
 
+  /**
+   * As tabelas de vendedor não têm `branch_id`: a cidade delas vem do vendedor
+   * — é a segunda âncora, e é o que evita quinze colunas que podem divergir.
+   * A RLS já corta pelo que a pessoa ALCANÇA; o recorte pela filial ATIVA é
+   * feito aqui, em memória, pelo conjunto de `seller_id` da cidade (a lista de
+   * `sellers` já chega filtrada da consulta).
+   *
+   * Em "Todas" não há recorte nenhum: a RLS é o único corte, e ela já é o
+   * corte certo.
+   */
+  const branchSellerIds = useMemo(() => new Set(sellers.map((s) => s.id)), [sellers]);
+  const bySeller = useCallback(
+    <T extends { sellerId: string }>(rows: T[]): T[] =>
+      branchId ? rows.filter((r) => branchSellerIds.has(r.sellerId)) : rows,
+    [branchId, branchSellerIds],
+  );
+
+  const scopedAssignments = useMemo(() => bySeller(productAssignments), [bySeller, productAssignments]);
+  const scopedDebtPayments = useMemo(() => bySeller(sellerDebtPayments), [bySeller, sellerDebtPayments]);
+  const scopedManualDebts = useMemo(() => bySeller(sellerManualDebts), [bySeller, sellerManualDebts]);
+  const scopedCommissions = useMemo(() => bySeller(commissionPayments), [bySeller, commissionPayments]);
+
   const ctxValue = useMemo<StoreContextType>(
     () => ({
       products: sortedProducts,
@@ -2096,12 +2357,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       dividends,
       partners: sortedPartners,
       sellers: sortedSellers,
-      productAssignments,
-      sellerDebtPayments,
+      productAssignments: scopedAssignments,
+      sellerDebtPayments: scopedDebtPayments,
       partnerPayments,
-      sellerManualDebts,
+      sellerManualDebts: scopedManualDebts,
       stockLosses,
-      commissionPayments,
+      commissionPayments: scopedCommissions,
       proLaborePayments,
       loading,
       addProduct,
@@ -2195,12 +2456,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       dividends,
       sortedPartners,
       sortedSellers,
-      productAssignments,
-      sellerDebtPayments,
+      scopedAssignments,
+      scopedDebtPayments,
       partnerPayments,
-      sellerManualDebts,
+      scopedManualDebts,
       stockLosses,
-      commissionPayments,
+      scopedCommissions,
       proLaborePayments,
       loading,
       addProduct,

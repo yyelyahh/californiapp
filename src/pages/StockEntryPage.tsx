@@ -1,4 +1,5 @@
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 import { useState, useMemo } from "react";
 import { Plus, Search, Trash2, ChevronRight, X, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
@@ -69,6 +70,7 @@ const MAX_TOP_MODELS = 6;
 
 export default function StockEntryPage() {
   const { products, stockEntries, purchaseOrders, addStockEntry, deleteStockEntry, getProductName } = useStore();
+  const { branchId } = useBranch();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
@@ -287,9 +289,14 @@ export default function StockEntryPage() {
             <h1 className="mt-1 text-xl sm:text-[22px]">Entrada de estoque</h1>
           </div>
 
+          <div className="flex items-center gap-3">
+            {!branchId && <BranchReadOnly className="text-right" />}
           <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
             <SheetTrigger asChild>
-              <NcButton variant="solid" size="md"><Plus size={14} />Nova entrada</NcButton>
+              {/* Em "Todas as filiais" não há para onde a entrada ir: a
+                  pergunta "em qual filial isso entrou?" não tem resposta, e
+                  escolher uma por acaso é pior que não deixar lançar. */}
+              <NcButton variant="solid" size="md" disabled={!branchId}><Plus size={14} />Nova entrada</NcButton>
             </SheetTrigger>
             {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
                 o Radix porta o painel para o <body> e os tokens não chegam por
@@ -410,6 +417,7 @@ export default function StockEntryPage() {
               </SheetFooter>
             </SheetContent>
           </Sheet>
+          </div>
         </header>
 
         <PurchaseOrdersSection />

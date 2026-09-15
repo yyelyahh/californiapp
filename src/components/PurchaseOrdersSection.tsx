@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +14,14 @@ import { sortNames } from "@/lib/catalog-order";
 import { NcButton, NcSheetHeader, EYEBROW } from "@/components/nocturne";
 
 type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string; unitPrice: string };
-type FlavorRow = { flavor: string; quantity: string };
+/**
+ * Uma linha do recebimento. `branchId` é por LINHA, não por compra: a compra é
+ * central (o fornecedor entrega uma vez, o frete é dela), e é aqui que a caixa
+ * se divide entre as cidades. O mesmo sabor pode aparecer duas vezes, uma por
+ * filial — exatamente como `order_items` já aceita duas linhas do mesmo
+ * produto. A validação (soma === esperado) continua valendo sobre a SOMA.
+ */
+type FlavorRow = { flavor: string; quantity: string; branchId: string };
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -108,6 +116,11 @@ const emptyItem = (): DraftItem => ({ brand: "", brandNew: "", model: "", modelN
 
 export default function PurchaseOrdersSection() {
   const { products, purchaseOrders, addPurchaseOrder, deletePurchaseOrder, receivePurchaseOrder } = useStore();
+  const { branches, branchId } = useBranch();
+  /** Filial padrão de uma linha nova: a ativa; em "Todas", a primeira da lista.
+   *  A compra pode ser recebida em "Todas" de propósito — ela é central, e a
+   *  divisão é justamente o que se está fazendo nesta tela. */
+  const defaultBranch = branchId ?? branches[0]?.id ?? "";
   const confirm = useConfirm();
 
   const [newOpen, setNewOpen] = useState(false);
@@ -180,7 +193,7 @@ export default function PurchaseOrdersSection() {
     order.items.forEach(it => {
       const ref = products.find(p => p.brand.toLowerCase() === it.brand.toLowerCase() && (p.model || "").toLowerCase() === it.model.toLowerCase());
       c[it.id] = it.unitPrice > 0 ? String(it.unitPrice) : (ref?.purchasePrice ? String(ref.purchasePrice) : "");
-      f[it.id] = [{ flavor: "", quantity: "" }];
+      f[it.id] = [{ flavor: "", quantity: "", branchId: defaultBranch }];
     });
     setCosts(c);
     setFlavors(f);
@@ -190,7 +203,15 @@ export default function PurchaseOrdersSection() {
   const setRow = (itemId: string, idx: number, patch: Partial<FlavorRow>) => {
     setFlavors(prev => ({ ...prev, [itemId]: prev[itemId].map((r, i) => i === idx ? { ...r, ...patch } : r) }));
   };
-  const addRow = (itemId: string) => setFlavors(prev => ({ ...prev, [itemId]: [...prev[itemId], { flavor: "", quantity: "" }] }));
+  // A linha nova herda a filial da ANTERIOR, não a ativa: dividir uma caixa é
+  // repetir o mesmo sabor mudando a cidade, e voltar para o padrão a cada linha
+  // faria a pessoa trocar o seletor duas vezes por divisão.
+  const addRow = (itemId: string) =>
+    setFlavors(prev => {
+      const rows = prev[itemId] ?? [];
+      const last = rows[rows.length - 1];
+      return { ...prev, [itemId]: [...rows, { flavor: "", quantity: "", branchId: last?.branchId ?? defaultBranch }] };
+    });
   const removeRow = (itemId: string, idx: number) =>
     setFlavors(prev => ({ ...prev, [itemId]: prev[itemId].filter((_, i) => i !== idx) }));
 
@@ -214,7 +235,11 @@ export default function PurchaseOrdersSection() {
         unitCost: (Number(costs[it.id]) || 0) + freightPerUnit,
         flavors: (flavors[it.id] ?? [])
           .filter(r => r.flavor.trim())
-          .map(r => ({ flavor: r.flavor.trim(), quantity: parseInt(r.quantity, 10) || 0 })),
+          .map(r => ({
+            flavor: r.flavor.trim(),
+            quantity: parseInt(r.quantity, 10) || 0,
+            branchId: r.branchId || undefined,
+          })),
       })),
       receiptDate,
     );
@@ -462,6 +487,20 @@ export default function PurchaseOrdersSection() {
                       <div key={i} className="flex items-center gap-1.5">
                         <Input value={row.flavor} placeholder="Sabor" className="flex-1"
                           onChange={e => setRow(it.id, i, { flavor: e.target.value })} />
+                        {/* Seletor por LINHA, e só quando há mais de uma cidade:
+                            com uma filial só ele seria um campo de uma opção. */}
+                        {branches.length > 1 && (
+                          <Select value={row.branchId} onValueChange={v => setRow(it.id, i, { branchId: v })}>
+                            <SelectTrigger className="w-[7.5rem]" aria-label={`Filial do sabor ${i + 1}`}>
+                              <SelectValue placeholder="Filial" />
+                            </SelectTrigger>
+                            <SelectContent className="nocturne">
+                              {branches.map(b => (
+                                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <Input type="number" min={0} value={row.quantity} placeholder="Qtd" className="nc-num w-20"
                           onChange={e => setRow(it.id, i, { quantity: e.target.value })} />
                         <NcButton

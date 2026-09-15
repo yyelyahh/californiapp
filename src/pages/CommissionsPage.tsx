@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useBranch } from "@/context/BranchContext";
 import { useStore } from "@/context/StoreContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
@@ -77,6 +78,7 @@ const PANEL_TITLES: Record<Exclude<PanelMode, "resumo">, string> = {
 
 export default function CommissionsPage() {
   const store = useStore();
+  const { branchId, branchName } = useBranch();
   const confirm = useConfirm();
   const {
     sellers, partners, sales, expenses, products, productAssignments, dividends,
@@ -418,9 +420,20 @@ export default function CommissionsPage() {
             <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{label}</span>
             <h1 className="mt-1 text-xl sm:text-[22px]">Distribuição</h1>
           </div>
-          <NcButton variant="solid" size="md" onClick={() => { resetMove(); setMoveOpen(true); }}>
-            <Package size={14} />Movimentar estoque
-          </NcButton>
+          <div className="flex items-center gap-3">
+            {!branchId && <BranchReadOnly className="text-right" />}
+            {/* A unidade sai do estoque de UMA cidade e entra na mão de um
+                vendedor DELA. Em "Todas" a lista de vendedores tem gente das
+                duas, e a origem "estoque da casa" não teria endereço. */}
+            <NcButton
+              variant="solid"
+              size="md"
+              disabled={!branchId}
+              onClick={() => { resetMove(); setMoveOpen(true); }}
+            >
+              <Package size={14} />Movimentar estoque
+            </NcButton>
+          </div>
         </header>
 
         {/* ---------------- Período ---------------- */}
@@ -473,6 +486,13 @@ export default function CommissionsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-[13px]">{r.seller.name}</span>
+                        {/* Em "Todas as filiais" a lista junta gente das duas
+                            cidades, e dois nomes parecidos de praças diferentes
+                            ficariam indistinguíveis. Com uma filial escolhida a
+                            informação é redundante e não aparece. */}
+                        {!branchId && r.seller.branchId && (
+                          <span className="nc-pill nc-pill--mute flex-none">{branchName(r.seller.branchId)}</span>
+                        )}
                         {/* A faixa é o que o vendedor persegue e estava escondida
                             dentro do painel. Selo neutro: faixa não é estado de
                             dinheiro, é em qual degrau ele está. */}

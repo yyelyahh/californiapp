@@ -1,4 +1,5 @@
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 import type { Product } from "@/types";
 import { useState, useMemo } from "react";
 import { Trash2, Search, Package, ChevronRight, Pencil, Tag, X } from "lucide-react";
@@ -14,7 +15,7 @@ import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { AnimatePresence, motion } from "motion/react";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { sortNames, sortCatalog, compareText } from "@/lib/catalog-order";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
@@ -43,6 +44,9 @@ function modelStockColor(m: { stock: number; min: number }) {
 
 export default function ProductsPage() {
   const { products, updateProduct, deleteProduct } = useStore();
+  const { branchId } = useBranch();
+  /** "Todas as filiais" é somente leitura: o estoque aqui é somado e o preço é o maior entre as cidades. */
+  const readOnly = !branchId;
   const [search, setSearch] = useState("");
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
@@ -281,16 +285,21 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <NcButton onClick={() => setBulkOpen(true)}>
+            {/* Preço e mínimo são da CIDADE: em "Todas" mudá-los significaria
+                mudar dois números de uma vez, sem dizer qual. A foto do modelo
+                (`ModelImagesDialog`) continua de pé — ela é do catálogo
+                compartilhado, e vale na rede inteira. */}
+            {readOnly && <BranchReadOnly />}
+            <NcButton onClick={() => setBulkOpen(true)} disabled={readOnly}>
               <Tag size={13} />
               <span className="hidden sm:inline">Preço por modelo</span><span className="sm:hidden">Preço</span>
             </NcButton>
-            <NcButton onClick={() => setBulkMinOpen(true)}>
+            <NcButton onClick={() => setBulkMinOpen(true)} disabled={readOnly}>
               <Package size={13} />
               <span className="hidden sm:inline">Mínimo por modelo</span><span className="sm:hidden">Mínimo</span>
             </NcButton>
             <ModelImagesDialog />
-            <AddProductDialog />
+            <AddProductDialog disabled={readOnly} />
           </div>
         </header>
 
@@ -436,6 +445,7 @@ export default function ProductsPage() {
                                             <FlavorRow
                                               key={p.id}
                                               product={p}
+                                              readOnly={readOnly}
                                               onEdit={() => startEdit(p)}
                                               onDelete={() => setDeleteTarget(p)}
                                             />
@@ -762,7 +772,17 @@ function GroupTotals({ invested, saleValue, profit }: { invested: number; saleVa
  * "Repor agora": terciário para zerado (existe mas não conta), `--nc-alert`
  * para acabando, texto normal para o que está de pé.
  */
-function FlavorRow({ product: p, onEdit, onDelete }: { product: Product; onEdit: () => void; onDelete: () => void }) {
+function FlavorRow({
+  product: p,
+  readOnly,
+  onEdit,
+  onDelete,
+}: {
+  product: Product;
+  readOnly?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const profit = p.salePrice - p.purchasePrice;
   const stockColor = p.stock === 0
     ? "var(--nc-text-3)"
@@ -779,7 +799,21 @@ function FlavorRow({ product: p, onEdit, onDelete }: { product: Product; onEdit:
       <td className="nc-num hidden px-2 py-1.5 text-right sm:table-cell" style={{ color: "var(--nc-text-2)" }}>
         {formatCurrency(p.purchasePrice)}
       </td>
-      <td className="nc-num px-2 py-1.5 text-right">{formatCurrency(p.salePrice)}</td>
+      <td className="nc-num px-2 py-1.5 text-right">
+        {formatCurrency(p.salePrice)}
+        {/* Em "Todas as filiais" este número é o MAIOR entre as cidades, não um
+            preço que alguém cobra. O asterisco diz isso onde a pessoa está
+            olhando — esconder o preço seria pior, e mostrar um só, mentira. */}
+        {p.priceVaries && (
+          <span
+            className="ml-0.5 align-super text-[10px]"
+            style={{ color: "var(--nc-alert)" }}
+            title="O preço varia entre as filiais — este é o maior"
+          >
+            *
+          </span>
+        )}
+      </td>
       <td className="nc-num px-2 py-1.5 text-right" style={{ color: profitColor(profit) }}>
         {formatCurrency(profit)}
       </td>
@@ -787,10 +821,22 @@ function FlavorRow({ product: p, onEdit, onDelete }: { product: Product; onEdit:
         {/* No desktop as ações só aparecem no hover da linha; no toque não há
             hover, então ficam sempre visíveis abaixo de sm. */}
         <div className="flex justify-end gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-          <NcButton variant="ghost" size="icon" onClick={onEdit} aria-label={`Editar ${p.flavor || p.name}`}>
+          <NcButton
+            variant="ghost"
+            size="icon"
+            onClick={onEdit}
+            disabled={readOnly}
+            aria-label={`Editar ${p.flavor || p.name}`}
+          >
             <Pencil size={13} />
           </NcButton>
-          <NcButton variant="danger" size="icon" onClick={onDelete} aria-label={`Excluir ${p.flavor || p.name}`}>
+          <NcButton
+            variant="danger"
+            size="icon"
+            onClick={onDelete}
+            disabled={readOnly}
+            aria-label={`Excluir ${p.flavor || p.name}`}
+          >
             <Trash2 size={13} />
           </NcButton>
         </div>

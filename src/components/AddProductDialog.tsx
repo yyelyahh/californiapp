@@ -18,7 +18,7 @@ const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }
 
 const DEFAULT_BRANDS = Object.keys(BRAND_PRESETS);
 
-export default function AddProductDialog() {
+export default function AddProductDialog({ disabled }: { disabled?: boolean } = {}) {
   const { products, addProduct } = useStore();
   const [open, setOpen] = useState(false);
   const [brandSelect, setBrandSelect] = useState("");
@@ -118,7 +118,7 @@ export default function AddProductDialog() {
   return (
     <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
       <SheetTrigger asChild>
-        <NcButton variant="solid" size="md"><Plus size={14} />Novo produto</NcButton>
+        <NcButton variant="solid" size="md" disabled={disabled}><Plus size={14} />Novo produto</NcButton>
       </SheetTrigger>
       {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja: o
           Radix porta o painel para o <body> e os tokens não chegam por herança. */}

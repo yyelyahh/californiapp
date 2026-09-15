@@ -1,4 +1,5 @@
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 import { useMemo, useState } from "react";
 import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
@@ -23,6 +24,7 @@ const MAX_STAGGERED_ROWS = 20;
 
 export default function LossesPage() {
   const { products, stockLosses, stockEntries, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue, sellers, productAssignments } = useStore();
+  const { branchId } = useBranch();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
@@ -140,9 +142,13 @@ export default function LossesPage() {
               dado do painel (nova entrada, nova compra, cadastro rápido). Era
               um diálogo no meio da tela — a única porta de registro do ERP que
               ainda abria assim. */}
+          <div className="flex items-center gap-3">
+            {!branchId && <BranchReadOnly className="text-right" />}
           <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
             <SheetTrigger asChild>
-              <NcButton variant="solid" size="md"><Plus size={14} />Nova perda</NcButton>
+              {/* "Todas as filiais" é somente leitura: a perda sai do estoque
+                  de UMA cidade, e o consolidado não tem essa resposta. */}
+              <NcButton variant="solid" size="md" disabled={!branchId}><Plus size={14} />Nova perda</NcButton>
             </SheetTrigger>
             {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
                 o Radix porta o painel para o <body> e os tokens não chegam por
@@ -250,6 +256,7 @@ export default function LossesPage() {
               </SheetFooter>
             </SheetContent>
           </Sheet>
+          </div>
         </header>
 
         {/* ---------------- Lista ----------------

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense } from "react";
 import { StoreProvider } from "@/context/StoreContext";
+import { BranchProvider, useBranch } from "@/context/BranchContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
@@ -49,50 +50,78 @@ function ProtectedRoutes() {
   // O vendedor tem uma tela só, e ela usa o tema da loja em vez do Nocturne do
   // ERP. Por isso a bifurcação acontece ANTES do AppLayout: a sidebar e a barra
   // inferior existiriam para navegar entre uma opção, e o shell de tela cheia
-  // da tela dele brigaria com o shell do ERP por fora. O `StoreProvider`
-  // continua, que é de onde vêm os dados.
+  // da tela dele brigaria com o shell do ERP por fora.
   //
   // Chegar aqui com `role` ainda desconhecido não acontece mais: o
   // `AuthContext` só desliga o `loading` depois de resolver o papel.
-  if (role === "seller") {
+  //
+  // O `BranchProvider` fica ACIMA do `StoreProvider` nos dois caminhos: é ele
+  // que diz de qual cidade são os dados que o Store vai carregar. O vendedor
+  // não vê switch nenhum — o contexto resolve a filial única dele sozinho.
+  return (
+    <BranchProvider>
+      <BranchScopedStore>
+        {role === "seller" ? (
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route path="/minhas-vendas" element={<SellerSalesPage />} />
+              <Route path="*" element={<Navigate to="/minhas-vendas" replace />} />
+            </Routes>
+          </Suspense>
+        ) : (
+          <AppLayout>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/products" element={<ProductsPage />} />
+                <Route path="/stock" element={<StockEntryPage />} />
+                <Route path="/sales" element={<SalesPage />} />
+                <Route path="/expenses" element={<ExpensesPage />} />
+                <Route path="/investors" element={<Navigate to="/finance" replace />} />
+                <Route path="/finance" element={<FinancePage />} />
+                <Route path="/revenue" element={<Navigate to="/commissions" replace />} />
+                <Route path="/sellers" element={<Navigate to="/commissions" replace />} />
+                <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />
+                <Route path="/losses" element={<LossesPage />} />
+                <Route path="/commissions" element={<CommissionsPage />} />
+                <Route path="/insights" element={<InsightsPage />} />
+                <Route path="/audit" element={<AuditPage />} />
+
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </Suspense>
+          </AppLayout>
+        )}
+      </BranchScopedStore>
+    </BranchProvider>
+  );
+}
+
+/**
+ * Trocar de filial REMONTA o `StoreProvider` inteiro, pelo `key`.
+ *
+ * A alternativa era reconciliar 21 estados diferentes (produtos, vendas,
+ * atribuições, despesas…) a cada troca, cada um com a sua própria janela entre
+ * "já mudou a filial" e "ainda tem dado da anterior na tela". Um `key` resolve
+ * a classe inteira de bug de dado velho de uma vez: o provider antigo morre
+ * com tudo o que tinha dentro e o novo nasce carregando do zero.
+ *
+ * Enquanto a lista de filiais não chegou, nada monta — o Store precisa saber
+ * de qual cidade carregar ANTES da primeira consulta, e montar sem saber
+ * pediria a rede inteira para jogar fora no instante seguinte.
+ */
+function BranchScopedStore({ children }: { children: React.ReactNode }) {
+  const { branchId, loading } = useBranch();
+
+  if (loading) {
     return (
-      <StoreProvider>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/minhas-vendas" element={<SellerSalesPage />} />
-            <Route path="*" element={<Navigate to="/minhas-vendas" replace />} />
-          </Routes>
-        </Suspense>
-      </StoreProvider>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground">Carregando...</div>
+      </div>
     );
   }
 
-  return (
-    <StoreProvider>
-      <AppLayout>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/products" element={<ProductsPage />} />
-            <Route path="/stock" element={<StockEntryPage />} />
-            <Route path="/sales" element={<SalesPage />} />
-            <Route path="/expenses" element={<ExpensesPage />} />
-            <Route path="/investors" element={<Navigate to="/finance" replace />} />
-            <Route path="/finance" element={<FinancePage />} />
-            <Route path="/revenue" element={<Navigate to="/commissions" replace />} />
-            <Route path="/sellers" element={<Navigate to="/commissions" replace />} />
-            <Route path="/seller-accounts" element={<Navigate to="/commissions" replace />} />
-            <Route path="/losses" element={<LossesPage />} />
-            <Route path="/commissions" element={<CommissionsPage />} />
-            <Route path="/insights" element={<InsightsPage />} />
-            <Route path="/audit" element={<AuditPage />} />
-
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </Suspense>
-      </AppLayout>
-    </StoreProvider>
-  );
+  return <StoreProvider key={branchId ?? "all"}>{children}</StoreProvider>;
 }
 
 /**

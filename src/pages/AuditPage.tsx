@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, RotateCw, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useStore } from "@/context/StoreContext";
+import { useBranch } from "@/context/BranchContext";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
@@ -101,6 +102,7 @@ function dayLabel(day: string): string {
 
 export default function AuditPage() {
   const { products, sellers, partners, investors, loans } = useStore();
+  const { branches } = useBranch();
 
   const [preset, setPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
   const [dateFrom, setDateFrom] = useState(currentMonthRange().from);
@@ -128,6 +130,8 @@ export default function AuditPage() {
           const p = products.find(x => x.id === id);
           return p ? [p.brand, p.model, p.flavor].filter(Boolean).join(" · ") : null;
         }
+        case "branch_id":
+          return branches.find(x => x.id === id)?.name ?? null;
         case "seller_id":
           return sellers.find(x => x.id === id)?.name ?? null;
         case "partner_id":
@@ -140,7 +144,7 @@ export default function AuditPage() {
           return null;
       }
     },
-    [products, sellers, partners, investors, loans],
+    [products, sellers, partners, investors, loans, branches],
   );
 
   const movements = useMemo(() => groupMovements(rows), [rows]);
