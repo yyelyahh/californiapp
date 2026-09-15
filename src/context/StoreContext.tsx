@@ -51,6 +51,25 @@ function requireBranch(branchId: string | null): branchId is string {
 }
 
 /**
+ * A recusa do gatilho `validate_assignment_fits_stock`, em português.
+ *
+ * O banco manda o número que ele viu junto do código (`erro:N`), e é isso que
+ * permite dizer "cabem 3" em vez de "não deu" — a pessoa aprende o limite sem
+ * precisar abrir outra tela para descobrir.
+ */
+function assignmentError(message?: string): string {
+  const m = message ?? "";
+  if (m.includes("atribuicao_maior_que_estoque")) {
+    const cabem = m.match(/:(\d+)/)?.[1] ?? "0";
+    return `A filial não tem tudo isso livre — cabem ${cabem} un.`;
+  }
+  if (m.includes("produto_nao_vendido_nesta_filial")) {
+    return "Esta filial não vende esse produto";
+  }
+  return "Erro ao atribuir produto";
+}
+
+/**
  * Soma (ou subtrai, com `quantity` negativo) unidades ao estoque de um sabor
  * NUMA cidade, criando a linha de `product_branch` quando aquela cidade ainda
  * não vendia esse sabor.
@@ -149,6 +168,8 @@ interface StoreContextType {
     quantity: number;
     date: string;
     notes?: string;
+    /** De quem a unidade saiu. Ausente = estoque da casa. */
+    fromSellerId?: string;
   }) => Promise<boolean>;
   stockLosses: StockLoss[];
   addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => Promise<void>;
@@ -670,6 +691,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     productId: r.product_id,
     fromBranchId: r.from_branch_id,
     toBranchId: r.to_branch_id,
+    fromSellerId: r.from_seller_id ?? undefined,
     quantity: Number(r.quantity ?? 0),
     unitCost: Number(r.unit_cost ?? 0),
     date: r.date,
@@ -1422,7 +1444,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // As três escritas (debita origem, credita destino, registra) moram na
   // function: aqui só passamos o pedido e sincronizamos a tela com o que ficou.
   const transferBranchStock = useCallback(
-    async (t: { productId: string; toBranchId: string; quantity: number; date: string; notes?: string }) => {
+    async (t: {
+      productId: string;
+      toBranchId: string;
+      quantity: number;
+      date: string;
+      notes?: string;
+      fromSellerId?: string;
+    }) => {
       if (!requireBranch(branchId)) return false;
 
       const { data, error } = await supabase.rpc("transfer_branch_stock" as any, {
@@ -1432,21 +1461,48 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         p_quantity: t.quantity,
         p_date: t.date,
         p_notes: t.notes ?? null,
+        p_from_seller_id: t.fromSellerId ?? null,
       } as any);
 
       if (error) {
         const m = error.message ?? "";
-        if (m.includes("estoque_insuficiente")) toast.error("Estoque insuficiente nesta filial");
-        else if (m.includes("mesma_filial")) toast.error("Escolha uma filial diferente da atual");
-        else if (m.includes("nao_autorizado")) toast.error("Você não tem acesso a uma das filiais");
-        else if (m.includes("quantidade_invalida")) toast.error("Quantidade inválida");
-        else toast.error("Erro ao transferir");
+        // O banco manda o número que ele viu junto do código (`erro:N`) — é o
+        // que permite dizer "só 3 livre" em vez de "não deu".
+        const quanto = m.match(/:(\d+)/)?.[1];
+        if (m.includes("estoque_livre_insuficiente")) {
+          toast.error(
+            `Só ${quanto ?? 0} un. livres nesta filial — o resto está com os vendedores. Escolha de quem sai.`,
+          );
+        } else if (m.includes("estoque_vendedor_insuficiente")) {
+          toast.error(`Esse vendedor tem apenas ${quanto ?? 0} un. deste produto`);
+        } else if (m.includes("vendedor_de_outra_filial")) {
+          toast.error("Esse vendedor não é desta filial");
+        } else if (m.includes("estoque_insuficiente")) {
+          toast.error("Estoque insuficiente nesta filial");
+        } else if (m.includes("mesma_filial")) {
+          toast.error("Escolha uma filial diferente da atual");
+        } else if (m.includes("nao_autorizado")) {
+          toast.error("Você não tem acesso a uma das filiais");
+        } else if (m.includes("quantidade_invalida")) {
+          toast.error("Quantidade inválida");
+        } else {
+          toast.error("Erro ao transferir");
+        }
         return false;
       }
 
       setStockTransfers((prev) => [mapStockTransfer(data), ...prev]);
       // A lista inteira: o destino também mudou, e o custo vem de outra RPC.
       setProducts(await fetchProductsList());
+      // Saiu da caixa de um vendedor: a atribuição dele mudou junto, e é o que
+      // a Distribuição e o catálogo dele leem.
+      if (t.fromSellerId) {
+        const { data: refreshed } = await supabase
+          .from("product_assignments")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
+      }
       toast.success("Estoque transferido");
       return true;
     },
@@ -1852,7 +1908,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .order("created_at", { ascending: true });
 
     if (fetchError) {
-      toast.error("Erro ao atribuir produto");
+      toast.error(assignmentError(fetchError.message));
       return;
     }
 
@@ -1871,7 +1927,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (updateError || !updatedAssignment) {
-        toast.error("Erro ao atribuir produto");
+        toast.error(assignmentError(updateError?.message));
         return;
       }
 
@@ -1909,7 +1965,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (error) {
-      toast.error("Erro ao atribuir produto");
+      toast.error(assignmentError(error.message));
       return;
     }
 

@@ -135,6 +135,7 @@ export default function AuditPage() {
         case "to_branch_id":
           return branches.find(x => x.id === id)?.name ?? null;
         case "seller_id":
+        case "from_seller_id":
           return sellers.find(x => x.id === id)?.name ?? null;
         case "partner_id":
           return partners.find(x => x.id === id)?.name ?? null;

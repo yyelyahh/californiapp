@@ -48,6 +48,13 @@ export interface StockTransfer {
   productId: string;
   fromBranchId: string;
   toBranchId: string;
+  /**
+   * De quem a unidade saiu. Ausente = estoque da casa.
+   *
+   * Não se deduz: quando dois vendedores têm o mesmo sabor, adivinhar de qual
+   * caixa saíram as unidades acerta o total e erra a pessoa, em silêncio.
+   */
+  fromSellerId?: string;
   quantity: number;
   /** O custo com que a unidade saiu da origem, copiado no momento da saída. */
   unitCost: number;

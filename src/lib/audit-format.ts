@@ -294,6 +294,7 @@ const FIELD_LABEL: Record<string, string> = {
   brand: "marca",
   branch_id: "filial",
   from_branch_id: "filial de origem",
+  from_seller_id: "saiu de",
   to_branch_id: "filial de destino",
   category: "categoria",
   confirmed_at: "confirmado em",
@@ -371,7 +372,7 @@ const DATE = new Set([
 
 /** Campos cujo valor é o id de outra linha — a tela resolve para nome. */
 const REFERENCE = new Set([
-  "branch_id", "from_branch_id", "to_branch_id",
+  "branch_id", "from_branch_id", "to_branch_id", "from_seller_id",
   "customer_id", "investor_id", "loan_id", "order_id", "partner_id",
   "product_id", "purchase_order_id", "sale_id", "seller_id", "user_id",
 ]);
@@ -389,7 +390,7 @@ const HIDDEN = new Set(["id", "created_at", "updated_at", "client_token", "origi
  * que a pessoa quer ler primeiro.
  */
 const FIELD_ORDER = [
-  "date", "status", "branch_id", "from_branch_id", "to_branch_id", "name", "description", "brand", "model", "flavor", "category",
+  "date", "status", "branch_id", "from_branch_id", "to_branch_id", "from_seller_id", "name", "description", "brand", "model", "flavor", "category",
   "product_id", "seller_id", "partner_id", "investor_id", "customer_id", "user_id", "role",
   "quantity", "stock", "min_stock",
   "unit_price", "sale_price", "purchase_price", "unit_cost",

@@ -17,6 +17,9 @@ const MAX_ROWS = 6;
 /** Teto da observação. Espelha o `left(..., 200)` da `transfer_branch_stock`. */
 const NOTES_MAX = 200;
 
+/** Valor do "estoque da casa" no Select — o Radix não aceita string vazia. */
+const CASA = "casa";
+
 /**
  * Transferência de estoque entre filiais.
  *
@@ -26,22 +29,36 @@ const NOTES_MAX = 200;
  * consignação: aquela passa unidade para a MÃO de um vendedor e não tira nada
  * da loja.
  *
- * A ORIGEM É SEMPRE A FILIAL ATIVA, e não um campo. Dois motivos, e o segundo
- * não é escolha: é o estoque dela que está na tela, então é o único número que
- * a pessoa pode conferir antes de mandar; e é o único que o `StoreContext`
- * carregou — a lista de produtos vem escopada pela filial. Um seletor de
- * origem mostraria "0 un." para todo sabor da outra cidade. Para mandar no
- * sentido contrário, troca-se de filial, que é a regra de todo o resto do app.
+ * São DUAS origens, e elas respondem perguntas diferentes:
+ *
+ *   * a FILIAL de origem é sempre a ativa, e não um campo. É o estoque dela
+ *     que está na tela — o único número que a pessoa pode conferir antes de
+ *     mandar — e o único que o `StoreContext` carregou, porque a lista de
+ *     produtos vem escopada. Um seletor mostraria "0 un." para todo sabor da
+ *     outra cidade. Para mandar no sentido contrário, troca-se de filial.
+ *   * DE QUEM a unidade sai É um campo: do estoque da casa, ou da caixa de um
+ *     vendedor. Isso não se deduz — com dois vendedores segurando o mesmo
+ *     sabor, qualquer regra automática acerta o total e erra a pessoa. É o
+ *     mesmo campo que /losses tem para a origem da perda.
+ *
+ * O teto da quantidade muda com essa escolha: o LIVRE da casa (estoque da
+ * filial menos o que está distribuído) ou o que aquele vendedor tem. A conta é
+ * refeita no banco — aqui ela existe para a pessoa não descobrir o limite só
+ * no erro.
  *
  * Em "Todas as filiais" o botão fica desabilitado: ali o estoque exibido é a
  * SOMA das duas, e não há de onde tirar.
  */
 export default function BranchTransferSection() {
-  const { products, stockTransfers, transferBranchStock, getProductName } = useStore();
+  const {
+    products, stockTransfers, transferBranchStock,
+    getProductName, getSellerName, sellers, productAssignments,
+  } = useStore();
   const { branches, branchId, branchName } = useBranch();
 
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
+  const [origin, setOrigin] = useState(CASA);
   const [toBranch, setToBranch] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [date, setDate] = useState(todayDateString());
@@ -60,12 +77,43 @@ export default function BranchTransferSection() {
   const available = useMemo(() => products.filter(p => p.stock > 0), [products]);
 
   const selected = products.find(p => p.id === productId);
+
+  /**
+   * Quanto do produto está na mão de cada vendedor DESTA filial. `sellers` e
+   * `productAssignments` já chegam escopados pela filial ativa do
+   * `StoreContext`, então não há o que filtrar aqui.
+   */
+  const heldBySeller = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!productId) return map;
+    for (const a of productAssignments) {
+      if (a.productId !== productId) continue;
+      map.set(a.sellerId, (map.get(a.sellerId) ?? 0) + a.quantity);
+    }
+    return map;
+  }, [productAssignments, productId]);
+
+  /**
+   * O LIVRE é a mesma conta que a function refaz no banco: o estoque da filial
+   * menos o que está distribuído. Mostrá-lo aqui evita que a pessoa descubra o
+   * limite só no erro — o banco continua sendo quem decide.
+   */
+  const assignedTotal = useMemo(
+    () => Array.from(heldBySeller.values()).reduce((s, n) => s + n, 0),
+    [heldBySeller],
+  );
+  const freeStock = Math.max(0, (selected?.stock ?? 0) - assignedTotal);
+
+  /** O teto muda com a origem: o livre da casa, ou o que aquele vendedor tem. */
+  const maxQty = origin === CASA ? freeStock : (heldBySeller.get(origin) ?? 0);
+
   const qty = Number(quantity) || 0;
-  const tooMany = !!selected && qty > selected.stock;
+  const tooMany = !!selected && qty > maxQty;
   const canSubmit = !!productId && !!toBranch && qty > 0 && !tooMany && !saving;
 
   const reset = () => {
     setProductId("");
+    setOrigin(CASA);
     setToBranch(destinations.length === 1 ? destinations[0].id : "");
     setQuantity("1");
     setDate(todayDateString());
@@ -86,6 +134,7 @@ export default function BranchTransferSection() {
       quantity: qty,
       date: localDateToISO(date),
       notes: notes.trim() || undefined,
+      fromSellerId: origin === CASA ? undefined : origin,
     });
     setSaving(false);
     if (ok) setOpen(false);
@@ -150,7 +199,13 @@ export default function BranchTransferSection() {
                       <span className="truncate text-[13px]">{getProductName(t.productId)}</span>
                     </div>
                     <div className="flex flex-none items-center gap-1.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-                      <span>{branchName(t.fromBranchId)}</span>
+                      {/* Quando saiu da caixa de alguém, o nome dele entra na
+                          linha: é a informação que explica por que a
+                          atribuição daquele vendedor mudou. */}
+                      <span>
+                        {branchName(t.fromBranchId)}
+                        {t.fromSellerId ? ` · ${getSellerName(t.fromSellerId)}` : ""}
+                      </span>
                       <ArrowRight size={11} />
                       <span>{branchName(t.toBranchId)}</span>
                       <span className="nc-num ml-1.5">{formatDateBR(t.date)}</span>
@@ -184,7 +239,7 @@ export default function BranchTransferSection() {
           <NcSheetHeader
             eyebrow="Entre filiais"
             title="Transferir estoque"
-            description={`As unidades saem de ${branchName(branchId)} e entram na filial escolhida. O custo viaja junto; o preço de venda é decisão de quem recebe.`}
+            description={`As unidades saem de ${branchName(branchId)} e entram no estoque da casa da filial escolhida. O custo viaja junto; o preço de venda é decisão de quem recebe.`}
           />
 
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
@@ -209,20 +264,51 @@ export default function BranchTransferSection() {
                 </Select>
               </div>
 
+              {/* De onde sai, como a origem da perda em /losses. NÃO se deduz:
+                  com dois vendedores segurando o mesmo sabor, escolher por
+                  regra automática acerta o total e erra a pessoa. E sem isso a
+                  atribuição dele ficaria contando unidade que saiu da caixa. */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">De onde sai</Label>
+                <Select value={origin} onValueChange={v => { setOrigin(v); setQuantity("1"); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="nocturne">
+                    <SelectItem value={CASA} disabled={!!productId && freeStock <= 0}>
+                      Estoque da casa{productId ? ` (${freeStock} un. livres)` : ""}
+                    </SelectItem>
+                    {sellers.map(s => {
+                      const held = heldBySeller.get(s.id) ?? 0;
+                      return (
+                        <SelectItem key={s.id} value={s.id} disabled={!!productId && held <= 0}>
+                          {s.name}{productId ? ` (${held} un.)` : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {!!productId && origin === CASA && assignedTotal > 0 && (
+                  <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                    {selected!.stock} un. na filial, {assignedTotal} com vendedores.
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Quantidade</Label>
                   <Input
                     type="number"
                     min={1}
-                    max={selected?.stock ?? undefined}
+                    max={maxQty || undefined}
                     className="nc-num"
                     value={quantity}
                     onChange={e => setQuantity(e.target.value)}
                   />
                   {tooMany && (
                     <p className="text-[11px]" style={{ color: "var(--nc-crit)" }}>
-                      Disponível apenas {selected!.stock} un.
+                      {origin === CASA
+                        ? `Livres na casa: ${maxQty} un.`
+                        : `Esse vendedor tem ${maxQty} un.`}
                     </p>
                   )}
                 </div>
@@ -273,7 +359,8 @@ export default function BranchTransferSection() {
                 {canSubmit && selected ? (
                   <>
                     <span className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>{qty}</span> un. de{" "}
-                    {selected.flavor} → {branchName(toBranch)}
+                    {selected.flavor}, {origin === CASA ? "do estoque da casa" : `com ${getSellerName(origin)}`} →{" "}
+                    {branchName(toBranch)}
                   </>
                 ) : (
                   "Preencha os campos para transferir"
