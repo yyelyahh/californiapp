@@ -35,6 +35,27 @@ export interface StockEntry {
   branchId?: string;
 }
 
+/**
+ * Unidades que mudaram de cidade.
+ *
+ * Não é consignação (`ProductAssignment`, que é o que está na mão de um
+ * vendedor e não sai da loja) nem entrada (`StockEntry`, que é compra e mexe
+ * no caixa). É a mesma mercadoria trocando de prateleira — por isso fica fora
+ * do razão.
+ */
+export interface StockTransfer {
+  id: string;
+  productId: string;
+  fromBranchId: string;
+  toBranchId: string;
+  quantity: number;
+  /** O custo com que a unidade saiu da origem, copiado no momento da saída. */
+  unitCost: number;
+  date: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export type SaleType = "venda" | "retirada_funcionario";
 export type PaymentMethod =
   | "pix"

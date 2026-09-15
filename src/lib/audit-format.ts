@@ -57,6 +57,7 @@ const ENTITY: Record<string, EntityInfo> = {
   stock_entries: { thing: "uma entrada de estoque", area: "Entrada" },
   purchase_orders: { thing: "uma compra", area: "Entrada" },
   stock_losses: { thing: "uma perda", area: "Perdas" },
+  stock_transfers: { thing: "uma transferência entre filiais", area: "Entrada" },
   product_assignments: { thing: "uma atribuição de estoque", area: "Distribuição" },
   commission_payments: { thing: "um pagamento de comissão", area: "Distribuição" },
   seller_manual_debts: { thing: "uma dívida de vendedor", area: "Distribuição" },
@@ -112,6 +113,7 @@ const PRIORITY = [
   "purchase_orders",
   "sales",
   "stock_entries",
+  "stock_transfers",
   "stock_losses",
   "expenses",
   "commission_payments",
@@ -291,6 +293,8 @@ const FIELD_LABEL: Record<string, string> = {
   amount: "valor",
   brand: "marca",
   branch_id: "filial",
+  from_branch_id: "filial de origem",
+  to_branch_id: "filial de destino",
   category: "categoria",
   confirmed_at: "confirmado em",
   customer_id: "cliente",
@@ -367,7 +371,8 @@ const DATE = new Set([
 
 /** Campos cujo valor é o id de outra linha — a tela resolve para nome. */
 const REFERENCE = new Set([
-  "branch_id", "customer_id", "investor_id", "loan_id", "order_id", "partner_id",
+  "branch_id", "from_branch_id", "to_branch_id",
+  "customer_id", "investor_id", "loan_id", "order_id", "partner_id",
   "product_id", "purchase_order_id", "sale_id", "seller_id", "user_id",
 ]);
 
@@ -384,7 +389,7 @@ const HIDDEN = new Set(["id", "created_at", "updated_at", "client_token", "origi
  * que a pessoa quer ler primeiro.
  */
 const FIELD_ORDER = [
-  "date", "status", "branch_id", "name", "description", "brand", "model", "flavor", "category",
+  "date", "status", "branch_id", "from_branch_id", "to_branch_id", "name", "description", "brand", "model", "flavor", "category",
   "product_id", "seller_id", "partner_id", "investor_id", "customer_id", "user_id", "role",
   "quantity", "stock", "min_stock",
   "unit_price", "sale_price", "purchase_price", "unit_cost",

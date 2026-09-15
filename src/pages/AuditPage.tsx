@@ -131,6 +131,8 @@ export default function AuditPage() {
           return p ? [p.brand, p.model, p.flavor].filter(Boolean).join(" · ") : null;
         }
         case "branch_id":
+        case "from_branch_id":
+        case "to_branch_id":
           return branches.find(x => x.id === id)?.name ?? null;
         case "seller_id":
           return sellers.find(x => x.id === id)?.name ?? null;

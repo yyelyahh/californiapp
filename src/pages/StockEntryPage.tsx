@@ -10,6 +10,7 @@ import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRang
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PurchaseOrdersSection from "@/components/PurchaseOrdersSection";
+import BranchTransferSection from "@/components/BranchTransferSection";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
@@ -421,6 +422,7 @@ export default function StockEntryPage() {
         </header>
 
         <PurchaseOrdersSection />
+        <BranchTransferSection />
 
         {/* ---------------- Busca e período ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">

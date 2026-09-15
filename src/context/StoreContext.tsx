@@ -16,6 +16,7 @@ import {
   SellerDebtPayment,
   SellerManualDebt,
   StockLoss,
+  StockTransfer,
   CommissionPayment,
   ProLaborePayment,
   PartnerContribution,
@@ -135,6 +136,20 @@ interface StoreContextType {
   deleteProduct: (id: string) => Promise<void>;
   addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
   deleteStockEntry: (id: string) => Promise<void>;
+  /** Só as que tocam a filial ativa — de um lado ou do outro. */
+  stockTransfers: StockTransfer[];
+  /**
+   * A origem é SEMPRE a filial ativa: é o estoque dela que está na tela, e é
+   * dela que as unidades saem. Para mandar no sentido contrário, troque de
+   * filial — é a mesma regra de todo o resto do app.
+   */
+  transferBranchStock: (t: {
+    productId: string;
+    toBranchId: string;
+    quantity: number;
+    date: string;
+    notes?: string;
+  }) => Promise<boolean>;
   stockLosses: StockLoss[];
   addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => Promise<void>;
   deleteStockLoss: (id: string) => Promise<void>;
@@ -231,6 +246,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [partnerPayments, setPartnerPayments] = useState<PartnerPayment[]>([]);
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
+  const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
   const [commissionPayments, setCommissionPayments] = useState<CommissionPayment[]>([]);
   const [proLaborePayments, setProLaborePayments] = useState<ProLaborePayment[]>([]);
   const [partnerContributions, setPartnerContributions] = useState<PartnerContribution[]>([]);
@@ -294,6 +310,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     <T,>(q: T): T => (branchId ? ((q as any).eq("branch_id", branchId) as T) : q),
     [branchId],
   );
+
+  /**
+   * As transferências que TOCAM a filial ativa, de um lado ou do outro — a
+   * que saiu daqui e a que chegou aqui contam as duas. Por isso não dá para
+   * usar o `scoped`: o filtro é um OR entre duas colunas, não uma igualdade
+   * em `branch_id`.
+   */
+  const fetchTransfers = useCallback(async () => {
+    let q: any = supabase
+      .from("stock_transfers" as any)
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(200);
+    if (branchId) q = q.or(`from_branch_id.eq.${branchId},to_branch_id.eq.${branchId}`);
+    const { data } = await q;
+    if (data) setStockTransfers((data as any[]).map(mapStockTransfer));
+  }, [branchId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -405,6 +438,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
       if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
       if (poRes?.data) setPurchaseOrdersRaw((poRes.data as any[]).map(mapPurchaseOrder));
+      // Fora do Promise.all porque o filtro é um OR entre duas colunas, e a
+      // consulta é só de admin (a RLS de stock_transfers exige o papel).
+      if (isAdmin) await fetchTransfers();
     };
 
     const fetchAll = async () => {
@@ -513,6 +549,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // Tabelas financeiras são restritas a administradores: só assinamos quando o usuário é admin.
     if (isAdmin) {
       channel = channel
+        // Sem `filter`: o realtime só filtra por igualdade numa coluna, e aqui
+        // interessam as duas pontas. A RLS já entrega só o que toca uma filial
+        // alcançável, então o recorte acontece do lado do banco de qualquer
+        // jeito — o `fetchTransfers` reaplica o da filial ATIVA.
+        .on("postgres_changes", { event: "*", schema: "public", table: "stock_transfers" }, () => {
+          void fetchTransfers();
+        })
         .on("postgres_changes", onBranch("expenses"), refetchFinancialEvents)
         .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
         .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
@@ -538,7 +581,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (feTimer) clearTimeout(feTimer);
       supabase.removeChannel(channel);
     };
-  }, [fetchProductsList, isAdmin, branchId, scoped]);
+  }, [fetchProductsList, isAdmin, branchId, scoped, fetchTransfers]);
 
   const mapStockEntry = (r: any): StockEntry => ({
     id: r.id,
@@ -620,6 +663,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     date: r.date,
     sellerId: r.seller_id || undefined,
     branchId: r.branch_id ?? undefined,
+  });
+
+  const mapStockTransfer = (r: any): StockTransfer => ({
+    id: r.id,
+    productId: r.product_id,
+    fromBranchId: r.from_branch_id,
+    toBranchId: r.to_branch_id,
+    quantity: Number(r.quantity ?? 0),
+    unitCost: Number(r.unit_cost ?? 0),
+    date: r.date,
+    notes: r.notes || undefined,
+    createdAt: r.created_at,
   });
 
   const mapExpense = (r: any): Expense => ({
@@ -1357,6 +1412,45 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [stockLosses, branchId],
+  );
+
+  // ---- Transferência entre filiais ----
+  // A origem é a filial ATIVA, sempre: é o estoque dela que está na tela, e é
+  // a única de que temos os números carregados. Mandar no sentido contrário é
+  // trocar de filial — a mesma regra que vale para lançar qualquer coisa.
+  //
+  // As três escritas (debita origem, credita destino, registra) moram na
+  // function: aqui só passamos o pedido e sincronizamos a tela com o que ficou.
+  const transferBranchStock = useCallback(
+    async (t: { productId: string; toBranchId: string; quantity: number; date: string; notes?: string }) => {
+      if (!requireBranch(branchId)) return false;
+
+      const { data, error } = await supabase.rpc("transfer_branch_stock" as any, {
+        p_product_id: t.productId,
+        p_from_branch_id: branchId,
+        p_to_branch_id: t.toBranchId,
+        p_quantity: t.quantity,
+        p_date: t.date,
+        p_notes: t.notes ?? null,
+      } as any);
+
+      if (error) {
+        const m = error.message ?? "";
+        if (m.includes("estoque_insuficiente")) toast.error("Estoque insuficiente nesta filial");
+        else if (m.includes("mesma_filial")) toast.error("Escolha uma filial diferente da atual");
+        else if (m.includes("nao_autorizado")) toast.error("Você não tem acesso a uma das filiais");
+        else if (m.includes("quantidade_invalida")) toast.error("Quantidade inválida");
+        else toast.error("Erro ao transferir");
+        return false;
+      }
+
+      setStockTransfers((prev) => [mapStockTransfer(data), ...prev]);
+      // A lista inteira: o destino também mudou, e o custo vem de outra RPC.
+      setProducts(await fetchProductsList());
+      toast.success("Estoque transferido");
+      return true;
+    },
+    [branchId, fetchProductsList],
   );
 
   const getTotalLossValue = useCallback(() => {
@@ -2362,6 +2456,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       partnerPayments,
       sellerManualDebts: scopedManualDebts,
       stockLosses,
+      stockTransfers,
+      transferBranchStock,
       commissionPayments: scopedCommissions,
       proLaborePayments,
       loading,
@@ -2461,6 +2557,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       partnerPayments,
       scopedManualDebts,
       stockLosses,
+      stockTransfers,
+      transferBranchStock,
       scopedCommissions,
       proLaborePayments,
       loading,
