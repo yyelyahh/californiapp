@@ -41,10 +41,15 @@ const CASA = "casa";
  *     sabor, qualquer regra automática acerta o total e erra a pessoa. É o
  *     mesmo campo que /losses tem para a origem da perda.
  *
- * O teto da quantidade muda com essa escolha: o LIVRE da casa (estoque da
- * filial menos o que está distribuído) ou o que aquele vendedor tem. A conta é
- * refeita no banco — aqui ela existe para a pessoa não descobrir o limite só
- * no erro.
+ * E esse campo vem ANTES do produto: a lista de sabores sai da origem
+ * escolhida, com a quantidade que ELA tem. Escolher o produto primeiro é
+ * descobrir no fim que aquele vendedor não tem nenhum; assim a pergunta errada
+ * não chega a ser feita. Mesma ordem do "Movimentar estoque" da Distribuição.
+ *
+ * O teto da quantidade é o disponível daquele item na origem: o LIVRE da casa
+ * (estoque da filial menos o que está distribuído) ou o que aquele vendedor
+ * tem. A conta é refeita no banco — aqui ela existe para a pessoa não
+ * descobrir o limite só no erro.
  *
  * Em "Todas as filiais" o botão fica desabilitado: ali o estoque exibido é a
  * SOMA das duas, e não há de onde tirar.
@@ -73,43 +78,64 @@ export default function BranchTransferSection() {
 
   const destinations = useMemo(() => branches.filter(b => b.id !== branchId), [branches, branchId]);
 
-  /** Só sabor COM estoque nesta filial: não se transfere o que não se tem. */
-  const available = useMemo(() => products.filter(p => p.stock > 0), [products]);
-
-  const selected = products.find(p => p.id === productId);
-
   /**
-   * Quanto do produto está na mão de cada vendedor DESTA filial. `sellers` e
-   * `productAssignments` já chegam escopados pela filial ativa do
+   * Quanto de cada sabor está distribuído entre os vendedores DESTA filial.
+   * `productAssignments` já chega escopado pela filial ativa do
    * `StoreContext`, então não há o que filtrar aqui.
    */
-  const heldBySeller = useMemo(() => {
+  const assignedByProduct = useMemo(() => {
     const map = new Map<string, number>();
-    if (!productId) return map;
     for (const a of productAssignments) {
-      if (a.productId !== productId) continue;
+      map.set(a.productId, (map.get(a.productId) ?? 0) + a.quantity);
+    }
+    return map;
+  }, [productAssignments]);
+
+  /** Quanto cada vendedor tem no total — o que o seletor de origem mostra. */
+  const heldTotalBySeller = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of productAssignments) {
       map.set(a.sellerId, (map.get(a.sellerId) ?? 0) + a.quantity);
     }
     return map;
-  }, [productAssignments, productId]);
+  }, [productAssignments]);
+
+  /** Total livre da casa: o que existe na filial e não está com ninguém. */
+  const freeTotal = useMemo(
+    () => products.reduce((s, p) => s + Math.max(0, p.stock - (assignedByProduct.get(p.id) ?? 0)), 0),
+    [products, assignedByProduct],
+  );
 
   /**
-   * O LIVRE é a mesma conta que a function refaz no banco: o estoque da filial
-   * menos o que está distribuído. Mostrá-lo aqui evita que a pessoa descubra o
-   * limite só no erro — o banco continua sendo quem decide.
+   * O QUE A ORIGEM ESCOLHIDA TEM — e é por isso que a origem vem antes do
+   * produto no painel. Escolher o sabor primeiro é descobrir no fim que aquele
+   * vendedor não tem nenhum: a lista que já nasce da origem não deixa a
+   * pergunta errada ser feita. Mesmo desenho do "Movimentar estoque" da
+   * Distribuição.
+   *
+   * Da casa, o disponível é o LIVRE (estoque da filial menos o distribuído) —
+   * a mesma conta que a function refaz no banco. Mostrá-la aqui evita que a
+   * pessoa descubra o limite só no erro; quem decide continua sendo o banco.
    */
-  const assignedTotal = useMemo(
-    () => Array.from(heldBySeller.values()).reduce((s, n) => s + n, 0),
-    [heldBySeller],
-  );
-  const freeStock = Math.max(0, (selected?.stock ?? 0) - assignedTotal);
+  const originItems = useMemo(() => {
+    if (origin === CASA) {
+      return products
+        .map(p => ({ product: p, available: Math.max(0, p.stock - (assignedByProduct.get(p.id) ?? 0)) }))
+        .filter(i => i.available > 0);
+    }
+    return productAssignments
+      .filter(a => a.sellerId === origin && a.quantity > 0)
+      .map(a => ({ product: products.find(p => p.id === a.productId), available: a.quantity }))
+      .filter((i): i is { product: (typeof products)[number]; available: number } => !!i.product);
+  }, [origin, products, productAssignments, assignedByProduct]);
 
-  /** O teto muda com a origem: o livre da casa, ou o que aquele vendedor tem. */
-  const maxQty = origin === CASA ? freeStock : (heldBySeller.get(origin) ?? 0);
+  const selectedItem = originItems.find(i => i.product.id === productId);
+  const selected = selectedItem?.product;
+  const maxQty = selectedItem?.available ?? 0;
 
   const qty = Number(quantity) || 0;
   const tooMany = !!selected && qty > maxQty;
-  const canSubmit = !!productId && !!toBranch && qty > 0 && !tooMany && !saving;
+  const canSubmit = !!selected && !!toBranch && qty > 0 && !tooMany && !saving;
 
   const reset = () => {
     setProductId("");
@@ -246,49 +272,62 @@ export default function BranchTransferSection() {
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que sai daqui</p>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Produto</Label>
-                <Select value={productId} onValueChange={setProductId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
-                  <SelectContent className="nocturne">
-                    {available.length === 0 ? (
-                      <div className="px-2 py-1.5 text-xs" style={{ color: "var(--nc-text-3)" }}>
-                        Nenhum produto com estoque nesta filial.
-                      </div>
-                    ) : available.map(p => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.flavor} · {p.brand} {p.model} ({p.stock} un.)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* A ORIGEM VEM PRIMEIRO, e o produto sai dela. Escolher o sabor
+                  antes é descobrir no fim que aquele vendedor não tem nenhum;
+                  a lista que já nasce da origem não deixa a pergunta errada ser
+                  feita. Mesmo desenho do "Movimentar estoque" da Distribuição.
 
-              {/* De onde sai, como a origem da perda em /losses. NÃO se deduz:
-                  com dois vendedores segurando o mesmo sabor, escolher por
-                  regra automática acerta o total e erra a pessoa. E sem isso a
-                  atribuição dele ficaria contando unidade que saiu da caixa. */}
+                  E de quem sai NÃO se deduz: com dois vendedores segurando o
+                  mesmo sabor, escolher por regra automática acerta o total e
+                  erra a pessoa — e a atribuição dele ficaria contando unidade
+                  que saiu da caixa. */}
               <div className="space-y-1.5">
                 <Label className="text-xs">De onde sai</Label>
-                <Select value={origin} onValueChange={v => { setOrigin(v); setQuantity("1"); }}>
+                <Select
+                  value={origin}
+                  onValueChange={v => { setOrigin(v); setProductId(""); setQuantity("1"); }}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="nocturne">
-                    <SelectItem value={CASA} disabled={!!productId && freeStock <= 0}>
-                      Estoque da casa{productId ? ` (${freeStock} un. livres)` : ""}
+                    <SelectItem value={CASA} disabled={freeTotal <= 0}>
+                      Estoque da casa ({freeTotal} un. livres)
                     </SelectItem>
                     {sellers.map(s => {
-                      const held = heldBySeller.get(s.id) ?? 0;
+                      const held = heldTotalBySeller.get(s.id) ?? 0;
                       return (
-                        <SelectItem key={s.id} value={s.id} disabled={!!productId && held <= 0}>
-                          {s.name}{productId ? ` (${held} un.)` : ""}
+                        <SelectItem key={s.id} value={s.id} disabled={held <= 0}>
+                          {s.name} ({held} un.)
                         </SelectItem>
                       );
                     })}
                   </SelectContent>
                 </Select>
-                {!!productId && origin === CASA && assignedTotal > 0 && (
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Produto</Label>
+                <Select value={productId} onValueChange={v => { setProductId(v); setQuantity("1"); }}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
+                  <SelectContent className="nocturne">
+                    {originItems.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs" style={{ color: "var(--nc-text-3)" }}>
+                        {origin === CASA
+                          ? "Nada livre na casa — está tudo com os vendedores."
+                          : "Esse vendedor não tem nenhum produto."}
+                      </div>
+                    ) : originItems.map(({ product: p, available }) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.flavor} · {p.brand} {p.model} ({available} un.)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Da casa, "livre" e "na filial" são números diferentes, e a
+                    diferença é o que está na rua. Dizer os dois evita a
+                    pergunta "mas o estoque não era maior?". */}
+                {origin === CASA && selected && (assignedByProduct.get(selected.id) ?? 0) > 0 && (
                   <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-                    {selected!.stock} un. na filial, {assignedTotal} com vendedores.
+                    {selected.stock} un. na filial, {assignedByProduct.get(selected.id)} com vendedores.
                   </p>
                 )}
               </div>
