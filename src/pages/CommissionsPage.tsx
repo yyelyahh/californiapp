@@ -8,8 +8,10 @@ import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Wallet, Trash2, Plus, Clock, Crown, ArrowRight, Users, X,
-  HandCoins, Receipt, Package, Share2,
+  HandCoins, Receipt, Package, Share2, Copy,
 } from "lucide-react";
+import { toast } from "sonner";
+import type { Seller } from "@/types";
 import {
   format, startOfMonth, endOfMonth, endOfYear,
   isWithinInterval, parseISO, isToday, isYesterday, subMonths,
@@ -930,6 +932,13 @@ export default function CommissionsPage() {
                           <Share2 size={14} />Enviar no WhatsApp
                         </NcButton>
                       </div>
+
+                      {/* O link da loja mora aqui pela mesma regra do resto:
+                          tudo o que se faz com um vendedor acontece DENTRO do
+                          painel dele. O `key` remonta o bloco ao trocar de
+                          vendedor, para o campo não ficar com o apelido do
+                          anterior. */}
+                      <StoreLinkBlock key={panelRow.seller.id} seller={panelRow.seller} onSave={store.updateSeller} />
                   </motion.section>
                 ) : (
                   <motion.section
@@ -1242,5 +1251,84 @@ function LedgerLine({ label, value, tone }: { label: string; value: string; tone
       <span style={{ color: "var(--nc-text-2)" }}>{label}</span>
       <span className="nc-num" style={{ color: tone }}>{value}</span>
     </div>
+  );
+}
+
+/**
+ * O link que o vendedor manda para o cliente, e o apelido que o encurta.
+ *
+ * O endereço é o produto: ele vai colado numa mensagem de WhatsApp, e o uuid
+ * de 36 caracteres ocupa duas linhas no celular sem dizer nada a ninguém. Com
+ * apelido vira `/loja/ivoti`.
+ *
+ * O apelido é OPCIONAL, e tirar não quebra nada: a rota aceita as duas formas
+ * para sempre, porque o link antigo já está em conversa que ninguém tem como
+ * corrigir. Por isso a linha mostra sempre o link que está VALENDO agora — é
+ * ele que a pessoa vai copiar, com ou sem apelido.
+ */
+function StoreLinkBlock({
+  seller,
+  onSave,
+}: {
+  seller: Seller;
+  onSave: (id: string, updates: Partial<Seller>) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(seller.slug ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const url = `${window.location.origin}/loja/${seller.slug || seller.id}`;
+  const dirty = draft.trim() !== (seller.slug ?? "");
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copiado");
+    } catch {
+      // Área de transferência bloqueada (contexto inseguro, permissão negada):
+      // o link está na tela, dá para copiar à mão.
+      toast.error("Não foi possível copiar — o link está aí ao lado");
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    await onSave(seller.id, { slug: draft.trim() });
+    setSaving(false);
+  };
+
+  return (
+    <>
+      <p className={cn(EYEBROW, "pt-2")} style={{ color: "var(--nc-text-3)" }}>Link da loja</p>
+
+      <div className="flex items-center gap-2">
+        <span className="nc-num min-w-0 flex-1 truncate text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+          {url}
+        </span>
+        <NcButton variant="ghost" onClick={copy}>
+          <Copy size={13} />Copiar
+        </NcButton>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="flex-none text-[12px]" style={{ color: "var(--nc-text-3)" }}>/loja/</span>
+          <Input
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="ivoti"
+            maxLength={32}
+            aria-label="Apelido da loja no endereço"
+            className="h-8 text-[12.5px]"
+          />
+        </div>
+        <NcButton variant={dirty ? "outline" : "ghost"} onClick={save} disabled={!dirty || saving}>
+          {saving ? "Salvando…" : "Salvar"}
+        </NcButton>
+      </div>
+      <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+        Letras, números e hífen. Sem apelido, o link continua sendo o código do vendedor — e o
+        antigo nunca para de funcionar.
+      </p>
+    </>
   );
 }

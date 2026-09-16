@@ -696,6 +696,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     createdAt: r.created_at,
     debtPercentage: r.debt_percentage != null ? Number(r.debt_percentage) : 10,
     branchId: r.branch_id ?? undefined,
+    slug: r.slug ?? undefined,
   });
 
   const mapProductAssignment = (r: any): ProductAssignment => ({
@@ -2004,15 +2005,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.debtPercentage !== undefined) dbUpdates.debt_percentage = updates.debtPercentage;
-    const { error } = await supabase
+    // Apelido vazio é NULL, não string vazia: no banco, duas strings vazias
+    // colidiriam no índice único do slug.
+    if (updates.slug !== undefined) dbUpdates.slug = updates.slug?.trim() || null;
+    // Lê de volta o que o banco GRAVOU: o gatilho normaliza o apelido
+    // (minúsculas, sem acento, espaço vira hífen), e refazer essa conta aqui
+    // seria a mesma regra escrita em dois lugares — o dia em que divergissem, a
+    // tela mostraria um link que não existe.
+    const { data, error } = await supabase
       .from("sellers" as any)
       .update(dbUpdates)
-      .eq("id", id);
+      .eq("id", id)
+      .select()
+      .maybeSingle();
     if (error) {
-      toast.error("Erro ao atualizar vendedor");
+      // O gatilho `seller_slug_guard` recusa o que não vira endereço, e o
+      // índice único recusa o apelido repetido. As duas frases dizem o que
+      // fazer; "erro ao atualizar" não diria.
+      if ((error.message || "").includes("slug_invalido")) {
+        toast.error("Use só letras, números e hífen — de 2 a 32 caracteres");
+      } else if ((error as any).code === "23505") {
+        toast.error("Esse apelido já é de outro vendedor");
+      } else {
+        toast.error("Erro ao atualizar vendedor");
+      }
       return;
     }
-    setSellers((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+    const saved = data ? mapSeller(data) : null;
+    setSellers((prev) => prev.map((s) => (s.id === id ? (saved ?? { ...s, ...updates }) : s)));
   }, []);
 
   const deleteSeller = useCallback(async (id: string) => {

@@ -1449,8 +1449,21 @@ function ProductCard({
 /* ------------------------------------------------------------------ */
 
 export default function SellerStorePage() {
-  const { sellerId } = useParams<{ sellerId: string }>();
-  const validId = !!sellerId && UUID_RE.test(sellerId);
+  /**
+   * O endereço traz o uuid do vendedor OU o apelido dele (`/loja/ivoti`).
+   *
+   * As duas formas na mesma rota porque link já enviado não pode parar de
+   * funcionar: o uuid é o que está colado em conversa de WhatsApp desde o
+   * começo, e ninguém tem como avisar quem guardou. Quando não é uuid, o
+   * apelido vira id por uma function (`get_seller_by_slug`) — a tabela de
+   * vendedores não é alcançável por quem não está logado, e nem deve ser.
+   */
+  const { sellerId: handle } = useParams<{ sellerId: string }>();
+  const handleIsId = !!handle && UUID_RE.test(handle);
+  const [sellerId, setSellerId] = useState<string | undefined>(handleIsId ? handle : undefined);
+  /** Enquanto o apelido não virou id, a tela está CARREGANDO, não inválida. */
+  const [resolving, setResolving] = useState(!handleIsId);
+  const validId = !!sellerId;
   // Realce flutuante da lista de sabores. Ficam aqui em cima porque abaixo há
   // returns antecipados (link inválido, identificação, sucesso) e hook não
   // pode ficar depois de um return.
@@ -1497,7 +1510,11 @@ export default function SellerStorePage() {
     fn();
   }, []);
 
-  const [cart, setCart] = useState<CartItem[]>(() => readStoredCart(sellerId));
+  // A chave do carrinho é o que está NO ENDEREÇO, não o id resolvido: por
+  // apelido, o id só existe depois de uma ida ao banco, e ler o carrinho com
+  // `undefined` no meio apagaria o que a pessoa tinha deixado. O endereço é
+  // estável desde o primeiro render, nas duas formas.
+  const [cart, setCart] = useState<CartItem[]>(() => readStoredCart(handle));
   /** O que a reconciliação com o catálogo mexeu no carrinho guardado. */
   const [cartNotice, setCartNotice] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -1597,6 +1614,31 @@ export default function SellerStorePage() {
     }
   }, [phoneDigits, phoneComplete]);
 
+  /** Apelido → id. Roda uma vez, antes de qualquer consulta do catálogo. */
+  useEffect(() => {
+    if (handleIsId || !handle) {
+      setResolving(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // `get_seller_by_slug` ainda não existe no types.ts gerado (ele é criado
+      // pela migration 20260916140000). Um tipo local em vez de `any`: o
+      // formato do argumento e do retorno continua conferido.
+      const rpc = supabase.rpc as unknown as (
+        fn: "get_seller_by_slug",
+        args: { p_slug: string },
+      ) => Promise<{ data: string | null }>;
+      const { data } = await rpc("get_seller_by_slug", { p_slug: handle });
+      if (cancelled) return;
+      setSellerId(data ?? undefined);
+      setResolving(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [handle, handleIsId]);
+
   const load = useCallback(async () => {
     if (!validId) {
       setLoading(false);
@@ -1672,12 +1714,12 @@ export default function SellerStorePage() {
   /** Guarda o carrinho para a próxima visita. Ver readStoredCart. */
   useEffect(() => {
     try {
-      if (cart.length === 0) localStorage.removeItem(cartKey(sellerId));
-      else localStorage.setItem(cartKey(sellerId), JSON.stringify({ savedAt: Date.now(), items: cart }));
+      if (cart.length === 0) localStorage.removeItem(cartKey(handle));
+      else localStorage.setItem(cartKey(handle), JSON.stringify({ savedAt: Date.now(), items: cart }));
     } catch {
       // Nada a fazer: o carrinho só não sobrevive ao reload.
     }
-  }, [cart, sellerId]);
+  }, [cart, handle]);
 
   const sellerName = rows[0]?.seller_name ?? "";
 
@@ -2085,6 +2127,16 @@ export default function SellerStorePage() {
   );
 
   /* ---------------- Link inválido ---------------- */
+
+  // Enquanto o apelido não virou id não dá para dizer que o link é inválido:
+  // a tela piscaria "Link inválido" em toda loja que abre por apelido.
+  if (resolving) {
+    return (
+      <main className="storefront flex h-[100dvh] items-center justify-center overflow-hidden p-6">
+        <p className="text-[13px]" style={{ color: "var(--sf-text-dim)" }}>Abrindo a loja…</p>
+      </main>
+    );
+  }
 
   if (!validId) {
     return (

@@ -209,6 +209,13 @@ export interface Seller {
    * seria reescrito junto.
    */
   branchId?: string;
+  /**
+   * O apelido da loja no endereço: `/loja/ivoti` em vez de `/loja/<uuid>`.
+   *
+   * Opcional — sem ele o link continua sendo o id, que é o que já circula por
+   * aí e não pode parar de funcionar.
+   */
+  slug?: string;
 }
 
 export interface ProductAssignment {
