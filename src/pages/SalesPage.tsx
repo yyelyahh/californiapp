@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
 import { useMemo, useState, type ReactNode } from "react";
-import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
@@ -88,6 +88,17 @@ function paymentBadge(method: string | null | undefined, sellerLabel: string) {
  * tocar.
  */
 const TABLE_MEDIA = "(min-width: 1024px)";
+
+/**
+ * Abaixo deste ponto os filtros deixam de caber em pé.
+ *
+ * São sete controles num `flex-wrap`: busca, funcionário, situação, ordenação,
+ * direção, limpar, período e o intervalo à mão. Em 304px úteis eles viravam
+ * cinco fileiras de caixinha entre o cabeçalho e a lista, com as quebras
+ * caindo em lugar diferente conforme o rótulo do select — e isso não se
+ * conserta com largura, porque o problema é quantidade, não tamanho.
+ */
+const FILTER_MEDIA = "(max-width: 639.98px)";
 
 /**
  * Alvo de toque das ações da linha no celular: 44px, a referência do iOS.
@@ -464,8 +475,11 @@ export default function SalesPage() {
 
   // Onde a coluna do meio comporta a tabela inteira sem rolagem lateral.
   const wideEnoughForTable = useMediaQuery(TABLE_MEDIA);
+  // Onde a barra de filtros não cabe em pé e o excedente vira painel.
+  const compactFilters = useMediaQuery(FILTER_MEDIA);
 
   const [tab, setTab] = useState<TabValue>("vendas");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [modalTab, setModalTab] = useState<"unica" | "lote">("unica");
   const [editingSale, setEditingSale] = useState<string | null>(null);
@@ -1104,7 +1118,13 @@ export default function SalesPage() {
         transition={transitionBase}
         className="nc-row px-3.5 py-3"
       >
-        <div className="flex items-start justify-between gap-3">
+        {/* `items-baseline`, não `items-start`: o nome tem 14px e o total 15px,
+            e alinhar pelo TOPO da caixa de linha deixa as duas primeiras linhas
+            com as bases a um pixel uma da outra — quase alinhado lê pior que
+            claramente diferente. Pela base, nome e total assentam na mesma
+            linha, e o metadado e o "falta" embaixo seguem juntos porque os dois
+            têm o mesmo corpo. */}
+        <div className="flex items-baseline justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[14px]">{label}</p>
             <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
@@ -1153,15 +1173,140 @@ export default function SalesPage() {
               )
             )}
           </div>
-          {/* -mr-2 devolve o respiro que os 44px do alvo comem: o ícone fica
-              alinhado com a borda do card, a área tocável passa dela. */}
-          <div className="-mr-2 flex flex-none items-center">
+          {/* A margem negativa tem que ser o padding INTEIRO do card (px-3.5 =
+              14px), não metade dele: o glifo de 16px fica centrado num alvo de
+              44px, ou seja, recuado 14px da borda do botão. Com a caixa do
+              botão encostando na borda do card, o glifo cai exatamente nos
+              mesmos 14px em que o total termina na linha de cima. Com -mr-2 ele
+              parava 6px antes, e a coluna da direita saía torta. */}
+          <div className="-mr-3.5 flex flex-none items-center">
             {rowActions(s, label, true)}
           </div>
         </div>
       </motion.div>
     );
   };
+
+  // === Peças do card de filtros ===
+  /**
+   * Cada controle é escrito UMA vez e vai para o arranjo que existir naquela
+   * largura: a barra em pé (a partir do `sm`) ou o painel (abaixo dele). Os
+   * dois nunca coexistem na tela, então o tamanho pode sair do mesmo lugar —
+   * na barra é a caixinha de 32px que cabe ao lado de outras seis; no painel é
+   * a linha inteira, com 44px de alvo.
+   *
+   * Duas cópias de cada select seria a forma óbvia e a errada: no dia em que
+   * "Parcial" virar outra coisa, uma das duas ficaria para trás.
+   */
+  const triggerClass = compactFilters ? "h-11 w-full text-[15px]" : "h-8 w-auto text-[12.5px]";
+
+  const searchField = (
+    <div className={cn("relative min-w-0 flex-1", !compactFilters && "min-w-[180px]")}>
+      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--nc-text-3)" }} />
+      <input
+        type="text"
+        placeholder="Buscar produto…"
+        value={fProduct}
+        onChange={e => setFProduct(e.target.value)}
+        aria-label="Buscar venda por produto"
+        // 16px no celular não é escolha de estilo: abaixo disso o Safari do iOS
+        // dá zoom sozinho ao focar o campo, e a página não volta do lugar.
+        className={cn("nc-input w-full pl-8 pr-2.5", compactFilters ? "h-10 text-[16px]" : "h-8 text-[12.5px]")}
+      />
+    </div>
+  );
+
+  const sellerSelect = (
+    <Select value={fSeller} onValueChange={setFSeller}>
+      <SelectTrigger className={cn(triggerClass, !compactFilters && "min-w-[130px]")} aria-label="Filtrar por funcionário">
+        <SelectValue placeholder="Funcionário" />
+      </SelectTrigger>
+      <SelectContent className="nocturne">
+        <SelectItem value="all">Todos funcionários</SelectItem>
+        <SelectItem value="none">Sem funcionário</SelectItem>
+        {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+
+  const statusSelect = (
+    <Select value={fStatus} onValueChange={(v) => setFStatus(v as PaymentStatus)}>
+      <SelectTrigger className={cn(triggerClass, !compactFilters && "min-w-[110px]")} aria-label="Filtrar por situação do pagamento">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="nocturne">
+        <SelectItem value="all">Todos status</SelectItem>
+        <SelectItem value="paid">Pagas</SelectItem>
+        <SelectItem value="partial">Parcial</SelectItem>
+        <SelectItem value="open">Em aberto</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+
+  const sortControl = (
+    <div className={cn("flex items-center gap-1", compactFilters && "w-full")}>
+      <Select value={fSortKey} onValueChange={(v) => setFSortKey(v as SortKey)}>
+        {/* `flex-1 min-w-0` vence o `w-full` do triggerClass no painel: com a
+            largura cheia o select empurraria o botão de direção para fora. */}
+        <SelectTrigger
+          className={cn(triggerClass, compactFilters ? "min-w-0 flex-1" : "min-w-[100px]")}
+          aria-label="Ordenar por"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="nocturne">
+          <SelectItem value="date">Data</SelectItem>
+          <SelectItem value="total">Valor</SelectItem>
+          <SelectItem value="remaining">Falta</SelectItem>
+        </SelectContent>
+      </Select>
+      <NcButton
+        variant={compactFilters ? "quiet" : "ghost"}
+        size="icon"
+        aria-label={fSortDir === "asc" ? "Ordenar do maior para o menor" : "Ordenar do menor para o maior"}
+        onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")}
+        className={compactFilters ? "h-11 w-11 flex-none" : undefined}
+      >
+        <ArrowUpDown size={compactFilters ? 16 : 13} className={cn("transition-transform", fSortDir === "asc" && "rotate-180")} />
+      </NcButton>
+    </div>
+  );
+
+  const periodChips = (
+    <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
+  );
+
+  const dateRange = (
+    <div className={cn("flex items-center gap-1.5", compactFilters && "w-full")}>
+      <input
+        type="date"
+        value={fFrom}
+        onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }}
+        aria-label="Data inicial"
+        className={cn("nc-input nc-num px-2", compactFilters ? "h-11 min-w-0 flex-1 text-[16px]" : "h-8 w-[132px] text-[12px]")}
+      />
+      <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
+      <input
+        type="date"
+        value={fTo}
+        onChange={e => { setFTo(e.target.value); setFPreset("custom"); }}
+        aria-label="Data final"
+        className={cn("nc-input nc-num px-2", compactFilters ? "h-11 min-w-0 flex-1 text-[16px]" : "h-8 w-[132px] text-[12px]")}
+      />
+    </div>
+  );
+
+  /**
+   * Quantos filtros do PAINEL estão ligados. A busca e o período ficam à vista
+   * e não entram na conta: o número no botão existe para dizer o que está
+   * escondido — filtro que não aparece e não se anuncia faz a lista encolher
+   * sem explicação.
+   */
+  const sheetFilterCount =
+    (fSeller !== "all" ? 1 : 0) +
+    (fStatus !== "all" ? 1 : 0) +
+    (fSortKey !== "date" || fSortDir !== "desc" ? 1 : 0) +
+    (fPreset === "custom" ? 1 : 0);
 
   const headerEyebrow = tab === "vendas" ? periodLabel : tab === "retiradas" ? "Saldo devedor de funcionário" : "Pedidos do catálogo";
 
@@ -1265,99 +1410,113 @@ export default function SalesPage() {
 
         {/* ---------------- Vendas ---------------- */}
         <TabsContent value="vendas" className="mt-0 flex flex-col gap-4">
-          <div className="nc-card flex flex-col gap-2 px-3 py-2.5">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* No celular a busca fica com a linha inteira: ela é o filtro que
-                  se usa, e dividir a linha com um select deixaria as duas
-                  coisas estreitas demais para qualquer uma servir. */}
-              <div className="relative w-full min-w-[180px] flex-1 sm:w-auto">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--nc-text-3)" }} />
-                <input
-                  type="text"
-                  placeholder="Buscar produto…"
-                  value={fProduct}
-                  onChange={e => setFProduct(e.target.value)}
-                  aria-label="Buscar venda por produto"
-                  // 16px no celular não é escolha de estilo: abaixo disso o
-                  // Safari do iOS dá zoom sozinho ao focar o campo, e a página
-                  // não volta do lugar. É o mesmo motivo de todo campo de texto
-                  // desta tela; o `h-10` é o alvo de toque.
-                  className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px] max-sm:h-10 max-sm:text-[16px]"
-                />
-              </div>
-              <Select value={fSeller} onValueChange={setFSeller}>
-                <SelectTrigger className="h-8 w-auto min-w-[130px] text-[12.5px] max-sm:h-10 max-sm:flex-1"><SelectValue placeholder="Funcionário" /></SelectTrigger>
-                <SelectContent className="nocturne">
-                  <SelectItem value="all">Todos funcionários</SelectItem>
-                  <SelectItem value="none">Sem funcionário</SelectItem>
-                  {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={fStatus} onValueChange={(v) => setFStatus(v as PaymentStatus)}>
-                <SelectTrigger className="h-8 w-auto min-w-[110px] text-[12.5px] max-sm:h-10 max-sm:flex-1"><SelectValue /></SelectTrigger>
-                <SelectContent className="nocturne">
-                  <SelectItem value="all">Todos status</SelectItem>
-                  <SelectItem value="paid">Pagas</SelectItem>
-                  <SelectItem value="partial">Parcial</SelectItem>
-                  <SelectItem value="open">Em aberto</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex items-center gap-1 max-sm:flex-1">
-                <Select value={fSortKey} onValueChange={(v) => setFSortKey(v as SortKey)}>
-                  <SelectTrigger className="h-8 w-auto min-w-[100px] text-[12.5px] max-sm:h-10 max-sm:flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent className="nocturne">
-                    <SelectItem value="date">Data</SelectItem>
-                    <SelectItem value="total">Valor</SelectItem>
-                    <SelectItem value="remaining">Falta</SelectItem>
-                  </SelectContent>
-                </Select>
+          {compactFilters ? (
+            /* No celular a barra inteira não cabe em pé: sete controles num
+               `flex-wrap` de 304px viravam CINCO fileiras de caixinha em cima
+               da lista, cada quebra caindo num lugar diferente conforme o
+               rótulo do select — e nenhum ajuste de largura conserta isso,
+               porque o problema é a quantidade de coisa, não o tamanho dela.
+
+               Ficam de pé os dois filtros que se usam o tempo todo: a busca e o
+               período. O resto (funcionário, situação, ordenação, intervalo à
+               mão) vai para um painel, com a contagem no botão — filtro que não
+               aparece precisa dizer que está ligado, senão a lista some sem
+               explicação. */
+            <div className="nc-card flex flex-col gap-2 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                {searchField}
                 <NcButton
-                  variant="ghost"
-                  size="icon"
-                  aria-label={fSortDir === "asc" ? "Ordenar do maior para o menor" : "Ordenar do menor para o maior"}
-                  onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")}
-                  className="max-sm:h-10 max-sm:w-10"
+                  variant={sheetFilterCount > 0 ? "outline" : "quiet"}
+                  onClick={() => setFiltersOpen(true)}
+                  className="h-10 flex-none"
                 >
-                  <ArrowUpDown size={13} className={cn("transition-transform", fSortDir === "asc" && "rotate-180")} />
+                  <SlidersHorizontal size={14} />
+                  Filtros
+                  {sheetFilterCount > 0 && <span className="nc-num">{sheetFilterCount}</span>}
                 </NcButton>
               </div>
-              {/* O "Limpar" fica SEMPRE na linha e só some da vista quando não há
-                  filtro: montar e desmontar ele mudava a largura de todo mundo a
-                  cada clique, porque a busca é `flex-1` e engolia (ou devolvia) o
-                  espaço dele. Mesma regra da tela de Entrada. */}
-              <NcButton
-                variant="ghost"
-                onClick={clearFilters}
-                disabled={!hasActiveFilters}
-                className={cn("ml-auto flex-none max-sm:h-10", !hasActiveFilters && "invisible")}
-              >
-                <X size={13} />Limpar
-              </NcButton>
+              {periodChips}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
-              {/* Os dois campos de data dividem a linha no celular em vez de
-                  carregar os 132px cravados: em 360px de tela a largura fixa
-                  sobrava dos dois lados numa hora e transbordava na outra. */}
-              <div className="flex items-center gap-1.5 max-sm:w-full">
-                <input
-                  type="date"
-                  value={fFrom}
-                  onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }}
-                  aria-label="Data inicial"
-                  className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:h-10 max-sm:w-auto max-sm:flex-1 max-sm:text-[16px]"
-                />
-                <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
-                <input
-                  type="date"
-                  value={fTo}
-                  onChange={e => { setFTo(e.target.value); setFPreset("custom"); }}
-                  aria-label="Data final"
-                  className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:h-10 max-sm:w-auto max-sm:flex-1 max-sm:text-[16px]"
-                />
+          ) : (
+            <div className="nc-card flex flex-col gap-2 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                {searchField}
+                {sellerSelect}
+                {statusSelect}
+                {sortControl}
+                {/* O "Limpar" fica SEMPRE na linha e só some da vista quando não
+                    há filtro: montar e desmontar ele mudava a largura de todo
+                    mundo a cada clique, porque a busca é `flex-1` e engolia (ou
+                    devolvia) o espaço dele. Mesma regra da tela de Entrada. */}
+                <NcButton
+                  variant="ghost"
+                  onClick={clearFilters}
+                  disabled={!hasActiveFilters}
+                  className={cn("ml-auto flex-none", !hasActiveFilters && "invisible")}
+                >
+                  <X size={13} />Limpar
+                </NcButton>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {periodChips}
+                {dateRange}
               </div>
             </div>
-          </div>
+          )}
+
+          {/* O painel dos filtros que não couberam. Só é MONTADO no celular:
+              acima do `sm` os mesmos controles estão na barra, e as duas cópias
+              vivas de cada select disputariam o mesmo estado. Aqui cada um
+              ganha a linha toda e 44px de altura, que é o que a fileira
+              apertada não tinha como dar. O rodapé segue o padrão dos outros
+              painéis — o que vai acontecer à esquerda, a ação à direita. */}
+          {compactFilters && (
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetContent side="right" className="nocturne flex w-full flex-col p-0 sm:max-w-sm">
+              <NcSheetHeader
+                eyebrow="Vendas"
+                title="Filtros"
+                description="A busca e o período ficam na tela; o resto mora aqui."
+              />
+              <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+                <div className="space-y-1.5">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Funcionário</p>
+                  {sellerSelect}
+                </div>
+                <div className="space-y-1.5">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Situação do pagamento</p>
+                  {statusSelect}
+                </div>
+                <div className="space-y-1.5">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Ordenar por</p>
+                  {sortControl}
+                </div>
+                <div className="space-y-1.5">
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Intervalo exato</p>
+                  {dateRange}
+                  <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                    Escolher uma data aqui desliga o período da tela.
+                  </p>
+                </div>
+              </div>
+              <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
+                <div className="flex w-full items-center justify-between gap-3">
+                  <NcButton
+                    variant="ghost"
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters}
+                    className={cn("h-11", !hasActiveFilters && "invisible")}
+                  >
+                    <X size={13} />Limpar
+                  </NcButton>
+                  <NcButton variant="solid" className="h-11" onClick={() => setFiltersOpen(false)}>
+                    Ver {sortedSales.length} venda{sortedSales.length === 1 ? "" : "s"}
+                  </NcButton>
+                </div>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+          )}
 
           {sortedSales.length === 0 ? (
             <div className="nc-card py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
@@ -1542,9 +1701,16 @@ export default function SalesPage() {
               )}
             </div>
 
-            <Rule />
+            {/* "Modelos que mais vendem" só existe a partir do `xl`, onde o
+                trilho é uma COLUNA ao lado da lista e o espaço dele não custa
+                nada a ninguém. Abaixo disso o trilho vira um bloco EM CIMA da
+                lista (`order-first`), e seis linhas de ranking mais o "+ N
+                outros" empurram para baixo justamente o que a pessoa abriu a
+                tela para ver. É leitura de análise, e no celular ela tem tela
+                própria (Insights) — o que fica aqui é o dinheiro da aba. */}
+            <Rule className="hidden xl:block" />
 
-            <div>
+            <div className="hidden xl:block">
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Modelos que mais vendem</span>
                 <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
