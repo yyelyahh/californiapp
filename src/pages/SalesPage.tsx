@@ -27,6 +27,7 @@ import {
 } from "@/hooks/usePendingOrders";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 import { orderRef } from "@/lib/order-ref";
+import { useMediaQuery } from "@/hooks/use-mobile";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -51,6 +52,52 @@ const POPOVER_STYLE: React.CSSProperties = {
   background: "var(--nc-surface)",
   boxShadow: "0 0 0 1px var(--nc-divider), 0 10px 30px rgba(0,0,0,0.5)",
 };
+
+/**
+ * Forma de pagamento → selo.
+ *
+ * Mora fora do componente porque a tabela (a partir do `lg`) e o card (abaixo
+ * dele) mostram o MESMO selo: duas cópias divergiriam no dia em que o
+ * vocabulário fechado de `sales.payment_method` ganhar um valor novo.
+ *
+ * `null` é venda sem forma de pagamento — quem chama decide como desenhar o
+ * vazio. Valor FORA do vocabulário aparece CRU, não como "—": "—" já é o estado
+ * de venda sem forma de pagamento, e os dois juntos escondiam o `combinado` que
+ * o confirm_order gravava.
+ */
+function paymentBadge(method: string | null | undefined, sellerLabel: string) {
+  if (!method) return null;
+  const map: Record<string, { label: string; tone: string }> = {
+    pix: { label: "Pix", tone: "nc-pill--paid" },
+    dinheiro: { label: "Dinheiro", tone: "nc-pill--paid" },
+    pix_pendente: { label: "Falta Pix", tone: "nc-pill--partial" },
+    dinheiro_pendente: { label: "Falta Dinheiro", tone: "nc-pill--partial" },
+    dinheiro_com_vendedor: { label: `Dinheiro c/ ${sellerLabel}`, tone: "nc-pill--partial" },
+    pendente: { label: "Falta receber", tone: "nc-pill--mute" },
+  };
+  return map[method] ?? { label: method, tone: "nc-pill--mute" };
+}
+
+/**
+ * Abaixo deste ponto a lista de vendas deixa de ser tabela e vira card.
+ *
+ * O número não é gosto: a tabela pede 760px, e a coluna do meio só chega lá a
+ * partir do `lg` (1024 − 48 de padding = 976). Abaixo disso ela virava rolagem
+ * lateral dentro de uma tela que já rola na vertical — e as colunas que ficavam
+ * fora da vista eram justamente "Situação" e as ações, que é o que a pessoa vem
+ * tocar.
+ */
+const TABLE_MEDIA = "(min-width: 1024px)";
+
+/**
+ * Alvo de toque das ações da linha no celular: 44px, a referência do iOS.
+ *
+ * Fica escrito aqui, e não no `.nc-btn--icon` do index.css, porque a passagem
+ * dos tokens para o toque é o passo seguinte e vale para as dez telas — mexer
+ * na classe agora mudaria nove telas que ninguém olhou ainda. Quando aquele
+ * passo vier, esta constante some e o botão volta a ser um `size="icon"` seco.
+ */
+const TOUCH_ICON = "h-11 w-11";
 
 type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
 
@@ -138,7 +185,10 @@ function ConfirmOrderPopover({
   return (
     <Popover open={open} onOpenChange={change}>
       <PopoverTrigger asChild disabled={disabled}>{children}</PopoverTrigger>
-      <PopoverContent align="end" className={cn(POPOVER_CLASS, "w-60 space-y-2.5 p-3")} style={POPOVER_STYLE}>
+      {/* Cada escolha aqui GRAVA uma venda: no celular elas vão a 40px, porque
+          errar o alvo entre "Pix" e "Falta Pix" é confirmar a venda com o
+          dinheiro no lugar errado. */}
+      <PopoverContent align="end" className={cn(POPOVER_CLASS, "w-60 space-y-2.5 p-3 max-sm:w-[17rem]")} style={POPOVER_STYLE}>
         <div className="space-y-1.5">
           <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Observação (opcional)</p>
           <input
@@ -146,14 +196,14 @@ function ConfirmOrderPopover({
             onChange={e => setNote(e.target.value)}
             maxLength={ORDER_NOTE_MAX}
             placeholder="dia 20, fiado…"
-            className="nc-input h-8 w-full px-2.5 text-xs"
+            className="nc-input h-8 w-full px-2.5 text-xs max-sm:h-10 max-sm:text-[16px]"
           />
         </div>
         <div className="nc-rule-top space-y-1.5 pt-2.5">
           <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebido agora</p>
           <div className="grid grid-cols-2 gap-1.5">
             {ORDER_PAYMENT_CHOICES.filter(c => c.paid).map(c => (
-              <NcButton key={c.id} variant="quiet" onClick={() => pick(c.id)}>{c.label}</NcButton>
+              <NcButton key={c.id} variant="quiet" className="max-sm:h-10" onClick={() => pick(c.id)}>{c.label}</NcButton>
             ))}
           </div>
         </div>
@@ -161,7 +211,7 @@ function ConfirmOrderPopover({
           <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Falta receber</p>
           <div className="grid gap-1">
             {ORDER_PAYMENT_CHOICES.filter(c => !c.paid).map(c => (
-              <NcButton key={c.id} variant="ghost" className="justify-start" onClick={() => pick(c.id)}>{c.label}</NcButton>
+              <NcButton key={c.id} variant="ghost" className="justify-start max-sm:h-10" onClick={() => pick(c.id)}>{c.label}</NcButton>
             ))}
           </div>
         </div>
@@ -188,7 +238,21 @@ function ConfirmOrderPopover({
  * vocabulário fechado e um valor chutado aqui apareceria como "—" na própria
  * coluna ao lado.
  */
-function OpenStatusButton({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro") => Promise<void> }) {
+function OpenStatusButton({
+  onConfirm, touch,
+}: {
+  onConfirm: (method: "pix" | "dinheiro") => Promise<void>;
+  /**
+   * No card do celular o selo cresce para 32px de altura. Não vai a 44 como os
+   * botões de editar e excluir de propósito: ele está numa fileira de selos, e
+   * um alvo de 44px ali dominaria o card e faria os outros dois parecerem
+   * desligados. 32px passa o mínimo de alvo do WCAG 2.2 (24px) com folga.
+   *
+   * A troca "Aberto → Pago" continua presa ao hover, que no toque não existe:
+   * lá o selo só diz "Aberto", e o popover é que conta o resto.
+   */
+  touch?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -210,7 +274,10 @@ function OpenStatusButton({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro
           type="button"
           title="Marcar como recebido"
           aria-label="Marcar venda como recebida"
-          className="nc-pill nc-pill--open nc-pill--action group/paid"
+          className={cn(
+            "nc-pill nc-pill--open nc-pill--action group/paid",
+            touch && "min-h-[32px] px-3 text-[11.5px]",
+          )}
         >
           <span className="grid">
             <span className="col-start-1 row-start-1 text-center transition-opacity group-hover/paid:opacity-0 group-data-[state=open]/paid:opacity-0">
@@ -225,8 +292,8 @@ function OpenStatusButton({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro
       <PopoverContent align="end" className={cn(POPOVER_CLASS, "w-48 space-y-2 p-2.5")} style={POPOVER_STYLE}>
         <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebido em</p>
         <div className="grid grid-cols-2 gap-1.5">
-          <NcButton variant="quiet" disabled={saving} onClick={() => handle("pix")}>Pix</NcButton>
-          <NcButton variant="quiet" disabled={saving} onClick={() => handle("dinheiro")}>Dinheiro</NcButton>
+          <NcButton variant="quiet" className="max-sm:h-10" disabled={saving} onClick={() => handle("pix")}>Pix</NcButton>
+          <NcButton variant="quiet" className="max-sm:h-10" disabled={saving} onClick={() => handle("dinheiro")}>Dinheiro</NcButton>
         </div>
       </PopoverContent>
     </Popover>
@@ -301,13 +368,19 @@ function PendingOrdersList({
             )}
 
             {/* Mesma tabela das outras telas migradas: cabeçalho em texto
-                terciário e peso normal, sem faixa de fundo e sem caixa alta. */}
+                terciário e peso normal, sem faixa de fundo e sem caixa alta.
+
+                No celular a coluna "Sabor" não vira linha nova: ela entra no
+                fim do nome do produto, que é como a própria loja escreve o item
+                ("Elfbar · 10K · Mint"). Assim a tabela desce de 380px para
+                caber num telefone sem esconder nada — e sem montar duas
+                versões dela no DOM. */}
             <div className="overflow-x-auto px-3 pb-1 pt-1" style={{ borderTop: "1px solid var(--nc-track)" }}>
-              <table className="w-full min-w-[380px] text-[13px]">
+              <table className="w-full min-w-[260px] text-[13px]">
                 <thead>
                   <tr style={{ color: "var(--nc-text-3)" }}>
                     <th className="px-2 py-1.5 text-left font-normal">Produto</th>
-                    <th className="px-2 py-1.5 text-left font-normal">Sabor</th>
+                    <th className="hidden px-2 py-1.5 text-left font-normal sm:table-cell">Sabor</th>
                     <th className="w-[50px] px-2 py-1.5 text-right font-normal">Qtd</th>
                     <th className="w-[90px] px-2 py-1.5 text-right font-normal">Unitário</th>
                   </tr>
@@ -315,8 +388,13 @@ function PendingOrdersList({
                 <tbody>
                   {order.order_items?.map(item => (
                     <tr key={item.id} className="nc-row">
-                      <td className="px-2 py-1.5">{item.products ? `${item.products.brand} · ${item.products.name}` : "—"}</td>
-                      <td className="px-2 py-1.5" style={{ color: "var(--nc-text-2)" }}>{item.products?.flavor ?? "—"}</td>
+                      <td className="px-2 py-1.5">
+                        {item.products ? `${item.products.brand} · ${item.products.name}` : "—"}
+                        <span className="sm:hidden" style={{ color: "var(--nc-text-2)" }}>
+                          {" · "}{item.products?.flavor ?? "—"}
+                        </span>
+                      </td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell" style={{ color: "var(--nc-text-2)" }}>{item.products?.flavor ?? "—"}</td>
                       <td className="nc-num px-2 py-1.5 text-right">{item.quantity}</td>
                       <td className="nc-num px-2 py-1.5 text-right">{formatCurrency(item.unit_price)}</td>
                     </tr>
@@ -325,12 +403,18 @@ function PendingOrdersList({
               </table>
             </div>
 
+            {/* Recusar e confirmar são a razão de o card existir, e no celular
+                eles crescem para 44px e dividem a largura. Confirmar fica à
+                DIREITA nos dois tamanhos: é onde o polegar cai e é a decisão
+                que se espera — trocar a ordem por tamanho de tela faria alguém
+                recusar um pedido por decoreba de posição. */}
             <div className="flex items-center justify-end gap-2 px-4 pb-3.5 pt-2.5">
               <NcButton
                 variant="quiet"
                 size="md"
                 disabled={processingOrder === order.id}
                 onClick={() => onDecline(order.id)}
+                className="max-sm:h-11 max-sm:flex-1"
               >
                 <Ban size={13} />Recusar
               </NcButton>
@@ -338,7 +422,7 @@ function PendingOrdersList({
                 disabled={processingOrder === order.id}
                 onConfirm={(method, notes) => onConfirm(order.id, method, notes)}
               >
-                <NcButton variant="solid" size="md" disabled={processingOrder === order.id}>
+                <NcButton variant="solid" size="md" disabled={processingOrder === order.id} className="max-sm:h-11 max-sm:flex-1">
                   <Check size={13} />Confirmar
                 </NcButton>
               </ConfirmOrderPopover>
@@ -377,6 +461,9 @@ export default function SalesPage() {
     confirmOrder: handleConfirmOrder,
     declineOrder: handleDeclineOrder,
   } = usePendingOrders();
+
+  // Onde a coluna do meio comporta a tabela inteira sem rolagem lateral.
+  const wideEnoughForTable = useMediaQuery(TABLE_MEDIA);
 
   const [tab, setTab] = useState<TabValue>("vendas");
   const [open, setOpen] = useState(false);
@@ -870,12 +957,50 @@ export default function SalesPage() {
     </form>
   );
 
-  // === Linha da tabela, compartilhada por Vendas e Retiradas ===
+  /**
+   * O que a tabela e o card precisam saber da venda — uma leitura só.
+   *
+   * As duas formas mostram exatamente os mesmos sete campos; o que muda é o
+   * arranjo. Calcular em dois lugares seria a porta para elas discordarem sobre
+   * o que é "falta receber".
+   */
+  const readSale = (s: typeof sales[number]) => ({
+    remaining: Math.max(0, s.totalPrice - s.paidAmount),
+    isRet: s.type === "retirada_funcionario",
+    sellerName: s.sellerId ? getSellerName(s.sellerId) : "Sem funcionário",
+    label: getProductDisplayName(s.productId),
+    // Fallback diferente do `sellerName` de propósito: o selo fala em segunda
+    // pessoa ("Dinheiro c/ vendedor"), a linha fala em terceira.
+    badge: paymentBadge(s.paymentMethod, s.sellerId ? getSellerName(s.sellerId) : "vendedor"),
+  });
+
+  /** Editar e excluir, os mesmos dois em qualquer arranjo. */
+  const rowActions = (s: typeof sales[number], label: string, touch = false) => (
+    <>
+      <NcButton
+        variant="ghost"
+        size="icon"
+        aria-label={`Editar ${label}`}
+        onClick={() => openEdit(s)}
+        className={touch ? TOUCH_ICON : undefined}
+      >
+        <Pencil size={touch ? 16 : 13} />
+      </NcButton>
+      <NcButton
+        variant="danger"
+        size="icon"
+        aria-label={`Excluir ${label}`}
+        onClick={() => handleDelete(s.id)}
+        className={touch ? TOUCH_ICON : undefined}
+      >
+        <Trash2 size={touch ? 16 : 13} />
+      </NcButton>
+    </>
+  );
+
+  // === Linha da tabela (a partir do `lg`), compartilhada por Vendas e Retiradas ===
   const renderRow = (s: typeof sales[number], rowIndex = 0) => {
-    const remaining = Math.max(0, s.totalPrice - s.paidAmount);
-    const isRet = s.type === "retirada_funcionario";
-    const sellerName = s.sellerId ? getSellerName(s.sellerId) : "Sem funcionário";
-    const label = getProductDisplayName(s.productId);
+    const { remaining, isRet, sellerName, label, badge } = readSale(s);
 
     return (
       <motion.tr
@@ -901,22 +1026,9 @@ export default function SalesPage() {
         </td>
         {!isRet && (
           <td className="px-3 py-2.5 text-center">
-            {(() => {
-              if (!s.paymentMethod) return <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>—</span>;
-              const map: Record<string, { label: string; tone: string }> = {
-                pix: { label: "Pix", tone: "nc-pill--paid" },
-                dinheiro: { label: "Dinheiro", tone: "nc-pill--paid" },
-                pix_pendente: { label: "Falta Pix", tone: "nc-pill--partial" },
-                dinheiro_pendente: { label: "Falta Dinheiro", tone: "nc-pill--partial" },
-                dinheiro_com_vendedor: { label: `Dinheiro c/ ${s.sellerId ? getSellerName(s.sellerId) : "vendedor"}`, tone: "nc-pill--partial" },
-                pendente: { label: "Falta receber", tone: "nc-pill--mute" },
-              };
-              // Valor fora do vocabulário fechado aparece CRU, não como "—":
-              // "—" já é o estado de venda sem forma de pagamento, e os dois
-              // juntos escondiam o `combinado` que o confirm_order gravava.
-              const info = map[s.paymentMethod] ?? { label: s.paymentMethod, tone: "nc-pill--mute" };
-              return <span className={cn("nc-pill", info.tone)}>{info.label}</span>;
-            })()}
+            {badge
+              ? <span className={cn("nc-pill", badge.tone)}>{badge.label}</span>
+              : <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>—</span>}
           </td>
         )}
         {!isRet && (
@@ -950,18 +1062,104 @@ export default function SalesPage() {
           </td>
         )}
         <td className="px-3 py-2">
-          {/* No desktop a ação só aparece no hover da linha; no toque não há
-              hover, então fica sempre visível abaixo de sm. */}
-          <div className="flex items-center justify-end gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-            <NcButton variant="ghost" size="icon" aria-label={`Editar ${label}`} onClick={() => openEdit(s)}>
-              <Pencil size={13} />
-            </NcButton>
-            <NcButton variant="danger" size="icon" aria-label={`Excluir ${label}`} onClick={() => handleDelete(s.id)}>
-              <Trash2 size={13} />
-            </NcButton>
+          {/* A tabela só existe onde há ponteiro (a partir do `lg`), então a
+              ação pode morar no hover: no toque quem responde é o card. */}
+          <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {rowActions(s, label)}
           </div>
         </td>
       </motion.tr>
+    );
+  };
+
+  // === A mesma venda no celular (abaixo do `lg`) ===
+  /**
+   * A tabela de sete colunas pede 760px e o telefone tem 360. Aqui o que era
+   * coluna vira faixa, e nada foi cortado — as sete informações continuam na
+   * tela, em três linhas:
+   *
+   *   1. o que foi vendido, e quanto vale;
+   *   2. quem vendeu, quando, a observação, e quanto AINDA FALTA;
+   *   3. o rodapé do que se toca — quantidade, forma de pagamento, situação,
+   *      editar e excluir.
+   *
+   * "Falta R$ 30,00" só aparece quando falta: na venda quitada o valor recebido
+   * é igual ao total logo acima, e repetir o mesmo número em duas linhas faz
+   * procurar a diferença que não existe. Quem diz que entrou é o selo "Pago" —
+   * mesma divisão de trabalho do trilho (verde entrou, laranja falta).
+   *
+   * Nasce dentro desta tela de propósito, como o `PeriodChips` nasceu dentro do
+   * Dashboard: quando a segunda lista precisar do mesmo card, ele sobe para
+   * `src/components/nocturne` e as duas importam.
+   */
+  const renderCard = (s: typeof sales[number], rowIndex = 0) => {
+    const { remaining, isRet, sellerName, label, badge } = readSale(s);
+
+    return (
+      <motion.div
+        key={s.id}
+        layout
+        variants={rowIndex < MAX_STAGGERED_ROWS ? listItem : undefined}
+        exit={{ opacity: 0 }}
+        transition={transitionBase}
+        className="nc-row px-3.5 py-3"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px]">{label}</p>
+            <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+              <span>{sellerName}</span>
+              <span className="nc-num"> · {formatDateBR(s.date)}</span>
+              {s.notes && <span> · {s.notes}</span>}
+            </p>
+          </div>
+          <div className="flex-none text-right">
+            <p className="nc-num text-[15px]" style={isRet ? { color: "var(--nc-alert)" } : undefined}>
+              {formatCurrency(s.totalPrice)}
+            </p>
+            {!isRet && remaining > 0 && (
+              <p className="nc-num mt-0.5 text-[11.5px]" style={{ color: "var(--nc-alert)" }}>
+                falta {formatCurrency(remaining)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-2">
+          {/* Os selos ocupam o espaço que sobra e quebram entre si; as ações
+              ficam ancoradas à direita. Sem isso, um "Dinheiro c/ Fulano" longo
+              empurraria o botão de excluir para fora da largura do telefone. */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <span className="nc-num text-[12px]" style={{ color: "var(--nc-text-2)" }}>
+              {s.quantity} un.
+            </span>
+            {!isRet && badge && <span className={cn("nc-pill", badge.tone)}>{badge.label}</span>}
+            {!isRet && (
+              remaining === 0 ? (
+                <span className="nc-pill nc-pill--paid">Pago</span>
+              ) : s.paidAmount > 0 ? (
+                <span className="nc-pill nc-pill--partial">Parcial</span>
+              ) : (
+                <OpenStatusButton
+                  touch
+                  onConfirm={async (method) => {
+                    await updateSale(s.id, {
+                      paidAmount: s.totalPrice,
+                      paymentMethod: method,
+                      paidAt: new Date().toISOString(),
+                    });
+                  }}
+                />
+              )
+            )}
+          </div>
+          {/* -mr-2 devolve o respiro que os 44px do alvo comem: o ícone fica
+              alinhado com a borda do card, a área tocável passa dela. */}
+          <div className="-mr-2 flex flex-none items-center">
+            {rowActions(s, label, true)}
+          </div>
+        </div>
+      </motion.div>
     );
   };
 
@@ -1069,7 +1267,10 @@ export default function SalesPage() {
         <TabsContent value="vendas" className="mt-0 flex flex-col gap-4">
           <div className="nc-card flex flex-col gap-2 px-3 py-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[180px] flex-1">
+              {/* No celular a busca fica com a linha inteira: ela é o filtro que
+                  se usa, e dividir a linha com um select deixaria as duas
+                  coisas estreitas demais para qualquer uma servir. */}
+              <div className="relative w-full min-w-[180px] flex-1 sm:w-auto">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--nc-text-3)" }} />
                 <input
                   type="text"
@@ -1077,11 +1278,15 @@ export default function SalesPage() {
                   value={fProduct}
                   onChange={e => setFProduct(e.target.value)}
                   aria-label="Buscar venda por produto"
-                  className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px]"
+                  // 16px no celular não é escolha de estilo: abaixo disso o
+                  // Safari do iOS dá zoom sozinho ao focar o campo, e a página
+                  // não volta do lugar. É o mesmo motivo de todo campo de texto
+                  // desta tela; o `h-10` é o alvo de toque.
+                  className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px] max-sm:h-10 max-sm:text-[16px]"
                 />
               </div>
               <Select value={fSeller} onValueChange={setFSeller}>
-                <SelectTrigger className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue placeholder="Funcionário" /></SelectTrigger>
+                <SelectTrigger className="h-8 w-auto min-w-[130px] text-[12.5px] max-sm:h-10 max-sm:flex-1"><SelectValue placeholder="Funcionário" /></SelectTrigger>
                 <SelectContent className="nocturne">
                   <SelectItem value="all">Todos funcionários</SelectItem>
                   <SelectItem value="none">Sem funcionário</SelectItem>
@@ -1089,7 +1294,7 @@ export default function SalesPage() {
                 </SelectContent>
               </Select>
               <Select value={fStatus} onValueChange={(v) => setFStatus(v as PaymentStatus)}>
-                <SelectTrigger className="h-8 w-auto min-w-[110px] text-[12.5px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 w-auto min-w-[110px] text-[12.5px] max-sm:h-10 max-sm:flex-1"><SelectValue /></SelectTrigger>
                 <SelectContent className="nocturne">
                   <SelectItem value="all">Todos status</SelectItem>
                   <SelectItem value="paid">Pagas</SelectItem>
@@ -1097,9 +1302,9 @@ export default function SalesPage() {
                   <SelectItem value="open">Em aberto</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 max-sm:flex-1">
                 <Select value={fSortKey} onValueChange={(v) => setFSortKey(v as SortKey)}>
-                  <SelectTrigger className="h-8 w-auto min-w-[100px] text-[12.5px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-auto min-w-[100px] text-[12.5px] max-sm:h-10 max-sm:flex-1"><SelectValue /></SelectTrigger>
                   <SelectContent className="nocturne">
                     <SelectItem value="date">Data</SelectItem>
                     <SelectItem value="total">Valor</SelectItem>
@@ -1111,6 +1316,7 @@ export default function SalesPage() {
                   size="icon"
                   aria-label={fSortDir === "asc" ? "Ordenar do maior para o menor" : "Ordenar do menor para o maior"}
                   onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")}
+                  className="max-sm:h-10 max-sm:w-10"
                 >
                   <ArrowUpDown size={13} className={cn("transition-transform", fSortDir === "asc" && "rotate-180")} />
                 </NcButton>
@@ -1123,20 +1329,23 @@ export default function SalesPage() {
                 variant="ghost"
                 onClick={clearFilters}
                 disabled={!hasActiveFilters}
-                className={cn("ml-auto flex-none", !hasActiveFilters && "invisible")}
+                className={cn("ml-auto flex-none max-sm:h-10", !hasActiveFilters && "invisible")}
               >
                 <X size={13} />Limpar
               </NcButton>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
-              <div className="flex items-center gap-1.5">
+              {/* Os dois campos de data dividem a linha no celular em vez de
+                  carregar os 132px cravados: em 360px de tela a largura fixa
+                  sobrava dos dois lados numa hora e transbordava na outra. */}
+              <div className="flex items-center gap-1.5 max-sm:w-full">
                 <input
                   type="date"
                   value={fFrom}
                   onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }}
                   aria-label="Data inicial"
-                  className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+                  className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:h-10 max-sm:w-auto max-sm:flex-1 max-sm:text-[16px]"
                 />
                 <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
                 <input
@@ -1144,7 +1353,7 @@ export default function SalesPage() {
                   value={fTo}
                   onChange={e => { setFTo(e.target.value); setFPreset("custom"); }}
                   aria-label="Data final"
-                  className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+                  className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:h-10 max-sm:w-auto max-sm:flex-1 max-sm:text-[16px]"
                 />
               </div>
             </div>
@@ -1160,6 +1369,12 @@ export default function SalesPage() {
             </div>
           ) : (
             <div className="nc-card overflow-hidden">
+              {/* Card ou tabela, NUNCA os dois: `hidden lg:block` esconderia com
+                  CSS e montaria as duas no DOM, dobrando os nós justamente na
+                  lista que já pesa (ver o roadmap no CLAUDE.md). */}
+              {!wideEnoughForTable ? (
+                <AnimatePresence initial={false}>{sortedSales.map(renderCard)}</AnimatePresence>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-[13px]">
                   <thead>
@@ -1178,6 +1393,7 @@ export default function SalesPage() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           )}
         </TabsContent>
@@ -1190,6 +1406,15 @@ export default function SalesPage() {
             </div>
           ) : (
             <div className="nc-card overflow-hidden">
+              {/* A tabela de retiradas pede 440px e caberia num telefone, mas
+                  ela reusa a MESMA `renderRow` das vendas — e as ações dela
+                  vivem no hover, que no toque não existe. As duas abas trocam
+                  de forma na mesma largura, de propósito: aba que muda de
+                  desenho no meio do caminho é a mesma tela contando duas
+                  histórias. */}
+              {!wideEnoughForTable ? (
+                <AnimatePresence initial={false}>{sortedRetiradas.map(renderCard)}</AnimatePresence>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[440px] text-[13px]">
                   <thead>
@@ -1205,6 +1430,7 @@ export default function SalesPage() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           )}
         </TabsContent>
