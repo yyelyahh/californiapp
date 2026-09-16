@@ -19,6 +19,7 @@ import { listItem, transitionBase } from "@/lib/motion";
 import { NcButton, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { sortNames, sortCatalog, compareText } from "@/lib/catalog-order";
+import { lensStock, LENS_GERAL, LENS_CASA, type StockLens } from "@/lib/stock-lens";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 /** Abaixo disso a coluna de estoque do sabor sai em --nc-alert na tabela. */
@@ -50,11 +51,19 @@ export default function ProductsPage() {
    * justamente daqui que ele foi tirado. Ele continua existindo em `products`,
    * que é quem dá nome ao histórico, e volta pelo painel "Modelos".
    */
-  const { activeProducts: products, archivedModels, updateProduct, deleteProduct } = useStore();
+  const {
+    activeProducts,
+    archivedModels,
+    productAssignments,
+    sellers,
+    updateProduct,
+    deleteProduct,
+  } = useStore();
   const { branchId } = useBranch();
   /** "Todas as filiais" é somente leitura: o estoque aqui é somado e o preço é o maior entre as cidades. */
   const readOnly = !branchId;
   const [search, setSearch] = useState("");
+  const [lens, setLens] = useState<StockLens>(LENS_GERAL);
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [showOutOfStock, setShowOutOfStock] = useState(false);
@@ -65,6 +74,43 @@ export default function ProductsPage() {
   const [bulkForm, setBulkForm] = useState({ brand: "", model: "", purchasePrice: "", salePrice: "" });
   const [bulkMinOpen, setBulkMinOpen] = useState(false);
   const [bulkMinForm, setBulkMinForm] = useState({ brand: "", model: "", minStock: "" });
+
+  /**
+   * Vendedor que saiu da lista (foi excluído) deixaria a tela presa num recorte
+   * sem dono, mostrando zero em tudo — parece "sumiu o estoque", não "esse
+   * vendedor não existe mais". Mesma decisão do `pickBranch` e do filtro de
+   * pessoa da Auditoria: volta sozinho para o geral.
+   */
+  const activeLens =
+    lens === LENS_GERAL || lens === LENS_CASA || sellers.some(s => s.id === lens) ? lens : LENS_GERAL;
+
+  /**
+   * A lista que a tela inteira lê, já pela lente escolhida. `activeProducts`
+   * segue sendo a verdade da filial — quem ESCREVE (editar, excluir) resolve o
+   * produto por ele, nunca por esta cópia, senão gravaria a conta do vendedor
+   * como estoque da cidade.
+   */
+  const products = useMemo(
+    () => lensStock(activeLens, activeProducts, productAssignments),
+    [activeLens, activeProducts, productAssignments],
+  );
+
+  const realById = useMemo(() => new Map(activeProducts.map(p => [p.id, p])), [activeProducts]);
+
+  const lensLabel =
+    activeLens === LENS_GERAL ? "Estoque geral"
+      : activeLens === LENS_CASA ? "a casa"
+        : sellers.find(s => s.id === activeLens)?.name ?? "";
+
+  /** As opções da lente: o geral, a casa e cada vendedor da filial. */
+  const lensOptions = useMemo(
+    () => [
+      { value: LENS_GERAL, label: "Estoque geral" },
+      { value: LENS_CASA, label: "Casa" },
+      ...sellers.map(s => ({ value: s.id, label: s.name })),
+    ],
+    [sellers],
+  );
 
   const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
 
@@ -151,7 +197,9 @@ export default function ProductsPage() {
    */
   const modelStock = useMemo(() => {
     const map = new Map<string, { key: string; brand: string; model: string; stock: number; min: number }>();
-    products.forEach(p => {
+    // Lê `activeProducts`, NÃO a lente: o mínimo é política da filial, e
+    // comparar a caixa de um vendedor com ele diria que tudo está em falta.
+    activeProducts.forEach(p => {
       const model = (p.model || "").trim() || "Sem modelo";
       const brand = (p.brand || "").trim() || "Sem marca";
       const key = `${brand}|${model}`;
@@ -164,7 +212,7 @@ export default function ProductsPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.stock - b.stock || compareText(a.model, b.model));
-  }, [products]);
+  }, [activeProducts]);
 
   /** Abaixo do mínimo configurado. Modelo sem mínimo definido não entra. */
   const belowMin = useMemo(
@@ -201,7 +249,15 @@ export default function ProductsPage() {
   };
 
 
-  const startEdit = (p: typeof products[0]) => {
+  /**
+   * Edita e exclui SEMPRE o produto de verdade, resolvido pelo id — nunca a
+   * cópia que a lente devolveu. Sob a lente de um vendedor, `p.stock` é a caixa
+   * DELE: salvar a partir dali gravaria essa conta como o estoque da cidade
+   * inteira, e o `deleted_products` guardaria a fotografia errada.
+   */
+  const startEdit = (id: string) => {
+    const p = realById.get(id);
+    if (!p) return;
     setEditId(p.id);
     setEditForm({
       name: p.name, brand: p.brand, model: p.model || '', flavor: p.flavor,
@@ -209,6 +265,8 @@ export default function ProductsPage() {
       minStock: String(p.minStock ?? 0),
     });
   };
+
+  const startDelete = (id: string) => setDeleteTarget(realById.get(id) ?? null);
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,6 +417,18 @@ export default function ProductsPage() {
               className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px]"
             />
           </div>
+          {/* De quem é o estoque que está na tela. Um Select e não chips: com
+              "geral", "casa" e um por vendedor a lista cresce com a equipe, e
+              nome de pessoa não tem forma curta — mesma razão do switch de
+              filial na sidebar. */}
+          <Select value={activeLens} onValueChange={setLens}>
+            <SelectTrigger className="h-8 w-auto min-w-[140px] text-[12.5px]" aria-label="De quem é o estoque">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="nocturne">
+              {lensOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
           {/* Mesmo realce do chip de período do Dashboard: contorno accent sobre
               preenchimento de 10%. Um botão ligado no painel é sempre isso. */}
           <button
@@ -372,8 +442,8 @@ export default function ProductsPage() {
           >
             {showOutOfStock ? "Ocultar zerados" : `Mostrar zerados${outOfStockCount > 0 ? ` (${outOfStockCount})` : ""}`}
           </button>
-          {search && (
-            <NcButton variant="ghost" onClick={() => setSearch("")}>
+          {(search || activeLens !== LENS_GERAL) && (
+            <NcButton variant="ghost" onClick={() => { setSearch(""); setLens(LENS_GERAL); }}>
               <X size={13} />Limpar
             </NcButton>
           )}
@@ -386,7 +456,11 @@ export default function ProductsPage() {
               ? "Nenhum produto cadastrado ainda."
               : search.trim()
                 ? `Nenhum produto encontrado para “${search.trim()}”.`
-                : "Nenhum produto encontrado."}
+                : activeLens === LENS_CASA
+                  ? "A casa está sem estoque: tudo o que a filial tem está distribuído."
+                  : activeLens !== LENS_GERAL
+                    ? `${lensLabel} não está com nenhum sabor no momento.`
+                    : "Nenhum produto encontrado."}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -489,8 +563,8 @@ export default function ProductsPage() {
                                               key={p.id}
                                               product={p}
                                               readOnly={readOnly}
-                                              onEdit={() => startEdit(p)}
-                                              onDelete={() => setDeleteTarget(p)}
+                                              onEdit={() => startEdit(p.id)}
+                                              onDelete={() => startDelete(p.id)}
                                             />
                                           ))}
                                         </tbody>
@@ -520,7 +594,12 @@ export default function ProductsPage() {
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Capital em estoque</span>
+        {/* O trilho acompanha a lente, como o da SalesPage acompanha a aba: um
+            resumo da cidade ao lado da lista de um vendedor falaria de outra
+            coisa. O sobretítulo é quem diz de quem é o número. */}
+        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
+          {activeLens === LENS_GERAL ? "Capital em estoque" : `Em estoque · ${lensLabel}`}
+        </span>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Potencial de venda</span>
@@ -633,6 +712,13 @@ export default function ProductsPage() {
           {belowMin.length === 0 && modelStock.some(m => m.min > 0) && (
             <p className="pt-2 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
               Nenhum modelo abaixo do mínimo.
+            </p>
+          )}
+          {/* O mínimo é da FILIAL, não de quem está segurando a caixa: sob a
+              lente de um vendedor ele acusaria falta em tudo. */}
+          {activeLens !== LENS_GERAL && (
+            <p className="pt-2 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+              Não segue o filtro: o mínimo é da filial inteira.
             </p>
           )}
         </div>
