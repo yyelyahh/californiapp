@@ -1463,6 +1463,8 @@ export default function SellerStorePage() {
   const [sellerId, setSellerId] = useState<string | undefined>(handleIsId ? handle : undefined);
   /** Enquanto o apelido não virou id, a tela está CARREGANDO, não inválida. */
   const [resolving, setResolving] = useState(!handleIsId);
+  /** O banco não respondeu. Diferente de "esse apelido não existe". */
+  const [resolveFailed, setResolveFailed] = useState(false);
   const validId = !!sellerId;
   // Realce flutuante da lista de sabores. Ficam aqui em cima porque abaixo há
   // returns antecipados (link inválido, identificação, sucesso) e hook não
@@ -1622,17 +1624,34 @@ export default function SellerStorePage() {
     }
     let cancelled = false;
     (async () => {
-      // `get_seller_by_slug` ainda não existe no types.ts gerado (ele é criado
-      // pela migration 20260916140000). Um tipo local em vez de `any`: o
-      // formato do argumento e do retorno continua conferido.
-      const rpc = supabase.rpc as unknown as (
-        fn: "get_seller_by_slug",
-        args: { p_slug: string },
-      ) => Promise<{ data: string | null }>;
-      const { data } = await rpc("get_seller_by_slug", { p_slug: handle });
-      if (cancelled) return;
-      setSellerId(data ?? undefined);
-      setResolving(false);
+      try {
+        // `get_seller_by_slug` ainda não está no types.ts gerado (ele nasceu na
+        // migration 20260916140000), então o tipo vem daqui.
+        //
+        // O cast é no CLIENTE, não no método: `const rpc = supabase.rpc` destaca
+        // a função do objeto, e chamada assim ela roda sem `this` e estoura na
+        // primeira linha. Foi o que deixou esta tela em "Abrindo a loja…" para
+        // sempre — a exceção matava a função antes do `setResolving(false)`.
+        const client = supabase as unknown as {
+          rpc(fn: "get_seller_by_slug", args: { p_slug: string }): Promise<{
+            data: string | null;
+            error: { message: string } | null;
+          }>;
+        };
+        const { data, error } = await client.rpc("get_seller_by_slug", { p_slug: handle });
+        if (cancelled) return;
+        // Erro do banco não é endereço errado: uma coisa se resolve tentando de
+        // novo, a outra pedindo o link certo ao vendedor. Dizer "Link inválido"
+        // quando o banco não respondeu manda a pessoa embora à toa.
+        if (error) setResolveFailed(true);
+        else setSellerId(data ?? undefined);
+      } catch {
+        if (!cancelled) setResolveFailed(true);
+      } finally {
+        // Sai do "Abrindo a loja…" ACONTEÇA O QUE ACONTECER: uma tela que pode
+        // ficar carregando para sempre é pior que qualquer mensagem de erro.
+        if (!cancelled) setResolving(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -2134,6 +2153,22 @@ export default function SellerStorePage() {
     return (
       <main className="storefront flex h-[100dvh] items-center justify-center overflow-hidden p-6">
         <p className="text-[13px]" style={{ color: "var(--sf-text-dim)" }}>Abrindo a loja…</p>
+      </main>
+    );
+  }
+
+  // Falha de rede ou de banco: o link pode estar certíssimo, então a saída é
+  // tentar de novo — não mandar a pessoa pedir outro endereço ao vendedor.
+  if (resolveFailed) {
+    return (
+      <main className="storefront flex h-[100dvh] items-center justify-center overflow-hidden p-6">
+        <div className={`${COLUMN} space-y-3 text-center`}>
+          <h1 className="text-xl font-bold">Não foi possível abrir a loja</h1>
+          <p className="text-sm" style={{ color: "var(--sf-text-muted)" }}>
+            O catálogo não respondeu agora. Tente de novo em instantes.
+          </p>
+          <PillButton onClick={() => window.location.reload()}>Tentar de novo</PillButton>
+        </div>
       </main>
     );
   }
