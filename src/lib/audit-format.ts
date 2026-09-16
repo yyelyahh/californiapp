@@ -156,6 +156,41 @@ export type Movement = {
 };
 
 /**
+ * As tabelas das AÇÕES PRINCIPAIS — o que a tela mostra por padrão.
+ *
+ * O log guarda tudo, e é para guardar tudo que ele existe: editar um preço,
+ * excluir uma compra e mexer no banco pelo SQL Editor continuam registrados, e
+ * o "Tudo" da tela continua trazendo. O que este corte resolve é outra coisa —
+ * uma lista em que cada correção de cadastro tem o mesmo peso de uma venda não
+ * é uma lista de movimentos, é o log cru, e nela ninguém acha o que procura.
+ *
+ * `sales` cobre as duas entradas de dinheiro que nascem ali: a venda e a
+ * retirada de funcionário (a mesma tabela, separadas por `type`). Excluir uma
+ * venda também é `sales` — o corte é por TABELA, nunca por ação, senão a
+ * exclusão, que é o que mais se quer auditar, seria a primeira a sumir.
+ */
+export const KEY_ENTITIES = new Set([
+  "sales",
+  "product_assignments",
+  "stock_transfers",
+  "commission_payments",
+  "pro_labore_payments",
+]);
+
+/**
+ * Um movimento é principal quando QUALQUER registro dele toca uma dessas
+ * tabelas — não só o `main`.
+ *
+ * É o que salva o pedido do catálogo: confirmar um pedido cria N vendas, mas o
+ * assunto do movimento é `orders` (está na frente na PRIORITY). Olhando só o
+ * `main`, a venda que veio da loja — que é venda igual às outras — sumiria da
+ * lista de vendas.
+ */
+export function isKeyMovement(m: Movement): boolean {
+  return m.entries.some(e => KEY_ENTITIES.has(e.entity));
+}
+
+/**
  * Agrupa as linhas em movimentos.
  *
  * Chave é só o `tx`: `at` recebe `now()`, que em Postgres é o instante de

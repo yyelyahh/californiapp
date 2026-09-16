@@ -18,6 +18,7 @@ import {
   fieldLabel,
   formatValue,
   groupMovements,
+  isKeyMovement,
   isOutsideApp,
   shortId,
   sourceLabel,
@@ -62,6 +63,23 @@ const PERIOD_OPTIONS: { value: DateRangePreset; label: string; short: string }[]
  * pelo menos uma linha). "Tudo" é um clique; voltar de uma tela travada não é.
  */
 const DEFAULT_PRESET: DateRangePreset = "month";
+
+/**
+ * O que a tela mostra: só as ações principais, ou o log inteiro.
+ *
+ * Abre em "Principais" porque é para isso que se abre a Auditoria — ver quem
+ * registrou venda, quem atribuiu estoque, quem pagou comissão. Toda correção de
+ * cadastro com o mesmo peso de uma venda transforma a lista no log cru. "Tudo"
+ * é um clique, e nada foi apagado: o gatilho continua gravando cada escrita.
+ */
+type Scope = "key" | "all";
+
+const SCOPE_OPTIONS: { value: Scope; label: string; short: string }[] = [
+  { value: "key", label: "Ações principais", short: "Principais" },
+  { value: "all", label: "Tudo o que foi escrito", short: "Tudo" },
+];
+
+const DEFAULT_SCOPE: Scope = "key";
 
 /** Quantas pessoas / áreas cabem nas listas do trilho. */
 const MAX_RAIL_ROWS = 6;
@@ -108,6 +126,7 @@ export default function AuditPage() {
   const [dateFrom, setDateFrom] = useState(currentMonthRange().from);
   const [dateTo, setDateTo] = useState(currentMonthRange().to);
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState<Scope>(DEFAULT_SCOPE);
   const [fArea, setFArea] = useState("all");
   const [fActor, setFActor] = useState("all");
   const [open, setOpen] = useState<Set<number>>(new Set());
@@ -175,12 +194,13 @@ export default function AuditPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return movements.filter(m => {
+      if (scope === "key" && !isKeyMovement(m)) return false;
       if (fArea !== "all" && entityInfo(m.main.entity).area !== fArea) return false;
       if (activeActor !== "all" && actorKey(m.main) !== activeActor) return false;
       if (q && !searchableText(m, resolve, names).includes(q)) return false;
       return true;
     });
-  }, [movements, search, fArea, activeActor, resolve, names]);
+  }, [movements, search, scope, fArea, activeActor, resolve, names]);
 
   /** Os movimentos quebrados por dia LOCAL — `at` chega em UTC. */
   const days = useMemo(() => {
@@ -202,7 +222,6 @@ export default function AuditPage() {
   const stats = useMemo(() => {
     const byActor = new Map<string, { key: string; label: string; count: number }>();
     const byArea = new Map<string, number>();
-    let outside = 0;
 
     filtered.forEach(m => {
       const key = actorKey(m.main);
@@ -212,19 +231,41 @@ export default function AuditPage() {
 
       const area = entityInfo(m.main.entity).area;
       byArea.set(area, (byArea.get(area) ?? 0) + 1);
-
-      if (isOutsideApp(m.main.actor_source)) outside += 1;
     });
 
     return {
       count: filtered.length,
       writes: filtered.reduce((s, m) => s + m.entries.length, 0),
       people: byActor.size,
-      outside,
       actors: Array.from(byActor.values()).sort((a, b) => b.count - a.count),
       areas: Array.from(byArea, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     };
   }, [filtered, names]);
+
+  /**
+   * Escrita que não veio do app conta sobre o PERÍODO INTEIRO, não sobre a
+   * lista filtrada — e o trilho diz isso na própria linha, como o "A caminho"
+   * da Entrada.
+   *
+   * É o único sinal que só a auditoria dá, e ele não pode depender do recorte
+   * da tela: em "Principais" uma mexida no preço pelo SQL Editor não é ação
+   * principal, então o alarme cairia para zero justamente no modo em que a tela
+   * abre — dizendo "tudo passou pelo app" quando não passou.
+   */
+  const outside = useMemo(
+    () => movements.filter(m => isOutsideApp(m.main.actor_source)).length,
+    [movements],
+  );
+
+  /**
+   * Quantos o corte "Principais" deixou de fora. Contado sobre o período, não
+   * sobre o que sobrou dos outros filtros: dizer "+8 de cadastro" quando 6
+   * deles foram escondidos pelo filtro de pessoa seria inventar um motivo.
+   */
+  const hiddenByScope = useMemo(
+    () => movements.filter(m => !isKeyMovement(m)).length,
+    [movements],
+  );
 
   const applyPreset = (p: DateRangePreset) => {
     setPreset(p);
@@ -253,11 +294,13 @@ export default function AuditPage() {
    */
   const clearFilters = () => {
     setSearch("");
+    setScope(DEFAULT_SCOPE);
     setFArea("all");
     setFActor("all");
     applyPreset(DEFAULT_PRESET);
   };
-  const hasActiveFilters = search !== "" || fArea !== "all" || activeActor !== "all" || preset !== DEFAULT_PRESET;
+  const hasActiveFilters =
+    search !== "" || scope !== DEFAULT_SCOPE || fArea !== "all" || activeActor !== "all" || preset !== DEFAULT_PRESET;
 
   const periodLabel = PERIOD_OPTIONS.find(o => o.value === preset)?.label ?? "Período personalizado";
 
@@ -329,6 +372,10 @@ export default function AuditPage() {
             </NcButton>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* O corte do que se está lendo vem ANTES do período: ele decide
+                quais movimentos existem na tela, e o período só recorta
+                quando. */}
+            <SegmentedChips options={SCOPE_OPTIONS} value={scope} onChange={v => setScope(v as Scope)} />
             <SegmentedChips options={PERIOD_OPTIONS} value={preset} onChange={v => applyPreset(v as DateRangePreset)} />
             <div className="flex items-center gap-1.5">
               <input
@@ -368,7 +415,9 @@ export default function AuditPage() {
           <div className="nc-card py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
             {rows.length === 0
               ? "Nenhum movimento neste período."
-              : "Nenhum movimento encontrado com os filtros aplicados."}
+              : scope === "key" && movements.length > 0
+                ? "Nenhuma ação principal neste período. Em “Tudo” aparece o resto do que foi escrito."
+                : "Nenhum movimento encontrado com os filtros aplicados."}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -439,6 +488,13 @@ export default function AuditPage() {
           <p className="nc-num mt-1.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
             {stats.writes} escrita{stats.writes === 1 ? "" : "s"} · {stats.people} pessoa{stats.people === 1 ? "" : "s"}
           </p>
+          {/* Quantos ficaram de fora do corte: o número grande encolheu de
+              propósito, e some dizer por quê é o que faria duvidar dele. */}
+          {scope === "key" && hiddenByScope > 0 && (
+            <p className="mt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+              + {hiddenByScope} de cadastro e correção, em “Tudo”
+            </p>
+          )}
         </div>
 
         <Rule />
@@ -503,15 +559,18 @@ export default function AuditPage() {
             <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Escritas direto no banco</span>
             <span
               className="nc-num text-base font-semibold"
-              style={{ color: stats.outside > 0 ? "var(--nc-alert)" : undefined }}
+              style={{ color: outside > 0 ? "var(--nc-alert)" : undefined }}
             >
-              {stats.outside}
+              {outside}
             </span>
           </div>
           <p className="mt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-            {stats.outside > 0
+            {outside > 0
               ? "Feitas pelo SQL Editor ou por um serviço, sem passar pelo app."
               : "Tudo no período passou pelo app."}
+          </p>
+          <p className="mt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+            Não segue o filtro: conta o período inteiro.
           </p>
         </div>
       </aside>

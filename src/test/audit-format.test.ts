@@ -6,6 +6,7 @@ import {
   entityInfo,
   formatValue,
   groupMovements,
+  isKeyMovement,
   summarize,
   visibleFields,
   type AuditRow,
@@ -38,6 +39,57 @@ const row = (over: Partial<AuditRow> = {}): AuditRow => ({
   row_data: {},
   old_data: null,
   ...over,
+});
+
+describe("ações principais", () => {
+  const only = (rows: AuditRow[]) => groupMovements(rows).filter(isKeyMovement);
+
+  it("passa venda, retirada, atribuição, transferência, comissão e pró-labore", () => {
+    const rows = [
+      row({ tx: 1, entity: "sales", action: "insert" }),
+      row({ tx: 2, entity: "sales", action: "insert", row_data: { type: "retirada_funcionario" } }),
+      row({ tx: 3, entity: "product_assignments", action: "insert" }),
+      row({ tx: 4, entity: "stock_transfers", action: "insert" }),
+      row({ tx: 5, entity: "commission_payments", action: "insert" }),
+      row({ tx: 6, entity: "pro_labore_payments", action: "insert" }),
+    ];
+
+    expect(only(rows)).toHaveLength(6);
+  });
+
+  it("corta cadastro, correção e o resto da operação", () => {
+    const rows = [
+      row({ tx: 1, entity: "products", action: "update", changed_fields: ["name"] }),
+      row({ tx: 2, entity: "product_branch", action: "update", changed_fields: ["sale_price"] }),
+      row({ tx: 3, entity: "stock_entries", action: "insert" }),
+      row({ tx: 4, entity: "expenses", action: "insert" }),
+      row({ tx: 5, entity: "archived_models", action: "insert" }),
+    ];
+
+    expect(only(rows)).toHaveLength(0);
+  });
+
+  it("a venda que veio do catálogo fica, mesmo com o pedido de assunto", () => {
+    // O `main` do movimento é `orders` (confirmar um pedido gera N vendas).
+    // Olhar só o assunto sumiria com a venda da loja da lista de vendas.
+    const movements = only([
+      row({ tx: 9, entity: "orders", action: "update", changed_fields: ["status"] }),
+      row({ tx: 9, entity: "sales", action: "insert" }),
+    ]);
+
+    expect(movements).toHaveLength(1);
+    expect(movements[0].main.entity).toBe("orders");
+  });
+
+  it("o pedido que ainda não virou venda não é ação principal", () => {
+    expect(only([row({ tx: 3, entity: "orders", action: "insert", actor_source: "anon" })])).toHaveLength(0);
+  });
+
+  it("o corte é por tabela, não por ação: excluir uma venda continua aparecendo", () => {
+    // É o movimento que mais se quer auditar — seria o primeiro a sumir num
+    // corte por "insert".
+    expect(only([row({ tx: 4, entity: "sales", action: "delete" })])).toHaveLength(1);
+  });
 });
 
 describe("agrupamento por transação", () => {
