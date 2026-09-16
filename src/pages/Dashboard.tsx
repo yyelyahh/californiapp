@@ -39,8 +39,7 @@ const CHART_AXIS = "#75798c";
 const GERAL = "geral";
 /** Quantos meses aparecem como atalho no seletor de período. */
 const QUICK_MONTHS = 3;
-/** Linhas mínimas na tabela de reposição, para o card não ficar vazio. */
-const MIN_RESTOCK_ROWS = 3;
+/** Quantos pedidos cabem na tabela de reposição. */
 const MAX_RESTOCK_ROWS = 6;
 /** Modelos nomeados na barra empilhada; o resto vira "Outros". */
 const TOP_MODELS = 5;
@@ -165,22 +164,48 @@ export default function Dashboard() {
    */
   const modelStats = useMemo(
     () => computeModelStats({
-      products: store.products,
+      // `activeProducts`: modelo fora de linha não é candidato a reposição.
+      // Zerado e sem giro ele já não entraria, mas o que acabou de ser
+      // arquivado ainda tem venda na janela — e apareceria no topo pedindo
+      // reposição de algo que a pessoa decidiu não repor mais.
+      products: store.activeProducts,
       sales: store.sales,
       periodSales: periodStats.sales,
+      purchaseOrders: store.purchaseOrders,
     }),
-    [store.products, store.sales, periodStats.sales],
+    [store.activeProducts, store.sales, store.purchaseOrders, periodStats.sales],
   );
 
   const restock = useMemo(() => summarizeRestock(modelStats), [modelStats]);
 
-  /** Urgentes primeiro; completa com os próximos para a tabela não ficar vazia. */
-  const restockRows = useMemo(() => {
-    const rows = restock.urgent.slice(0, MAX_RESTOCK_ROWS);
-    if (rows.length >= MIN_RESTOCK_ROWS) return rows;
-    const seen = new Set(rows.map(r => r.key));
-    return [...rows, ...modelStats.filter(m => !seen.has(m.key) && m.stock > 0).slice(0, MIN_RESTOCK_ROWS - rows.length)];
-  }, [restock.urgent, modelStats]);
+  /**
+   * Os maiores pedidos. NÃO completa a tabela com modelo que não precisa de
+   * nada: linha de enchimento era ruído ocupando o lugar de decisão.
+   */
+  const restockRows = useMemo(() => restock.urgent.slice(0, MAX_RESTOCK_ROWS), [restock.urgent]);
+
+  /**
+   * O que a tabela não mostra. Modelo de venda isolada e modelo já comprado
+   * saem da lista para ela caber numa olhada, mas continuam contados aqui —
+   * some da tabela, não do card.
+   */
+  const restockAsides = useMemo(() => {
+    const parts: string[] = [];
+    const hidden = restock.urgent.length - restockRows.length;
+    if (hidden > 0) parts.push(`+${hidden} pedido${hidden > 1 ? "s" : ""} menor${hidden > 1 ? "es" : ""}`);
+    if (restock.occasionalCount > 0) {
+      parts.push(`${restock.occasionalCount} de venda isolada · ${formatCurrencyShort(restock.occasionalCost)}`);
+    }
+    if (restock.orderedCount > 0) {
+      parts.push(`${restock.orderedCount} já pedido${restock.orderedCount > 1 ? "s" : ""}, ${restock.orderedUnits} un. a caminho`);
+    }
+    if (restock.staleCount > 0) {
+      parts.push(
+        `${restock.staleCount} parado${restock.staleCount > 1 ? "s" : ""} há mais de ${STALE_DAYS} dias travando ${formatCurrencyShort(restock.staleValue)}`,
+      );
+    }
+    return parts;
+  }, [restock, restockRows.length]);
 
   /** Barra empilhada: os N maiores por receita + "Outros". */
   const revenueSplit = useMemo(() => {
@@ -305,14 +330,16 @@ export default function Dashboard() {
               Modelo: m.model,
               "Estoque (un.)": m.stock,
               "Vende/dia": fmt(m.perDay),
+              "Dias com venda": m.saleDays,
               "Dura (dias)": isFinite(m.daysLeft) ? Math.round(m.daysLeft) : "sem giro",
               "Margem (%)": fmt(m.marginPct),
+              "A caminho (un.)": m.incoming,
               "Repor (un.)": m.restockUnits,
               [`Custo p/ ${HORIZON_DAYS}d (R$)`]: fmt(m.restockCost),
             }))
           : [{ Marca: "—" }],
       );
-      wsRepor["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 13 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }];
+      wsRepor["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 13 }, { wch: 11 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 16 }];
       XLSX.utils.book_append_sheet(wb, wsRepor, "Repor agora");
 
       // Vendas do período
@@ -418,7 +445,7 @@ export default function Dashboard() {
           <div className="px-4 pb-3.5">
             {restockRows.length === 0 ? (
               <p className="py-6 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
-                {modelStats.length === 0 ? "Nenhum modelo cadastrado ainda." : "Nenhum modelo com estoque no momento."}
+                {modelStats.length === 0 ? "Nenhum modelo cadastrado ainda." : "Nenhum modelo em giro precisa de pedido."}
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -430,7 +457,7 @@ export default function Dashboard() {
                       <th className="px-2 py-1.5 text-right font-normal">Vende/dia</th>
                       <th className="px-2 py-1.5 text-right font-normal">Dura</th>
                       <th className="px-2 py-1.5 text-right font-normal">Margem</th>
-                      <th className="px-2 py-1.5 text-right font-normal">Custo p/ {HORIZON_DAYS}d</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Pedir</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -441,20 +468,31 @@ export default function Dashboard() {
             )}
 
             <div className="nc-rule-top mt-3 flex flex-wrap items-center justify-between gap-3 pt-3">
-              <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
-                {restock.staleCount > 0 ? (
-                  <>
-                    {restock.staleCount} modelo{restock.staleCount > 1 ? "s" : ""} parado
-                    {restock.staleCount > 1 ? "s" : ""} há mais de {STALE_DAYS} dias travando{" "}
-                    <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
-                      {formatCurrencyShort(restock.staleValue)}
-                    </strong>{" "}
-                    em estoque
-                  </>
-                ) : (
-                  <>Nenhum modelo parado há mais de {STALE_DAYS} dias.</>
+              {/* O total do pedido em cima; embaixo, em tom terciário, o que
+                  NÃO está na tabela — nada sai da lista em silêncio. */}
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+                  {restock.horizonUnits > 0 ? (
+                    <>
+                      <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
+                        {restock.horizonUnits} un.
+                      </strong>{" "}
+                      para cobrir {HORIZON_DAYS} dias ·{" "}
+                      <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
+                        {formatCurrencyShort(restock.horizonCost)}
+                      </strong>{" "}
+                      a custo
+                    </>
+                  ) : (
+                    <>Nada a pedir para cobrir os próximos {HORIZON_DAYS} dias.</>
+                  )}
+                </span>
+                {restockAsides.length > 0 && (
+                  <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                    {restockAsides.join(" · ")}
+                  </span>
                 )}
-              </span>
+              </div>
               <Link
                 to="/stock"
                 className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors hover:bg-white/5"
@@ -763,8 +801,15 @@ function RestockRow({ model }: { model: ModelStat }) {
         {formatDays(model.daysLeft)}
       </td>
       <td className="px-2 py-1.5 text-right nc-num">{formatPct(model.marginPct)}</td>
-      <td className="px-2 py-1.5 text-right nc-num" style={model.restockCost > 0 ? undefined : { color: "var(--nc-text-3)" }}>
-        {model.restockCost > 0 ? formatCurrencyShort(model.restockCost) : "—"}
+      {/* Quanto pedir, já descontado o que está a caminho — e o abatimento
+          aparece embaixo, senão o número menor não teria explicação. */}
+      <td className="px-2 py-1.5 text-right">
+        <span className="nc-num">{model.restockUnits} un.</span>
+        {model.incoming > 0 && (
+          <span className="block text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>
+            {model.incoming} a caminho
+          </span>
+        )}
       </td>
     </tr>
   );

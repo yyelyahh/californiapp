@@ -70,7 +70,10 @@ const DEFAULT_PRESET: DateRangePreset = "month";
 const MAX_TOP_MODELS = 6;
 
 export default function StockEntryPage() {
-  const { products, stockEntries, purchaseOrders, addStockEntry, deleteStockEntry, getProductName } = useStore();
+  // `products` (inteiro) resolve o sabor que está sendo lançado e dá nome ao
+  // histórico; `activeProducts` alimenta os seletores — modelo fora de linha
+  // não precisa ser oferecido a quem está dando entrada.
+  const { products, activeProducts, stockEntries, purchaseOrders, addStockEntry, deleteStockEntry, getProductName } = useStore();
   const { branchId } = useBranch();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
@@ -114,15 +117,15 @@ export default function StockEntryPage() {
   const existingModels = useMemo(() => {
     if (!brand) return [];
     const set = new Set<string>();
-    products.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
+    activeProducts.filter(p => p.brand === brand).forEach(p => p.model && set.add(p.model));
     return sortNames(Array.from(set));
-  }, [products, brand]);
+  }, [activeProducts, brand]);
 
   const allBrands = useMemo(() => {
     const set = new Set<string>(DEFAULT_BRANDS);
-    products.forEach(p => p.brand && set.add(p.brand));
+    activeProducts.forEach(p => p.brand && set.add(p.brand));
     return sortNames(Array.from(set));
-  }, [products]);
+  }, [activeProducts]);
 
   const handleBrandChange = (value: string) => {
     setBrand(value);

@@ -24,6 +24,7 @@ import {
   LoanPayment,
   FinancialEvent,
   FinancialEventKind,
+  ArchivedModel,
 } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -32,6 +33,7 @@ import { toast } from "sonner";
 import { localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { sortCatalog, sortByName } from "@/lib/catalog-order";
 import { numberPurchaseOrders, type UnnumberedOrder } from "@/lib/purchase-order-number";
+import { hiddenModelKeys, isProductHidden } from "@/lib/archived-models";
 
 /**
  * Escrever exige uma filial concreta.
@@ -129,7 +131,19 @@ async function addBranchStock(
 }
 
 interface StoreContextType {
+  /** O catálogo inteiro — inclusive o que está fora de linha. Use para RESOLVER NOME. */
   products: Product[];
+  /**
+   * O catálogo sem os modelos arquivados (e sem estoque). É o que toda lista de
+   * ESCOLHA deve ler: seletor, diálogo em lote, conta de reposição.
+   */
+  activeProducts: Product[];
+  archivedModels: ArchivedModel[];
+  /** Chaves `marca|modelo` escondidas na filial de referência. */
+  hiddenModels: Set<string>;
+  /** Tira modelos de linha nesta filial. Só com estoque zero — quem recusa é o banco. */
+  archiveModels: (models: { brand: string; model: string }[]) => Promise<boolean>;
+  unarchiveModel: (brand: string, model: string) => Promise<boolean>;
   stockEntries: StockEntry[];
   sales: Sale[];
   expenses: Expense[];
@@ -276,6 +290,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sellerManualDebts, setSellerManualDebts] = useState<SellerManualDebt[]>([]);
   const [stockLosses, setStockLosses] = useState<StockLoss[]>([]);
   const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
+  const [archivedModels, setArchivedModels] = useState<ArchivedModel[]>([]);
   const [commissionPayments, setCommissionPayments] = useState<CommissionPayment[]>([]);
   const [proLaborePayments, setProLaborePayments] = useState<ProLaborePayment[]>([]);
   const [partnerContributions, setPartnerContributions] = useState<PartnerContribution[]>([]);
@@ -288,7 +303,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
   const isAdmin = role === "admin";
-  const { branchId } = useBranch();
+  const { branchId, branches } = useBranch();
 
   /**
    * A lista de produtos vem de `get_branch_products`, não mais de um SELECT em
@@ -357,6 +372,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (data) setStockTransfers((data as any[]).map(mapStockTransfer));
   }, [branchId]);
 
+  /**
+   * Os modelos arquivados de TODAS as filiais que a pessoa alcança, não só os
+   * da ativa: em "Todas as filiais" a tela só esconde o que as duas cidades
+   * arquivaram, e para saber isso é preciso ter as duas na mão. A RLS já corta
+   * pelo que ela administra, e a tabela é de uma linha por modelo fora de linha
+   * — não há o que paginar.
+   */
+  const fetchArchivedModels = useCallback(async () => {
+    const { data } = await supabase.from("archived_models" as any).select("*");
+    if (data) setArchivedModels((data as any[]).map(mapArchivedModel));
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -382,6 +409,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ])) as any;
       if (cancelled) return;
       setProducts(prodList);
+      // Junto da primeira onda de propósito: chega depois, a lista de produtos
+      // pisca com os arquivados dentro antes de se corrigir sozinha.
+      void fetchArchivedModels();
       if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
       if (salesRes.data) setSales(salesRes.data.map(mapSale));
       if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
@@ -585,6 +615,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .on("postgres_changes", { event: "*", schema: "public", table: "stock_transfers" }, () => {
           void fetchTransfers();
         })
+        // Recarrega a lista inteira: a chave é composta (filial + marca +
+        // modelo), e o `patch` remenda por `id`, que esta tabela não tem.
+        .on("postgres_changes", { event: "*", schema: "public", table: "archived_models" }, () => {
+          void fetchArchivedModels();
+        })
         .on("postgres_changes", onBranch("expenses"), refetchFinancialEvents)
         .on("postgres_changes", { event: "*", schema: "public", table: "commission_payments" }, refetchFinancialEvents)
         .on("postgres_changes", { event: "*", schema: "public", table: "pro_labore_payments" }, refetchFinancialEvents)
@@ -610,7 +645,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (feTimer) clearTimeout(feTimer);
       supabase.removeChannel(channel);
     };
-  }, [fetchProductsList, isAdmin, branchId, scoped, fetchTransfers]);
+  }, [fetchProductsList, isAdmin, branchId, scoped, fetchTransfers, fetchArchivedModels]);
+
+  const mapArchivedModel = (r: any): ArchivedModel => ({
+    branchId: r.branch_id,
+    brand: r.brand,
+    model: r.model,
+    archivedAt: r.archived_at,
+  });
 
   const mapStockEntry = (r: any): StockEntry => ({
     id: r.id,
@@ -1231,6 +1273,62 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toast.success("Produto excluído");
     },
     [products],
+  );
+
+  /**
+   * Tira modelos de linha NESTA filial. Vários de uma vez porque a faxina é
+   * assim que acontece — a pessoa abre o painel uma vez por trimestre e marca
+   * os dez que morreram —, e um INSERT de N linhas é uma transação só: ou todos
+   * entram, ou nenhum. Na auditoria isso vira um movimento só, pelo `tx`.
+   *
+   * A regra do estoque zero NÃO está aqui: ela é do banco (gatilho
+   * `archived_model_guard`), senão não existiria para quem chega pelo
+   * PostgREST. Daqui sai só a tradução do erro dele.
+   */
+  const archiveModels = useCallback(
+    async (models: { brand: string; model: string }[]): Promise<boolean> => {
+      if (!requireBranch(branchId)) return false;
+      if (models.length === 0) return false;
+      const { error } = await supabase.from("archived_models" as any).insert(
+        models.map((m) => ({ branch_id: branchId, brand: m.brand, model: m.model })) as any,
+      );
+      if (error) {
+        // O gatilho manda junto quanto sobrou e QUAL modelo travou — num lote
+        // de dez, "ainda tem estoque" sem nome não diria o que fazer.
+        const stuck = /modelo_com_estoque:(\d+)@(.+)/.exec(error.message || "");
+        if (stuck) toast.error(`${stuck[2]} ainda tem ${stuck[1]} un. — venda ou dê baixa antes de arquivar`);
+        else if ((error as any).code === "23505") toast.error("Esse modelo já está arquivado nesta filial");
+        else toast.error("Erro ao arquivar");
+        return false;
+      }
+      await fetchArchivedModels();
+      toast.success(models.length === 1 ? "Modelo arquivado" : `${models.length} modelos arquivados`);
+      return true;
+    },
+    [branchId, fetchArchivedModels],
+  );
+
+  /** Volta o modelo para as listas desta filial. Desarquivar é apagar a linha. */
+  const unarchiveModel = useCallback(
+    async (brand: string, model: string): Promise<boolean> => {
+      if (!requireBranch(branchId)) return false;
+      const { error } = await supabase
+        .from("archived_models" as any)
+        .delete()
+        .eq("branch_id", branchId)
+        // Pelas colunas normalizadas: é o que o gatilho gravou, e é o que a
+        // tela usa para esconder.
+        .eq("brand_key", brand.trim().toLowerCase())
+        .eq("model_key", model.trim().toLowerCase());
+      if (error) {
+        toast.error("Erro ao desarquivar");
+        return false;
+      }
+      await fetchArchivedModels();
+      toast.success("Modelo de volta nas listas");
+      return true;
+    },
+    [branchId, fetchArchivedModels],
   );
 
   // ---- Stock Entries ----
@@ -2503,6 +2601,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * Nada dependia da ordem de criação: as buscas são todas por `id`.
    */
   const sortedProducts = useMemo(() => sortCatalog(products), [products]);
+
+  /**
+   * Os modelos escondidos na filial de referência, e a lista de produtos sem
+   * eles.
+   *
+   * `products` continua INTEIRO: é ele que dá nome a toda venda, entrada e
+   * perda do passado, e um histórico que perde o rótulo do produto arquivado
+   * seria pior do que a lista poluída que isto veio resolver. Quem escolhe —
+   * seletor da Entrada, diálogos de preço e mínimo, lista de Produtos, as
+   * contas de reposição — lê `activeProducts`.
+   */
+  const hiddenModels = useMemo(
+    () => hiddenModelKeys(archivedModels, branchId, branches.map((b) => b.id)),
+    [archivedModels, branchId, branches],
+  );
+
+  const activeProducts = useMemo(
+    () => sortedProducts.filter((p) => !isProductHidden(p, hiddenModels)),
+    [sortedProducts, hiddenModels],
+  );
   const sortedSellers = useMemo(() => sortByName(sellers), [sellers]);
   const sortedPartners = useMemo(() => sortByName(partners), [partners]);
 
@@ -2531,6 +2649,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const ctxValue = useMemo<StoreContextType>(
     () => ({
       products: sortedProducts,
+      activeProducts,
+      archivedModels,
+      hiddenModels,
+      archiveModels,
+      unarchiveModel,
       stockEntries,
       sales,
       expenses,
@@ -2632,6 +2755,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       sortedProducts,
+      activeProducts,
+      archivedModels,
+      hiddenModels,
+      archiveModels,
+      unarchiveModel,
       stockEntries,
       sales,
       expenses,

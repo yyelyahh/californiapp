@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import AddProductDialog from "@/components/AddProductDialog";
 import ModelImagesDialog from "@/components/ModelImagesDialog";
+import ModelsSheet from "@/components/ModelsSheet";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { AnimatePresence, motion } from "motion/react";
@@ -43,7 +44,13 @@ function modelStockColor(m: { stock: number; min: number }) {
 }
 
 export default function ProductsPage() {
-  const { products, updateProduct, deleteProduct } = useStore();
+  /**
+   * A tela inteira lê `activeProducts`: modelo arquivado (e zerado) não entra
+   * na lista, nem nos totais, nem nos seletores dos diálogos em lote — é
+   * justamente daqui que ele foi tirado. Ele continua existindo em `products`,
+   * que é quem dá nome ao histórico, e volta pelo painel "Modelos".
+   */
+  const { activeProducts: products, archivedModels, updateProduct, deleteProduct } = useStore();
   const { branchId } = useBranch();
   /** "Todas as filiais" é somente leitura: o estoque aqui é somado e o preço é o maior entre as cidades. */
   const readOnly = !branchId;
@@ -55,9 +62,9 @@ export default function ProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkForm, setBulkForm] = useState({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
+  const [bulkForm, setBulkForm] = useState({ brand: "", model: "", purchasePrice: "", salePrice: "" });
   const [bulkMinOpen, setBulkMinOpen] = useState(false);
-  const [bulkMinForm, setBulkMinForm] = useState({ model: "", brand: "all", minStock: "" });
+  const [bulkMinForm, setBulkMinForm] = useState({ brand: "", model: "", minStock: "" });
 
   const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
 
@@ -124,6 +131,12 @@ export default function ProductsPage() {
   }), [products]);
 
   const marginPct = totals.saleValue > 0 ? (totals.profit / totals.saleValue) * 100 : 0;
+
+  /** Quantos modelos esta filial tirou de linha — em "Todas", os de qualquer cidade. */
+  const archivedCount = useMemo(
+    () => (branchId ? archivedModels.filter(r => r.branchId === branchId) : archivedModels).length,
+    [archivedModels, branchId],
+  );
 
 /**
    * Estoque por MODELO, do mais baixo para o mais alto.
@@ -214,28 +227,53 @@ export default function ProductsPage() {
     setEditId(null);
   };
 
-  const availableModels = useMemo(() => {
-    const set = new Set<string>();
-    products.forEach(p => { if (p.model && p.model.trim()) set.add(p.model.trim()); });
-    return sortNames(Array.from(set));
-  }, [products]);
-
   const availableBrands = useMemo(() => {
     const set = new Set<string>();
     products.forEach(p => { if (p.brand && p.brand.trim()) set.add(p.brand.trim()); });
     return sortNames(Array.from(set));
   }, [products]);
 
+  /**
+   * Os modelos DE CADA MARCA. Um modelo não tem identidade sozinho: quem
+   * identifica é marca + modelo, e é assim que o estoque agrupa aqui mesmo
+   * (`modelStock`), que o "Repor agora" do Dashboard soma e que o banco casa a
+   * foto do modelo. Uma lista solta de nomes juntava o "10K" da Elfbar com o
+   * "10K" da Ignite numa opção só, e aplicar preço ou mínimo ali mexia nas duas
+   * marcas de uma vez, sem dizer — com "Todas as marcas" ainda por cima de
+   * padrão. Por isso a marca vem ANTES e é obrigatória: ela é o recipiente, o
+   * modelo é o que está dentro. Mesma ordem do "de onde sai" da transferência.
+   *
+   * A chave é normalizada (sem caixa, sem sobra de espaço) porque é assim que o
+   * filtro dos afetados compara — a lista e o que ela atinge têm que ser a
+   * mesma coisa.
+   */
+  const modelsByBrand = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    products.forEach(p => {
+      const brand = (p.brand || "").trim();
+      const model = (p.model || "").trim();
+      if (!brand || !model) return;
+      const key = brand.toLowerCase();
+      const set = map.get(key) ?? new Set<string>();
+      set.add(model);
+      map.set(key, set);
+    });
+    return new Map(Array.from(map, ([key, set]) => [key, sortNames(Array.from(set))]));
+  }, [products]);
+
+  const modelsOfBrand = (brand: string) => modelsByBrand.get(brand.trim().toLowerCase()) ?? [];
+
   const bulkAffected = useMemo(() => {
-    if (!bulkForm.model) return [];
+    if (!bulkForm.brand || !bulkForm.model) return [];
     return products.filter(p =>
-      p.model.trim().toLowerCase() === bulkForm.model.trim().toLowerCase() &&
-      (bulkForm.brand === "all" || p.brand.trim().toLowerCase() === bulkForm.brand.trim().toLowerCase())
+      p.brand.trim().toLowerCase() === bulkForm.brand.trim().toLowerCase() &&
+      p.model.trim().toLowerCase() === bulkForm.model.trim().toLowerCase()
     );
-  }, [products, bulkForm.model, bulkForm.brand]);
+  }, [products, bulkForm.brand, bulkForm.model]);
 
   const handleBulkUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!bulkForm.brand) { toast.error("Selecione uma marca"); return; }
     if (!bulkForm.model) { toast.error("Selecione um modelo"); return; }
     const newPurchase = bulkForm.purchasePrice.trim() === "" ? null : Number(bulkForm.purchasePrice);
     const newSale = bulkForm.salePrice.trim() === "" ? null : Number(bulkForm.salePrice);
@@ -247,19 +285,20 @@ export default function ProductsPage() {
     await Promise.all(bulkAffected.map(p => updateProduct(p.id, updates)));
     toast.success(`${bulkAffected.length} produto(s) atualizado(s)`);
     setBulkOpen(false);
-    setBulkForm({ model: "", brand: "all", purchasePrice: "", salePrice: "" });
+    setBulkForm({ brand: "", model: "", purchasePrice: "", salePrice: "" });
   };
 
   const bulkMinAffected = useMemo(() => {
-    if (!bulkMinForm.model) return [];
+    if (!bulkMinForm.brand || !bulkMinForm.model) return [];
     return products.filter(p =>
-      p.model.trim().toLowerCase() === bulkMinForm.model.trim().toLowerCase() &&
-      (bulkMinForm.brand === "all" || p.brand.trim().toLowerCase() === bulkMinForm.brand.trim().toLowerCase())
+      p.brand.trim().toLowerCase() === bulkMinForm.brand.trim().toLowerCase() &&
+      p.model.trim().toLowerCase() === bulkMinForm.model.trim().toLowerCase()
     );
-  }, [products, bulkMinForm.model, bulkMinForm.brand]);
+  }, [products, bulkMinForm.brand, bulkMinForm.model]);
 
   const handleBulkMinUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!bulkMinForm.brand) { toast.error("Selecione uma marca"); return; }
     if (!bulkMinForm.model) { toast.error("Selecione um modelo"); return; }
     if (bulkMinForm.minStock.trim() === "") { toast.error("Informe o estoque mínimo"); return; }
     const min = Number(bulkMinForm.minStock);
@@ -268,7 +307,7 @@ export default function ProductsPage() {
     await Promise.all(bulkMinAffected.map(p => updateProduct(p.id, { minStock: min })));
     toast.success(`Mínimo aplicado a ${bulkMinAffected.length} produto(s)`);
     setBulkMinOpen(false);
-    setBulkMinForm({ model: "", brand: "all", minStock: "" });
+    setBulkMinForm({ brand: "", model: "", minStock: "" });
   };
 
   return (
@@ -298,6 +337,10 @@ export default function ProductsPage() {
               <Package size={13} />
               <span className="hidden sm:inline">Mínimo por modelo</span><span className="sm:hidden">Mínimo</span>
             </NcButton>
+            {/* Fica ao lado dos outros dois de modelo, e sem `disabled` em
+                "Todas": ali ele ainda mostra o que cada cidade arquivou, que é
+                leitura — o próprio painel recusa a escrita. */}
+            <ModelsSheet />
             <ModelImagesDialog />
             <AddProductDialog disabled={readOnly} />
           </div>
@@ -543,6 +586,13 @@ export default function ProductsPage() {
             <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
               {totals.brands} marca{totals.brands === 1 ? "" : "s"} · {products.length} sabores
             </span>
+            {/* O que a tela DEIXOU de mostrar, dito na própria tela: contagem
+                que encolhe sem explicação é a mesma poluição por outro lado. */}
+            {archivedCount > 0 && (
+              <span className="nc-num block text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                + {archivedCount} fora de linha
+              </span>
+            )}
           </div>
         </div>
 
@@ -597,27 +647,33 @@ export default function ProductsPage() {
         <DialogContent className="nocturne">
           <DialogHeader>
             <DialogTitle>Alterar preço por modelo</DialogTitle>
-            <DialogDescription>Atualize o preço de compra e/ou venda de todos os produtos de um modelo de uma só vez.</DialogDescription>
+            <DialogDescription>Atualize o preço de compra e/ou venda de todos os sabores de um modelo de uma só vez.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleBulkUpdate} className="space-y-4">
+            {/* Marca antes do modelo: o modelo sai da marca escolhida. Trocar a
+                marca limpa o modelo — nome que sobrou da marca anterior ou não
+                acha nada, ou acha um homônimo. */}
             <div>
-              <Label className="text-xs">Modelo</Label>
-              <Select value={bulkForm.model} onValueChange={v => setBulkForm(f => ({ ...f, model: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione um modelo (ex: 10K, V155)" /></SelectTrigger>
+              <Label className="text-xs">Marca</Label>
+              <Select value={bulkForm.brand} onValueChange={v => setBulkForm(f => ({ ...f, brand: v, model: "" }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma marca" /></SelectTrigger>
                 <SelectContent className="nocturne">
-                  {availableModels.length === 0 ? (
-                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo cadastrado</div>
-                  ) : availableModels.map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                  {availableBrands.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma marca cadastrada</div>
+                  ) : availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Marca (opcional)</Label>
-              <Select value={bulkForm.brand} onValueChange={v => setBulkForm(f => ({ ...f, brand: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Modelo</Label>
+              <Select value={bulkForm.model} onValueChange={v => setBulkForm(f => ({ ...f, model: v }))} disabled={!bulkForm.brand}>
+                <SelectTrigger>
+                  <SelectValue placeholder={bulkForm.brand ? "Selecione um modelo (ex: 10K, V155)" : "Escolha a marca primeiro"} />
+                </SelectTrigger>
                 <SelectContent className="nocturne">
-                  <SelectItem value="all">Todas as marcas</SelectItem>
-                  {availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
+                  {modelsOfBrand(bulkForm.brand).length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo nessa marca</div>
+                  ) : modelsOfBrand(bulkForm.brand).map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
@@ -639,7 +695,7 @@ export default function ProductsPage() {
                 {bulkAffected.length > 0 && (
                   <ul className="max-h-32 space-y-0.5 overflow-auto" style={{ color: "var(--nc-text-2)" }}>
                     {bulkAffected.slice(0, 8).map(p => (
-                      <li key={p.id} className="truncate">• {p.brand} {p.name} {p.flavor && `· ${p.flavor}`}</li>
+                      <li key={p.id} className="truncate">• {p.name} {p.flavor && `· ${p.flavor}`}</li>
                     ))}
                     {bulkAffected.length > 8 && (<li>+ {bulkAffected.length - 8} outros…</li>)}
                   </ul>
@@ -660,24 +716,28 @@ export default function ProductsPage() {
             <DialogDescription>Defina o estoque mínimo de um modelo. O valor será aplicado a todos os sabores desse modelo.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleBulkMinUpdate} className="space-y-4">
+            {/* Mesma ordem do diálogo de preço: marca, depois o modelo dela. */}
             <div>
-              <Label className="text-xs">Modelo</Label>
-              <Select value={bulkMinForm.model} onValueChange={v => setBulkMinForm(f => ({ ...f, model: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione um modelo" /></SelectTrigger>
+              <Label className="text-xs">Marca</Label>
+              <Select value={bulkMinForm.brand} onValueChange={v => setBulkMinForm(f => ({ ...f, brand: v, model: "" }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma marca" /></SelectTrigger>
                 <SelectContent className="nocturne">
-                  {availableModels.length === 0 ? (
-                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo cadastrado</div>
-                  ) : availableModels.map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                  {availableBrands.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma marca cadastrada</div>
+                  ) : availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Marca (opcional)</Label>
-              <Select value={bulkMinForm.brand} onValueChange={v => setBulkMinForm(f => ({ ...f, brand: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Modelo</Label>
+              <Select value={bulkMinForm.model} onValueChange={v => setBulkMinForm(f => ({ ...f, model: v }))} disabled={!bulkMinForm.brand}>
+                <SelectTrigger>
+                  <SelectValue placeholder={bulkMinForm.brand ? "Selecione um modelo" : "Escolha a marca primeiro"} />
+                </SelectTrigger>
                 <SelectContent className="nocturne">
-                  <SelectItem value="all">Todas as marcas</SelectItem>
-                  {availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
+                  {modelsOfBrand(bulkMinForm.brand).length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum modelo nessa marca</div>
+                  ) : modelsOfBrand(bulkMinForm.brand).map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeModelStats, summarizeRestock, urgencyOf } from "@/lib/restock";
-import type { Product, Sale } from "@/types";
+import type { Product, PurchaseOrder, Sale } from "@/types";
 
 const NOW = new Date(2026, 8, 3); // 03/09/2026, mesma data-base dos exemplos
 
@@ -20,6 +20,19 @@ const sale = (id: string, productId: string, quantity: number, daysAgo: number, 
     date: d.toISOString(), installments: 1, paidAmount: unitPrice * quantity, type: "venda",
   };
 };
+
+/** Compra de `quantity` un. de um modelo, aguardando recebimento por padrão. */
+const order = (
+  id: string, brand: string, model: string, quantity: number,
+  status: PurchaseOrder["status"] = "pending",
+): PurchaseOrder => ({
+  id, number: 1, status, date: NOW.toISOString(), paidAmount: 0, freightCost: 0,
+  createdAt: NOW.toISOString(),
+  items: [{
+    id: `${id}-i1`, purchaseOrderId: id, brand, model,
+    expectedQuantity: quantity, unitPrice: 90, receivedFlavors: [],
+  }],
+});
 
 describe("computeModelStats", () => {
   it("agrupa os sabores de um mesmo modelo e pondera custo e margem pelo estoque", () => {
@@ -63,6 +76,71 @@ describe("computeModelStats", () => {
     expect(m.restockUnits).toBe(0);
     expect(m.restockCost).toBe(0);
     expect(m.daysSinceLastSale).toBe(Infinity);
+  });
+
+  it("conta dias DISTINTOS com venda: duas vendas no mesmo dia são um dia só", () => {
+    const products = [product("p1", "Ignite", "V80", "Mint", 12, 92, 170)];
+    const sales = [
+      sale("s1", "p1", 3, 5),
+      sale("s2", "p1", 4, 5),  // mesmo dia da anterior
+      sale("s3", "p1", 2, 9),
+      sale("s4", "p1", 9, 90), // fora da janela: nem giro nem dia
+    ];
+    const [m] = computeModelStats({ products, sales, periodSales: [], now: NOW });
+
+    expect(m.saleDays).toBe(2);
+  });
+
+  it("desconta do pedido o que já está a caminho", () => {
+    const products = [product("p1", "Ignite", "V80", "Mint", 3, 92, 170)];
+    const sales = [sale("s1", "p1", 15, 2)]; // 0,5/dia → cobrir 30 dias = 15 un.
+    const [m] = computeModelStats({
+      products, sales, periodSales: [], now: NOW,
+      purchaseOrders: [order("o1", "Ignite", "V80", 5)],
+    });
+
+    expect(m.needUnits).toBe(12);
+    expect(m.incoming).toBe(5);
+    expect(m.restockUnits).toBe(7);
+    expect(m.restockCost).toBeCloseTo(7 * 92);
+  });
+
+  it("zera o pedido quando a compra em aberto cobre tudo, sem ficar negativo", () => {
+    const products = [product("p1", "Ignite", "V80", "Mint", 3, 92, 170)];
+    const sales = [sale("s1", "p1", 15, 2)];
+    const [m] = computeModelStats({
+      products, sales, periodSales: [], now: NOW,
+      purchaseOrders: [order("o1", "Ignite", "V80", 40)],
+    });
+
+    expect(m.needUnits).toBe(12);
+    expect(m.restockUnits).toBe(0);
+    expect(m.restockCost).toBe(0);
+  });
+
+  it("compra já recebida não conta como a caminho", () => {
+    // Ela já virou estoque no recebimento — abater de novo contaria duas vezes.
+    const products = [product("p1", "Ignite", "V80", "Mint", 3, 92, 170)];
+    const sales = [sale("s1", "p1", 15, 2)];
+    const [m] = computeModelStats({
+      products, sales, periodSales: [], now: NOW,
+      purchaseOrders: [order("o1", "Ignite", "V80", 40, "received")],
+    });
+
+    expect(m.incoming).toBe(0);
+    expect(m.restockUnits).toBe(12);
+  });
+
+  it("casa a compra com o modelo ignorando caixa e espaço", () => {
+    // Marca e modelo do item de compra são texto digitado em outra tela.
+    const products = [product("p1", "Ignite", "V80", "Mint", 3, 92, 170)];
+    const sales = [sale("s1", "p1", 15, 2)];
+    const [m] = computeModelStats({
+      products, sales, periodSales: [], now: NOW,
+      purchaseOrders: [order("o1", " ignite ", "v80", 5)],
+    });
+
+    expect(m.incoming).toBe(5);
   });
 
   it("ignora retiradas de funcionário e vendas com data futura no cálculo do giro", () => {
@@ -112,9 +190,10 @@ describe("summarizeRestock", () => {
       product("c", "Ignite", "V80", "Mint", 300, 92, 170),
     ];
     const sales = [
-      sale("s1", "a", 15, 2),  // gira: 0,5/dia → dura 6 dias
-      sale("s2", "b", 1, 90),  // parado há 90 dias, 50 un. × R$ 80 = R$ 4.000
-      sale("s3", "c", 15, 2),  // gira, mas tem estoque para 600 dias
+      sale("s1", "a", 10, 2),  // gira: 15 un. em dois dias → 0,5/dia, dura 6 dias
+      sale("s2", "a", 5, 4),
+      sale("s3", "b", 1, 90),  // parado há 90 dias, 50 un. × R$ 80 = R$ 4.000
+      sale("s4", "c", 15, 2),  // gira, mas tem estoque para 600 dias
     ];
     const stats = computeModelStats({ products, sales, periodSales: [], now: NOW });
     const r = summarizeRestock(stats);
@@ -122,9 +201,59 @@ describe("summarizeRestock", () => {
     expect(r.totalModels).toBe(3);
     expect(r.urgent.map(s => s.model)).toEqual(["BC10000"]);
     // cobrir 30 dias = 15 un.; tem 3, faltam 12 × R$ 100
+    expect(r.horizonUnits).toBe(12);
     expect(r.horizonCost).toBeCloseTo(1200);
     expect(r.staleCount).toBe(1);
     expect(r.staleValue).toBeCloseTo(4000);
+  });
+
+  it("ordena pelo tamanho do pedido, e quem acaba antes desempata", () => {
+    // O modelo que zerou vendendo 1 un. no mês dá `daysLeft` 0 e encabeçava a
+    // lista — na frente do que move 2 un./dia. É o ruído que o card tinha.
+    const products = [
+      product("a", "Ignite", "V80", "Mint", 0, 92, 170),      // pede 60 un.
+      product("b", "Elfbar", "BC10000", "Cola", 10, 100, 200), // pede 5 un.
+      product("c", "Nikbar", "15k", "Ice", 20, 80, 140),       // pede 5 un., dura mais
+    ];
+    const sales = [
+      sale("s1", "a", 30, 2), sale("s2", "a", 30, 4),
+      sale("s3", "b", 8, 2), sale("s4", "b", 7, 4),
+      sale("s5", "c", 13, 2), sale("s6", "c", 12, 4),
+    ];
+    const r = summarizeRestock(computeModelStats({ products, sales, periodSales: [], now: NOW }));
+
+    expect(r.urgent.map(s => s.model)).toEqual(["V80", "BC10000", "15k"]);
+    expect(r.urgent.map(s => s.restockUnits)).toEqual([60, 5, 5]);
+  });
+
+  it("tira da lista o que vendeu num dia só e conta à parte", () => {
+    const products = [
+      product("a", "Ignite", "V80", "Mint", 0, 92, 170),        // recorrente
+      product("b", "Elfbar", "BC10000", "Cola", 0, 100, 200),   // uma venda só
+    ];
+    const sales = [
+      sale("s1", "a", 10, 2), sale("s2", "a", 10, 5),
+      sale("s3", "b", 2, 3),
+    ];
+    const r = summarizeRestock(computeModelStats({ products, sales, periodSales: [], now: NOW }));
+
+    expect(r.urgent.map(s => s.model)).toEqual(["V80"]);
+    expect(r.occasionalCount).toBe(1);
+    expect(r.occasionalCost).toBeCloseTo(200); // 2 un. × R$ 100
+  });
+
+  it("some da lista o modelo cuja compra em aberto já cobre o pedido", () => {
+    const products = [product("a", "Ignite", "V80", "Mint", 0, 92, 170)];
+    const sales = [sale("s1", "a", 10, 2), sale("s2", "a", 5, 5)];
+    const r = summarizeRestock(computeModelStats({
+      products, sales, periodSales: [], now: NOW,
+      purchaseOrders: [order("o1", "Ignite", "V80", 50)],
+    }));
+
+    expect(r.urgent).toHaveLength(0);
+    expect(r.orderedCount).toBe(1);
+    expect(r.orderedUnits).toBe(50);
+    expect(r.horizonUnits).toBe(0);
   });
 
   it("não conta como parado o modelo sem estoque", () => {

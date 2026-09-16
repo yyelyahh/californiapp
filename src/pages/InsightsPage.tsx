@@ -47,7 +47,10 @@ const fmtPct = (v: number) => `${(v * 100).toFixed(0)}%`;
 const fmtDays = (v: number) => `${Math.floor(v)} ${Math.floor(v) === 1 ? "dia" : "dias"}`;
 
 export default function InsightsPage() {
-  const { products, sales } = useStore();
+  // `products` (inteiro) dá nome ao que foi vendido no período — o passado não
+  // se reescreve quando um modelo sai de linha. `activeProducts` é quem monta
+  // a leitura de HOJE: cobertura, o que repor e o que está parado.
+  const { products, activeProducts, sales } = useStore();
   const [period, setPeriod] = useState<Period>("month");
   const [customStart, setCustomStart] = useState(() => currentMonthRange().from);
   const [customEnd, setCustomEnd] = useState(() => currentMonthRange().to);
@@ -164,7 +167,7 @@ export default function InsightsPage() {
       key: string; brand: string; model: string;
       stock: number; minStock: number; flavors: number; zeroed: number; cost: number;
     }>();
-    for (const p of products) {
+    for (const p of activeProducts) {
       const key = modelKey(p.brand, p.model);
       const entry = map.get(key) ?? { key, brand: p.brand, model: p.model, stock: 0, minStock: 0, flavors: 0, zeroed: 0, cost: 0 };
       entry.stock += p.stock;
@@ -175,7 +178,7 @@ export default function InsightsPage() {
       map.set(key, entry);
     }
     return map;
-  }, [products]);
+  }, [activeProducts]);
 
   /**
    * Cobertura: quantos dias o estoque de hoje dura no ritmo de venda deste

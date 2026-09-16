@@ -58,6 +58,7 @@ const ENTITY: Record<string, EntityInfo> = {
   purchase_orders: { thing: "uma compra", area: "Entrada" },
   stock_losses: { thing: "uma perda", area: "Perdas" },
   stock_transfers: { thing: "uma transferência entre filiais", area: "Entrada" },
+  archived_models: { thing: "um modelo fora de linha", area: "Produtos" },
   product_assignments: { thing: "uma atribuição de estoque", area: "Distribuição" },
   commission_payments: { thing: "um pagamento de comissão", area: "Distribuição" },
   seller_manual_debts: { thing: "uma dívida de vendedor", area: "Distribuição" },
@@ -380,9 +381,14 @@ const REFERENCE = new Set([
 /**
  * Não entram no detalhe. `id` e os carimbos de tempo do banco não são decisão
  * de ninguém, e `client_token` é peça interna do pedido idempotente: mostrar
- * qualquer um dos três empurra para baixo o campo que importa.
+ * qualquer um dos três empurra para baixo o campo que importa. `brand_key` e
+ * `model_key` são a mesma coisa que `brand` e `model`, só que em caixa baixa —
+ * a chave de casamento do modelo arquivado, repetida na tela sem dizer nada.
  */
-const HIDDEN = new Set(["id", "created_at", "updated_at", "client_token", "original_id"]);
+const HIDDEN = new Set([
+  "id", "created_at", "updated_at", "client_token", "original_id",
+  "brand_key", "model_key",
+]);
 
 /**
  * Ordem de leitura do detalhe. O jsonb do Postgres devolve as chaves ordenadas

@@ -18,6 +18,20 @@ export interface Product {
   priceVaries?: boolean;
 }
 
+/**
+ * Um modelo fora de linha NAQUELA filial. A identidade fica em `products` (é o
+ * que dá nome ao histórico); o que some são as listas de escolha.
+ *
+ * Sair de linha é decisão de cidade: uma pode ter parado de pedir o que a outra
+ * ainda vende. Por isso a filial faz parte da chave.
+ */
+export interface ArchivedModel {
+  branchId: string;
+  brand: string;
+  model: string;
+  archivedAt: string;
+}
+
 export interface StockEntry {
   id: string;
   productId: string;
