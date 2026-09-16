@@ -163,13 +163,21 @@ interface StoreContextType {
    * filial — é a mesma regra de todo o resto do app.
    */
   transferBranchStock: (t: {
-    productId: string;
     toBranchId: string;
-    quantity: number;
     date: string;
     notes?: string;
-    /** De quem a unidade saiu. Ausente = estoque da casa. */
-    fromSellerId?: string;
+    /**
+     * Os sabores da MESMA viagem. É uma operação só: ou vai tudo, ou não vai
+     * nada — a function percorre os itens dentro de uma transação. A origem é
+     * por ITEM porque juntar o que sobrou com dois vendedores continua sendo
+     * uma viagem só.
+     */
+    items: {
+      productId: string;
+      quantity: number;
+      /** De quem a unidade saiu. Ausente = estoque da casa. */
+      fromSellerId?: string;
+    }[];
   }) => Promise<boolean>;
   stockLosses: StockLoss[];
   addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => Promise<void>;
@@ -692,6 +700,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     fromBranchId: r.from_branch_id,
     toBranchId: r.to_branch_id,
     fromSellerId: r.from_seller_id ?? undefined,
+    batchId: r.batch_id ?? undefined,
     quantity: Number(r.quantity ?? 0),
     unitCost: Number(r.unit_cost ?? 0),
     date: r.date,
@@ -1443,70 +1452,92 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   //
   // As três escritas (debita origem, credita destino, registra) moram na
   // function: aqui só passamos o pedido e sincronizamos a tela com o que ficou.
+  //
+  // E o pedido é um LOTE, sempre — um sabor só é um lote de um. A viagem leva
+  // vários sabores e é um movimento só: em N chamadas, a quinta podia falhar
+  // por estoque com as quatro anteriores já gravadas, e a caixa física já
+  // fechada. `transfer_branch_stock_batch` percorre tudo numa transação.
   const transferBranchStock = useCallback(
     async (t: {
-      productId: string;
       toBranchId: string;
-      quantity: number;
       date: string;
       notes?: string;
-      fromSellerId?: string;
+      items: { productId: string; quantity: number; fromSellerId?: string }[];
     }) => {
       if (!requireBranch(branchId)) return false;
+      if (t.items.length === 0) return false;
 
-      const { data, error } = await supabase.rpc("transfer_branch_stock" as any, {
-        p_product_id: t.productId,
+      const { data, error } = await supabase.rpc("transfer_branch_stock_batch" as any, {
         p_from_branch_id: branchId,
         p_to_branch_id: t.toBranchId,
-        p_quantity: t.quantity,
+        p_items: t.items.map((i) => ({
+          product_id: i.productId,
+          quantity: i.quantity,
+          from_seller_id: i.fromSellerId ?? null,
+        })),
         p_date: t.date,
         p_notes: t.notes ?? null,
-        p_from_seller_id: t.fromSellerId ?? null,
       } as any);
 
       if (error) {
         const m = error.message ?? "";
         // O banco manda o número que ele viu junto do código (`erro:N`) — é o
-        // que permite dizer "só 3 livre" em vez de "não deu".
+        // que permite dizer "só 3 livre" em vez de "não deu" — e, no lote, o
+        // produto que derrubou a operação (`...@<product_id>`): sem ele o
+        // aviso falaria de dez sabores sem dizer qual.
         const quanto = m.match(/:(\d+)/)?.[1];
+        const culpado = m.match(/@([0-9a-f-]{36})/i)?.[1];
+        const p = culpado ? products.find((x) => x.id === culpado) : undefined;
+        const qual = p ? ` (${p.flavor || p.name})` : "";
         if (m.includes("estoque_livre_insuficiente")) {
           toast.error(
-            `Só ${quanto ?? 0} un. livres nesta filial — o resto está com os vendedores. Escolha de quem sai.`,
+            `Só ${quanto ?? 0} un. livres nesta filial${qual} — o resto está com os vendedores. Escolha de quem sai.`,
           );
         } else if (m.includes("estoque_vendedor_insuficiente")) {
-          toast.error(`Esse vendedor tem apenas ${quanto ?? 0} un. deste produto`);
+          toast.error(`Esse vendedor tem apenas ${quanto ?? 0} un.${qual}`);
         } else if (m.includes("vendedor_de_outra_filial")) {
           toast.error("Esse vendedor não é desta filial");
         } else if (m.includes("estoque_insuficiente")) {
-          toast.error("Estoque insuficiente nesta filial");
+          toast.error(`Estoque insuficiente nesta filial${qual}`);
         } else if (m.includes("mesma_filial")) {
           toast.error("Escolha uma filial diferente da atual");
         } else if (m.includes("nao_autorizado")) {
           toast.error("Você não tem acesso a uma das filiais");
         } else if (m.includes("quantidade_invalida")) {
-          toast.error("Quantidade inválida");
+          toast.error(`Quantidade inválida${qual}`);
+        } else if (m.includes("itens_demais")) {
+          toast.error("Transferência longa demais: separe em mais de uma viagem");
+        } else if (m.includes("itens_invalidos")) {
+          toast.error("Nenhum produto na transferência");
         } else {
           toast.error("Erro ao transferir");
         }
         return false;
       }
 
-      setStockTransfers((prev) => [mapStockTransfer(data), ...prev]);
+      // A tela monta a lista do que o BANCO gravou, nunca do que ela mandou.
+      const rows = ((data as any[]) ?? []).map(mapStockTransfer);
+      setStockTransfers((prev) => [...rows.reverse(), ...prev]);
       // A lista inteira: o destino também mudou, e o custo vem de outra RPC.
       setProducts(await fetchProductsList());
       // Saiu da caixa de um vendedor: a atribuição dele mudou junto, e é o que
       // a Distribuição e o catálogo dele leem.
-      if (t.fromSellerId) {
+      if (t.items.some((i) => i.fromSellerId)) {
         const { data: refreshed } = await supabase
           .from("product_assignments")
           .select("*")
           .order("created_at", { ascending: true });
         if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
       }
-      toast.success("Estoque transferido");
+      const un = rows.reduce((s, r) => s + r.quantity, 0);
+      toast.success(
+        rows.length > 1
+          ? `${un} un. de ${rows.length} sabores transferidas`
+          : "Estoque transferido",
+      );
       return true;
     },
-    [branchId, fetchProductsList],
+    [branchId, fetchProductsList, products],
   );
 
   const getTotalLossValue = useCallback(() => {

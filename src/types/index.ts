@@ -55,6 +55,12 @@ export interface StockTransfer {
    * caixa saíram as unidades acerta o total e erra a pessoa, em silêncio.
    */
   fromSellerId?: string;
+  /**
+   * A OPERAÇÃO de que esta linha faz parte: uma viagem leva vários sabores, e
+   * eles são um movimento só. Ausente nas linhas anteriores ao lote — que era
+   * exatamente o que elas eram, uma operação de um item.
+   */
+  batchId?: string;
   quantity: number;
   /** O custo com que a unidade saiu da origem, copiado no momento da saída. */
   unitCost: number;

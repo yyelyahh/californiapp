@@ -10,7 +10,7 @@ import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRang
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import PurchaseOrdersSection from "@/components/PurchaseOrdersSection";
-import BranchTransferSection from "@/components/BranchTransferSection";
+import BranchTransferSheet from "@/components/BranchTransferSheet";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
@@ -292,6 +292,12 @@ export default function StockEntryPage() {
 
           <div className="flex items-center gap-3">
             {!branchId && <BranchReadOnly className="text-right" />}
+          {/* Transferência entre filiais é ação ocasional: vive no cabeçalho,
+              ao lado da entrada, e tudo o que é dela (lançar e histórico)
+              acontece dentro do próprio painel. Como seção na coluna, o
+              histórico enchia a tela com uma linha por sabor transferido no
+              meio do caminho entre as compras e as entradas. */}
+          <BranchTransferSheet />
           <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
             <SheetTrigger asChild>
               {/* Em "Todas as filiais" não há para onde a entrada ir: a
@@ -422,7 +428,6 @@ export default function StockEntryPage() {
         </header>
 
         <PurchaseOrdersSection />
-        <BranchTransferSection />
 
         {/* ---------------- Busca e período ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
