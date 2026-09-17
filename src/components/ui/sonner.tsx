@@ -1,14 +1,21 @@
-import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+/**
+ * Tema FIXO em escuro, e não o do sistema.
+ *
+ * Havia aqui um `useTheme()` do next-themes, mas o projeto nunca montou o
+ * ThemeProvider que ele precisa — sem provider o hook cai no default e o tema
+ * saía "system" SEMPRE. Era uma dependência inteira para produzir uma
+ * constante, e a constante estava errada: o ERP é o Nocturne, escuro fixo, e a
+ * loja pública tem tema próprio (.storefront). Numa máquina com o sistema em
+ * tema claro o toast nascia claro em cima de uma tela escura.
+ */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       toastOptions={{
         classNames: {
