@@ -282,7 +282,7 @@ export default function BranchTransferSheet() {
             </div>
 
             {/* ---------------- Transferir ---------------- */}
-            <TabsContent value="transferir" className="mt-0 min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
+            <TabsContent value="transferir" className="mt-0 min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 overscroll-contain">
               {!branchId ? (
                 <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
                   Escolha uma filial para lançar. Em “Todas as filiais” o estoque da tela é a soma
@@ -499,7 +499,7 @@ export default function BranchTransferSheet() {
             </TabsContent>
 
             {/* ---------------- Histórico ---------------- */}
-            <TabsContent value="historico" className="mt-0 min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <TabsContent value="historico" className="mt-0 min-h-0 flex-1 overflow-y-auto px-5 py-4 overscroll-contain">
               {days.length === 0 ? (
                 <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
                   Nenhuma transferência registrada.

@@ -122,14 +122,14 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
       </SheetTrigger>
       {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja: o
           Radix porta o painel para o <body> e os tokens não chegam por herança. */}
-      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
         <NcSheetHeader
           eyebrow="Produtos"
           title="Cadastro rápido"
           description="Crie vários sabores de um mesmo modelo de uma só vez."
         />
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
           {/* Identificação */}
           <section className="space-y-3">
             <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Identificação</p>

@@ -211,7 +211,12 @@ function ConfirmOrderPopover({
         </div>
         <div className="nc-rule-top space-y-1.5 pt-2.5">
           <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Falta receber</p>
-          <div className="grid gap-1">
+          {/* `grid-cols-1` explícito pelo mesmo motivo do formulário em lote:
+              sem classe de coluna a faixa fica `auto` (max-content), e o
+              `.nc-btn` é `white-space: nowrap` — um rótulo longo como "Dinheiro
+              com <vendedor>" esticaria o popover, que é portado e não tem quem
+              o clipe. */}
+          <div className="grid grid-cols-1 gap-1">
             {ORDER_PAYMENT_CHOICES.filter(c => !c.paid).map(c => (
               <NcButton key={c.id} variant="ghost" className="justify-start" onClick={() => pick(c.id)}>{c.label}</NcButton>
             ))}

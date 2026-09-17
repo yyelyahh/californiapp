@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useMediaQuery } from "@/hooks/use-mobile";
 import AddProductDialog from "@/components/AddProductDialog";
 import ModelImagesDialog from "@/components/ModelImagesDialog";
 import ModelsSheet from "@/components/ModelsSheet";
@@ -62,6 +63,8 @@ export default function ProductsPage() {
   const { branchId } = useBranch();
   /** "Todas as filiais" é somente leitura: o estoque aqui é somado e o preço é o maior entre as cidades. */
   const readOnly = !branchId;
+  /** Abaixo do `sm` as ações de modelo saem do cabeçalho travado (ver `modelActions`). */
+  const compactHeader = useMediaQuery("(max-width: 639.98px)");
   const [search, setSearch] = useState("");
   const [lens, setLens] = useState<StockLens>(LENS_GERAL);
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
@@ -368,6 +371,37 @@ export default function ProductsPage() {
     setBulkMinForm({ brand: "", model: "", minStock: "" });
   };
 
+  /**
+   * As quatro ações que operam sobre um MODELO inteiro, e não sobre um sabor.
+   *
+   * Escritas uma vez e renderizadas no cabeçalho (a partir do `sm`) ou na faixa
+   * própria (abaixo dele). Os dois lugares nunca coexistem: cada uma destas
+   * peças guarda estado e abre o próprio painel, e duas instâncias vivas do
+   * `AddProductDialog` seriam dois painéis disputando o mesmo formulário — o
+   * mesmo motivo pelo qual o painel de filtros da tela de Vendas só é montado
+   * no celular.
+   *
+   * Preço e mínimo são da CIDADE: em "Todas" mudá-los significaria mudar dois
+   * números de uma vez, sem dizer qual. A foto do modelo continua de pé — ela é
+   * do catálogo compartilhado e vale na rede inteira. O `ModelsSheet` também
+   * fica sem `disabled` em "Todas": ali ele mostra o que cada cidade arquivou,
+   * que é leitura, e o próprio painel recusa a escrita.
+   */
+  const modelActions = (
+    <>
+      <NcButton onClick={() => setBulkOpen(true)} disabled={readOnly}>
+        <Tag size={13} />
+        <span className="hidden sm:inline">Preço por modelo</span><span className="sm:hidden">Preço</span>
+      </NcButton>
+      <NcButton onClick={() => setBulkMinOpen(true)} disabled={readOnly}>
+        <Package size={13} />
+        <span className="hidden sm:inline">Mínimo por modelo</span><span className="sm:hidden">Mínimo</span>
+      </NcButton>
+      <ModelsSheet />
+      <ModelImagesDialog />
+    </>
+  );
+
   return (
     // `/products` está em `fullBleedRoutes` (AppLayout): chega sem padding e sem
     // max-width, e é a tela que cuida do próprio espaçamento. Mesmo esqueleto do
@@ -382,31 +416,37 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Preço e mínimo são da CIDADE: em "Todas" mudá-los significaria
-                mudar dois números de uma vez, sem dizer qual. A foto do modelo
-                (`ModelImagesDialog`) continua de pé — ela é do catálogo
-                compartilhado, e vale na rede inteira. */}
             {readOnly && <BranchReadOnly />}
-            <NcButton onClick={() => setBulkOpen(true)} disabled={readOnly}>
-              <Tag size={13} />
-              <span className="hidden sm:inline">Preço por modelo</span><span className="sm:hidden">Preço</span>
-            </NcButton>
-            <NcButton onClick={() => setBulkMinOpen(true)} disabled={readOnly}>
-              <Package size={13} />
-              <span className="hidden sm:inline">Mínimo por modelo</span><span className="sm:hidden">Mínimo</span>
-            </NcButton>
-            {/* Fica ao lado dos outros dois de modelo, e sem `disabled` em
-                "Todas": ali ele ainda mostra o que cada cidade arquivou, que é
-                leitura — o próprio painel recusa a escrita. */}
-            <ModelsSheet />
-            <ModelImagesDialog />
+            {/* No celular só a ação PRIMÁRIA fica no cabeçalho travado. As
+                quatro de modelo descem para uma faixa própria, logo abaixo —
+                ver `modelActions`. */}
+            {!compactHeader && modelActions}
             <AddProductDialog disabled={readOnly} />
           </div>
         </header>
 
+        {/* Ações de modelo, no celular. Elas são episódicas — mudar preço de um
+            modelo inteiro, trocar a foto, arquivar o que saiu de linha — e no
+            cabeçalho `sticky` as cinco somavam ~500px, ou seja, três fileiras
+            PRESAS no topo comendo um sexto da janela em toda visita, ao lado de
+            uma lista que é o que a pessoa veio ler.
+
+            Aqui elas rolam junto com a página e saem da frente. O sobretítulo
+            existe porque um bloco de botões soltos entre o filtro e a lista não
+            diz a que se referem — e o que os une é serem todas por MODELO, não
+            por sabor, que é a distinção que a tela inteira faz. */}
+        {compactHeader && (
+          <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
+            <span className={cn(EYEBROW, "w-full")} style={{ color: "var(--nc-text-3)" }}>
+              Por modelo
+            </span>
+            {modelActions}
+          </div>
+        )}
+
         {/* ---------------- Busca e filtro ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
-          <div className="relative min-w-[200px] flex-1">
+          <div className="relative w-full min-w-[160px] flex-1 sm:w-auto">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--nc-text-3)" }} />
             <input
               type="text"
@@ -414,7 +454,10 @@ export default function ProductsPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               aria-label="Buscar produto"
-              className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px]"
+              // 16px no celular: abaixo disso o Safari do iOS dá zoom sozinho
+              // ao focar o campo. O `h-8` continua valendo no desktop; a altura
+              // de toque vem do `pointer: coarse` no index.css.
+              className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px] max-sm:text-[16px]"
             />
           </div>
           {/* De quem é o estoque que está na tela. Um Select e não chips: com
@@ -422,7 +465,7 @@ export default function ProductsPage() {
               nome de pessoa não tem forma curta — mesma razão do switch de
               filial na sidebar. */}
           <Select value={activeLens} onValueChange={setLens}>
-            <SelectTrigger className="h-8 w-auto min-w-[140px] text-[12.5px]" aria-label="De quem é o estoque">
+            <SelectTrigger className="h-8 w-auto min-w-[140px] text-[12.5px] max-sm:flex-1" aria-label="De quem é o estoque">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="nocturne">
@@ -430,7 +473,16 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
           {/* Mesmo realce do chip de período do Dashboard: contorno accent sobre
-              preenchimento de 10%. Um botão ligado no painel é sempre isso. */}
+              preenchimento de 10%. Um botão ligado no painel é sempre isso.
+
+              O RÓTULO É FIXO — "Zerados" — e quem diz o estado é o realce, não a
+              palavra. Ele alternava entre "Mostrar zerados (12)" e "Ocultar
+              zerados", que são larguras diferentes: a cada clique o botão
+              mudava de tamanho e empurrava os vizinhos, porque a busca ao lado
+              é `flex-1` e engolia ou devolvia a diferença. É o mesmo solavanco
+              que o "Limpar" já tinha, e que o resto do sistema resolve mantendo
+              a peça montada e estável. A contagem continua, entre parênteses,
+              porque ela é a informação — quantos estão fora da vista. */}
           <button
             type="button"
             onClick={() => setShowOutOfStock(v => !v)}
@@ -440,13 +492,20 @@ export default function ProductsPage() {
               ? { color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)", background: "color-mix(in srgb, var(--nc-accent) 10%, transparent)" }
               : { color: "var(--nc-text-2)", boxShadow: "inset 0 0 0 1px var(--nc-divider)" }}
           >
-            {showOutOfStock ? "Ocultar zerados" : `Mostrar zerados${outOfStockCount > 0 ? ` (${outOfStockCount})` : ""}`}
+            Zerados{outOfStockCount > 0 ? ` (${outOfStockCount})` : ""}
           </button>
-          {(search || activeLens !== LENS_GERAL) && (
-            <NcButton variant="ghost" onClick={() => { setSearch(""); setLens(LENS_GERAL); }}>
-              <X size={13} />Limpar
-            </NcButton>
-          )}
+          {/* Sempre montado, escondido com `invisible`: montar e desmontar
+              mudava a largura de todo mundo a cada clique. Mesma regra de
+              Vendas e Entrada — era o último lugar do sistema que ainda tinha
+              esse solavanco. */}
+          <NcButton
+            variant="ghost"
+            onClick={() => { setSearch(""); setLens(LENS_GERAL); }}
+            disabled={!search && activeLens === LENS_GERAL}
+            className={cn("ml-auto flex-none", !search && activeLens === LENS_GERAL && "invisible")}
+          >
+            <X size={13} />Limpar
+          </NcButton>
         </div>
 
         {/* ---------------- Marcas ---------------- */}

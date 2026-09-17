@@ -127,7 +127,7 @@ export default function ModelsSheet() {
             </div>
 
             {/* ---------------- Em desuso ---------------- */}
-            <TabsContent value="desuso" className="mt-0 min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <TabsContent value="desuso" className="mt-0 min-h-0 flex-1 overflow-y-auto px-5 py-4 overscroll-contain">
               {!branchId ? (
                 <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
                   Escolha uma filial para arquivar. Sair de linha é decisão de cada cidade — uma pode
@@ -193,7 +193,7 @@ export default function ModelsSheet() {
             </TabsContent>
 
             {/* ---------------- Arquivados ---------------- */}
-            <TabsContent value="arquivados" className="mt-0 min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <TabsContent value="arquivados" className="mt-0 min-h-0 flex-1 overflow-y-auto px-5 py-4 overscroll-contain">
               {archived.length === 0 ? (
                 <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
                   Nenhum modelo arquivado.

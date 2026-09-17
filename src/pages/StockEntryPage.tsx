@@ -293,7 +293,10 @@ export default function StockEntryPage() {
             <h1 className="mt-1 text-xl sm:text-[22px]">Entrada de estoque</h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* `flex-wrap`: com o aviso de "Todas as filiais" ao lado dos dois
+              botões a linha não cabe num telefone, e sem quebra ela empurrava o
+              cabeçalho para fora da largura. */}
+          <div className="flex flex-wrap items-center justify-end gap-3">
             {!branchId && <BranchReadOnly className="text-right" />}
           {/* Transferência entre filiais é ação ocasional: vive no cabeçalho,
               ao lado da entrada, e tudo o que é dela (lançar e histórico)
@@ -318,7 +321,9 @@ export default function StockEntryPage() {
                 description="Lance vários sabores de um mesmo modelo de uma só vez."
               />
 
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              {/* `overscroll-contain` no elemento que ROLA: sem ele, arrastar
+                  além do fim do formulário empurra a página atrás. */}
+              <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5">
                 {/* Identificação */}
                 <section className="space-y-3">
                   <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Identificação</p>
@@ -434,7 +439,12 @@ export default function StockEntryPage() {
 
         {/* ---------------- Busca e período ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
-          <div className="relative min-w-[200px] flex-1">
+          {/* No celular a busca toma a linha inteira e os dois campos de data
+              dividem outra. Os 132px cravados de cada data sobravam de um lado
+              e transbordavam do outro em 360px de tela; `flex-1` reparte o que
+              existe. 16px no campo de texto porque abaixo disso o Safari do iOS
+              dá zoom sozinho ao focar. */}
+          <div className="relative w-full min-w-[160px] flex-1 sm:w-auto">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--nc-text-3)" }} />
             <input
               type="text"
@@ -442,17 +452,17 @@ export default function StockEntryPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               aria-label="Buscar entrada por produto"
-              className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px]"
+              className="nc-input h-8 w-full pl-8 pr-2.5 text-[12.5px] max-sm:text-[16px]"
             />
           </div>
           <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 max-sm:w-full">
             <input
               type="date"
               value={dateFrom}
               onChange={e => { setDateFrom(e.target.value); setFPreset("custom"); }}
               aria-label="Data inicial"
-              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
             <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
             <input
@@ -460,7 +470,7 @@ export default function StockEntryPage() {
               value={dateTo}
               onChange={e => { setDateTo(e.target.value); setFPreset("custom"); }}
               aria-label="Data final"
-              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
           </div>
           {/* O "Limpar" fica SEMPRE na linha e só some da vista quando não há

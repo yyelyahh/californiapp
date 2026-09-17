@@ -297,13 +297,13 @@ export default function PurchaseOrdersSection() {
 
       {/* Histórico de compras recebidas */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Compras"
             title="Histórico de recebimentos"
             description="Compras que já viraram estoque."
           />
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overscroll-contain">
             {received.length === 0 ? (
               <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
                 Nenhuma compra recebida ainda.
@@ -317,13 +317,13 @@ export default function PurchaseOrdersSection() {
 
       {/* Nova compra */}
       <Sheet open={newOpen} onOpenChange={(v) => { setNewOpen(v); if (!v) resetNew(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Compras"
             title="Nova compra"
             description="Registre o pedido agora; os sabores entram no recebimento."
           />
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Pedido</p>
               <div className="grid grid-cols-2 gap-3">
@@ -426,13 +426,13 @@ export default function PurchaseOrdersSection() {
 
       {/* Receber compra */}
       <Sheet open={!!receiving} onOpenChange={(v) => { if (!v) setReceiving(null); }}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Compras"
             title={`Receber compra #${receiving?.number ?? ""}`}
             description="Some os sabores até bater com a quantidade esperada de cada produto."
           />
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebimento</p>
               <div className="grid grid-cols-2 gap-3">
