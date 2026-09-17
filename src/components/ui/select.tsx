@@ -66,7 +66,21 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        // O TETO DE LARGURA é o que impede o arrasto lateral no celular.
+        //
+        // A lista tinha `min-w` e nenhum `max-w`, e ela é PORTADA para o
+        // <body>: fora do <main>, que é quem tem `overflow-x-hidden`, e fora do
+        // painel, que teria o dele. Nada clipava. Com rótulo longo — e aqui
+        // todo seletor de produto escreve "<sabor> · <modelo> (<qtd>)" — a
+        // lista nascia mais larga que a tela e o DOCUMENTO inteiro passava a
+        // arrastar de lado enquanto ela estivesse aberta.
+        //
+        // `--radix-select-content-available-width` é o próprio Radix dizendo
+        // quanto espaço sobrou depois da detecção de colisão; é preferível a um
+        // `100vw` cravado porque já desconta o respiro da borda. O
+        // `calc(100vw-2rem)` fica de rede para o caso de a variável não existir
+        // (ela só é definida com `position="popper"`, que é o padrão aqui).
+        "relative z-50 max-h-96 min-w-[8rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,
@@ -79,7 +93,9 @@ const SelectContent = React.forwardRef<
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+            // `max-w` junto do `min-w`: sem ele o viewport ignora o teto do
+            // content e volta a esticar com o item mais longo.
+            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-content-available-width)]",
         )}
       >
         {children}
