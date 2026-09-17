@@ -78,7 +78,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const closeMenu = () => setMobileMenuOpen(false);
 
   return (
-    <div className="flex h-screen">
+    // `h-screen` é 100vh, e no celular 100vh NÃO é o que se vê: o Safari e o
+    // Chrome medem a altura com a barra de endereço recolhida, então a raiz
+    // nasce mais alta que a janela e o documento inteiro ganha uma sobra para
+    // arrastar — é o "a página se mexe sozinha" que não tem conteúdo nenhum
+    // embaixo. `dvh` é a altura VISÍVEL, que encolhe e cresce junto com a barra.
+    // O `supports` mantém o 100vh de pé em navegador que não conhece a unidade,
+    // onde o comportamento errado ainda é melhor que altura nenhuma.
+    <div className="flex h-screen supports-[height:100dvh]:h-[100dvh]">
       {/* ---------------- Sidebar (desktop) ----------------
           Mesmo papel do trilho direito do Dashboard, e por isso a mesma cor:
           --nc-rail. A separação do conteúdo é por TOM, não por borda — é assim

@@ -539,8 +539,14 @@ export default function StockEntryPage() {
                       >
                         {/* Mesma tabela do Produtos: cabeçalho em texto terciário
                             e peso normal, sem faixa de fundo e sem caixa alta. */}
+                        {/* O `min-w` só existe a partir do `sm`. Abaixo dele a
+                            coluna "Custo un." já sai da tabela, e as quatro que
+                            sobram (produto, qtd, total, excluir) cabem num
+                            telefone — o piso de 440px era o único motivo de a
+                            tabela arrastar de lado ali. O `overflow-x-auto`
+                            fica como rede, para o nome fora do comum. */}
                         <div className="overflow-x-auto px-3 pb-2 pt-1">
-                          <table className="w-full min-w-[440px] text-[13px]">
+                          <table className="w-full min-w-0 text-[13px] sm:min-w-[440px]">
                             <thead>
                               <tr style={{ color: "var(--nc-text-3)" }}>
                                 <th className="px-2 py-1.5 text-left font-normal">Produto</th>
@@ -560,7 +566,15 @@ export default function StockEntryPage() {
                                 return (
                                   <tr key={e.id} className="nc-row nc-hover group">
                                     <td className="px-2 py-1.5">
-                                      <div className="truncate">{label}</div>
+                                      {/* No celular o nome QUEBRA em vez de
+                                          cortar: `truncate` traz
+                                          `whitespace-nowrap`, e numa tabela de
+                                          largura automática isso faz a célula
+                                          reservar a linha inteira do texto —
+                                          um sabor de nome comprido empurrava a
+                                          tabela para fora da tela mesmo com o
+                                          piso de largura removido. */}
+                                      <div className="sm:truncate">{label}</div>
                                       {hasSubline && (
                                         <div className="mt-0.5 flex items-center gap-1.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
                                           {flavor && modelName && <span>{modelName}</span>}

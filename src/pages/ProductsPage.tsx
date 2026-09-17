@@ -545,15 +545,24 @@ export default function ProductsPage() {
                                     {/* Mesma tabela do "Repor agora": cabeçalho
                                         em texto terciário e peso normal, sem
                                         faixa de fundo e sem caixa alta. */}
+                                    {/* O `min-w` só existe a partir do `sm`, e
+                                        abaixo dele o LUCRO sai da tabela junto
+                                        com a compra. Não é corte por corte: o
+                                        lucro é a diferença entre os dois
+                                        preços, e com a compra já fora ele fica
+                                        sendo meia conta na tela. Com sabor,
+                                        estoque, venda e as ações sobra largura
+                                        para o nome — com cinco colunas sobravam
+                                        48px, que não dá nome nenhum. */}
                                     <div className="overflow-x-auto px-3 pb-2 pt-1">
-                                      <table className="w-full min-w-[440px] text-[13px]">
+                                      <table className="w-full min-w-0 text-[13px] sm:min-w-[440px]">
                                         <thead>
                                           <tr style={{ color: "var(--nc-text-3)" }}>
                                             <th className="px-2 py-1.5 text-left font-normal">Sabor</th>
                                             <th className="px-2 py-1.5 text-right font-normal">Estoque</th>
                                             <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Compra</th>
                                             <th className="px-2 py-1.5 text-right font-normal">Venda</th>
-                                            <th className="px-2 py-1.5 text-right font-normal">Lucro</th>
+                                            <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Lucro</th>
                                             <th className="w-[72px] px-2 py-1.5" />
                                           </tr>
                                         </thead>
@@ -937,7 +946,11 @@ function FlavorRow({
   return (
     <tr className="nc-row nc-hover group">
       <td className="px-2 py-1.5">
-        <span className="truncate">{p.flavor || p.name}</span>
+        {/* No celular o nome QUEBRA em vez de cortar: `truncate` traz
+            `whitespace-nowrap`, e numa tabela de largura automática isso faz a
+            célula reservar a linha inteira do texto, empurrando a tabela para
+            fora da tela mesmo sem piso de largura. */}
+        <span className="sm:truncate">{p.flavor || p.name}</span>
       </td>
       <td className="nc-num px-2 py-1.5 text-right font-medium" style={stockColor ? { color: stockColor } : undefined}>
         {p.stock}
@@ -960,7 +973,7 @@ function FlavorRow({
           </span>
         )}
       </td>
-      <td className="nc-num px-2 py-1.5 text-right" style={{ color: profitColor(profit) }}>
+      <td className="nc-num hidden px-2 py-1.5 text-right sm:table-cell" style={{ color: profitColor(profit) }}>
         {formatCurrency(profit)}
       </td>
       <td className="px-2 py-1">

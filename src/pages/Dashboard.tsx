@@ -449,14 +449,22 @@ export default function Dashboard() {
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-[13px]">
+                {/* Seis colunas não cabem num telefone, e o `min-w` de 560px
+                    virava arrasto lateral. Abaixo do `sm` saem "Vende/dia" e
+                    "Margem": o card responde UMA pergunta — quanto pedir hoje
+                    —, e ela se lê com estoque, quanto tempo dura e quanto
+                    pedir. As duas que saem são o porquê do número, e o porquê
+                    cabe na tela grande. A ordem ("Pedir" por último, e a lista
+                    ordenada por unidades a pedir) não muda: é ela que decide
+                    quem entra aqui. */}
+                <table className="w-full min-w-0 text-[13px] sm:min-w-[560px]">
                   <thead>
                     <tr style={{ color: "var(--nc-text-3)" }}>
                       <th className="px-2 py-1.5 text-left font-normal">Modelo</th>
                       <th className="px-2 py-1.5 text-right font-normal">Estoque</th>
-                      <th className="px-2 py-1.5 text-right font-normal">Vende/dia</th>
+                      <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Vende/dia</th>
                       <th className="px-2 py-1.5 text-right font-normal">Dura</th>
-                      <th className="px-2 py-1.5 text-right font-normal">Margem</th>
+                      <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Margem</th>
                       <th className="px-2 py-1.5 text-right font-normal">Pedir</th>
                     </tr>
                   </thead>
@@ -787,20 +795,23 @@ function RestockRow({ model }: { model: ModelStat }) {
   return (
     <tr className="nc-row">
       <td className="px-2 py-1.5">
-        <div className="flex items-center gap-2">
+        {/* `min-w-0` no flex e no nome: sem ele o `truncate` não tem contra o
+            que cortar, a célula reserva a linha inteira do texto e a tabela sai
+            da tela — o que se via como arrasto lateral no celular. */}
+        <div className="flex min-w-0 items-center gap-2">
           <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: dot }} />
-          <span className="truncate">{model.model}</span>
-          <span className="truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>{model.brand}</span>
+          <span className="min-w-0 truncate">{model.model}</span>
+          <span className="min-w-0 truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>{model.brand}</span>
         </div>
       </td>
       <td className="px-2 py-1.5 text-right nc-num">{model.stock} un.</td>
-      <td className="px-2 py-1.5 text-right nc-num">
+      <td className="hidden px-2 py-1.5 text-right nc-num sm:table-cell">
         {model.perDay.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </td>
       <td className="px-2 py-1.5 text-right nc-num" style={daysColor ? { color: daysColor } : undefined}>
         {formatDays(model.daysLeft)}
       </td>
-      <td className="px-2 py-1.5 text-right nc-num">{formatPct(model.marginPct)}</td>
+      <td className="hidden px-2 py-1.5 text-right nc-num sm:table-cell">{formatPct(model.marginPct)}</td>
       {/* Quanto pedir, já descontado o que está a caminho — e o abatimento
           aparece embaixo, senão o número menor não teria explicação. */}
       <td className="px-2 py-1.5 text-right">
