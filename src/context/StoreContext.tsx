@@ -93,19 +93,19 @@ async function addBranchStock(
   seed: { unitCost?: number; salePrice?: number; minStock?: number } = {},
 ): Promise<boolean> {
   const { data: existing } = await supabase
-    .from("product_branch" as any)
+    .from("product_branch")
     .select("stock")
     .eq("product_id", productId)
     .eq("branch_id", branchId)
     .maybeSingle();
 
   if (existing) {
-    const next = Math.max(0, Number((existing as any).stock ?? 0) + quantity);
-    const updates: Record<string, unknown> = { stock: next };
+    const next = Math.max(0, Number(existing?.stock ?? 0) + quantity);
+    const updates: { stock: number; purchase_price?: number } = { stock: next };
     if (seed.unitCost !== undefined) updates.purchase_price = seed.unitCost;
     const { error } = await supabase
-      .from("product_branch" as any)
-      .update(updates as any)
+      .from("product_branch")
+      .update(updates)
       .eq("product_id", productId)
       .eq("branch_id", branchId);
     if (error) {
@@ -115,14 +115,14 @@ async function addBranchStock(
     return true;
   }
 
-  const { error } = await supabase.from("product_branch" as any).insert({
+  const { error } = await supabase.from("product_branch").insert({
     product_id: productId,
     branch_id: branchId,
     stock: Math.max(0, quantity),
     purchase_price: seed.unitCost ?? 0,
     sale_price: seed.salePrice ?? 0,
     min_stock: seed.minStock ?? 0,
-  } as any);
+  });
   if (error) {
     toast.error("Erro ao cadastrar o produto nesta filial");
     return false;
@@ -318,17 +318,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * etiqueta.
    */
   const fetchProductsList = useCallback(async (): Promise<Product[]> => {
-    const { data, error } = await supabase.rpc("get_branch_products" as any, {
+    const { data, error } = await supabase.rpc("get_branch_products", {
       p_branch_id: branchId,
-    } as any);
+    });
     if (error) throw error;
     if (!data) return [];
     let costs: Record<string, number> = {};
     if (isAdmin) {
-      const { data: c } = await supabase.rpc("get_product_costs" as any, { p_branch_id: branchId } as any);
-      if (c) costs = Object.fromEntries((c as any[]).map((r) => [r.product_id, Number(r.purchase_price)]));
+      const { data: c } = await supabase.rpc("get_product_costs", { p_branch_id: branchId });
+      if (c) costs = Object.fromEntries(c.map((r) => [r.product_id, Number(r.purchase_price)]));
     }
-    return (data as any[]).map((r: any) => ({
+    return data.map((r: any) => ({
       id: r.id,
       name: r.name,
       brand: r.brand,
@@ -351,6 +351,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * minhas", nunca "todas as do banco".
    */
   const scoped = useCallback(
+    // O `as any` aqui é CARREGADOR, não resíduo de tipo faltando. Com a
+    // restrição escrita à mão (`T extends { eq(...): T }`) o TypeScript tenta
+    // resolver o tipo do query builder do supabase-js, que é recursivo, e
+    // estoura com "Type instantiation is excessively deep" em toda chamada de
+    // `scoped` — dez erros de uma vez, medidos. O genérico externo preserva o
+    // tipo de quem chama; o que se perde é só a checagem de que o builder tem
+    // `.eq`, e todo uso desta função passa um builder.
     <T,>(q: T): T => (branchId ? ((q as any).eq("branch_id", branchId) as T) : q),
     [branchId],
   );
@@ -363,13 +370,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    */
   const fetchTransfers = useCallback(async () => {
     let q: any = supabase
-      .from("stock_transfers" as any)
+      .from("stock_transfers")
       .select("*")
       .order("date", { ascending: false })
       .limit(200);
     if (branchId) q = q.or(`from_branch_id.eq.${branchId},to_branch_id.eq.${branchId}`);
     const { data } = await q;
-    if (data) setStockTransfers((data as any[]).map(mapStockTransfer));
+    if (data) setStockTransfers(data.map(mapStockTransfer));
   }, [branchId]);
 
   /**
@@ -380,8 +387,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * — não há o que paginar.
    */
   const fetchArchivedModels = useCallback(async () => {
-    const { data } = await supabase.from("archived_models" as any).select("*");
-    if (data) setArchivedModels((data as any[]).map(mapArchivedModel));
+    const { data } = await supabase.from("archived_models").select("*");
+    if (data) setArchivedModels(data.map(mapArchivedModel));
   }, []);
 
   useEffect(() => {
@@ -400,12 +407,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         fetchProductsList(),
         scoped(supabase.from("stock_entries").select("*")).order("created_at", { ascending: true }),
         scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }),
-        scoped(supabase.from("sellers" as any).select("*")).order("created_at", { ascending: true }),
+        scoped(supabase.from("sellers").select("*")).order("created_at", { ascending: true }),
         supabase
-          .from("product_assignments" as any)
+          .from("product_assignments")
           .select("*")
           .order("created_at", { ascending: true }),
-        scoped(supabase.from("stock_losses" as any).select("*")).order("created_at", { ascending: true }),
+        scoped(supabase.from("stock_losses").select("*")).order("created_at", { ascending: true }),
+      // Sem o `as any` o TypeScript resolve a tupla inteira do Promise.all
+      // contra os tipos recursivos do query builder e estoura com "Type
+      // instantiation is excessively deep" — o mesmo motivo do `scoped` acima.
+      // Cada `.data` é mapeado logo abaixo por uma função que valida a forma da
+      // linha, então o que se perde aqui é reposto ali.
       ])) as any;
       if (cancelled) return;
       setProducts(prodList);
@@ -414,9 +426,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       void fetchArchivedModels();
       if (stockRes.data) setStockEntries(stockRes.data.map(mapStockEntry));
       if (salesRes.data) setSales(salesRes.data.map(mapSale));
-      if (selRes.data) setSellers((selRes.data as any[]).map(mapSeller));
-      if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
-      if (slRes?.data) setStockLosses((slRes.data as any[]).map(mapStockLoss));
+      if (selRes.data) setSellers(selRes.data.map(mapSeller));
+      if (paRes.data) setProductAssignments(paRes.data.map(mapProductAssignment));
+      if (slRes?.data) setStockLosses(slRes.data.map(mapStockLoss));
     };
 
     // Wave 2: dados financeiros/administrativos, carregados logo em seguida sem travar a tela.
@@ -442,61 +454,66 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         supabase.from("dividends").select("*").order("created_at", { ascending: true }),
         supabase.from("partners").select("*").order("created_at", { ascending: true }),
         supabase
-          .from("seller_debt_payments" as any)
+          .from("seller_debt_payments")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("partner_payments" as any)
+          .from("partner_payments")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("seller_manual_debts" as any)
+          .from("seller_manual_debts")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("commission_payments" as any)
+          .from("commission_payments")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("pro_labore_payments" as any)
+          .from("pro_labore_payments")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("partner_contributions" as any)
+          .from("partner_contributions")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("loans" as any)
+          .from("loans")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("loan_payments" as any)
+          .from("loan_payments")
           .select("*")
           .order("created_at", { ascending: true }),
         supabase
-          .from("financial_events" as any)
+          .from("financial_events")
           .select("*")
           .order("event_date", { ascending: true }),
         supabase
-          .from("purchase_orders" as any)
+          .from("purchase_orders")
           .select("*, purchase_order_items(*)")
           .order("created_at", { ascending: false }),
+      // Sem o `as any` o TypeScript resolve a tupla inteira do Promise.all
+      // contra os tipos recursivos do query builder e estoura com "Type
+      // instantiation is excessively deep" — o mesmo motivo do `scoped` acima.
+      // Cada `.data` é mapeado logo abaixo por uma função que valida a forma da
+      // linha, então o que se perde aqui é reposto ali.
       ])) as any;
       if (cancelled) return;
       if (expRes.data) setExpenses(expRes.data.map(mapExpense));
       if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
       if (divRes.data) setDividends(divRes.data.map(mapDividend));
       if (partRes.data) setPartners(partRes.data.map(mapPartner));
-      if (sdpRes.data) setSellerDebtPayments((sdpRes.data as any[]).map(mapSellerDebtPayment));
-      if (ppRes.data) setPartnerPayments((ppRes.data as any[]).map(mapPartnerPayment));
-      if (smdRes.data) setSellerManualDebts((smdRes.data as any[]).map(mapSellerManualDebt));
-      if (cpRes?.data) setCommissionPayments((cpRes.data as any[]).map(mapCommissionPayment));
-      if (plRes?.data) setProLaborePayments((plRes.data as any[]).map(mapProLaborePayment));
-      if (pcRes?.data) setPartnerContributions((pcRes.data as any[]).map(mapPartnerContribution));
-      if (loanRes?.data) setLoans((loanRes.data as any[]).map(mapLoan));
-      if (lpRes?.data) setLoanPayments((lpRes.data as any[]).map(mapLoanPayment));
-      if (feRes?.data) setFinancialEvents((feRes.data as any[]).map(mapFinancialEvent));
-      if (poRes?.data) setPurchaseOrdersRaw((poRes.data as any[]).map(mapPurchaseOrder));
+      if (sdpRes.data) setSellerDebtPayments(sdpRes.data.map(mapSellerDebtPayment));
+      if (ppRes.data) setPartnerPayments(ppRes.data.map(mapPartnerPayment));
+      if (smdRes.data) setSellerManualDebts(smdRes.data.map(mapSellerManualDebt));
+      if (cpRes?.data) setCommissionPayments(cpRes.data.map(mapCommissionPayment));
+      if (plRes?.data) setProLaborePayments(plRes.data.map(mapProLaborePayment));
+      if (pcRes?.data) setPartnerContributions(pcRes.data.map(mapPartnerContribution));
+      if (loanRes?.data) setLoans(loanRes.data.map(mapLoan));
+      if (lpRes?.data) setLoanPayments(lpRes.data.map(mapLoanPayment));
+      if (feRes?.data) setFinancialEvents(feRes.data.map(mapFinancialEvent));
+      if (poRes?.data) setPurchaseOrdersRaw(poRes.data.map(mapPurchaseOrder));
       // Fora do Promise.all porque o filtro é um OR entre duas colunas, e a
       // consulta é só de admin (a RLS de stock_transfers exige o papel).
       if (isAdmin) await fetchTransfers();
@@ -526,10 +543,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (feTimer) clearTimeout(feTimer);
       feTimer = setTimeout(async () => {
         const { data } = await supabase
-          .from("financial_events" as any)
+          .from("financial_events")
           .select("*")
           .order("event_date", { ascending: true });
-        if (data && !cancelled) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+        if (data && !cancelled) setFinancialEvents(data.map(mapFinancialEvent));
       }, 400);
     };
 
@@ -866,7 +883,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     freightCost: Number(r.freight_cost ?? 0),
     receivedAt: r.received_at ?? undefined,
     createdAt: r.created_at,
-    items: ((r.purchase_order_items ?? []) as any[]).map(
+    items: (r.purchase_order_items ?? []).map(
       (i): PurchaseOrderItem => ({
         id: i.id,
         purchaseOrderId: i.purchase_order_id,
@@ -875,7 +892,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         expectedQuantity: Number(i.expected_quantity ?? 0),
         unitPrice: Number(i.unit_price ?? 0),
         receivedFlavors: Array.isArray(i.received_flavors)
-          ? (i.received_flavors as any[]).map((f) => ({
+          ? i.received_flavors.map((f) => ({
               flavor: String(f.flavor ?? ""),
               quantity: Number(f.quantity ?? 0),
             }))
@@ -898,23 +915,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const { data, error } = await supabase
-        .from("purchase_orders" as any)
+        .from("purchase_orders")
         .insert({
           date: o.date,
           notes: o.notes ?? null,
           status: "pending",
           paid_amount: items.reduce((s, i) => s + (i.unitPrice ?? 0) * i.expectedQuantity, 0),
           freight_cost: o.freightCost ?? 0,
-        } as any)
+        })
         .select("*")
         .single();
       if (error || !data) {
         toast.error("Erro ao criar compra");
         return;
       }
-      const orderId = (data as any).id;
+      const orderId = data.id;
       const { data: itemRows, error: itemErr } = await supabase
-        .from("purchase_order_items" as any)
+        .from("purchase_order_items")
         .insert(
           items.map((i) => ({
             purchase_order_id: orderId,
@@ -923,19 +940,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             expected_quantity: i.expectedQuantity,
             unit_price: i.unitPrice ?? 0,
             received_flavors: [],
-          })) as any,
+          })),
         )
         .select("*");
       if (itemErr) {
         await supabase
-          .from("purchase_orders" as any)
+          .from("purchase_orders")
           .delete()
           .eq("id", orderId);
         toast.error("Erro ao salvar itens da compra");
         return;
       }
       setPurchaseOrdersRaw((prev) => [
-        mapPurchaseOrder({ ...(data as any), purchase_order_items: itemRows ?? [] }),
+        mapPurchaseOrder({ ...data, purchase_order_items: itemRows ?? [] }),
         ...prev,
       ]);
       toast.success("Compra registrada (aguardando recebimento)");
@@ -945,7 +962,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deletePurchaseOrder = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("purchase_orders" as any)
+      .from("purchase_orders")
       .delete()
       .eq("id", id);
     if (error) {
@@ -1014,7 +1031,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       const identity = new Map<string, { id: string; salePrice: number; minStock: number }>();
-      for (const row of (catalog ?? []) as any[]) {
+      for (const row of catalog ?? []) {
         const known = products.find((p) => p.id === row.id);
         identity.set(`${row.brand}|${row.model || ""}|${row.flavor}`.toLowerCase(), {
           id: row.id,
@@ -1029,12 +1046,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       // Claim atômico do recebimento
       const { data: claimed, error: claimErr } = await supabase
-        .from("purchase_orders" as any)
-        .update({ status: "received", received_at: new Date().toISOString() } as any)
+        .from("purchase_orders")
+        .update({ status: "received", received_at: new Date().toISOString() })
         .eq("id", id)
         .eq("status", "pending")
         .select("*");
-      if (claimErr || !claimed || (claimed as any[]).length === 0) {
+      if (claimErr || !claimed || claimed.length === 0) {
         toast.error("Esta compra já foi recebida");
         return false;
       }
@@ -1069,7 +1086,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 brand: item.brand,
                 model: item.model,
                 flavor,
-              } as any)
+              })
               .select("id")
               .single();
             if (prodErr || !created) {
@@ -1077,7 +1094,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               continue;
             }
             product = {
-              id: (created as any).id,
+              id: created.id,
               salePrice: input.salePrice ?? reference?.salePrice ?? 0,
               minStock: reference?.minStock ?? 0,
             };
@@ -1099,7 +1116,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               // sempre, ele passaria a apontar para a compra errada — a data da
               // compra não se mexe. (Entradas antigas guardam o "#N" de antes.)
               notes: `Compra de ${formatDateBR(order.date)}`,
-            } as any)
+            })
             .select()
             .single();
           if (entryErr || !entry) {
@@ -1121,12 +1138,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           });
         }
         await supabase
-          .from("purchase_order_items" as any)
+          .from("purchase_order_items")
           .update({
             received_flavors: input.flavors
               .filter((f) => f.flavor.trim())
               .map((f) => ({ ...f, branchId: f.branchId ?? branchId })),
-          } as any)
+          })
           .eq("id", item.id);
       }
 
@@ -1173,25 +1190,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           model: p.model,
           flavor: p.flavor,
           image_url: p.imageUrl || null,
-        } as any)
+        })
         .select("id")
         .single();
       if (error || !data) {
         toast.error("Erro ao adicionar produto");
         return;
       }
-      const { error: pbErr } = await supabase.from("product_branch" as any).insert({
-        product_id: (data as any).id,
+      const { error: pbErr } = await supabase.from("product_branch").insert({
+        product_id: data.id,
         branch_id: branchId,
         purchase_price: p.purchasePrice,
         sale_price: p.salePrice,
         stock: 0,
         min_stock: p.minStock ?? 0,
-      } as any);
+      });
       if (pbErr) {
         // A identidade sem preço é um produto que não existe em cidade
         // nenhuma: desfaz, em vez de deixar um sabor fantasma no catálogo.
-        await supabase.from("products").delete().eq("id", (data as any).id);
+        await supabase.from("products").delete().eq("id", data.id);
         toast.error("Erro ao cadastrar o produto nesta filial");
         return;
       }
@@ -1229,7 +1246,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (Object.keys(branchFields).length > 0) {
         if (!requireBranch(branchId)) return;
         const { error } = await supabase
-          .from("product_branch" as any)
+          .from("product_branch")
           .update(branchFields)
           .eq("product_id", id)
           .eq("branch_id", branchId);
@@ -1290,15 +1307,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (models: { brand: string; model: string }[]): Promise<boolean> => {
       if (!requireBranch(branchId)) return false;
       if (models.length === 0) return false;
-      const { error } = await supabase.from("archived_models" as any).insert(
-        models.map((m) => ({ branch_id: branchId, brand: m.brand, model: m.model })) as any,
+      const { error } = await supabase.from("archived_models").insert(
+        // `brand_key`/`model_key` são NOT NULL e o tipo gerado os exige, mas
+        // quem os preenche é o gatilho `archived_model_guard` — o gerador lê o
+        // esquema, não os gatilhos. Mandar as chaves daqui duplicaria a
+        // normalização (lower/btrim) que o banco é dono, e é justamente essa
+        // duplicação que abriria a porta para uma chave que não corresponde ao
+        // texto. O cast fica, com nome de coluna conferido acima: o resto do
+        // payload é verificado normalmente.
+        models.map((m) => ({ branch_id: branchId, brand: m.brand, model: m.model })) as never,
       );
       if (error) {
         // O gatilho manda junto quanto sobrou e QUAL modelo travou — num lote
         // de dez, "ainda tem estoque" sem nome não diria o que fazer.
         const stuck = /modelo_com_estoque:(\d+)@(.+)/.exec(error.message || "");
         if (stuck) toast.error(`${stuck[2]} ainda tem ${stuck[1]} un. — venda ou dê baixa antes de arquivar`);
-        else if ((error as any).code === "23505") toast.error("Esse modelo já está arquivado nesta filial");
+        else if (error.code === "23505") toast.error("Esse modelo já está arquivado nesta filial");
         else toast.error("Erro ao arquivar");
         return false;
       }
@@ -1314,7 +1338,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (brand: string, model: string): Promise<boolean> => {
       if (!requireBranch(branchId)) return false;
       const { error } = await supabase
-        .from("archived_models" as any)
+        .from("archived_models")
         .delete()
         .eq("branch_id", branchId)
         // Pelas colunas normalizadas: é o que o gatilho gravou, e é o que a
@@ -1347,7 +1371,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           branch_id: branchId,
           date: e.date,
           notes: e.notes,
-        } as any)
+        })
         .select()
         .single();
       if (error) {
@@ -1438,7 +1462,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const unitCost = l.unitCost ?? product.purchasePrice;
       const totalCost = unitCost * l.quantity;
       const { data, error } = await supabase
-        .from("stock_losses" as any)
+        .from("stock_losses")
         .insert({
           product_id: l.productId,
           quantity: l.quantity,
@@ -1480,7 +1504,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .from("product_assignments")
           .select("*")
           .order("created_at", { ascending: true });
-        if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
+        if (refreshed) setProductAssignments(refreshed.map(mapProductAssignment));
       }
 
       toast.success("Perda registrada");
@@ -1492,7 +1516,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (id: string) => {
       const loss = stockLosses.find((l) => l.id === id);
       const { error } = await supabase
-        .from("stock_losses" as any)
+        .from("stock_losses")
         .delete()
         .eq("id", id);
       if (error) {
@@ -1537,7 +1561,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             .from("product_assignments")
             .select("*")
             .order("created_at", { ascending: true });
-          if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
+          if (refreshed) setProductAssignments(refreshed.map(mapProductAssignment));
         }
       }
     },
@@ -1566,7 +1590,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!requireBranch(branchId)) return false;
       if (t.items.length === 0) return false;
 
-      const { data, error } = await supabase.rpc("transfer_branch_stock_batch" as any, {
+      const { data, error } = await supabase.rpc("transfer_branch_stock_batch", {
         p_from_branch_id: branchId,
         p_to_branch_id: t.toBranchId,
         p_items: t.items.map((i) => ({
@@ -1576,7 +1600,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         })),
         p_date: t.date,
         p_notes: t.notes ?? null,
-      } as any);
+      });
 
       if (error) {
         const m = error.message ?? "";
@@ -1615,7 +1639,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
 
       // A tela monta a lista do que o BANCO gravou, nunca do que ela mandou.
-      const rows = ((data as any[]) ?? []).map(mapStockTransfer);
+      const rows = (data ?? []).map(mapStockTransfer);
       setStockTransfers((prev) => [...rows.reverse(), ...prev]);
       // A lista inteira: o destino também mudou, e o custo vem de outra RPC.
       setProducts(await fetchProductsList());
@@ -1626,7 +1650,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .from("product_assignments")
           .select("*")
           .order("created_at", { ascending: true });
-        if (refreshed) setProductAssignments((refreshed as any[]).map(mapProductAssignment));
+        if (refreshed) setProductAssignments(refreshed.map(mapProductAssignment));
       }
       const un = rows.reduce((s, r) => s + r.quantity, 0);
       toast.success(
@@ -1649,7 +1673,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const saleType = s.type || "venda";
       if (!requireBranch(branchId)) return;
 
-      const { data, error } = await supabase.rpc("create_sale" as any, {
+      const { data, error } = await supabase.rpc("create_sale", {
         p_product_id: s.productId,
         p_quantity: s.quantity,
         p_unit_price: s.unitPrice,
@@ -1664,7 +1688,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // CONFERIDO; sem vendedor (venda manual, retirada) é este aqui que
         // manda. Nos dois casos quem decide é o banco.
         p_branch_id: branchId,
-      } as any);
+      });
 
       if (error) {
         if (error.message.includes("estoque_insuficiente")) {
@@ -1697,7 +1721,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .select("*")
           .order("created_at", { ascending: true });
         if (refreshedAssignments) {
-          setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
+          setProductAssignments(refreshedAssignments.map(mapProductAssignment));
         }
       }
     },
@@ -1769,7 +1793,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             .select("*")
             .order("created_at", { ascending: true });
           if (refreshedAssignments) {
-            setProductAssignments((refreshedAssignments as any[]).map(mapProductAssignment));
+            setProductAssignments(refreshedAssignments.map(mapProductAssignment));
           }
         }
       }
@@ -1788,7 +1812,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         amount: e.amount,
         date: e.date,
         branch_id: branchId,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -1898,7 +1922,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         name: p.name,
         percentage: p.percentage,
         monthly_pro_labore: p.monthlyProLabore ?? 0,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -1933,14 +1957,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Partner Payments ----
   const addPartnerPayment = useCallback(async (p: Omit<PartnerPayment, "id">) => {
     const { data, error } = await supabase
-      .from("partner_payments" as any)
+      .from("partner_payments")
       .insert({
         partner_id: p.partnerId,
         month: p.month,
         amount: p.amount,
         date: p.date,
         notes: p.notes,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -1953,7 +1977,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deletePartnerPayment = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("partner_payments" as any)
+      .from("partner_payments")
       .delete()
       .eq("id", id);
     if (error) {
@@ -1984,12 +2008,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (s: Omit<Seller, "id" | "createdAt">) => {
       if (!requireBranch(branchId)) return;
       const { data, error } = await supabase
-        .from("sellers" as any)
+        .from("sellers")
         .insert({
           name: s.name,
           debt_percentage: s.debtPercentage ?? 10,
           branch_id: branchId,
-        } as any)
+        })
         .select()
         .single();
       if (error) {
@@ -2013,7 +2037,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // seria a mesma regra escrita em dois lugares — o dia em que divergissem, a
     // tela mostraria um link que não existe.
     const { data, error } = await supabase
-      .from("sellers" as any)
+      .from("sellers")
       .update(dbUpdates)
       .eq("id", id)
       .select()
@@ -2024,7 +2048,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // fazer; "erro ao atualizar" não diria.
       if ((error.message || "").includes("slug_invalido")) {
         toast.error("Use só letras, números e hífen — de 2 a 32 caracteres");
-      } else if ((error as any).code === "23505") {
+      } else if (error.code === "23505") {
         toast.error("Esse apelido já é de outro vendedor");
       } else {
         toast.error("Erro ao atualizar vendedor");
@@ -2037,7 +2061,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSeller = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("sellers" as any)
+      .from("sellers")
       .delete()
       .eq("id", id);
     if (error) {
@@ -2123,7 +2147,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProductAssignment = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("product_assignments" as any)
+      .from("product_assignments")
       .delete()
       .eq("id", id);
     if (error) {
@@ -2182,14 +2206,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Seller Debt Payments ----
   const addSellerDebtPayment = useCallback(async (p: Omit<SellerDebtPayment, "id">) => {
     const { data, error } = await supabase
-      .from("seller_debt_payments" as any)
+      .from("seller_debt_payments")
       .insert({
         seller_id: p.sellerId,
         sale_id: p.saleId || null,
         amount: p.amount,
         date: p.date,
         notes: p.notes,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -2201,7 +2225,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSellerDebtPayment = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("seller_debt_payments" as any)
+      .from("seller_debt_payments")
       .delete()
       .eq("id", id);
     if (error) {
@@ -2214,13 +2238,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Seller Manual Debts ----
   const addSellerManualDebt = useCallback(async (d: Omit<SellerManualDebt, "id">) => {
     const { data, error } = await supabase
-      .from("seller_manual_debts" as any)
+      .from("seller_manual_debts")
       .insert({
         seller_id: d.sellerId,
         amount: d.amount,
         date: d.date,
         notes: d.notes,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -2233,7 +2257,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSellerManualDebt = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("seller_manual_debts" as any)
+      .from("seller_manual_debts")
       .delete()
       .eq("id", id);
     if (error) {
@@ -2246,13 +2270,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Commission Payments ----
   const addCommissionPayment = useCallback(async (p: Omit<CommissionPayment, "id">) => {
     const { data, error } = await supabase
-      .from("commission_payments" as any)
+      .from("commission_payments")
       .insert({
         seller_id: p.sellerId,
         amount: p.amount,
         date: p.date,
         notes: p.notes,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -2265,7 +2289,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCommissionPayment = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("commission_payments" as any)
+      .from("commission_payments")
       .delete()
       .eq("id", id);
     if (error) {
@@ -2278,13 +2302,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Pro-labore Payments ----
   const addProLaborePayment = useCallback(async (p: Omit<ProLaborePayment, "id">) => {
     const { data, error } = await supabase
-      .from("pro_labore_payments" as any)
+      .from("pro_labore_payments")
       .insert({
         partner_id: p.partnerId,
         amount: p.amount,
         date: p.date,
         notes: p.notes,
-      } as any)
+      })
       .select()
       .single();
     if (error) {
@@ -2297,7 +2321,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProLaborePayment = useCallback(async (id: string) => {
     const { error } = await supabase
-      .from("pro_labore_payments" as any)
+      .from("pro_labore_payments")
       .delete()
       .eq("id", id);
     if (error) {
@@ -2385,36 +2409,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Novo modelo financeiro ----
   const refreshFinancialEvents = useCallback(async () => {
     const { data } = await supabase
-      .from("financial_events" as any)
+      .from("financial_events")
       .select("*")
       .order("event_date", { ascending: true });
-    if (data) setFinancialEvents((data as any[]).map(mapFinancialEvent));
+    if (data) setFinancialEvents(data.map(mapFinancialEvent));
   }, []);
 
   const refreshSales = useCallback(async () => {
     const [salesRes, paRes, prodList] = await Promise.all([
       scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }),
       supabase
-        .from("product_assignments" as any)
+        .from("product_assignments")
         .select("*")
         .order("created_at", { ascending: true }),
       fetchProductsList(),
     ]);
-    if (salesRes.data) setSales((salesRes.data as any[]).map(mapSale));
-    if (paRes.data) setProductAssignments((paRes.data as any[]).map(mapProductAssignment));
+    if (salesRes.data) setSales(salesRes.data.map(mapSale));
+    if (paRes.data) setProductAssignments(paRes.data.map(mapProductAssignment));
     if (prodList) setProducts(prodList);
   }, [fetchProductsList, scoped]);
 
   const addPartnerContribution = useCallback(
     async (c: Omit<PartnerContribution, "id" | "createdAt">) => {
       const { data, error } = await supabase
-        .from("partner_contributions" as any)
+        .from("partner_contributions")
         .insert({
           partner_id: c.partnerId,
           amount: c.amount,
           date: c.date,
           notes: c.notes,
-        } as any)
+        })
         .select()
         .single();
       if (error) {
@@ -2431,7 +2455,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const deletePartnerContribution = useCallback(
     async (id: string) => {
       const { error } = await supabase
-        .from("partner_contributions" as any)
+        .from("partner_contributions")
         .delete()
         .eq("id", id);
       if (error) {
@@ -2447,14 +2471,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const addLoan = useCallback(
     async (l: Omit<Loan, "id" | "createdAt">) => {
       const { data, error } = await supabase
-        .from("loans" as any)
+        .from("loans")
         .insert({
           lender_name: l.lenderName,
           principal: l.principal,
           interest_amount: l.interestAmount ?? 0,
           received_date: l.receivedDate,
           notes: l.notes,
-        } as any)
+        })
         .select()
         .single();
       if (error) {
@@ -2477,7 +2501,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (updates.receivedDate !== undefined) dbUpdates.received_date = updates.receivedDate;
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
       const { error } = await supabase
-        .from("loans" as any)
+        .from("loans")
         .update(dbUpdates)
         .eq("id", id);
       if (error) {
@@ -2493,7 +2517,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const deleteLoan = useCallback(
     async (id: string) => {
       const { error } = await supabase
-        .from("loans" as any)
+        .from("loans")
         .delete()
         .eq("id", id);
       if (error) {
@@ -2510,14 +2534,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const addLoanPayment = useCallback(
     async (p: Omit<LoanPayment, "id" | "createdAt">) => {
       const { data, error } = await supabase
-        .from("loan_payments" as any)
+        .from("loan_payments")
         .insert({
           loan_id: p.loanId,
           principal_amount: p.principalAmount ?? 0,
           interest_amount: p.interestAmount ?? 0,
           date: p.date,
           notes: p.notes,
-        } as any)
+        })
         .select()
         .single();
       if (error) {
@@ -2534,7 +2558,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const deleteLoanPayment = useCallback(
     async (id: string) => {
       const { error } = await supabase
-        .from("loan_payments" as any)
+        .from("loan_payments")
         .delete()
         .eq("id", id);
       if (error) {

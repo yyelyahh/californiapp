@@ -88,7 +88,7 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       const { data, error } = await supabase
-        .from("branches" as any)
+        .from("branches")
         .select("*")
         .eq("active", true)
         .order("created_at", { ascending: true });
@@ -96,7 +96,7 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
 
       const list: Branch[] = error || !data
         ? []
-        : (data as any[]).map(r => ({
+        : data.map(r => ({
             id: r.id,
             name: r.name,
             active: r.active !== false,
