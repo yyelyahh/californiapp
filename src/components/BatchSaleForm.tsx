@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +11,7 @@ import { AnimatePresence, motion } from "motion/react";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { formatCurrency } from "@/lib/currency";
+import { NcButton } from "@/components/nocturne";
 import { sellersWithAssignedStock } from "@/lib/sellers-with-stock";
 
 type PaymentMethodValue =
@@ -175,10 +175,18 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       )}
 
 
-      <div className="grid sm:grid-cols-2 gap-3">
+      {/* `grid-cols-1` EXPLÍCITO na base, e não só o `sm:grid-cols-2`.
+          Esta era a causa do arrasto lateral do painel, e a diferença exata
+          para o formulário de venda única, que sempre teve `grid-cols-2`:
+          sem uma classe de coluna, o Tailwind não emite `minmax(0, 1fr)`, a
+          coluna fica `auto` — do tamanho do MAX-CONTENT — e quem a estica é o
+          `<input type="date">`, que no Safari tem largura intrínseca grande e
+          não encolhe com `w-full`. O `minmax(0, …)` é justamente a permissão
+          de encolher abaixo do conteúdo. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {!isSeller && (
-          <div>
-            <Label>Funcionário</Label>
+          <div className="min-w-0 space-y-1.5">
+            <Label className="text-xs">Funcionário</Label>
             <Select value={formSellerId} onValueChange={v => { setFormSellerId(v); setLines([newLine()]); }}>
               <SelectTrigger><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
               <SelectContent>
@@ -192,9 +200,12 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
             </Select>
           </div>
         )}
-        <div>
-          <Label>Data</Label>
-          <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+        <div className="min-w-0 space-y-1.5">
+          <Label className="text-xs">Data</Label>
+          {/* `w-full min-w-0` no próprio campo: o `w-full` do Input do shadcn
+              não vence a largura intrínseca do seletor de data do Safari sem o
+              `min-w-0` para liberar o encolhimento. */}
+          <Input type="date" className="w-full min-w-0" value={date} onChange={e => setDate(e.target.value)} />
         </div>
       </div>
 
@@ -206,10 +217,10 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="flex items-center gap-1.5"><Layers size={14} /> Itens ({validLines.length})</Label>
-          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLines(ls => [...ls, newLine()])}>
-            <Plus size={13} className="mr-1" />Adicionar item
-          </Button>
+          <Label className="flex items-center gap-1.5 text-xs"><Layers size={14} /> Itens ({validLines.length})</Label>
+          <NcButton variant="quiet" onClick={() => setLines(ls => [...ls, newLine()])}>
+            <Plus size={13} />Adicionar item
+          </NcButton>
         </div>
 
         <div className="space-y-2">
@@ -227,9 +238,12 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 className="overflow-hidden"
               >
-              <div className="rounded-xl border border-border/60 bg-card/40 p-2.5 space-y-2">
+              {/* Card do item no Nocturne: a mesma superfície e a mesma régua
+                  do resto do painel, em vez do `bg-card/40` do shadcn que
+                  destoava dentro dele. */}
+              <div className="space-y-2 rounded-lg p-2.5" style={{ background: "var(--nc-surface)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold text-muted-foreground w-4 shrink-0 mono">{idx + 1}</span>
+                  <span className="nc-num w-4 shrink-0 text-[11px] font-semibold" style={{ color: "var(--nc-text-3)" }}>{idx + 1}</span>
                   <Select
                     value={l.productId}
                     onValueChange={v => {
@@ -251,14 +265,16 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button
-                    type="button"
-                    variant="ghost"
+                  {/* `NcButton--danger`: nasce neutro e só fica crítico no
+                      hover, a regra do sistema para ação destrutiva. O tamanho
+                      do alvo vem do `pointer: coarse` no index.css. */}
+                  <NcButton
+                    variant="danger"
                     size="icon"
-                    aria-label="Remover item"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={`Remover item ${idx + 1}`}
+                    className="shrink-0"
                     onClick={() => setLines(ls => (ls.length === 1 ? [newLine()] : ls.filter(x => x.key !== l.key)))}
-                  ><Trash2 size={14} /></Button>
+                  ><Trash2 size={14} /></NcButton>
                 </div>
                 {/* `flex-wrap`: os cinco controles desta linha somam ~448px com
                     os paddings do card e do painel, e o telefone tem 360 — era
@@ -291,6 +307,13 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                       disabled={type === "retirada_funcionario" ? false : undefined}
                     />
                   </div>
+                  {/* O selo entra no VOCABULÁRIO do sistema: `--paid` é dinheiro
+                      que entrou (verde) e `--partial` é o que falta (laranja),
+                      os mesmos dois tons da lista de vendas e do trilho. Antes
+                      era uma pílula própria em `bg-income`/`bg-warning`, cores
+                      de outra paleta — e a regra do Nocturne é que dois selos
+                      da mesma cor significam a mesma coisa em qualquer tela.
+                      Sendo `--action`, ele também herda o alvo de toque. */}
                   {type === "venda" && (
                     <motion.button
                       type="button"
@@ -299,10 +322,8 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                       onClick={() => setLine(l.key, { paid: !l.paid })}
-                      className={cn(
-                        "px-2 py-1 rounded-full text-[10px] font-medium border transition",
-                        l.paid ? "bg-income/10 text-income border-income/30" : "bg-warning/10 text-warning border-warning/30"
-                      )}
+                      aria-pressed={l.paid}
+                      className={cn("nc-pill nc-pill--action", l.paid ? "nc-pill--paid" : "nc-pill--partial")}
                     >{l.paid ? "Recebido" : "A receber"}</motion.button>
                   )}
                   <AnimatedNumber
@@ -313,7 +334,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                   />
                 </div>
                 {excede && (
-                  <p className="pl-6 text-[11px] text-destructive">Disponível: {disponivel}</p>
+                  <p className="pl-6 text-[11px]" style={{ color: "var(--nc-crit)" }}>Disponível: {disponivel}</p>
                 )}
               </div>
               </motion.div>
@@ -339,38 +360,72 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
-      <div>
-        <Label>Observações</Label>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Observações</Label>
         <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Aplicada a todos os itens" />
       </div>
 
+      {/* Resumo no mesmo desenho do rodapé do formulário único: fundo --nc-bg
+          dentro do painel, régua que apaga nas pontas antes da linha final, e
+          as cores do sistema — verde é dinheiro que entrou, laranja é o que
+          falta. Estava em `bg-secondary/50` com `text-income`/`text-warning`,
+          que são de outra paleta. */}
       {validLines.length > 0 && (
-        <div className={cn("rounded-xl p-3 space-y-1 text-sm border", type === "retirada_funcionario" ? "bg-warning/10 border-warning/20" : "bg-secondary/50 border-border/60")}>
-          <div className="flex justify-between"><span className="text-muted-foreground">Itens</span><span className="mono">{validLines.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Total</span><AnimatedNumber className="font-semibold mono" value={total} format={formatCurrency} duration={0.25} /></div>
+        <div className="space-y-1 rounded-lg p-3 text-xs" style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
+          <div className="flex justify-between">
+            <span style={{ color: "var(--nc-text-2)" }}>Itens</span>
+            <span className="nc-num">{validLines.length}</span>
+          </div>
+          <div className="flex justify-between">
+            <span style={{ color: "var(--nc-text-2)" }}>Total</span>
+            <AnimatedNumber className="nc-num font-semibold" value={total} format={formatCurrency} duration={0.25} />
+          </div>
           {type === "venda" && (
-            <>
-              <div className="flex justify-between"><span className="text-muted-foreground">Recebido</span><AnimatedNumber className="mono text-income" value={received} format={formatCurrency} duration={0.25} /></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Falta receber</span><AnimatedNumber className="mono text-warning" value={Math.max(0, total - received)} format={formatCurrency} duration={0.25} /></div>
-            </>
+            <div className="nc-rule-top space-y-1 pt-1.5">
+              <div className="flex justify-between">
+                <span style={{ color: "var(--nc-text-2)" }}>Recebido</span>
+                <AnimatedNumber className="nc-num" style={{ color: "var(--nc-ok)" }} value={received} format={formatCurrency} duration={0.25} />
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--nc-text-2)" }}>Falta receber</span>
+                <AnimatedNumber className="nc-num" style={{ color: "var(--nc-alert)" }} value={Math.max(0, total - received)} format={formatCurrency} duration={0.25} />
+              </div>
+            </div>
           )}
           {type === "retirada_funcionario" && (
-            <div className="flex justify-between"><span className="text-warning">Saldo devedor do funcionário</span><AnimatedNumber className="font-semibold mono text-warning" value={total} format={formatCurrency} duration={0.25} /></div>
+            <div className="nc-rule-top flex justify-between pt-1.5">
+              <span style={{ color: "var(--nc-text-2)" }}>Saldo devedor do funcionário</span>
+              <AnimatedNumber className="nc-num font-semibold" style={{ color: "var(--nc-alert)" }} value={total} format={formatCurrency} duration={0.25} />
+            </div>
           )}
         </div>
-
       )}
 
       {error && (
-        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
+        <div
+          className="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
+          style={{
+            color: "var(--nc-crit)",
+            background: "color-mix(in srgb, var(--nc-crit) 10%, transparent)",
+            boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--nc-crit) 30%, transparent)",
+          }}
+        >
           <AlertCircle size={14} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      <Button type="submit" className="w-full" disabled={submitting || validLines.length === 0}>
-        {submitting ? "Registrando..." : `Registrar ${validLines.length || ""} ${type === "retirada_funcionario" ? "retirada(s)" : "venda(s)"}`}
-      </Button>
+      {/* O lote traz o próprio botão — o rótulo dele conta as linhas válidas, e
+          por isso o painel não lhe dá o rodapé fixo do registro único. */}
+      <NcButton
+        type="submit"
+        variant="solid"
+        size="md"
+        className="w-full"
+        disabled={submitting || validLines.length === 0}
+      >
+        {submitting ? "Registrando…" : `Registrar ${validLines.length || ""} ${type === "retirada_funcionario" ? "retirada(s)" : "venda(s)"}`}
+      </NcButton>
     </form>
   );
 }
