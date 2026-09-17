@@ -484,8 +484,15 @@ export default function PurchaseOrdersSection() {
                   </div>
                   <div className="space-y-1.5">
                     {(flavors[it.id] ?? []).map((row, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <Input value={row.flavor} placeholder="Sabor" className="flex-1"
+                      // `flex-wrap` porque a linha não cabe num telefone: campo
+                      // de sabor (~150px, a largura intrínseca de um <input>),
+                      // filial (120), quantidade (80) e a lixeira somam mais que
+                      // a largura da tela. O `min-w` no sabor é o que impede a
+                      // quebra de espremer ele a nada — `flex-1` sozinho não
+                      // encolhe um <input> abaixo do tamanho intrínseco dele, e
+                      // com a quebra ele passa a poder.
+                      <div key={i} className="flex flex-wrap items-center gap-1.5">
+                        <Input value={row.flavor} placeholder="Sabor" className="min-w-[7rem] flex-1"
                           onChange={e => setRow(it.id, i, { flavor: e.target.value })} />
                         {/* Seletor por LINHA, e só quando há mais de uma cidade:
                             com uma filial só ele seria um campo de uma opção. */}

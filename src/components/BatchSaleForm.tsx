@@ -238,7 +238,10 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     }}
                     disabled={!isSeller && !formSellerId}
                   >
-                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
+                    {/* `min-w-0` porque o `w-full` do SelectTrigger, num item
+                        de flex, não deixa ele encolher abaixo do conteúdo: o
+                        nome do produto empurrava a lixeira para fora. */}
+                    <SelectTrigger className="h-9 min-w-0 flex-1 text-xs"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
                     <SelectContent>
                       {availableProducts.length === 0 && (
                         <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhum produto disponível.</div>
@@ -257,7 +260,15 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     onClick={() => setLines(ls => (ls.length === 1 ? [newLine()] : ls.filter(x => x.key !== l.key)))}
                   ><Trash2 size={14} /></Button>
                 </div>
-                <div className="flex items-center gap-2 pl-6">
+                {/* `flex-wrap`: os cinco controles desta linha somam ~448px com
+                    os paddings do card e do painel, e o telefone tem 360 — era
+                    isso que deixava o lote arrastar de lado. Com a quebra, a
+                    quantidade e o preço ficam na primeira linha (cabem em 242px)
+                    e a pílula e o total descem para a segunda. Não é largura
+                    fixa demais: os dois campos numéricos precisam de largura
+                    própria, senão o `<input>` assume a largura intrínseca dele,
+                    que é bem maior. */}
+                <div className="flex flex-wrap items-center gap-2 pl-6">
                   <div className="w-20">
                     <Input
                       type="number"
