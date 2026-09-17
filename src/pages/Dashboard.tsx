@@ -207,23 +207,53 @@ export default function Dashboard() {
     return parts;
   }, [restock, restockRows.length]);
 
-  /** Barra empilhada: os N maiores por receita + "Outros". */
-  const revenueSplit = useMemo(() => {
+  /**
+   * Ranking de modelos por receita no período.
+   *
+   * Era uma barra empilhada com a porcentagem escrita DENTRO de cada faixa (e
+   * só quando passava de 14%, senão não cabia) mais uma legenda de pares
+   * "quadradinho + nome + valor" embrulhando embaixo. Dois problemas: números
+   * amontoados numa faixa só, onde comparar o terceiro com o quarto exigia
+   * medir com o olho; e uma faixa "Outros 4 modelos" que ocupava espaço sem
+   * dizer nada — não dá para agir sobre ela, e ela não diz quais são.
+   *
+   * Agora é lista ordenada, uma linha por modelo, e a cauda vira uma LINHA DE
+   * RODAPÉ em texto terciário: continua contando quanto ficou de fora (nada
+   * some em silêncio, a mesma regra do rodapé do "Repor agora"), sem competir
+   * por atenção com o que se pode ler.
+   *
+   * `max` é a receita do LÍDER, e é contra ela que as barras são escaladas —
+   * não contra o total. Comparar contra o total deixaria o primeiro com um
+   * terço da largura e os últimos com fiapos indistinguíveis; contra o líder, a
+   * barra responde "quanto este vende perto do que mais vende", que é a
+   * pergunta do ranking. A porcentagem ao lado continua sendo a fatia do TOTAL:
+   * são dois fatos diferentes, cada um na forma que lhe cabe.
+   *
+   * `key` vem do modelo (marca|modelo) porque dois modelos de marcas diferentes
+   * podem ter o mesmo nome — o nome sozinho não é único, e é por isso que a
+   * linha mostra os dois.
+   */
+  const topModels = useMemo(() => {
     const sold = modelStats.filter(m => m.revenue > 0).sort((a, b) => b.revenue - a.revenue);
     const total = sold.reduce((s, m) => s + m.revenue, 0);
-    const top = sold.slice(0, TOP_MODELS);
+    const rows = sold.slice(0, TOP_MODELS).map(m => ({
+      key: m.key,
+      brand: m.brand,
+      model: m.model,
+      revenue: m.revenue,
+      qty: m.qty,
+      pct: total > 0 ? (m.revenue / total) * 100 : 0,
+    }));
     const rest = sold.slice(TOP_MODELS);
-    // `key` vem do modelo (marca|modelo) porque dois modelos de marcas
-    // diferentes podem ter o mesmo nome — `label` sozinho não é único.
-    const segments = top.map(m => ({ key: m.key, label: m.model, revenue: m.revenue }));
-    if (rest.length > 0) {
-      segments.push({
-        key: "__outros__",
-        label: `Outros ${rest.length} modelo${rest.length > 1 ? "s" : ""}`,
-        revenue: rest.reduce((s, m) => s + m.revenue, 0),
-      });
-    }
-    return { total, segments: segments.map(s => ({ ...s, pct: total > 0 ? (s.revenue / total) * 100 : 0 })) };
+    const restRevenue = rest.reduce((s, m) => s + m.revenue, 0);
+    return {
+      total,
+      rows,
+      max: rows[0]?.revenue ?? 0,
+      restCount: rest.length,
+      restRevenue,
+      restPct: total > 0 ? (restRevenue / total) * 100 : 0,
+    };
   }, [modelStats]);
 
   const monthlyData = useMemo(() => {
@@ -606,43 +636,58 @@ export default function Dashboard() {
         </section>
 
         {/* ---------------- Modelos mais vendidos ---------------- */}
-        <section className="nc-card px-4 py-3.5">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <section className="nc-card overflow-hidden">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pb-3 pt-3.5">
             <h2 className="text-[15px]">Modelos mais vendidos</h2>
-            {revenueSplit.total > 0 && (
+            {topModels.total > 0 && (
               <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-                {formatCurrencyShort(revenueSplit.total)} no período · 100%
+                {formatCurrencyShort(topModels.total)} no período
               </span>
             )}
           </div>
-          {revenueSplit.segments.length === 0 ? (
-            <p className="py-4 text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
+
+          {topModels.rows.length === 0 ? (
+            <p className="px-4 pb-4 text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
           ) : (
             <>
-              <div className="flex h-[26px] gap-px overflow-hidden rounded">
-                {revenueSplit.segments.map((s, i) => (
-                  <motion.div
-                    key={s.key}
-                    className="grid place-items-center overflow-hidden text-[10.5px] font-semibold nc-num"
-                    initial={{ flexGrow: 0 }}
-                    animate={{ flexGrow: Math.max(s.pct, 0.5) }}
-                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ flexBasis: 0, background: segmentTint(i), color: i < 3 ? "#12202e" : "var(--nc-text)" }}
-                    title={`${s.label} · ${formatCurrencyShort(s.revenue)}`}
-                  >
-                    {s.pct >= 14 ? formatPct(s.pct) : ""}
-                  </motion.div>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-                {revenueSplit.segments.map((s, i) => (
-                  <span key={s.key} className="flex items-baseline gap-1.5 text-xs">
-                    <span className="h-2 w-2 flex-none rounded-sm" style={{ background: segmentTint(i) }} />
-                    {s.label}{" "}
-                    <span className="nc-num" style={{ color: "var(--nc-text-3)" }}>{formatCurrencyShort(s.revenue)}</span>
-                  </span>
-                ))}
-              </div>
+              {topModels.rows.map((m, i) => (
+                <div key={m.key} className="nc-row px-4 py-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 truncate text-[13px]">
+                      {m.model}
+                      <span style={{ color: "var(--nc-text-3)" }}> · {m.brand}</span>
+                    </p>
+                    <span className="nc-num flex-none text-[13px]">{formatCurrencyShort(m.revenue)}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    {/* A barra é escalada pelo LÍDER, a porcentagem é do TOTAL.
+                        Ver o comentário do `topModels`. */}
+                    <div className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full" style={{ background: "var(--nc-track)" }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${topModels.max > 0 ? Math.max((m.revenue / topModels.max) * 100, 2) : 0}%` }}
+                        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ background: segmentTint(i) }}
+                      />
+                    </div>
+                    <span className="nc-num flex-none text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                      {m.qty} un. · {formatPct(m.pct, 0)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* A cauda como LINHA, não como faixa na barra: continua dizendo
+                  quanto ficou de fora — número que encolhe sem explicação faz
+                  duvidar do número — sem ocupar o lugar do que se pode ler. */}
+              {topModels.restCount > 0 && (
+                <p className="px-4 py-2.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                  + {topModels.restCount} modelo{topModels.restCount > 1 ? "s" : ""} somam{" "}
+                  <span className="nc-num">{formatCurrencyShort(topModels.restRevenue)}</span>
+                  {" "}({formatPct(topModels.restPct, 0)} do período)
+                </p>
+              )}
             </>
           )}
         </section>
@@ -770,7 +815,15 @@ export default function Dashboard() {
   );
 }
 
-/** Tom do segmento na barra empilhada: do accent cheio até quase o fundo. */
+/**
+ * Tom da barra por posição no ranking: do accent cheio até quase o fundo.
+ *
+ * A cor é REDUNDANTE com a ordem, de propósito — ela não carrega informação que
+ * a posição na lista já não dê. Serve para o olho perceber a escada sem ler
+ * número nenhum, e é por isso que ela esmaece para baixo em vez de trocar de
+ * matiz: matizes diferentes sugeririam categorias diferentes, e são todos a
+ * mesma coisa.
+ */
 function segmentTint(index: number) {
   const mix = [100, 82, 64, 48, 33, 19][Math.min(index, 5)];
   return `color-mix(in srgb, var(--nc-accent) ${mix}%, var(--nc-bg))`;
