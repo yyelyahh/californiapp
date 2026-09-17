@@ -358,7 +358,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetContent
             side="bottom"
-            className="nocturne max-h-[85dvh] gap-0 overflow-y-auto rounded-t-2xl border-0 p-0 md:hidden"
+            className="nocturne max-h-[85dvh] gap-0 overflow-y-auto overscroll-contain rounded-t-2xl border-0 p-0 md:hidden"
             style={{ background: "var(--nc-rail)", boxShadow: "0 -1px 0 var(--nc-track)" }}
           >
             <SheetHeader className="px-4 pb-1 pt-4 text-left">

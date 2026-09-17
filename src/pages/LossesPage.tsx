@@ -153,14 +153,14 @@ export default function LossesPage() {
             {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
                 o Radix porta o painel para o <body> e os tokens não chegam por
                 herança. */}
-            <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+            <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
               <NcSheetHeader
                 eyebrow="Perdas"
                 title="Registrar perda"
                 description="A quantidade sai do estoque de onde a perda aconteceu — da casa ou do vendedor."
               />
 
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 {/* O que se perdeu */}
                 <section className="space-y-3">
                   <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que se perdeu</p>

@@ -422,7 +422,9 @@ export default function CommissionsPage() {
             <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{label}</span>
             <h1 className="mt-1 text-xl sm:text-[22px]">Distribuição</h1>
           </div>
-          <div className="flex items-center gap-3">
+          {/* `flex-wrap`: o aviso de "Todas as filiais" ao lado do botão não
+              cabe na largura de um telefone, e sem quebra empurrava a linha. */}
+          <div className="flex flex-wrap items-center justify-end gap-3">
             {!branchId && <BranchReadOnly className="text-right" />}
             {/* A unidade sai do estoque de UMA cidade e entra na mão de um
                 vendedor DELA. Em "Todas" a lista de vendedores tem gente das
@@ -441,13 +443,17 @@ export default function CommissionsPage() {
         {/* ---------------- Período ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
           <SegmentedChips options={PERIOD_OPTIONS} value={period} onChange={v => setPeriod(v as Period)} />
-          <div className="flex items-center gap-1.5">
+          {/* Mesma regra do filtro das outras telas: no celular os dois campos
+              dividem uma linha própria (os 132px cravados somam 276 e não cabem
+              ao lado dos chips) e o corpo sobe para 16px, porque o Safari do
+              iOS dá zoom sozinho ao focar abaixo disso e o zoom está travado. */}
+          <div className="flex items-center gap-1.5 max-sm:w-full">
             <input
               type="date"
               value={customStart}
               onChange={e => { setCustomStart(e.target.value); setPeriod("custom"); }}
               aria-label="Data inicial"
-              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
             <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
             <input
@@ -455,10 +461,10 @@ export default function CommissionsPage() {
               value={customEnd}
               onChange={e => { setCustomEnd(e.target.value); setPeriod("custom"); }}
               aria-label="Data final"
-              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
           </div>
-          <span className="ml-auto text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          <span className="text-[11px] max-sm:w-full sm:ml-auto" style={{ color: "var(--nc-text-3)" }}>
             {periodLabel} · comissão fecha por mês
           </span>
         </div>
@@ -806,7 +812,7 @@ export default function CommissionsPage() {
 
       {/* ================= Painel do vendedor ================= */}
       <Sheet open={!!panelSellerId} onOpenChange={v => { if (!v) { setPanelSellerId(null); setPanelMode("resumo"); } }}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           {panelRow && (
             <>
               <NcSheetHeader
@@ -820,7 +826,7 @@ export default function CommissionsPage() {
                 description={balanceLabel(panelRow.balance)}
               />
 
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 {/* Saldo */}
                 <div>
                   <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Saldo do vendedor</span>
@@ -1038,7 +1044,7 @@ export default function CommissionsPage() {
 
       {/* ================= Retirada do sócio ================= */}
       <Sheet open={!!wdPartnerId} onOpenChange={v => { if (!v) setWdPartnerId(null); }}>
-        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col overscroll-contain">
           {partnerRow && (
             <>
               <NcSheetHeader
@@ -1046,7 +1052,7 @@ export default function CommissionsPage() {
                 title={`Retirada de ${partnerRow.partner.name}`}
                 description={`${partnerRow.partner.percentage}% da sociedade · alvo do período ${formatCurrency(partnerRow.alvo)}`}
               />
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 <section className="space-y-1.5">
                   <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde ele está</p>
                   <LedgerLine label="Retirado no período" value={formatCurrency(partnerRow.periodAmt)} />
@@ -1104,14 +1110,14 @@ export default function CommissionsPage() {
 
       {/* ================= Movimentar estoque ================= */}
       <Sheet open={moveOpen} onOpenChange={v => { setMoveOpen(v); if (!v) resetMove(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Consignação"
             title="Movimentar estoque"
             description="Da casa para um vendedor, ou de um vendedor para outro. A quantidade sai de quem tem e entra na mão de quem vai vender."
           />
 
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De onde sai e para quem vai</p>
               <div className="grid grid-cols-2 gap-3">
@@ -1155,7 +1161,7 @@ export default function CommissionsPage() {
                   {moveCount} selecionado{moveCount === 1 ? "" : "s"}
                 </span>
               </div>
-              <div className="max-h-80 overflow-y-auto rounded-lg" style={{ boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
+              <div className="max-h-80 overflow-y-auto rounded-lg overscroll-contain" style={{ boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
                 {moveItems.length === 0 ? (
                   <p className="p-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
                     {moveFrom === "casa"

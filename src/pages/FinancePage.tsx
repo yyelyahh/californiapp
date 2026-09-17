@@ -486,13 +486,13 @@ export default function FinancePage() {
 
       {/* ================= Aporte ================= */}
       <Sheet open={panel === "aporte"} onOpenChange={v => { if (!v) closePanel(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Capital"
             title="Aporte de sócio"
             description="Dinheiro que o sócio põe na operação. Não volta como dívida — vira capital."
           />
-          <form id="form-aporte" onSubmit={submitContrib} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <form id="form-aporte" onSubmit={submitContrib} className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quem e quanto</p>
               <div className="space-y-1.5">
@@ -537,13 +537,13 @@ export default function FinancePage() {
 
       {/* ================= Empréstimo ================= */}
       <Sheet open={panel === "emprestimo"} onOpenChange={v => { if (!v) closePanel(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Dívida"
             title="Empréstimo recebido"
             description="Dinheiro que entrou e vai ter de voltar. Os juros são o total combinado, não a taxa."
           />
-          <form id="form-emprestimo" onSubmit={submitLoan} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          <form id="form-emprestimo" onSubmit={submitLoan} className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
               <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De quem veio</p>
               <div className="space-y-1.5">
@@ -590,7 +590,7 @@ export default function FinancePage() {
 
       {/* ================= Pagamento de empréstimo ================= */}
       <Sheet open={!!openLoanId} onOpenChange={v => { if (!v) closePanel(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col">
+        <SheetContent className="nocturne w-full sm:max-w-md overflow-y-auto p-0 flex flex-col overscroll-contain">
           {payingLoan && (
             <>
               <NcSheetHeader
@@ -598,7 +598,7 @@ export default function FinancePage() {
                 title={`Pagamento a ${payingLoan.lenderName}`}
                 description="Separe quanto do valor abate o principal e quanto é juro — o razão trata os dois de forma diferente."
               />
-              <form id="form-pagamento" onSubmit={submitPay} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              <form id="form-pagamento" onSubmit={submitPay} className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 <section className="space-y-1.5">
                   <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde este empréstimo está</p>
                   <LedgerLine label="Total com juros" value={formatCurrency(payingLoan.total)} />

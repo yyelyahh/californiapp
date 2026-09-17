@@ -400,7 +400,7 @@ export default function SellerReportDrawer({
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja: o
           Radix porta o painel para o <body> e os tokens não chegam por herança. */}
-      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+      <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
         <NcSheetHeader
           eyebrow={`Extrato · ${label}`}
           title={
@@ -411,7 +411,7 @@ export default function SellerReportDrawer({
           }
         />
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
           {/* ---- Período ---- */}
           <div className="flex flex-wrap items-center gap-2">
             <SegmentedChips options={PERIOD_OPTIONS} value={periodKey} onChange={v => setPeriodKey(v as PeriodKey)} />

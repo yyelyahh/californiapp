@@ -412,15 +412,22 @@ export default function Dashboard() {
             <h1 className="mt-1 text-xl sm:text-[22px]">Dashboard</h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* `flex-wrap`: são até cinco chips de período mais o exportar, o que
+              passa da largura de um telefone — sem quebra a faixa saía do
+              cabeçalho.
+
+              O exportar era um <button> cru com `p-2`, ou seja, 31px de alvo, e
+              por não ser `.nc-btn` ficava de fora do `pointer: coarse` que dá
+              44px a todos os outros. Agora é a peça do sistema, com o mesmo
+              fantasma de ícone da sidebar. */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <SegmentedChips options={periodOptions} value={filter} onChange={setFilter} />
             <button
               type="button"
               onClick={handleExport}
               title="Exportar Excel"
               aria-label="Exportar Excel"
-              className="rounded-md p-2 transition-colors hover:bg-white/5"
-              style={{ color: "var(--nc-text-3)" }}
+              className="nc-btn nc-btn--ghost nc-btn--icon"
             >
               <Download size={15} />
             </button>

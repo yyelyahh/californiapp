@@ -271,13 +271,17 @@ export default function InsightsPage() {
         {/* ---------------- Período ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
           <SegmentedChips options={PERIOD_OPTIONS} value={period} onChange={v => setPeriod(v as Period)} />
-          <div className="flex items-center gap-1.5">
+          {/* Os dois campos dividem uma linha própria no celular: os 132px
+              cravados de cada um somam 276, que com os chips ao lado não cabe
+              em 360px de tela. 16px no corpo porque o Safari do iOS dá zoom
+              sozinho ao focar abaixo disso, e o zoom do app está travado. */}
+          <div className="flex items-center gap-1.5 max-sm:w-full">
             <input
               type="date"
               value={customStart}
               onChange={e => { setCustomStart(e.target.value); setPeriod("custom"); }}
               aria-label="Data inicial"
-              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
             <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
             <input
@@ -285,10 +289,14 @@ export default function InsightsPage() {
               value={customEnd}
               onChange={e => { setCustomEnd(e.target.value); setPeriod("custom"); }}
               aria-label="Data final"
-              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px]"
+              className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
           </div>
-          <span className="ml-auto text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          {/* Esta linha explica o que os números abaixo significam — o ritmo é
+              medido nos dias JÁ CORRIDOS do período, não no mês fechado. No
+              celular ela toma a linha inteira: espremida ao lado dos campos ela
+              quebrava em três pedaços. */}
+          <span className="text-[11px] max-sm:w-full sm:ml-auto" style={{ color: "var(--nc-text-3)" }}>
             {periodLabel} · ritmo medido em {rateDays} {rateDays === 1 ? "dia" : "dias"}
           </span>
         </div>

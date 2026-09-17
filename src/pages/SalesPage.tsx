@@ -1482,7 +1482,7 @@ export default function SalesPage() {
                 title="Filtros"
                 description="A busca e o período ficam na tela; o resto mora aqui."
               />
-              <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+              <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5">
                 <div className="space-y-1.5">
                   <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Funcionário</p>
                   {sellerSelect}

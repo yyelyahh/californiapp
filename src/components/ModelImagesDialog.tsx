@@ -126,7 +126,7 @@ export default function ModelImagesDialog() {
             <Loader2 className="animate-spin" size={18} />
           </div>
         ) : (
-          <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto overscroll-contain pr-1">
             {combos.length === 0 && (
               <p className="py-6 text-center text-sm text-muted-foreground">Nenhum modelo cadastrado.</p>
             )}

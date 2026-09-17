@@ -314,7 +314,7 @@ export default function StockEntryPage() {
             {/* `nocturne` repetido aqui pelo mesmo motivo do SheetContent da loja:
                 o Radix porta o painel para o <body> e os tokens não chegam por
                 herança. */}
-            <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
+            <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto overscroll-contain p-0 flex flex-col">
               <NcSheetHeader
                 eyebrow="Reposição"
                 title="Nova entrada"
