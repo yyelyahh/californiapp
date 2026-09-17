@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   SquaresFour, Tag, Package, TrendDown, Receipt, FileText, HandCoins, ChartLine, Coins, ClockCounterClockwise,
-  CaretLeft, CaretRight, SignOut, List, X,
+  CaretLeft, CaretRight, SignOut, List,
 } from "@phosphor-icons/react";
 import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
 import { computeClosedCommission, computePriorCommissionBalance, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";

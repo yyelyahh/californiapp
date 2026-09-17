@@ -20,7 +20,11 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      // Vinha DESLIGADA do esqueleto do shadcn, e por isso import morto nunca
+      // aparecia: o lint acusava 80 problemas sem citar um só. Argumento de
+      // função fica de fora (`args: "none"`) porque parâmetro que o handler
+      // recebe e não lê é assinatura, não sobra.
+      "@typescript-eslint/no-unused-vars": ["error", { args: "none", ignoreRestSiblings: true }],
     },
   },
 );

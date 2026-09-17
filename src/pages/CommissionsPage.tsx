@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Wallet, Trash2, Plus, Clock, Crown, ArrowRight, Users, X,
+  Wallet, Trash2, Plus, ArrowRight, Users, X,
   HandCoins, Receipt, Package, Share2, Copy,
 } from "lucide-react";
 import { toast } from "sonner";

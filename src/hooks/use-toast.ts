@@ -12,13 +12,6 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement;
 };
 
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const;
-
 let count = 0;
 
 function genId() {
@@ -26,7 +19,16 @@ function genId() {
   return count.toString();
 }
 
-type ActionType = typeof actionTypes;
+// Era um `const actionTypes = {...} as const` de onde este tipo saía por
+// `typeof`. O valor nunca foi lido em tempo de execução — o reducer compara
+// com o literal direto —, então era um objeto montado a cada carregamento do
+// módulo só para dar nome a quatro strings. O tipo diz o mesmo sem o objeto.
+type ActionType = {
+  ADD_TOAST: "ADD_TOAST";
+  UPDATE_TOAST: "UPDATE_TOAST";
+  DISMISS_TOAST: "DISMISS_TOAST";
+  REMOVE_TOAST: "REMOVE_TOAST";
+};
 
 type Action =
   | {

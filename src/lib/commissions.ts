@@ -419,7 +419,6 @@ export function computeSellerBalance(seller: Seller, ctx: SellerBalanceContext) 
     !isLegacy(s.date)
   );
   const closed = computeClosedCommission(vendasPagasTodas, start, end);
-  const vendasPagas = closed.sales;
   const vendasTotal = vendas.reduce((a, s) => a + s.totalPrice, 0);
   const commPaid = commissionPayments.filter(p => p.sellerId === seller.id && inClosedPeriod(p.date) && !isLegacy(p.date)).reduce((a, p) => a + p.amount, 0);
 
