@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { formatCurrency } from "@/lib/currency";
+import { sellersWithAssignedStock } from "@/lib/sellers-with-stock";
 
 type PaymentMethodValue =
   | "pix"
@@ -48,6 +49,18 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
 
   const effectiveSellerId = isSeller ? sellerId : (formSellerId || null);
   const sellerName = effectiveSellerId ? getSellerName(effectiveSellerId) : "";
+
+  /**
+   * Mesma regra do formulário único, pela mesma função: só entra no seletor
+   * quem tem unidade atribuída. Os dois caminhos de registro de venda não podem
+   * divergir — este não tem edição, então não há vendedor gravado a preservar,
+   * mas o `formSellerId` entra assim mesmo para a lista não puxar o tapete de
+   * quem acabou de vender a última unidade com o painel ainda aberto.
+   */
+  const sellerOptions = useMemo(
+    () => sellersWithAssignedStock(sellers, productAssignments, formSellerId),
+    [sellers, productAssignments, formSellerId],
+  );
 
   const availableProducts = useMemo(() => {
     if (effectiveSellerId) {
@@ -169,7 +182,12 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
             <Select value={formSellerId} onValueChange={v => { setFormSellerId(v); setLines([newLine()]); }}>
               <SelectTrigger><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
               <SelectContent>
-                {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {sellerOptions.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    Nenhum vendedor com estoque atribuído. Distribua em Distribuição.
+                  </div>
+                )}
+                {sellerOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -181,7 +199,9 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       </div>
 
       {!isSeller && !formSellerId && (
-        <p className="text-xs text-muted-foreground">Selecione um vendedor para carregar os produtos atribuídos a ele.</p>
+        <p className="text-xs text-muted-foreground">
+          Selecione um vendedor para carregar os produtos atribuídos a ele. Só aparecem os que têm estoque atribuído.
+        </p>
       )}
 
       <div className="space-y-2">

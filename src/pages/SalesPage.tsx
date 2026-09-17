@@ -28,6 +28,7 @@ import {
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 import { orderRef } from "@/lib/order-ref";
 import { useMediaQuery } from "@/hooks/use-mobile";
+import { sellersWithAssignedStock } from "@/lib/sellers-with-stock";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -492,6 +493,19 @@ export default function SalesPage() {
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
 
+  /**
+   * O seletor de vendedor só oferece quem tem unidade na caixa. Escolher alguém
+   * sem atribuição levava a um seletor de produto vazio dizendo "Nenhum produto
+   * atribuído a este vendedor" — um beco que a lista podia ter evitado.
+   *
+   * `form.sellerId` entra mesmo de caixa vazia: a edição de uma venda antiga
+   * precisa mostrar quem está GRAVADO nela. Ver a função para o resto.
+   */
+  const sellerOptions = useMemo(
+    () => sellersWithAssignedStock(sellers, productAssignments, form.sellerId),
+    [sellers, productAssignments, form.sellerId],
+  );
+
   const availableProducts = effectiveSellerId
     ? products.filter(p => {
         const assignment = productAssignments.find(a => a.productId === p.id && a.sellerId === effectiveSellerId);
@@ -798,12 +812,19 @@ export default function SalesPage() {
           <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v, productId: "" }))} disabled={!!editingSale}>
             <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Selecione o vendedor"} /></SelectTrigger>
             <SelectContent className="nocturne">
-              {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              {/* Lista vazia sem explicação parece tela quebrada, e a saída não
+                  é aqui: é distribuir estoque. A frase diz onde. */}
+              {sellerOptions.length === 0 && (
+                <div className="px-2 py-1.5 text-xs" style={{ color: "var(--nc-text-3)" }}>
+                  Nenhum vendedor com estoque atribuído. Distribua em Distribuição.
+                </div>
+              )}
+              {sellerOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
           {!form.sellerId && !editingSale && (
             <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-              Selecione um vendedor para ver os produtos atribuídos a ele.
+              Só aparecem vendedores com estoque atribuído.
             </p>
           )}
         </div>
