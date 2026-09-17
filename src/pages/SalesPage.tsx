@@ -1352,7 +1352,11 @@ export default function SalesPage() {
                   description={editingSale ? "Ajuste os dados do registro." : "Registre uma venda/retirada ou várias de uma vez."}
                 />
 
-                <div className="flex-1 overflow-y-auto px-5 py-5">
+                {/* `overscroll-contain` no elemento que ROLA, e não no painel:
+                    o `overscroll-behavior` só vale para o próprio scroller, e
+                    aqui quem rola é este corpo, não o SheetContent. Sem ele,
+                    arrastar além do fim do formulário empurra a página atrás. */}
+                <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
                   {editingSale ? saleForm : (
                     <div className="space-y-5">
                       <SegmentedToggle
