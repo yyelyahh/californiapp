@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      archived_models: {
+        Row: {
+          archived_at: string
+          branch_id: string
+          brand: string
+          brand_key: string
+          model: string
+          model_key: string
+        }
+        Insert: {
+          archived_at?: string
+          branch_id: string
+          brand: string
+          brand_key: string
+          model: string
+          model_key: string
+        }
+        Update: {
+          archived_at?: string
+          branch_id?: string
+          brand?: string
+          brand_key?: string
+          model?: string
+          model_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "archived_models_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -59,6 +94,27 @@ export type Database = {
           old_data?: Json | null
           row_data?: Json
           tx?: number
+        }
+        Relationships: []
+      }
+      branches: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
         }
         Relationships: []
       }
@@ -201,6 +257,7 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          branch_id: string
           category: string
           created_at: string
           date: string
@@ -209,6 +266,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          branch_id: string
           category?: string
           created_at?: string
           date?: string
@@ -217,13 +275,22 @@ export type Database = {
         }
         Update: {
           amount?: number
+          branch_id?: string
           category?: string
           created_at?: string
           date?: string
           description?: string
           id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       investors: {
         Row: {
@@ -589,6 +656,51 @@ export type Database = {
           },
         ]
       }
+      product_branch: {
+        Row: {
+          branch_id: string
+          created_at: string
+          min_stock: number
+          product_id: string
+          purchase_price: number
+          sale_price: number
+          stock: number
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          min_stock?: number
+          product_id: string
+          purchase_price?: number
+          sale_price?: number
+          stock?: number
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          min_stock?: number
+          product_id?: string
+          purchase_price?: number
+          sale_price?: number
+          stock?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_branch_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_branch_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_model_images: {
         Row: {
           brand: string
@@ -620,12 +732,8 @@ export type Database = {
           flavor: string
           id: string
           image_url: string | null
-          min_stock: number
           model: string
           name: string
-          purchase_price: number
-          sale_price: number
-          stock: number
         }
         Insert: {
           brand?: string
@@ -633,12 +741,8 @@ export type Database = {
           flavor?: string
           id?: string
           image_url?: string | null
-          min_stock?: number
           model?: string
           name: string
-          purchase_price?: number
-          sale_price?: number
-          stock?: number
         }
         Update: {
           brand?: string
@@ -646,12 +750,8 @@ export type Database = {
           flavor?: string
           id?: string
           image_url?: string | null
-          min_stock?: number
           model?: string
           name?: string
-          purchase_price?: number
-          sale_price?: number
-          stock?: number
         }
         Relationships: []
       }
@@ -740,6 +840,7 @@ export type Database = {
       }
       sales: {
         Row: {
+          branch_id: string
           created_at: string
           date: string
           id: string
@@ -756,6 +857,7 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          branch_id: string
           created_at?: string
           date?: string
           id?: string
@@ -772,6 +874,7 @@ export type Database = {
           unit_price: number
         }
         Update: {
+          branch_id?: string
           created_at?: string
           date?: string
           id?: string
@@ -788,6 +891,13 @@ export type Database = {
           unit_price?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_product_id_fkey"
             columns: ["product_id"]
@@ -863,33 +973,48 @@ export type Database = {
       }
       sellers: {
         Row: {
+          branch_id: string
           created_at: string
           debt_percentage: number
           id: string
           name: string
+          slug: string | null
           user_id: string | null
           whatsapp: string | null
         }
         Insert: {
+          branch_id: string
           created_at?: string
           debt_percentage?: number
           id?: string
           name: string
+          slug?: string | null
           user_id?: string | null
           whatsapp?: string | null
         }
         Update: {
+          branch_id?: string
           created_at?: string
           debt_percentage?: number
           id?: string
           name?: string
+          slug?: string | null
           user_id?: string | null
           whatsapp?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sellers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stock_entries: {
         Row: {
+          branch_id: string
           created_at: string
           date: string
           id: string
@@ -900,6 +1025,7 @@ export type Database = {
           unit_cost: number
         }
         Insert: {
+          branch_id: string
           created_at?: string
           date?: string
           id?: string
@@ -910,6 +1036,7 @@ export type Database = {
           unit_cost: number
         }
         Update: {
+          branch_id?: string
           created_at?: string
           date?: string
           id?: string
@@ -921,6 +1048,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "stock_entries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "stock_entries_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -931,6 +1065,7 @@ export type Database = {
       }
       stock_losses: {
         Row: {
+          branch_id: string
           created_at: string
           date: string
           id: string
@@ -942,6 +1077,7 @@ export type Database = {
           unit_cost: number
         }
         Insert: {
+          branch_id: string
           created_at?: string
           date?: string
           id?: string
@@ -953,6 +1089,7 @@ export type Database = {
           unit_cost?: number
         }
         Update: {
+          branch_id?: string
           created_at?: string
           date?: string
           id?: string
@@ -964,6 +1101,13 @@ export type Database = {
           unit_cost?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "stock_losses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stock_losses_product_id_fkey"
             columns: ["product_id"]
@@ -976,6 +1120,103 @@ export type Database = {
             columns: ["seller_id"]
             isOneToOne: false
             referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_transfers: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          date: string
+          from_branch_id: string
+          from_seller_id: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          to_branch_id: string
+          unit_cost: number
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          date?: string
+          from_branch_id: string
+          from_seller_id?: string | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          to_branch_id: string
+          unit_cost?: number
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          date?: string
+          from_branch_id?: string
+          from_seller_id?: string | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          to_branch_id?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfers_from_branch_id_fkey"
+            columns: ["from_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_from_seller_id_fkey"
+            columns: ["from_seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_to_branch_id_fkey"
+            columns: ["to_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_branches: {
+        Row: {
+          branch_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_branches_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
         ]
@@ -1022,6 +1263,7 @@ export type Database = {
         Row: {
           accumulated_profit_delta: number | null
           amount: number | null
+          branch_id: string | null
           cash_delta: number | null
           created_at: string | null
           description: string | null
@@ -1068,6 +1310,7 @@ export type Database = {
       }
       create_sale: {
         Args: {
+          p_branch_id?: string
           p_date: string
           p_installments?: number
           p_notes?: string
@@ -1080,6 +1323,7 @@ export type Database = {
           p_unit_price: number
         }
         Returns: {
+          branch_id: string
           created_at: string
           date: string
           id: string
@@ -1105,11 +1349,27 @@ export type Database = {
       customer_units: { Args: { p_whatsapp: string }; Returns: number }
       decline_order: { Args: { p_order_id: string }; Returns: undefined }
       decrement_product_stock: {
-        Args: { p_product_id: string; p_quantity: number }
+        Args: { p_branch_id: string; p_product_id: string; p_quantity: number }
         Returns: number
       }
       delete_sale: { Args: { p_sale_id: string }; Returns: undefined }
       expire_stale_orders: { Args: never; Returns: number }
+      get_branch_products: {
+        Args: { p_branch_id?: string }
+        Returns: {
+          brand: string
+          created_at: string
+          flavor: string
+          id: string
+          image_url: string
+          min_stock: number
+          model: string
+          name: string
+          price_varies: boolean
+          sale_price: number
+          stock: number
+        }[]
+      }
       get_customer_loyalty: {
         Args: { p_whatsapp: string }
         Returns: {
@@ -1123,12 +1383,13 @@ export type Database = {
       }
       get_my_seller_id: { Args: never; Returns: string }
       get_product_costs: {
-        Args: never
+        Args: { p_branch_id?: string }
         Returns: {
           product_id: string
           purchase_price: number
         }[]
       }
+      get_seller_by_slug: { Args: { p_slug: string }; Returns: string }
       get_seller_catalog: {
         Args: { p_seller_id: string }
         Returns: {
@@ -1162,7 +1423,7 @@ export type Database = {
         Returns: boolean
       }
       increment_product_stock: {
-        Args: { p_product_id: string; p_quantity: number }
+        Args: { p_branch_id: string; p_product_id: string; p_quantity: number }
         Returns: number
       }
       loyalty_cycle: { Args: never; Returns: number }
@@ -1170,6 +1431,7 @@ export type Database = {
         Args: { p_purchase_price: number; p_sale_price: number }
         Returns: number
       }
+      my_branch_ids: { Args: never; Returns: string[] }
       order_receipt: { Args: { p_order_id: string }; Returns: Json }
       order_reservation_ttl: { Args: never; Returns: string }
       product_model_key: {
@@ -1179,6 +1441,65 @@ export type Database = {
       set_model_image: {
         Args: { p_brand: string; p_image_url: string; p_model: string }
         Returns: undefined
+      }
+      transfer_branch_stock: {
+        Args: {
+          p_batch_id?: string
+          p_date?: string
+          p_from_branch_id: string
+          p_from_seller_id?: string
+          p_notes?: string
+          p_product_id: string
+          p_quantity: number
+          p_to_branch_id: string
+        }
+        Returns: {
+          batch_id: string | null
+          created_at: string
+          date: string
+          from_branch_id: string
+          from_seller_id: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          to_branch_id: string
+          unit_cost: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "stock_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      transfer_branch_stock_batch: {
+        Args: {
+          p_date?: string
+          p_from_branch_id: string
+          p_items: Json
+          p_notes?: string
+          p_to_branch_id: string
+        }
+        Returns: {
+          batch_id: string | null
+          created_at: string
+          date: string
+          from_branch_id: string
+          from_seller_id: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          to_branch_id: string
+          unit_cost: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "stock_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
