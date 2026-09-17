@@ -472,6 +472,74 @@
     color: var(--nc-text-3);
   }
 
+  /* ---- Alvo de toque ----
+     O Nocturne foi desenhado para ponteiro: o .nc-btn tem 29px de altura, o
+     --icon fica em 26px quadrados e os campos vivem em `h-8` (32px). Com o dedo
+     nenhum desses é alvo — a referência é 44px no iOS e 48px no Android, e o
+     mínimo do WCAG 2.2 é 24px, que o --icon passa raspando e a pílula de ação
+     não passa.
+
+     O corte é `pointer: coarse`, e NÃO largura de tela, porque a pergunta é
+     dedo ou ponteiro, não telefone ou monitor: um notebook com tela sensível
+     precisa do alvo grande, e um telefone ligado a um mouse não precisa.
+
+     `min-height` e não `height` de propósito: as telas escrevem `h-8` na classe
+     do elemento, e min-height vence a altura declarada quando é maior — assim
+     um bloco de CSS acerta os ~200 botões e todos os campos do sistema sem
+     tocar em nenhum .tsx. Foi isto que aposentou o `TOUCH_ICON` e os
+     `max-sm:h-10` escritos à mão na tela de Vendas.
+
+     O [role="combobox"] é o SelectTrigger do shadcn, que não é .nc-btn nem
+     .nc-input e ficaria de fora. */
+  @media (pointer: coarse) {
+    .nc-btn {
+      min-height: 40px;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+    .nc-btn--icon {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0.5rem;
+    }
+    /* O glifo cresce junto. Sem isto, um ícone de 13px dentro de um alvo de
+       44px fica perdido no meio da caixa e o botão parece vazio — o alvo maior
+       tem que PARECER maior, senão a pessoa continua mirando no desenho
+       pequeno. */
+    .nc-btn--icon svg {
+      width: 16px;
+      height: 16px;
+    }
+    .nc-btn--md {
+      min-height: 44px;
+    }
+    .nc-input,
+    .nocturne [role="combobox"] {
+      min-height: 40px;
+    }
+    /* A pílula que também é botão (o selo "Aberto" da SalesPage). Não vai a 44
+       porque ela vive numa fileira de selos, e um alvo dessa altura ali
+       dominaria a linha e faria os selos vizinhos parecerem desligados. 32px
+       passa o mínimo do WCAG com folga. */
+    .nc-pill--action {
+      min-height: 32px;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+
+    /* O zoom do celular fica TRAVADO (ver o index.html), e quem trava o zoom
+       assume a conta de deixar o texto legível sem ele. O selo de situação é o
+       menor texto que carrega decisão no sistema ("Falta Dinheiro", "Parcial"),
+       e 10,5px com o dedo a 30cm do olho não é leitura, é adivinhação.
+
+       Só o selo e o sobretítulo sobem por CSS, porque os dois são classe. O
+       resto do texto pequeno (os 11px e 11,5px de metadado) está escrito tela a
+       tela em `text-[11px]`, e sobe junto com a migração de cada uma. */
+    .nc-pill {
+      font-size: 11.5px;
+    }
+  }
+
   /* Linha/cabeçalho clicável. Toca SÓ a background-color de propósito: a régua
      da .nc-row é background-image, e um `background` cheio no hover apagaria
      ela junto. */

@@ -101,16 +101,6 @@ const TABLE_MEDIA = "(min-width: 1024px)";
  */
 const FILTER_MEDIA = "(max-width: 639.98px)";
 
-/**
- * Alvo de toque das ações da linha no celular: 44px, a referência do iOS.
- *
- * Fica escrito aqui, e não no `.nc-btn--icon` do index.css, porque a passagem
- * dos tokens para o toque é o passo seguinte e vale para as dez telas — mexer
- * na classe agora mudaria nove telas que ninguém olhou ainda. Quando aquele
- * passo vier, esta constante some e o botão volta a ser um `size="icon"` seco.
- */
-const TOUCH_ICON = "h-11 w-11";
-
 type DateRangePreset = "all" | "today" | "7d" | "month" | "lastMonth" | "custom";
 
 /**
@@ -208,14 +198,14 @@ function ConfirmOrderPopover({
             onChange={e => setNote(e.target.value)}
             maxLength={ORDER_NOTE_MAX}
             placeholder="dia 20, fiado…"
-            className="nc-input h-8 w-full px-2.5 text-xs max-sm:h-10 max-sm:text-[16px]"
+            className="nc-input h-8 w-full px-2.5 text-xs max-sm:text-[16px]"
           />
         </div>
         <div className="nc-rule-top space-y-1.5 pt-2.5">
           <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebido agora</p>
           <div className="grid grid-cols-2 gap-1.5">
             {ORDER_PAYMENT_CHOICES.filter(c => c.paid).map(c => (
-              <NcButton key={c.id} variant="quiet" className="max-sm:h-10" onClick={() => pick(c.id)}>{c.label}</NcButton>
+              <NcButton key={c.id} variant="quiet" className="" onClick={() => pick(c.id)}>{c.label}</NcButton>
             ))}
           </div>
         </div>
@@ -223,7 +213,7 @@ function ConfirmOrderPopover({
           <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Falta receber</p>
           <div className="grid gap-1">
             {ORDER_PAYMENT_CHOICES.filter(c => !c.paid).map(c => (
-              <NcButton key={c.id} variant="ghost" className="justify-start max-sm:h-10" onClick={() => pick(c.id)}>{c.label}</NcButton>
+              <NcButton key={c.id} variant="ghost" className="justify-start" onClick={() => pick(c.id)}>{c.label}</NcButton>
             ))}
           </div>
         </div>
@@ -250,21 +240,7 @@ function ConfirmOrderPopover({
  * vocabulário fechado e um valor chutado aqui apareceria como "—" na própria
  * coluna ao lado.
  */
-function OpenStatusButton({
-  onConfirm, touch,
-}: {
-  onConfirm: (method: "pix" | "dinheiro") => Promise<void>;
-  /**
-   * No card do celular o selo cresce para 32px de altura. Não vai a 44 como os
-   * botões de editar e excluir de propósito: ele está numa fileira de selos, e
-   * um alvo de 44px ali dominaria o card e faria os outros dois parecerem
-   * desligados. 32px passa o mínimo de alvo do WCAG 2.2 (24px) com folga.
-   *
-   * A troca "Aberto → Pago" continua presa ao hover, que no toque não existe:
-   * lá o selo só diz "Aberto", e o popover é que conta o resto.
-   */
-  touch?: boolean;
-}) {
+function OpenStatusButton({ onConfirm }: { onConfirm: (method: "pix" | "dinheiro") => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -286,10 +262,14 @@ function OpenStatusButton({
           type="button"
           title="Marcar como recebido"
           aria-label="Marcar venda como recebida"
-          className={cn(
-            "nc-pill nc-pill--open nc-pill--action group/paid",
-            touch && "min-h-[32px] px-3 text-[11.5px]",
-          )}
+          // O alvo de toque vem do `.nc-pill--action` sob `pointer: coarse`
+          // (index.css): 32px, e não 44 como os botões de ícone, porque ele vive
+          // numa fileira de selos e um alvo dessa altura ali faria os vizinhos
+          // parecerem desligados.
+          //
+          // A troca "Aberto → Pago" continua presa ao hover, que no toque não
+          // existe: lá o selo só diz "Aberto", e o popover conta o resto.
+          className="nc-pill nc-pill--open nc-pill--action group/paid"
         >
           <span className="grid">
             <span className="col-start-1 row-start-1 text-center transition-opacity group-hover/paid:opacity-0 group-data-[state=open]/paid:opacity-0">
@@ -304,8 +284,8 @@ function OpenStatusButton({
       <PopoverContent align="end" className={cn(POPOVER_CLASS, "w-48 space-y-2 p-2.5")} style={POPOVER_STYLE}>
         <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebido em</p>
         <div className="grid grid-cols-2 gap-1.5">
-          <NcButton variant="quiet" className="max-sm:h-10" disabled={saving} onClick={() => handle("pix")}>Pix</NcButton>
-          <NcButton variant="quiet" className="max-sm:h-10" disabled={saving} onClick={() => handle("dinheiro")}>Dinheiro</NcButton>
+          <NcButton variant="quiet" className="" disabled={saving} onClick={() => handle("pix")}>Pix</NcButton>
+          <NcButton variant="quiet" className="" disabled={saving} onClick={() => handle("dinheiro")}>Dinheiro</NcButton>
         </div>
       </PopoverContent>
     </Popover>
@@ -426,7 +406,7 @@ function PendingOrdersList({
                 size="md"
                 disabled={processingOrder === order.id}
                 onClick={() => onDecline(order.id)}
-                className="max-sm:h-11 max-sm:flex-1"
+                className=" max-sm:flex-1"
               >
                 <Ban size={13} />Recusar
               </NcButton>
@@ -434,7 +414,7 @@ function PendingOrdersList({
                 disabled={processingOrder === order.id}
                 onConfirm={(method, notes) => onConfirm(order.id, method, notes)}
               >
-                <NcButton variant="solid" size="md" disabled={processingOrder === order.id} className="max-sm:h-11 max-sm:flex-1">
+                <NcButton variant="solid" size="md" disabled={processingOrder === order.id} className=" max-sm:flex-1">
                   <Check size={13} />Confirmar
                 </NcButton>
               </ConfirmOrderPopover>
@@ -1009,26 +989,21 @@ export default function SalesPage() {
     badge: paymentBadge(s.paymentMethod, s.sellerId ? getSellerName(s.sellerId) : "vendedor"),
   });
 
-  /** Editar e excluir, os mesmos dois em qualquer arranjo. */
-  const rowActions = (s: typeof sales[number], label: string, touch = false) => (
+  /**
+   * Editar e excluir, os mesmos dois em qualquer arranjo.
+   *
+   * Sem tamanho escrito aqui: o `.nc-btn--icon` já cresce para 44px (e o glifo
+   * para 16px) sob `pointer: coarse`, no index.css. Um alvo cravado no .tsx
+   * mediria a LARGURA da tela, que é a pergunta errada — quem decide o tamanho
+   * do alvo é o dedo, não o telefone.
+   */
+  const rowActions = (s: typeof sales[number], label: string) => (
     <>
-      <NcButton
-        variant="ghost"
-        size="icon"
-        aria-label={`Editar ${label}`}
-        onClick={() => openEdit(s)}
-        className={touch ? TOUCH_ICON : undefined}
-      >
-        <Pencil size={touch ? 16 : 13} />
+      <NcButton variant="ghost" size="icon" aria-label={`Editar ${label}`} onClick={() => openEdit(s)}>
+        <Pencil size={13} />
       </NcButton>
-      <NcButton
-        variant="danger"
-        size="icon"
-        aria-label={`Excluir ${label}`}
-        onClick={() => handleDelete(s.id)}
-        className={touch ? TOUCH_ICON : undefined}
-      >
-        <Trash2 size={touch ? 16 : 13} />
+      <NcButton variant="danger" size="icon" aria-label={`Excluir ${label}`} onClick={() => handleDelete(s.id)}>
+        <Trash2 size={13} />
       </NcButton>
     </>
   );
@@ -1182,7 +1157,6 @@ export default function SalesPage() {
                 <span className="nc-pill nc-pill--partial">Parcial</span>
               ) : (
                 <OpenStatusButton
-                  touch
                   onConfirm={async (method) => {
                     await updateSale(s.id, {
                       paidAmount: s.totalPrice,
@@ -1201,7 +1175,7 @@ export default function SalesPage() {
               mesmos 14px em que o total termina na linha de cima. Com -mr-2 ele
               parava 6px antes, e a coluna da direita saía torta. */}
           <div className="-mr-3.5 flex flex-none items-center">
-            {rowActions(s, label, true)}
+            {rowActions(s, label)}
           </div>
         </div>
       </motion.div>
@@ -1219,7 +1193,7 @@ export default function SalesPage() {
    * Duas cópias de cada select seria a forma óbvia e a errada: no dia em que
    * "Parcial" virar outra coisa, uma das duas ficaria para trás.
    */
-  const triggerClass = compactFilters ? "h-11 w-full text-[15px]" : "h-8 w-auto text-[12.5px]";
+  const triggerClass = compactFilters ? "w-full text-[15px]" : "h-8 w-auto text-[12.5px]";
 
   const searchField = (
     <div className={cn("relative min-w-0 flex-1", !compactFilters && "min-w-[180px]")}>
@@ -1286,7 +1260,7 @@ export default function SalesPage() {
         size="icon"
         aria-label={fSortDir === "asc" ? "Ordenar do maior para o menor" : "Ordenar do menor para o maior"}
         onClick={() => setFSortDir(d => d === "asc" ? "desc" : "asc")}
-        className={compactFilters ? "h-11 w-11 flex-none" : undefined}
+        className={compactFilters ? "flex-none" : undefined}
       >
         <ArrowUpDown size={compactFilters ? 16 : 13} className={cn("transition-transform", fSortDir === "asc" && "rotate-180")} />
       </NcButton>
@@ -1304,7 +1278,7 @@ export default function SalesPage() {
         value={fFrom}
         onChange={e => { setFFrom(e.target.value); setFPreset("custom"); }}
         aria-label="Data inicial"
-        className={cn("nc-input nc-num px-2", compactFilters ? "h-11 min-w-0 flex-1 text-[16px]" : "h-8 w-[132px] text-[12px]")}
+        className={cn("nc-input nc-num px-2", compactFilters ? "min-w-0 flex-1 text-[16px]" : "h-8 w-[132px] text-[12px]")}
       />
       <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
       <input
@@ -1312,7 +1286,7 @@ export default function SalesPage() {
         value={fTo}
         onChange={e => { setFTo(e.target.value); setFPreset("custom"); }}
         aria-label="Data final"
-        className={cn("nc-input nc-num px-2", compactFilters ? "h-11 min-w-0 flex-1 text-[16px]" : "h-8 w-[132px] text-[12px]")}
+        className={cn("nc-input nc-num px-2", compactFilters ? "min-w-0 flex-1 text-[16px]" : "h-8 w-[132px] text-[12px]")}
       />
     </div>
   );
@@ -1526,11 +1500,11 @@ export default function SalesPage() {
                     variant="ghost"
                     onClick={clearFilters}
                     disabled={!hasActiveFilters}
-                    className={cn("h-11", !hasActiveFilters && "invisible")}
+                    className={cn(!hasActiveFilters && "invisible")}
                   >
                     <X size={13} />Limpar
                   </NcButton>
-                  <NcButton variant="solid" className="h-11" onClick={() => setFiltersOpen(false)}>
+                  <NcButton variant="solid" onClick={() => setFiltersOpen(false)}>
                     Ver {sortedSales.length} venda{sortedSales.length === 1 ? "" : "s"}
                   </NcButton>
                 </div>

@@ -89,8 +89,15 @@ export function BranchReadOnly({ className }: { className?: string }) {
   );
 }
 
-/** Sobretítulo: 10px, caixa alta, entreletra larga. A cor vem de quem usa. */
-export const EYEBROW = "text-[10px] uppercase tracking-[0.1em]";
+/**
+ * Sobretítulo: 10px, caixa alta, entreletra larga. A cor vem de quem usa.
+ *
+ * 11px no celular, e a razão é a mesma do `.nc-pill` no index.css: o zoom fica
+ * travado ali, e quem trava o zoom assume a conta de deixar o texto legível sem
+ * ele. Vai na constante e não em cada uso porque ela é o sobretítulo de TODA
+ * tela — um `max-sm:` aqui acerta as dez de uma vez.
+ */
+export const EYEBROW = "text-[11px] uppercase tracking-[0.1em] sm:text-[10px]";
 
 /**
  * Trilho lateral de 312px — o `<aside>` de toda tela migrada. Quem rola é o
