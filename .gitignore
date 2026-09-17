@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Skills de agente instaladas por plugin (CodeRabbit e afins).
+# Os arquivos de verdade ficam em .agents/; o que está em .claude/skills/
+# são symlinks para lá, e o skills-lock.json é o lock da instalação.
+# Não versionamos porque quem instala é cada máquina, pela própria
+# ferramenta — versionar aqui deixaria o repo com uma cópia que envelhece
+# sozinha e que ninguém atualiza.
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Permissões e preferências locais do Claude Code — são da máquina, não do
+# projeto. Um .claude/settings.json compartilhado, se um dia existir, NÃO é
+# alcançado por esta linha e continua versionável.
+.claude/settings.local.json
