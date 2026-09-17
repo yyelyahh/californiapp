@@ -178,8 +178,13 @@ function StatCard({
  */
 function CarriedTag() {
   return (
+    // `inline-flex` + `align-middle` e não `flex-none`: desde que o nome do
+    // produto passou a QUEBRAR em vez de cortar, o selo não pode mais ser um
+    // irmão de largura fixa ao lado de um bloco de texto — ele flui junto com a
+    // última palavra do nome, e vai para a linha seguinte se não couber. O
+    // `whitespace-nowrap` é para ele não se quebrar no meio.
     <span
-      className="ml-1.5 flex-none rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.08em]"
+      className="ml-1.5 inline-flex whitespace-nowrap rounded-full px-1.5 py-0.5 align-middle text-[9.5px] font-bold uppercase tracking-[0.08em]"
       style={{ background: "var(--sf-surface-2)", color: "var(--sf-text-faint)" }}
     >
       de antes
@@ -202,12 +207,19 @@ function ConsumptionRow({
       : `Dívida${entry.debt?.notes ? ` · ${entry.debt.notes}` : ""}`;
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2">
+    // `items-baseline`: com o nome quebrando em duas linhas, `items-center`
+    // centraria o valor contra o bloco inteiro e ele flutuaria no meio do nada.
+    // Pela base ele assenta na PRIMEIRA linha do nome, que é onde se lê a dupla
+    // "o que é / quanto é". Mesma escolha do card de venda do ERP.
+    <div className="flex items-baseline justify-between gap-3 py-2">
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center">
-          <p className="truncate text-[13px] font-semibold">{title}</p>
+        {/* Sem `truncate`: nome de retirada cortado no meio não diz qual sabor
+            saiu, e é a única identificação da linha. O selo "de antes" flui
+            dentro do parágrafo, ver CarriedTag. */}
+        <p className="break-words text-[13px] font-semibold leading-snug">
+          {title}
           {!entry.inPeriod && <CarriedTag />}
-        </div>
+        </p>
         <p className="mt-0.5 text-[11px]" style={{ color: "var(--sf-text-muted)" }}>
           {formatDateBR(entry.date)}
           {entry.kind === "retirada" && entry.sale ? ` · ${entry.sale.quantity} un.` : ""}
@@ -238,14 +250,19 @@ function SaleRow({
   const received = openAmount(sale) <= 0.01;
   return (
     <div
-      className="flex items-center justify-between gap-3 px-3.5 py-3"
+      className="flex items-baseline justify-between gap-3 px-3.5 py-3"
       style={divider ? { borderTop: "1px solid var(--sf-hairline)" } : undefined}
     >
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center">
-          <p className="truncate text-[13.5px] font-bold">{productLabel(sale.productId)}</p>
+        {/* O nome QUEBRA, não corta. `productLabel` devolve "sabor · modelo", e
+            numa coluna de 480px o corte comia justamente o modelo — a linha
+            virava "Blueberry Ice · Elf…", que não diz de qual aparelho é. Duas
+            linhas custam 18px; a informação que falta custa uma pergunta no
+            WhatsApp. `break-words` cobre o nome sem espaço nenhum. */}
+        <p className="break-words text-[13.5px] font-bold leading-snug">
+          {productLabel(sale.productId)}
           {carried && <CarriedTag />}
-        </div>
+        </p>
         <p className="mt-0.5 text-[11px]" style={{ color: "var(--sf-text-muted)" }}>
           {formatDateBR(sale.date)} · {sale.quantity} un.
         </p>
@@ -412,7 +429,9 @@ function OrderCard({
             </span>
             Novo pedido
           </span>
-          <p className="mt-2 truncate text-base font-bold leading-tight">{order.customers?.name ?? "Sem cliente"}</p>
+          {/* Nome composto cortado é o vendedor sem saber para quem vai
+              entregar — mesmo motivo dos itens logo abaixo. */}
+          <p className="mt-2 break-words text-base font-bold leading-tight">{order.customers?.name ?? "Sem cliente"}</p>
           <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--sf-text-muted)" }}>
             {order.customers?.whatsapp ?? "—"}
             {/* A mesma referência que vai na mensagem que o cliente encaminha:
@@ -438,7 +457,10 @@ function OrderCard({
       <ul className="mt-3 space-y-1.5 rounded-2xl px-3.5 py-2.5" style={{ background: "var(--sf-surface-2)" }}>
         {order.order_items?.map(item => (
           <li key={item.id} className="flex items-baseline justify-between gap-2 text-[13px]">
-            <span className="min-w-0 flex-1 truncate">
+            {/* Sem `truncate`: esta lista é o que o cliente pediu, e é por ela
+                que o vendedor decide confirmar ou recusar. Item cortado pela
+                metade transforma a decisão num chute. */}
+            <span className="min-w-0 flex-1 break-words leading-snug">
               <span className="font-extrabold">{item.quantity}×</span>{" "}
               <span className="font-semibold">{item.products?.flavor ?? "Produto"}</span>
               {item.products?.brand && (
@@ -922,7 +944,9 @@ export default function SellerSalesPage() {
                       className="flex items-baseline justify-between gap-3 px-3.5 py-2.5"
                       style={{ background: "var(--sf-surface-2)" }}
                     >
-                      <p className="min-w-0 truncate text-[12.5px] font-extrabold uppercase tracking-[0.06em]">
+                      {/* Marca · modelo é o cabeçalho do grupo: cortado, dois
+                          modelos da mesma marca viram o mesmo título. */}
+                      <p className="min-w-0 break-words text-[12.5px] font-extrabold uppercase leading-snug tracking-[0.06em]">
                         {group.brand}
                         {group.model && (
                           <span style={{ color: "var(--sf-text-muted)" }}> · {group.model}</span>
@@ -938,13 +962,16 @@ export default function SellerSalesPage() {
                     {group.lines.map((line, i) => (
                       <div
                         key={line.productId}
-                        className="flex items-center justify-between gap-3 px-3.5 py-2.5"
+                        className="flex items-baseline justify-between gap-3 px-3.5 py-2.5"
                         style={i > 0 ? { borderTop: "1px solid var(--sf-hairline)" } : undefined}
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-[13.5px] font-bold">{line.flavor}</p>
+                          {/* Esta tela existe para CONFERIR o que está na mão
+                              com o que o sistema diz. Sabor cortado é
+                              exatamente a conferência que não dá para fazer. */}
+                          <p className="break-words text-[13.5px] font-bold leading-snug">{line.flavor}</p>
                           {line.reserved > 0 && (
-                            <p className="mt-0.5 truncate text-[11px]" style={{ color: "var(--sf-warn)" }}>
+                            <p className="mt-0.5 text-[11px]" style={{ color: "var(--sf-warn)" }}>
                               {line.reserved} em pedido pendente
                             </p>
                           )}
