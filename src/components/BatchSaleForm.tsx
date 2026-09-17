@@ -384,18 +384,18 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
             <div className="nc-rule-top space-y-1 pt-1.5">
               <div className="flex justify-between">
                 <span style={{ color: "var(--nc-text-2)" }}>Recebido</span>
-                <AnimatedNumber className="nc-num" style={{ color: "var(--nc-ok)" }} value={received} format={formatCurrency} duration={0.25} />
+                <span style={{ color: "var(--nc-ok)" }}><AnimatedNumber className="nc-num" value={received} format={formatCurrency} duration={0.25} /></span>
               </div>
               <div className="flex justify-between">
                 <span style={{ color: "var(--nc-text-2)" }}>Falta receber</span>
-                <AnimatedNumber className="nc-num" style={{ color: "var(--nc-alert)" }} value={Math.max(0, total - received)} format={formatCurrency} duration={0.25} />
+                <span style={{ color: "var(--nc-alert)" }}><AnimatedNumber className="nc-num" value={Math.max(0, total - received)} format={formatCurrency} duration={0.25} /></span>
               </div>
             </div>
           )}
           {type === "retirada_funcionario" && (
             <div className="nc-rule-top flex justify-between pt-1.5">
               <span style={{ color: "var(--nc-text-2)" }}>Saldo devedor do funcionário</span>
-              <AnimatedNumber className="nc-num font-semibold" style={{ color: "var(--nc-alert)" }} value={total} format={formatCurrency} duration={0.25} />
+              <span style={{ color: "var(--nc-alert)" }}><AnimatedNumber className="nc-num font-semibold" value={total} format={formatCurrency} duration={0.25} /></span>
             </div>
           )}
         </div>

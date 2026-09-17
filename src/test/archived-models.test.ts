@@ -15,7 +15,7 @@ const archived = (branchId: string, brand: string, model: string): ArchivedModel
 
 const stat = (t: Partial<ModelStat> & { brand: string; model: string }): ModelStat => ({
   key: `${t.brand}|${t.model}`,
-  stock: 0, unitCost: 80, stockValue: 0, perDay: 0, saleDays: 0,
+  stock: 0, minUnits: 0, unitCost: 80, stockValue: 0, perDay: 0, saleDays: 0,
   daysLeft: Infinity, marginPct: 40, incoming: 0, needUnits: 0,
   restockUnits: 0, restockCost: 0, daysSinceLastSale: Infinity,
   revenue: 0, qty: 0,

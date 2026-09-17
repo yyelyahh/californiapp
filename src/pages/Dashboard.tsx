@@ -11,18 +11,13 @@ import { listItem } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { SegmentedChips, Rule, RAIL, STICKY_HEAD } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
-import { computeModelStats, summarizeRestock, urgencyOf, HORIZON_DAYS, STALE_DAYS, type ModelStat } from "@/lib/restock";
+import { computeModelStats, summarizeRestock, urgencyOf, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { toast } from "sonner";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 function formatPct(value: number, digits = 1) {
   return `${value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
-}
-
-function formatDays(days: number) {
-  if (!isFinite(days)) return "sem giro";
-  return `${Math.round(days)} dias`;
 }
 
 /**
@@ -185,17 +180,17 @@ export default function Dashboard() {
   const restockRows = useMemo(() => restock.urgent.slice(0, MAX_RESTOCK_ROWS), [restock.urgent]);
 
   /**
-   * O que a tabela não mostra. Modelo de venda isolada e modelo já comprado
-   * saem da lista para ela caber numa olhada, mas continuam contados aqui —
-   * some da tabela, não do card.
+   * O que a tabela não mostra. Modelo já comprado sai da lista para ela caber
+   * numa olhada, mas continua contado aqui — some da tabela, não do card.
+   *
+   * O balde de "venda isolada" saiu junto com a conta antiga: ele existia para
+   * barrar uma PROJEÇÃO de giro feita em cima de uma venda só. O mínimo não
+   * projeta nada, é a decisão do dono sobre o que quer ter na prateleira.
    */
   const restockAsides = useMemo(() => {
     const parts: string[] = [];
     const hidden = restock.urgent.length - restockRows.length;
     if (hidden > 0) parts.push(`+${hidden} pedido${hidden > 1 ? "s" : ""} menor${hidden > 1 ? "es" : ""}`);
-    if (restock.occasionalCount > 0) {
-      parts.push(`${restock.occasionalCount} de venda isolada · ${formatCurrencyShort(restock.occasionalCost)}`);
-    }
     if (restock.orderedCount > 0) {
       parts.push(`${restock.orderedCount} já pedido${restock.orderedCount > 1 ? "s" : ""}, ${restock.orderedUnits} un. a caminho`);
     }
@@ -359,17 +354,15 @@ export default function Dashboard() {
               Marca: m.brand,
               Modelo: m.model,
               "Estoque (un.)": m.stock,
-              "Vende/dia": fmt(m.perDay),
-              "Dias com venda": m.saleDays,
-              "Dura (dias)": isFinite(m.daysLeft) ? Math.round(m.daysLeft) : "sem giro",
-              "Margem (%)": fmt(m.marginPct),
+              "Mínimo (un.)": m.minUnits,
+              "Vendeu no período (un.)": m.qty,
               "A caminho (un.)": m.incoming,
               "Repor (un.)": m.restockUnits,
-              [`Custo p/ ${HORIZON_DAYS}d (R$)`]: fmt(m.restockCost),
+              "Custo do pedido (R$)": fmt(m.restockCost),
             }))
           : [{ Marca: "—" }],
       );
-      wsRepor["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 13 }, { wch: 11 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 16 }];
+      wsRepor["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 13 }, { wch: 13 }, { wch: 22 }, { wch: 15 }, { wch: 12 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsRepor, "Repor agora");
 
       // Vendas do período
@@ -495,13 +488,19 @@ export default function Dashboard() {
                     ordenada por unidades a pedir) não muda: é ela que decide
                     quem entra aqui. */}
                 <table className="w-full min-w-0 text-[13px] sm:min-w-[560px]">
+                  {/* Quatro colunas e a conta fecha na horizontal: o estoque de
+                      hoje contra o mínimo, o que saiu no período, e o que
+                      pedir. "Dura tantos dias", "Vende/dia" e "Margem" saíram —
+                      eram a leitura da conta ANTIGA, que projetava giro; a de
+                      agora é uma subtração contra o mínimo, e mostrar a projeção
+                      ao lado dela seria oferecer duas réguas para o mesmo
+                      número. O que está a caminho aparece embaixo do "Pedir",
+                      porque é o que explica um pedido menor que a falta. */}
                   <thead>
                     <tr style={{ color: "var(--nc-text-3)" }}>
                       <th className="px-2 py-1.5 text-left font-normal">Modelo</th>
-                      <th className="px-2 py-1.5 text-right font-normal">Estoque</th>
-                      <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Vende/dia</th>
-                      <th className="px-2 py-1.5 text-right font-normal">Dura</th>
-                      <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Margem</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Estoque / mín.</th>
+                      <th className="px-2 py-1.5 text-right font-normal">Vendeu</th>
                       <th className="px-2 py-1.5 text-right font-normal">Pedir</th>
                     </tr>
                   </thead>
@@ -522,14 +521,14 @@ export default function Dashboard() {
                       <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
                         {restock.horizonUnits} un.
                       </strong>{" "}
-                      para cobrir {HORIZON_DAYS} dias ·{" "}
+                      para voltar ao mínimo ·{" "}
                       <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
                         {formatCurrencyShort(restock.horizonCost)}
                       </strong>{" "}
                       a custo
                     </>
                   ) : (
-                    <>Nada a pedir para cobrir os próximos {HORIZON_DAYS} dias.</>
+                    <>Nenhum modelo abaixo do mínimo.</>
                   )}
                 </span>
                 {restockAsides.length > 0 && (
@@ -848,9 +847,11 @@ function Delta({ delta, invert }: { delta: DeltaValue; invert?: boolean }) {
 }
 
 function RestockRow({ model }: { model: ModelStat }) {
-  const urgency = urgencyOf(model.daysLeft);
+  // A bolinha mede a falta contra o MÍNIMO, não mais os dias de estoque: tudo
+  // aqui já está abaixo do mínimo, e o que ela separa é "faltou um pouco" de
+  // "está acabando" (metade do mínimo ou menos).
+  const urgency = urgencyOf(model.stock, model.minUnits);
   const dot = urgency === "critical" ? "var(--nc-crit)" : urgency === "warning" ? "var(--nc-alert)" : "var(--nc-text-3)";
-  const daysColor = urgency === "ok" ? undefined : dot;
 
   return (
     <tr className="nc-row">
@@ -864,14 +865,17 @@ function RestockRow({ model }: { model: ModelStat }) {
           <span className="min-w-0 truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>{model.brand}</span>
         </div>
       </td>
-      <td className="px-2 py-1.5 text-right nc-num">{model.stock} un.</td>
-      <td className="hidden px-2 py-1.5 text-right nc-num sm:table-cell">
-        {model.perDay.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {/* Estoque de hoje contra o mínimo, lado a lado: é a subtração que
+          produz o "Pedir", e vê-la inteira é o que deixa conferir a linha sem
+          abrir outra tela. O estoque herda a cor da bolinha; o mínimo fica em
+          terciário, porque ele é a régua e não o número que se persegue. */}
+      <td className="nc-num px-2 py-1.5 text-right">
+        <span style={urgency === "ok" ? undefined : { color: dot }}>{model.stock}</span>
+        <span style={{ color: "var(--nc-text-3)" }}> / {model.minUnits}</span>
       </td>
-      <td className="px-2 py-1.5 text-right nc-num" style={daysColor ? { color: daysColor } : undefined}>
-        {formatDays(model.daysLeft)}
+      <td className="nc-num px-2 py-1.5 text-right" style={{ color: "var(--nc-text-2)" }}>
+        {model.qty} un.
       </td>
-      <td className="hidden px-2 py-1.5 text-right nc-num sm:table-cell">{formatPct(model.marginPct)}</td>
       {/* Quanto pedir, já descontado o que está a caminho — e o abatimento
           aparece embaixo, senão o número menor não teria explicação. */}
       <td className="px-2 py-1.5 text-right">

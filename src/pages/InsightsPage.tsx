@@ -171,7 +171,12 @@ export default function InsightsPage() {
       const key = modelKey(p.brand, p.model);
       const entry = map.get(key) ?? { key, brand: p.brand, model: p.model, stock: 0, minStock: 0, flavors: 0, zeroed: 0, cost: 0 };
       entry.stock += p.stock;
-      entry.minStock += p.minStock || 0;
+      // MAIOR, não soma. O diálogo "Mínimo por modelo" grava o mesmo número em
+      // todos os sabores, e quem digita 10 ali quer dez unidades do modelo, não
+      // dez de cada sabor — somar multiplicava o mínimo pelo número de sabores
+      // e esta lista acusava falta em modelo que estava abastecido. É a mesma
+      // leitura do `minUnits` em src/lib/restock.ts e da tela de Produtos.
+      entry.minStock = Math.max(entry.minStock, p.minStock || 0);
       entry.flavors += 1;
       if (p.stock <= 0) entry.zeroed += 1;
       entry.cost += p.stock * (p.purchasePrice || 0);
