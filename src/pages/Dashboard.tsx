@@ -13,6 +13,8 @@ import { SegmentedChips, Rule, RAIL, STICKY_HEAD } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { computeModelStats, summarizeRestock, urgencyOf, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
+import { buildReport } from "@/lib/report-workbook";
+import { useBranch } from "@/context/BranchContext";
 import { toast } from "sonner";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
@@ -41,6 +43,9 @@ const TOP_MODELS = 5;
 
 export default function Dashboard() {
   const store = useStore();
+  // O relatório diz de QUAL filial ele fala. Sem isso, dois arquivos com os
+  // mesmos cabeçalhos e números diferentes não teriam como ser distinguidos.
+  const { branchId, branchName } = useBranch();
   const totalStock = store.products.reduce((s, p) => s + p.stock, 0);
   // Valor do estoque a custo: soma do custo unitário × quantidade de cada produto.
   const inventoryAtCost = useMemo(
@@ -76,6 +81,13 @@ export default function Dashboard() {
   }, [store.sales, store.expenses, store.stockEntries]);
 
   const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
+  /**
+   * O relatório monta ~24 abas sobre o histórico inteiro e carrega o `xlsx` na
+   * hora: em máquina lenta dá para clicar duas vezes antes de o arquivo sair, e
+   * o segundo clique baixaria um arquivo idêntico enquanto o primeiro ainda
+   * roda. O botão desliga enquanto isso.
+   */
+  const [exporting, setExporting] = useState(false);
 
   /**
    * Atalhos do seletor: os meses mais recentes + Geral. Se o mês escolhido for
@@ -130,19 +142,42 @@ export default function Dashboard() {
     };
   }, [store.sales, store.expenses, store.stockEntries, productMap]);
 
-  const intervalFor = (ym: string) => {
-    const [y, m] = ym.split("-").map(Number);
-    const ref = new Date(y, m - 1, 15);
-    return { start: startOfMonth(ref), end: endOfMonth(ref) };
-  };
-
   const isGeral = filter === GERAL;
 
-  const periodStats = useMemo(() => {
-    if (isGeral) return computeStats(() => true);
-    const interval = intervalFor(filter);
-    return computeStats((d) => isWithinInterval(parseISO(d), interval));
-  }, [filter, isGeral, computeStats]);
+  /**
+   * O período escolhido como JANELA e como TESTE, num lugar só.
+   *
+   * O `inPeriod` é o mesmo que os cartões da tela usam e o mesmo que o
+   * relatório recebe — duas definições do que é "este mês" acabariam
+   * divergindo num canto, e a planilha discordaria da tela por uma venda.
+   *
+   * Em "Geral" a janela vai do lançamento mais antigo até hoje: `inPeriod`
+   * aceita tudo de qualquer jeito, mas as datas são o que o relatório imprime
+   * no cabeçalho e o que decide quais MESES a comissão fecha.
+   */
+  const period = useMemo(() => {
+    if (!isGeral) {
+      const [y, m] = filter.split("-").map(Number);
+      const ref = new Date(y, m - 1, 15);
+      const start = startOfMonth(ref);
+      const end = endOfMonth(ref);
+      return { start, end, inPeriod: (d: string) => isWithinInterval(parseISO(d), { start, end }) };
+    }
+    // `Math.min(...array)` estoura a pilha com histórico grande — daí o laço.
+    let oldest = Infinity;
+    const scan = (rows: { date: string }[]) => rows.forEach(r => {
+      const t = Date.parse(r.date);
+      if (!isNaN(t) && t < oldest) oldest = t;
+    });
+    scan(store.sales); scan(store.expenses); scan(store.stockEntries);
+    return {
+      start: Number.isFinite(oldest) ? new Date(oldest) : new Date(),
+      end: new Date(),
+      inPeriod: () => true,
+    };
+  }, [filter, isGeral, store.sales, store.expenses, store.stockEntries]);
+
+  const periodStats = useMemo(() => computeStats(period.inPeriod), [period, computeStats]);
 
   const prevStats = useMemo(() => {
     if (isGeral) return null;
@@ -275,6 +310,13 @@ export default function Dashboard() {
         receita,
         lucro,
         margem,
+        // O gráfico não desenha as quatro de baixo; o relatório imprime. Ficam
+        // aqui porque é a MESMA passada pelos mesmos meses — recalcular por
+        // fora é como as duas leituras do mínimo já divergiram uma vez.
+        cogs,
+        despesas: desp,
+        vendas: salesInMonth.length,
+        unidades: salesInMonth.reduce((sum, s) => sum + s.quantity, 0),
       });
     }
     return months;
@@ -300,122 +342,92 @@ export default function Dashboard() {
     [store.sales],
   );
 
+  /**
+   * O relatório em Excel.
+   *
+   * A MONTAGEM mora em `src/lib/report-workbook.ts` (função pura, testada em
+   * `src/test/report-workbook.test.ts`); aqui fica só o que precisa do
+   * navegador: carregar a biblioteca sob demanda, virar planilha e baixar.
+   *
+   * Tudo o que a tela já calculou entra por parâmetro — `modelStats`,
+   * `monthlyData`, o `inPeriod` do filtro e os seletores do razão. O relatório
+   * não refaz conta nenhuma: número que aparece em duas telas é a MESMA conta
+   * nas duas, e a planilha é só mais uma tela.
+   */
   async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
     try {
       const XLSX = await import("xlsx");
-      let filterFn: (dateISO: string) => boolean;
-      if (isGeral) filterFn = () => true;
-      else {
-        const [y, m] = filter.split("-").map(Number);
-        const start = startOfMonth(new Date(y, m - 1, 15));
-        const end = endOfMonth(new Date(y, m - 1, 15));
-        filterFn = (d: string) => isWithinInterval(parseISO(d), { start, end });
-      }
 
-      const fmt = (n: number) => Number(n.toFixed(2));
+      const sheets = buildReport({
+        generatedAt: new Date(),
+        periodLabel: isGeral ? "Geral (todo período)" : filterLabel,
+        branchLabel: branchId ? branchName(branchId) : "Todas as filiais",
+        start: period.start,
+        end: period.end,
+        inPeriod: period.inPeriod,
+
+        products: store.products,
+        hiddenModels: store.hiddenModels,
+        sales: store.sales,
+        expenses: store.expenses,
+        stockEntries: store.stockEntries,
+        stockLosses: store.stockLosses,
+        stockTransfers: store.stockTransfers,
+        purchaseOrders: store.purchaseOrders,
+        productAssignments: store.productAssignments,
+        sellers: store.sellers,
+        commissionPayments: store.commissionPayments,
+        sellerDebtPayments: store.sellerDebtPayments,
+        sellerManualDebts: store.sellerManualDebts,
+        partners: store.partners,
+        proLaborePayments: store.proLaborePayments,
+        partnerContributions: store.partnerContributions,
+        loans: store.loans,
+        loanPayments: store.loanPayments,
+        investors: store.investors,
+        dividends: store.dividends,
+        financialEvents: store.financialEvents,
+
+        modelStats,
+        monthly: monthlyData,
+        position: {
+          cash: store.getCash(),
+          inventory: store.getInventoryCostValue(),
+          receivables: store.getReceivables(),
+          partnerCapital: store.getPartnerCapital(),
+          loansOutstanding: store.getLoansOutstanding(),
+          accumulatedProfit: store.getAccumulatedProfit(),
+          distributedProfit: store.getDistributedProfit(),
+          retainedEarnings: store.getRetainedEarnings(),
+        },
+        branchName,
+      });
+
       const wb = XLSX.utils.book_new();
-
-      // Resumo
-      const resumo = [
-        ["California Contabilidade — Dashboard"],
-        ["Período", isGeral ? "Geral (todo período)" : filterLabel],
-        ["Gerado em", format(new Date(), "dd/MM/yyyy HH:mm")],
-        [],
-        ["Indicador", "Valor (R$)"],
-        ["Receita", fmt(periodStats.revenue)],
-        ["Recebido", fmt(periodStats.received)],
-        ["A receber", fmt(periodStats.receivable)],
-        ["CPV (Custo dos Produtos Vendidos)", fmt(periodStats.cogs)],
-        ["Lucro bruto", fmt(periodStats.grossProfit)],
-        ["Margem bruta (%)", fmt(periodStats.grossMargin)],
-        ["Despesas", fmt(periodStats.expenses)],
-        ["Lucro líquido", fmt(periodStats.netProfit)],
-        ["Margem líquida (%)", fmt(periodStats.netMargin)],
-        ["Ticket médio", fmt(periodStats.ticket)],
-        ["Reposição de estoque (investimento)", fmt(periodStats.restock)],
-        ["Estoque atual (unidades)", totalStock],
-        ["Estoque a custo (razão)", fmt(inventoryAtCost)],
-      ];
-      const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
-      wsResumo["!cols"] = [{ wch: 40 }, { wch: 18 }];
-      XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
-
-      // Evolução 6 meses
-      const wsEvol = XLSX.utils.json_to_sheet(monthlyData.map(m => ({
-        Mês: m.monthLong, "Receita (R$)": fmt(m.receita), "Lucro Líquido (R$)": fmt(m.lucro), "Margem (%)": fmt(m.margem),
-      })));
-      wsEvol["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }];
-      XLSX.utils.book_append_sheet(wb, wsEvol, "Evolução 6 meses");
-
-      // Reposição sugerida (mesma conta do card "Repor agora")
-      const wsRepor = XLSX.utils.json_to_sheet(
-        restock.urgent.length
-          ? restock.urgent.map(m => ({
-              Marca: m.brand,
-              Modelo: m.model,
-              "Estoque (un.)": m.stock,
-              "Mínimo (un.)": m.minUnits,
-              "Vendeu no período (un.)": m.qty,
-              "A caminho (un.)": m.incoming,
-              "Repor (un.)": m.restockUnits,
-              "Custo do pedido (R$)": fmt(m.restockCost),
-            }))
-          : [{ Marca: "—" }],
-      );
-      wsRepor["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 13 }, { wch: 13 }, { wch: 22 }, { wch: 15 }, { wch: 12 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, wsRepor, "Repor agora");
-
-      // Vendas do período
-      const vendas = store.sales.filter(s => s.type === "venda" && filterFn(s.date)).map(s => {
-        const p = productMap.get(s.productId);
-        const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(s.productId);
-        const cost = (p?.purchasePrice ?? 0) * s.quantity;
-        return {
-          Data: format(parseISO(s.date), "dd/MM/yyyy"),
-          Produto: label,
-          Quantidade: s.quantity,
-          "Valor (R$)": fmt(s.totalPrice),
-          "Pago (R$)": fmt(s.paidAmount || 0),
-          "A receber (R$)": fmt(Math.max(0, s.totalPrice - (s.paidAmount || 0))),
-          "CPV (R$)": fmt(cost),
-          "Lucro bruto (R$)": fmt(s.totalPrice - cost),
-        };
+      sheets.forEach(sheet => {
+        const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+        ws["!cols"] = sheet.widths.map(wch => ({ wch }));
+        // As setinhas de ordenar e filtrar na linha do cabeçalho. É o que
+        // transforma uma aba de mil vendas em algo que se consulta.
+        if (sheet.autofilter && ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+        XLSX.utils.book_append_sheet(wb, ws, sheet.name);
       });
-      const wsVendas = XLSX.utils.json_to_sheet(vendas.length ? vendas : [{ Data: "—" }]);
-      wsVendas["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 16 }];
-      XLSX.utils.book_append_sheet(wb, wsVendas, "Vendas");
 
-      // Despesas
-      const despesas = store.expenses.filter(e => filterFn(e.date)).map(e => ({
-        Data: format(parseISO(e.date), "dd/MM/yyyy"),
-        Descrição: (e as any).description ?? (e as any).name ?? "",
-        "Valor (R$)": fmt(e.amount),
-      }));
-      const wsDesp = XLSX.utils.json_to_sheet(despesas.length ? despesas : [{ Data: "—" }]);
-      wsDesp["!cols"] = [{ wch: 12 }, { wch: 40 }, { wch: 14 }];
-      XLSX.utils.book_append_sheet(wb, wsDesp, "Despesas");
-
-      // Reposição de estoque
-      const entradas = store.stockEntries.filter(e => filterFn(e.date)).map(e => {
-        const p = productMap.get(e.productId);
-        const label = p ? `${p.flavor} · ${p.model}` : store.getProductName(e.productId);
-        return {
-          Data: format(parseISO(e.date), "dd/MM/yyyy"),
-          Produto: label,
-          Quantidade: e.quantity,
-          "Custo total (R$)": fmt(e.totalCost),
-        };
-      });
-      const wsEnt = XLSX.utils.json_to_sheet(entradas.length ? entradas : [{ Data: "—" }]);
-      wsEnt["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 16 }];
-      XLSX.utils.book_append_sheet(wb, wsEnt, "Reposição estoque");
-
-      const suffix = isGeral ? "geral" : filter;
-      XLSX.writeFile(wb, `dashboard-${suffix}.xlsx`);
-      toast.success("Exportação concluída");
+      const slug = (s: string) =>
+        s.normalize("NFD").replace(/[̀-ͯ]/g, "")
+          .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const place = branchId ? `-${slug(branchName(branchId))}` : "";
+      XLSX.writeFile(wb, `california${place}-${isGeral ? "geral" : filter}.xlsx`);
+      toast.success(`Relatório com ${sheets.length} abas`);
     } catch (err) {
       console.error(err);
       toast.error("Falha ao exportar");
+    } finally {
+      // Sem o `finally` um erro deixaria o botão desabilitado para sempre — a
+      // mesma regra de toda tela que troca de estado depois de um `await`.
+      setExporting(false);
     }
   }
 
@@ -448,8 +460,9 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={handleExport}
-              title="Exportar Excel"
-              aria-label="Exportar Excel"
+              disabled={exporting}
+              title={exporting ? "Montando o relatório…" : "Baixar relatório em Excel"}
+              aria-label={exporting ? "Montando o relatório" : "Baixar relatório em Excel"}
               className="nc-btn nc-btn--ghost nc-btn--icon"
             >
               <Download size={15} />

@@ -17,6 +17,21 @@ export const COMMISSION_TIERS: CommissionTier[] = [
   { label: "15%", rate: 0.15, min: 16, max: null },
 ];
 
+/**
+ * Quem está em `sellers` mas não recebe comissão: são os donos, cadastrados ali
+ * só para poderem segurar estoque e aparecer na Distribuição. O corte é pelo
+ * NOME em minúsculas porque não existe coluna para isso no banco.
+ *
+ * Mora aqui, e não dentro da CommissionsPage, porque o relatório precisa da
+ * MESMA lista: uma linha de comissão no Excel para quem a tela não mostra
+ * seria o relatório discordando do sistema.
+ */
+export const NON_COMMISSION_SELLERS = ["gab", "leo", "luis"];
+
+export function isCommissionSeller(seller: { name?: string }): boolean {
+  return !NON_COMMISSION_SELLERS.includes((seller.name || "").trim().toLowerCase());
+}
+
 export function getTierForUnits(units: number): CommissionTier {
   for (const t of COMMISSION_TIERS) {
     if (units >= t.min && (t.max === null || units <= t.max)) return t;

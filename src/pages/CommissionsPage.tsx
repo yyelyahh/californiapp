@@ -27,7 +27,7 @@ import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STI
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
-import { getNextTier, unitsUntilNextTier, computeSellerBalance } from "@/lib/commissions";
+import { getNextTier, unitsUntilNextTier, computeSellerBalance, isCommissionSeller } from "@/lib/commissions";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 type Period = "month" | "lastMonth" | "custom";
@@ -162,8 +162,7 @@ export default function CommissionsPage() {
     const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
 
     // === Balanço por vendedor — meses FECHADOS tocados pelo período ===
-    const HIDDEN_SELLERS = ["gab", "leo", "luis"];
-    const commissionSellers = sellers.filter(s => !HIDDEN_SELLERS.includes((s.name || "").trim().toLowerCase()));
+    const commissionSellers = sellers.filter(isCommissionSeller);
 
     const sellerBalanceCtx = {
       sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
