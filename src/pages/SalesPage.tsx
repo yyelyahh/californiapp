@@ -5,7 +5,7 @@ import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, S
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
-import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, ShowMore, LIST_PAGE } from "@/components/nocturne";
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRange } from "@/lib/date-utils";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -136,17 +136,8 @@ const MAX_TOP_ROWS = 6;
 /** Acima disso a linha entra sem cascata — lista longa não precisa animar item a item. */
 const MAX_STAGGERED_ROWS = 20;
 
-/**
- * Quantas linhas a lista MONTA de cada vez. O resto entra pelo "Mostrar mais".
- *
- * Medido: montar a lista custa por linha (cada uma é um `motion.tr` com
- * `layout`, e a aberta ainda traz o popover de dar baixa), e com 4.000 vendas
- * na memória a aba levava mais de um segundo para aparecer — o travamento do
- * roadmap. Com um teto, o custo da tela deixa de crescer com o histórico. O
- * TRILHO continua somando a lista filtrada INTEIRA: o corte é de desenho, não
- * de conta, e a própria linha do botão diz quantas faltam.
- */
-const ROW_PAGE = 100;
+/** Quantas linhas a lista monta de cada vez — ver `LIST_PAGE` e `ShowMore`. */
+const ROW_PAGE = LIST_PAGE;
 
 type TabValue = "vendas" | "retiradas" | "pedidos";
 
@@ -173,24 +164,6 @@ function SalesTabs({ value, counts }: { value: TabValue; counts: Record<TabValue
  * porque o clique no método é o que confirma; fechar o popover apaga o que foi
  * digitado, para reabrir ser um recomeço.
  */
-/**
- * Rodapé da lista quando ela foi cortada em ROW_PAGE. Diz quantas estão na
- * tela e quantas existem — linha que some sem aviso faz duvidar do número do
- * trilho, que conta todas.
- */
-function ShowMore({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }) {
-  if (total <= shown) return null;
-  const next = Math.min(ROW_PAGE, total - shown);
-  return (
-    <div className="nc-rule-top flex items-center justify-between gap-3 px-3.5 py-2.5">
-      <span className="nc-num text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
-        {shown} de {total}
-      </span>
-      <NcButton size="sm" onClick={onMore}>Mostrar mais {next}</NcButton>
-    </div>
-  );
-}
-
 function ConfirmOrderPopover({
   children, disabled, onConfirm,
 }: {

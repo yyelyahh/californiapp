@@ -1,17 +1,17 @@
 import { useStore } from "@/context/StoreContext";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2, X, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
-import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
+import { todayDateString, localDateToISO, formatDateBR, currentMonthRange } from "@/lib/date-utils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, ShowMore, LIST_PAGE } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
@@ -46,6 +46,13 @@ const MAX_TOP_CATEGORIES = 6;
 /** Acima disso a linha entra sem cascata — lista longa não precisa animar item a item. */
 const MAX_STAGGERED_ROWS = 20;
 
+/**
+ * A tela abre no MÊS CORRENTE, como Vendas e Entrada, e o "Limpar" volta para
+ * ele. Abria em "Tudo": a única lista da operação que desenhava o histórico
+ * inteiro ao abrir.
+ */
+const DEFAULT_PRESET: DateRangePreset = "month";
+
 export default function ExpensesPage() {
   const { expenses, addExpense, deleteExpense } = useStore();
   const confirm = useConfirm();
@@ -56,9 +63,20 @@ export default function ExpensesPage() {
 
   const [search, setSearch] = useState("");
   const [fCategory, setFCategory] = useState<string>("all");
-  const [fPreset, setFPreset] = useState<DateRangePreset>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [fPreset, setFPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
+  // Uma leitura só do relógio para os dois campos — mesmo motivo da Entrada:
+  // duas chamadas em cima da virada do mês dariam o "de" de um mês e o "até"
+  // de outro.
+  const [defaultRange] = useState(currentMonthRange);
+  const [dateFrom, setDateFrom] = useState(defaultRange.from);
+  const [dateTo, setDateTo] = useState(defaultRange.to);
+
+  // Quantas linhas estão montadas (ver LIST_PAGE). Mudar o filtro volta ao
+  // começo: o "mostrar mais" era sobre a lista anterior.
+  const [shown, setShown] = useState(LIST_PAGE);
+  useEffect(() => {
+    setShown(LIST_PAGE);
+  }, [search, fCategory, dateFrom, dateTo]);
 
   /**
    * Sugestões + o que já foi digitado alguma vez. Sem isso uma despesa gravada
@@ -98,12 +116,15 @@ export default function ExpensesPage() {
     if (p === "all") { setDateFrom(""); setDateTo(""); return; }
     if (p === "today") { const t = fmt(now); setDateFrom(t); setDateTo(t); return; }
     if (p === "7d") { const past = new Date(now); past.setDate(past.getDate() - 6); setDateFrom(fmt(past)); setDateTo(fmt(now)); return; }
-    if (p === "month") { setDateFrom(fmt(new Date(now.getFullYear(), now.getMonth(), 1))); setDateTo(fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0))); return; }
+    if (p === "month") { const m = currentMonthRange(); setDateFrom(m.from); setDateTo(m.to); return; }
     if (p === "lastMonth") { setDateFrom(fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setDateTo(fmt(new Date(now.getFullYear(), now.getMonth(), 0))); return; }
   };
 
-  const clearFilters = () => { setSearch(""); setFCategory("all"); setFPreset("all"); setDateFrom(""); setDateTo(""); };
-  const hasActiveFilters = search !== "" || fCategory !== "all" || dateFrom !== "" || dateTo !== "";
+  // "Limpar" devolve a tela ao estado em que ela abriu (o mês), não a "Tudo";
+  // e por isso o período só conta como filtro quando difere do padrão, senão o
+  // botão nasceria aceso.
+  const clearFilters = () => { setSearch(""); setFCategory("all"); applyPreset(DEFAULT_PRESET); };
+  const hasActiveFilters = search !== "" || fCategory !== "all" || fPreset !== DEFAULT_PRESET;
 
   /** Sobretítulo do cabeçalho: o período que está mandando na tela, como na Entrada. */
   const periodLabel = PERIOD_OPTIONS.find(o => o.value === fPreset)?.label ?? "Período personalizado";
@@ -350,7 +371,7 @@ export default function ExpensesPage() {
         ) : (
           <Stagger className="nc-card overflow-hidden">
             <AnimatePresence initial={false}>
-              {filtered.map((e, i) => (
+              {filtered.slice(0, shown).map((e, i) => (
                 <motion.div
                   key={e.id}
                   layout
@@ -391,6 +412,7 @@ export default function ExpensesPage() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            <ShowMore shown={shown} total={filtered.length} onMore={() => setShown(n => n + LIST_PAGE)} />
           </Stagger>
         )}
       </div>

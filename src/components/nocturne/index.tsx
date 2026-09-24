@@ -60,6 +60,38 @@ export const NcButton = forwardRef<HTMLButtonElement, NcButtonProps>(
 );
 NcButton.displayName = "NcButton";
 
+/**
+ * Quantas linhas uma lista longa MONTA de cada vez; o resto entra pelo
+ * `ShowMore`.
+ *
+ * Medido na lista de Vendas: montar custa por linha (cada uma é um elemento do
+ * motion com `layout`, que mede a posição a cada render), e com 4.000 vendas a
+ * aba levava mais de um segundo para aparecer. Com o teto, o custo da tela
+ * para de crescer com o histórico. O corte é de DESENHO, nunca de conta: o
+ * trilho de quem usa isto soma a lista filtrada inteira.
+ */
+export const LIST_PAGE = 100;
+
+/**
+ * Rodapé de lista cortada em `LIST_PAGE`. Diz quantas estão na tela e quantas
+ * existem — linha que some sem aviso faz duvidar do número do trilho, que
+ * conta todas. Some sozinho quando não há mais nada a mostrar.
+ *
+ * Nasceu na SalesPage e subiu para cá quando Despesas precisou do mesmo corte.
+ */
+export function ShowMore({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }) {
+  if (total <= shown) return null;
+  const next = Math.min(LIST_PAGE, total - shown);
+  return (
+    <div className="nc-rule-top flex items-center justify-between gap-3 px-3.5 py-2.5">
+      <span className="nc-num text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+        {shown} de {total}
+      </span>
+      <NcButton size="sm" onClick={onMore}>Mostrar mais {next}</NcButton>
+    </div>
+  );
+}
+
 /** Divisória que apaga nas pontas — a assinatura do painel. */
 export function Rule({ className }: { className?: string }) {
   return <div className={cn("nc-rule-top h-px", className)} />;
