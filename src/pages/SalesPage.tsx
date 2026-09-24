@@ -1,6 +1,6 @@
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -136,6 +136,18 @@ const MAX_TOP_ROWS = 6;
 /** Acima disso a linha entra sem cascata — lista longa não precisa animar item a item. */
 const MAX_STAGGERED_ROWS = 20;
 
+/**
+ * Quantas linhas a lista MONTA de cada vez. O resto entra pelo "Mostrar mais".
+ *
+ * Medido: montar a lista custa por linha (cada uma é um `motion.tr` com
+ * `layout`, e a aberta ainda traz o popover de dar baixa), e com 4.000 vendas
+ * na memória a aba levava mais de um segundo para aparecer — o travamento do
+ * roadmap. Com um teto, o custo da tela deixa de crescer com o histórico. O
+ * TRILHO continua somando a lista filtrada INTEIRA: o corte é de desenho, não
+ * de conta, e a própria linha do botão diz quantas faltam.
+ */
+const ROW_PAGE = 100;
+
 type TabValue = "vendas" | "retiradas" | "pedidos";
 
 const TABS: { value: TabValue; label: string }[] = [
@@ -161,6 +173,24 @@ function SalesTabs({ value, counts }: { value: TabValue; counts: Record<TabValue
  * porque o clique no método é o que confirma; fechar o popover apaga o que foi
  * digitado, para reabrir ser um recomeço.
  */
+/**
+ * Rodapé da lista quando ela foi cortada em ROW_PAGE. Diz quantas estão na
+ * tela e quantas existem — linha que some sem aviso faz duvidar do número do
+ * trilho, que conta todas.
+ */
+function ShowMore({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }) {
+  if (total <= shown) return null;
+  const next = Math.min(ROW_PAGE, total - shown);
+  return (
+    <div className="nc-rule-top flex items-center justify-between gap-3 px-3.5 py-2.5">
+      <span className="nc-num text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+        {shown} de {total}
+      </span>
+      <NcButton size="sm" onClick={onMore}>Mostrar mais {next}</NcButton>
+    </div>
+  );
+}
+
 function ConfirmOrderPopover({
   children, disabled, onConfirm,
 }: {
@@ -522,6 +552,14 @@ export default function SalesPage() {
   const [fTo, setFTo] = useState(defaultRange.to);
   const [fSortKey, setFSortKey] = useState<SortKey>("date");
   const [fSortDir, setFSortDir] = useState<"asc" | "desc">("desc");
+
+  // Quantas linhas estão montadas em cada aba (ver ROW_PAGE). Mudar o filtro
+  // volta ao começo: o "mostrar mais" era sobre a lista anterior.
+  const [shownSales, setShownSales] = useState(ROW_PAGE);
+  const [shownRetiradas, setShownRetiradas] = useState(ROW_PAGE);
+  useEffect(() => {
+    setShownSales(ROW_PAGE);
+  }, [fSeller, fStatus, fProduct, fFrom, fTo, fSortKey, fSortDir]);
 
   const applyPreset = (p: DateRangePreset) => {
     setFPreset(p);
@@ -1536,7 +1574,7 @@ export default function SalesPage() {
                   CSS e montaria as duas no DOM, dobrando os nós justamente na
                   lista que já pesa (ver o roadmap no CLAUDE.md). */}
               {!wideEnoughForTable ? (
-                <AnimatePresence initial={false}>{sortedSales.map(renderCard)}</AnimatePresence>
+                <AnimatePresence initial={false}>{sortedSales.slice(0, shownSales).map(renderCard)}</AnimatePresence>
               ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-[13px]">
@@ -1552,11 +1590,12 @@ export default function SalesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <AnimatePresence initial={false}>{sortedSales.map(renderRow)}</AnimatePresence>
+                    <AnimatePresence initial={false}>{sortedSales.slice(0, shownSales).map(renderRow)}</AnimatePresence>
                   </tbody>
                 </table>
               </div>
               )}
+              <ShowMore shown={shownSales} total={sortedSales.length} onMore={() => setShownSales(n => n + ROW_PAGE)} />
             </div>
           )}
         </TabsContent>
@@ -1576,7 +1615,7 @@ export default function SalesPage() {
                   desenho no meio do caminho é a mesma tela contando duas
                   histórias. */}
               {!wideEnoughForTable ? (
-                <AnimatePresence initial={false}>{sortedRetiradas.map(renderCard)}</AnimatePresence>
+                <AnimatePresence initial={false}>{sortedRetiradas.slice(0, shownRetiradas).map(renderCard)}</AnimatePresence>
               ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[440px] text-[13px]">
@@ -1589,11 +1628,12 @@ export default function SalesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <AnimatePresence initial={false}>{sortedRetiradas.map(renderRow)}</AnimatePresence>
+                    <AnimatePresence initial={false}>{sortedRetiradas.slice(0, shownRetiradas).map(renderRow)}</AnimatePresence>
                   </tbody>
                 </table>
               </div>
               )}
+              <ShowMore shown={shownRetiradas} total={sortedRetiradas.length} onMore={() => setShownRetiradas(n => n + ROW_PAGE)} />
             </div>
           )}
         </TabsContent>

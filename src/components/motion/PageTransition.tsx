@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useLocation } from "react-router-dom";
-import { transitionBase } from "@/lib/motion";
+import { transitionFast } from "@/lib/motion";
 
 /**
  * A ÚNICA transição entre páginas: um fade com 6px de deriva pra cima na
@@ -43,7 +43,10 @@ export default function PageTransition({ children, className }: { children: Reac
       className={className}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionBase}
+      // O rápido (180ms), não o base (280ms): a tela nova nasce em opacity 0, e
+      // cada milissegundo do fade é tempo em que ela já está pronta e ainda não
+      // aparece — somado a cada troca de tela, era parte da sensação de demora.
+      transition={transitionFast}
     >
       {children}
     </motion.div>

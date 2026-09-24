@@ -1,9 +1,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { StoreProvider } from "@/context/StoreContext";
 import { BranchProvider, useBranch } from "@/context/BranchContext";
 import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
+import { BootGate } from "@/components/BootProgress";
+import { BootScreen, BOOT_STEPS } from "@/components/BootScreen";
 
 /**
  * Tudo o que só existe DEPOIS do login mora neste arquivo, e o `App` o carrega
@@ -18,33 +20,76 @@ import AppLayout from "@/components/AppLayout";
  *
  * Cada tela do ERP também é um `lazy`: são 14, e ninguém abre duas ao mesmo
  * tempo. O `<Suspense>` abaixo é quem espera por elas, com fallback `null` —
- * o pedaço chega em milissegundos e já fica no cache do navegador nas trocas
- * seguintes, e um spinner que pisca é pior que um quadro que não chega a ser
- * visto.
+ * um spinner que pisca é pior que um quadro que não chega a ser visto. Para o
+ * quadro não chegar a ser visto de verdade, o código de todas elas é
+ * pré-carregado logo depois do login (`preloadErpPages`).
  */
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const ProductsPage = lazy(() => import("@/pages/ProductsPage"));
-const StockEntryPage = lazy(() => import("@/pages/StockEntryPage"));
-const SalesPage = lazy(() => import("@/pages/SalesPage"));
+/**
+ * O import de cada tela do ERP, num lugar só: é daqui que sai o `lazy` E o
+ * pré-carregamento (ver `preloadErpPages`). Duas listas separadas acabariam
+ * com uma tela nova no `lazy` e fora do pré-carregamento.
+ */
+const pageLoaders = {
+  dashboard: () => import("@/pages/Dashboard"),
+  products: () => import("@/pages/ProductsPage"),
+  stock: () => import("@/pages/StockEntryPage"),
+  sales: () => import("@/pages/SalesPage"),
+  expenses: () => import("@/pages/ExpensesPage"),
+  finance: () => import("@/pages/FinancePage"),
+  losses: () => import("@/pages/LossesPage"),
+  commissions: () => import("@/pages/CommissionsPage"),
+  insights: () => import("@/pages/InsightsPage"),
+  audit: () => import("@/pages/AuditPage"),
+};
+
+const Dashboard = lazy(pageLoaders.dashboard);
+const ProductsPage = lazy(pageLoaders.products);
+const StockEntryPage = lazy(pageLoaders.stock);
+const SalesPage = lazy(pageLoaders.sales);
 const SellerSalesPage = lazy(() => import("@/pages/SellerSalesPage"));
-const ExpensesPage = lazy(() => import("@/pages/ExpensesPage"));
-const FinancePage = lazy(() => import("@/pages/FinancePage"));
-const LossesPage = lazy(() => import("@/pages/LossesPage"));
-const CommissionsPage = lazy(() => import("@/pages/CommissionsPage"));
-const InsightsPage = lazy(() => import("@/pages/InsightsPage"));
-const AuditPage = lazy(() => import("@/pages/AuditPage"));
+const ExpensesPage = lazy(pageLoaders.expenses);
+const FinancePage = lazy(pageLoaders.finance);
+const LossesPage = lazy(pageLoaders.losses);
+const CommissionsPage = lazy(pageLoaders.commissions);
+const InsightsPage = lazy(pageLoaders.insights);
+const AuditPage = lazy(pageLoaders.audit);
+
+/**
+ * Baixa o código de TODAS as telas do ERP quando o navegador fica ocioso.
+ *
+ * Sem isto, a primeira visita a cada tela esperava a rede antes de desenhar
+ * qualquer coisa — e como o fallback do Suspense é `null` e a `key` do
+ * PageTransition remonta a área da página, a espera aparecia como tela em
+ * branco. A Lovable troca o nome dos arquivos a cada publicação, então essa
+ * "primeira visita" voltava depois de toda mudança, não só no primeiro acesso.
+ * O pacote vem DEPOIS que a tela atual está de pé: abrir o app não fica mais
+ * lento, e as trocas seguintes não esperam a rede.
+ *
+ * Falha calada: se o pré-carregamento cair, a tela carrega do jeito antigo
+ * quando for aberta.
+ */
+function preloadErpPages() {
+  const run = () => {
+    for (const load of Object.values(pageLoaders)) void load().catch(() => {});
+  };
+  const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+    .requestIdleCallback;
+  if (idle) idle(run, { timeout: 3000 });
+  else setTimeout(run, 1500);
+}
 
 const PageFallback = () => null;
 
 export default function ProtectedRoutes() {
   const { user, loading, role } = useAuth();
 
+  // Só o ERP: o vendedor tem uma tela só e não navega entre as outras.
+  useEffect(() => {
+    if (user && role === "admin") preloadErpPages();
+  }, [user, role]);
+
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-muted-foreground">Carregando...</div>
-      </div>
-    );
+    return <BootScreen progress={BOOT_STEPS.session} label="Verificando sua sessão" />;
   }
 
   if (!user) {
@@ -73,6 +118,10 @@ export default function ProtectedRoutes() {
             </Routes>
           </Suspense>
         ) : (
+          // A barra de carregamento é só do ERP: a tela do vendedor tem o
+          // tema da loja, e uma entrada no Nocturne antes dela seria outra
+          // marca piscando na frente.
+          <BootGate>
           <AppLayout>
             <Suspense fallback={<PageFallback />}>
               <Routes>
@@ -95,6 +144,7 @@ export default function ProtectedRoutes() {
               </Routes>
             </Suspense>
           </AppLayout>
+          </BootGate>
         )}
       </BranchScopedStore>
     </BranchProvider>
@@ -118,11 +168,7 @@ function BranchScopedStore({ children }: { children: React.ReactNode }) {
   const { branchId, loading } = useBranch();
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-muted-foreground">Carregando...</div>
-      </div>
-    );
+    return <BootScreen progress={BOOT_STEPS.branches} label="Carregando filiais" />;
   }
 
   return <StoreProvider key={branchId ?? "all"}>{children}</StoreProvider>;

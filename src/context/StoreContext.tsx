@@ -54,6 +54,21 @@ function requireBranch(branchId: string | null): branchId is string {
   return true;
 }
 
+/**
+ * Onde o carregamento está, para a barra (src/components/BootProgress.tsx).
+ *
+ * `core` é a primeira onda — produtos, vendas, entradas, vendedores,
+ * atribuições, perdas —, sem a qual as telas mostrariam zero no lugar dos
+ * números. `secondary` é a financeira, que chega depois sem travar a tela.
+ * `done`/`total` contam CONSULTAS terminadas, então a barra anda por fato
+ * acontecido, não por relógio.
+ */
+export type LoadProgress = { phase: "core" | "secondary" | "done"; done: number; total: number };
+
+/** Quantas consultas cada onda dispara — o tamanho de cada `track([...])`. */
+const CORE_QUERIES = 6;
+const SECONDARY_QUERIES = 14;
+
 /** A posição do razão: a soma de cada coluna `*_delta` de `financial_events`. */
 type LedgerPosition = {
   cash: number;
@@ -219,6 +234,7 @@ interface StoreContextType {
   deletePurchaseOrder: (id: string) => Promise<void>;
   receivePurchaseOrder: (id: string, items: PurchaseReceiptItemInput[], date: string) => Promise<boolean>;
   loading: boolean;
+  loadProgress: LoadProgress;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -361,6 +377,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const purchaseOrders = useMemo(() => numberPurchaseOrders(purchaseOrdersRaw), [purchaseOrdersRaw]);
   const [ledgerTotals, setLedgerTotals] = useState<LedgerPosition>(EMPTY_LEDGER);
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState<LoadProgress>({ phase: "core", done: 0, total: CORE_QUERIES });
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const { branchId, branches } = useBranch();
@@ -378,16 +395,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * etiqueta.
    */
   const fetchProductsList = useCallback(async (): Promise<Product[]> => {
-    const { data, error } = await supabase.rpc("get_branch_products", {
-      p_branch_id: branchId,
-    });
+    // As duas RPCs em paralelo: uma não depende da outra, e em fila cada
+    // recarga do catálogo (a abertura e toda venda vinda do realtime) pagava
+    // duas idas ao banco uma atrás da outra.
+    const [{ data, error }, costsRes] = await Promise.all([
+      supabase.rpc("get_branch_products", { p_branch_id: branchId }),
+      isAdmin ? supabase.rpc("get_product_costs", { p_branch_id: branchId }) : Promise.resolve(null),
+    ]);
     if (error) throw error;
     if (!data) return [];
     let costs: Record<string, number> = {};
-    if (isAdmin) {
-      const { data: c } = await supabase.rpc("get_product_costs", { p_branch_id: branchId });
-      if (c) costs = Object.fromEntries(c.map((r) => [r.product_id, Number(r.purchase_price)]));
-    }
+    const c = costsRes?.data;
+    if (c) costs = Object.fromEntries(c.map((r) => [r.product_id, Number(r.purchase_price)]));
     return data.map((r: any) => ({
       id: r.id,
       name: r.name,
@@ -462,8 +481,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // conjunto de `seller_id` da cidade (ver `branchSellerIds` mais abaixo).
     // A tabela vem inteira hoje e é pequena; consultar por uma lista de ids
     // seria uma consulta a mais para o mesmo resultado.
+    // Cada consulta que termina (bem ou mal) anda um passo da barra de
+    // carregamento — ver `loadProgress`. `Promise.resolve` porque o builder do
+    // supabase é thenable, não Promise, e não tem `.finally`.
+    const track = (items: unknown[]) =>
+      items.map((p) =>
+        Promise.resolve(p).finally(() => {
+          if (!cancelled) setLoadProgress((prev) => ({ ...prev, done: Math.min(prev.done + 1, prev.total) }));
+        }),
+      );
+
     const fetchCore = async () => {
-      const [prodList, stockRes, salesRes, selRes, paRes, slRes] = (await Promise.all([
+      const [prodList, stockRes, salesRes, selRes, paRes, slRes] = (await Promise.all(track([
         fetchProductsList(),
         // Histórico passa por `fetchAllRows`: cresce com o uso e um dia passa
         // do teto de 1000 linhas por consulta, que corta sem avisar.
@@ -481,12 +510,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         fetchAllRows(() =>
           scoped(supabase.from("stock_losses").select("*")).order("created_at", { ascending: true }).order("id"),
         ),
-      // Sem o `as any` o TypeScript resolve a tupla inteira do Promise.all
-      // contra os tipos recursivos do query builder e estoura com "Type
-      // instantiation is excessively deep" — o mesmo motivo do `scoped` acima.
-      // Cada `.data` é mapeado logo abaixo por uma função que valida a forma da
-      // linha, então o que se perde aqui é reposto ali.
-      ])) as any;
+      // `as any`: o `track` devolve `unknown[]`, e cada `.data` é mapeado logo
+      // abaixo por uma função que valida a forma da linha. (Tipar a tupla
+      // estourava com "Type instantiation is excessively deep" nos tipos
+      // recursivos do query builder — o mesmo motivo do `scoped` acima.)
+      ]))) as any;
       if (cancelled) return;
       setProducts(prodList);
       // Junto da primeira onda de propósito: chega depois, a lista de produtos
@@ -516,7 +544,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         lpRes,
         feRes,
         poRes,
-      ] = (await Promise.all([
+      ] = (await Promise.all(track([
         fetchAllRows(() =>
           scoped(supabase.from("expenses").select("*")).order("created_at", { ascending: true }).order("id"),
         ),
@@ -562,12 +590,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .from("purchase_orders")
           .select("*, purchase_order_items(*)")
           .order("created_at", { ascending: false }),
-      // Sem o `as any` o TypeScript resolve a tupla inteira do Promise.all
-      // contra os tipos recursivos do query builder e estoura com "Type
-      // instantiation is excessively deep" — o mesmo motivo do `scoped` acima.
-      // Cada `.data` é mapeado logo abaixo por uma função que valida a forma da
-      // linha, então o que se perde aqui é reposto ali.
-      ])) as any;
+      // `as any`: mesmo motivo da primeira onda.
+      ]))) as any;
       if (cancelled) return;
       if (expRes.data) setExpenses(expRes.data.map(mapExpense));
       if (invRes.data) setInvestors(invRes.data.map(mapInvestor));
@@ -588,20 +612,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (isAdmin) await fetchTransfers();
     };
 
+    // As fases andam nos `finally`: erro numa consulta não pode deixar a barra
+    // parada para sempre — tela presa carregando é pior que qualquer aviso.
     const fetchAll = async () => {
       setLoading(true);
+      setLoadProgress({ phase: "core", done: 0, total: CORE_QUERIES });
       try {
         await fetchCore();
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Erro ao carregar dados");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadProgress({ phase: "secondary", done: 0, total: SECONDARY_QUERIES });
+        }
       }
       try {
         await fetchSecondary();
       } catch (err) {
         console.error("Error fetching financial data:", err);
+      } finally {
+        if (!cancelled) setLoadProgress((prev) => ({ ...prev, phase: "done", done: prev.total }));
       }
     };
     fetchAll();
@@ -646,9 +678,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ? { event: "*" as const, schema: "public", table, filter: `branch_id=eq.${branchId}` }
         : { event: "*" as const, schema: "public", table };
 
-    const reloadProducts = async () => {
-      const list = await fetchProductsList();
-      if (!cancelled) setProducts(list);
+    // Com espera, como a posição do razão: um pedido de catálogo com cinco
+    // sabores confirmado gera cinco UPDATEs em `product_branch`, e cada um
+    // recarregava o catálogo inteiro. Agora a rajada vira uma recarga só.
+    let productsTimer: ReturnType<typeof setTimeout> | null = null;
+    const reloadProducts = () => {
+      if (productsTimer) clearTimeout(productsTimer);
+      productsTimer = setTimeout(async () => {
+        try {
+          const list = await fetchProductsList();
+          if (!cancelled) setProducts(list);
+        } catch (err) {
+          // Falha aqui mantém o catálogo que já está na tela; a próxima
+          // mudança tenta de novo.
+          console.error("reloadProducts:", err);
+        }
+      }, 400);
     };
 
     let channel = supabase
@@ -658,7 +703,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (payload.eventType === "DELETE") {
           setProducts((prev) => prev.filter((p) => p.id !== payload.old?.id));
         } else {
-          await reloadProducts();
+          reloadProducts();
         }
         refetchFinancialEvents();
       })
@@ -668,7 +713,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // motivo de sempre — o custo vem de outra RPC, e remendar meia linha aqui
       // deixaria a margem da tela mentindo.
       .on("postgres_changes", onBranch("product_branch"), () => {
-        void reloadProducts();
+        reloadProducts();
         refetchFinancialEvents();
       })
       .on("postgres_changes", onBranch("sales"), (payload: any) => {
@@ -728,6 +773,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       if (feTimer) clearTimeout(feTimer);
+      if (productsTimer) clearTimeout(productsTimer);
       supabase.removeChannel(channel);
     };
   }, [fetchProductsList, isAdmin, branchId, scoped, fetchTransfers, fetchArchivedModels]);
@@ -2778,6 +2824,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       commissionPayments: scopedCommissions,
       proLaborePayments,
       loading,
+      loadProgress,
       addProduct,
       updateProduct,
       deleteProduct,
@@ -2884,6 +2931,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       scopedCommissions,
       proLaborePayments,
       loading,
+      loadProgress,
       addProduct,
       updateProduct,
       deleteProduct,

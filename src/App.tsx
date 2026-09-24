@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BootScreen, BOOT_STEPS } from "@/components/BootScreen";
 import { Suspense, lazy } from "react";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
@@ -49,13 +50,20 @@ function safeNextPath(): string | null {
 
 function AuthGate() {
   const { user, loading, role } = useAuth();
+  const { pathname } = useLocation();
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-muted-foreground">Carregando...</div>
-      </div>
-    );
+    // A loja pública também espera a sessão aqui, e quem abre o link do
+    // vendedor não tem nada a ver com o ERP: para ela, o texto neutro de
+    // sempre. A tela de entrada com a marca é de quem vai ENTRAR no sistema.
+    if (pathname.startsWith("/loja/")) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="text-muted-foreground">Carregando...</div>
+        </div>
+      );
+    }
+    return <BootScreen progress={BOOT_STEPS.session} label="Verificando sua sessão" />;
   }
 
   return (
