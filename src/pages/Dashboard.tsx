@@ -419,7 +419,9 @@ export default function Dashboard() {
         loanPayments: store.loanPayments,
         investors: store.investors,
         dividends: store.dividends,
-        financialEvents: store.financialEvents,
+        // O razão linha a linha não mora na memória (as posições já vêm
+        // somadas pelo banco): é lido aqui, na hora de montar o arquivo.
+        financialEvents: await store.loadFinancialEvents(),
 
         modelStats,
         monthly: monthlyData,

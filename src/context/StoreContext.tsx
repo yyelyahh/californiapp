@@ -26,6 +26,7 @@ import {
   FinancialEventKind,
   ArchivedModel,
 } from "@/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useBranch } from "@/context/BranchContext";
@@ -34,6 +35,7 @@ import { localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { sortCatalog, sortByName } from "@/lib/catalog-order";
 import { numberPurchaseOrders, type UnnumberedOrder } from "@/lib/purchase-order-number";
 import { hiddenModelKeys, isProductHidden } from "@/lib/archived-models";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 
 /**
  * Escrever exige uma filial concreta.
@@ -50,6 +52,59 @@ function requireBranch(branchId: string | null): branchId is string {
     return false;
   }
   return true;
+}
+
+/** A posição do razão: a soma de cada coluna `*_delta` de `financial_events`. */
+type LedgerPosition = {
+  cash: number;
+  inventory: number;
+  receivable: number;
+  partnerCapital: number;
+  loan: number;
+  accumulatedProfit: number;
+  distributedProfit: number;
+};
+
+const EMPTY_LEDGER: LedgerPosition = {
+  cash: 0,
+  inventory: 0,
+  receivable: 0,
+  partnerCapital: 0,
+  loan: 0,
+  accumulatedProfit: 0,
+  distributedProfit: 0,
+};
+
+/**
+ * A posição somada NO BANCO, pela `ledger_position()` (migration
+ * 20260924120000). Antes o front baixava o razão inteiro para somar aqui — e
+ * o razão cresce várias linhas por dia, então era a primeira consulta a
+ * passar do teto de 1000 linhas e a mais cara de rebaixar a cada venda.
+ *
+ * `null` em caso de erro: quem chama mantém o último número bom em vez de
+ * zerar o Caixa na tela por causa de uma queda de rede.
+ *
+ * A function ainda não está no types.ts gerado: o cast é no CLIENTE e a
+ * chamada continua sendo método dele (ver "Gotchas de front" no CLAUDE.md).
+ */
+async function fetchLedgerPosition(): Promise<LedgerPosition | null> {
+  const client = supabase as unknown as SupabaseClient;
+  const { data, error } = await client.rpc("ledger_position");
+  if (error) {
+    console.error("ledger_position:", error);
+    return null;
+  }
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) return EMPTY_LEDGER;
+  return {
+    cash: Number(r.cash) || 0,
+    inventory: Number(r.inventory) || 0,
+    receivable: Number(r.receivable) || 0,
+    partnerCapital: Number(r.partner_capital) || 0,
+    loan: Number(r.loan) || 0,
+    accumulatedProfit: Number(r.accumulated_profit) || 0,
+    distributedProfit: Number(r.distributed_profit) || 0,
+  };
 }
 
 /**
@@ -248,7 +303,12 @@ interface StoreContextType {
   partnerContributions: PartnerContribution[];
   loans: Loan[];
   loanPayments: LoanPayment[];
-  financialEvents: FinancialEvent[];
+  /**
+   * O razão linha a linha, lido do banco NA HORA e em páginas. Não fica em
+   * memória: quem precisa das linhas é só o relatório em Excel, e as posições
+   * (getCash e companhia) já vêm somadas pelo banco.
+   */
+  loadFinancialEvents: () => Promise<FinancialEvent[]>;
   addPartnerContribution: (c: Omit<PartnerContribution, "id" | "createdAt">) => Promise<void>;
   deletePartnerContribution: (id: string) => Promise<void>;
   addLoan: (l: Omit<Loan, "id" | "createdAt">) => Promise<void>;
@@ -299,7 +359,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [purchaseOrdersRaw, setPurchaseOrdersRaw] = useState<UnnumberedOrder[]>([]);
   /** Quem é exposto (e quem as ações leem) é sempre o numerado — ver `numberPurchaseOrders`. */
   const purchaseOrders = useMemo(() => numberPurchaseOrders(purchaseOrdersRaw), [purchaseOrdersRaw]);
-  const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
+  const [ledgerTotals, setLedgerTotals] = useState<LedgerPosition>(EMPTY_LEDGER);
   const [loading, setLoading] = useState(true);
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -405,14 +465,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fetchCore = async () => {
       const [prodList, stockRes, salesRes, selRes, paRes, slRes] = (await Promise.all([
         fetchProductsList(),
-        scoped(supabase.from("stock_entries").select("*")).order("created_at", { ascending: true }),
-        scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }),
+        // Histórico passa por `fetchAllRows`: cresce com o uso e um dia passa
+        // do teto de 1000 linhas por consulta, que corta sem avisar.
+        fetchAllRows(() =>
+          scoped(supabase.from("stock_entries").select("*")).order("created_at", { ascending: true }).order("id"),
+        ),
+        fetchAllRows(() =>
+          scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }).order("id"),
+        ),
         scoped(supabase.from("sellers").select("*")).order("created_at", { ascending: true }),
         supabase
           .from("product_assignments")
           .select("*")
           .order("created_at", { ascending: true }),
-        scoped(supabase.from("stock_losses").select("*")).order("created_at", { ascending: true }),
+        fetchAllRows(() =>
+          scoped(supabase.from("stock_losses").select("*")).order("created_at", { ascending: true }).order("id"),
+        ),
       // Sem o `as any` o TypeScript resolve a tupla inteira do Promise.all
       // contra os tipos recursivos do query builder e estoura com "Type
       // instantiation is excessively deep" — o mesmo motivo do `scoped` acima.
@@ -449,7 +517,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         feRes,
         poRes,
       ] = (await Promise.all([
-        scoped(supabase.from("expenses").select("*")).order("created_at", { ascending: true }),
+        fetchAllRows(() =>
+          scoped(supabase.from("expenses").select("*")).order("created_at", { ascending: true }).order("id"),
+        ),
         supabase.from("investors").select("*").order("created_at", { ascending: true }),
         supabase.from("dividends").select("*").order("created_at", { ascending: true }),
         supabase.from("partners").select("*").order("created_at", { ascending: true }),
@@ -485,10 +555,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .from("loan_payments")
           .select("*")
           .order("created_at", { ascending: true }),
-        supabase
-          .from("financial_events")
-          .select("*")
-          .order("event_date", { ascending: true }),
+        // Só a POSIÇÃO, já somada pelo banco — o razão linha a linha não
+        // entra na memória (ver `fetchLedgerPosition`).
+        fetchLedgerPosition(),
         supabase
           .from("purchase_orders")
           .select("*, purchase_order_items(*)")
@@ -512,7 +581,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (pcRes?.data) setPartnerContributions(pcRes.data.map(mapPartnerContribution));
       if (loanRes?.data) setLoans(loanRes.data.map(mapLoan));
       if (lpRes?.data) setLoanPayments(lpRes.data.map(mapLoanPayment));
-      if (feRes?.data) setFinancialEvents(feRes.data.map(mapFinancialEvent));
+      if (feRes) setLedgerTotals(feRes);
       if (poRes?.data) setPurchaseOrdersRaw(poRes.data.map(mapPurchaseOrder));
       // Fora do Promise.all porque o filtro é um OR entre duas colunas, e a
       // consulta é só de admin (a RLS de stock_transfers exige o papel).
@@ -541,12 +610,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     let feTimer: ReturnType<typeof setTimeout> | null = null;
     const refetchFinancialEvents = () => {
       if (feTimer) clearTimeout(feTimer);
+      // Reler a posição custa sete números, não o razão inteiro — é o que
+      // cada venda de outra aba dispara.
       feTimer = setTimeout(async () => {
-        const { data } = await supabase
-          .from("financial_events")
-          .select("*")
-          .order("event_date", { ascending: true });
-        if (data && !cancelled) setFinancialEvents(data.map(mapFinancialEvent));
+        const position = await fetchLedgerPosition();
+        if (position && !cancelled) setLedgerTotals(position);
       }, 400);
     };
 
@@ -2407,17 +2475,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ---- Novo modelo financeiro ----
+  // O nome ficou (é chamado depois de toda escrita de dinheiro), mas o que ele
+  // relê hoje é só a posição somada pelo banco.
   const refreshFinancialEvents = useCallback(async () => {
-    const { data } = await supabase
-      .from("financial_events")
-      .select("*")
-      .order("event_date", { ascending: true });
-    if (data) setFinancialEvents(data.map(mapFinancialEvent));
+    const position = await fetchLedgerPosition();
+    if (position) setLedgerTotals(position);
+  }, []);
+
+  /** O razão linha a linha, para o relatório — em páginas, ver `fetchAllRows`. */
+  const loadFinancialEvents = useCallback(async (): Promise<FinancialEvent[]> => {
+    const { data, error } = await fetchAllRows(() =>
+      supabase
+        .from("financial_events")
+        .select("*")
+        .order("event_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .order("id"),
+    );
+    if (error) throw error;
+    return (data ?? []).map(mapFinancialEvent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshSales = useCallback(async () => {
     const [salesRes, paRes, prodList] = await Promise.all([
-      scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }),
+      fetchAllRows(() =>
+        scoped(supabase.from("sales").select("*")).order("created_at", { ascending: true }).order("id"),
+      ),
       supabase
         .from("product_assignments")
         .select("*")
@@ -2591,28 +2675,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ---- Selectors do razão (derivados de financial_events) ----
-  // Totais calculados uma única vez por atualização do razão, em vez de a cada chamada.
-  const ledgerTotals = useMemo(() => {
-    const t = {
-      cash: 0,
-      inventory: 0,
-      receivable: 0,
-      partnerCapital: 0,
-      loan: 0,
-      accumulatedProfit: 0,
-      distributedProfit: 0,
-    };
-    for (const e of financialEvents) {
-      t.cash += Number(e.cashDelta) || 0;
-      t.inventory += Number(e.inventoryDelta) || 0;
-      t.receivable += Number(e.receivableDelta) || 0;
-      t.partnerCapital += Number(e.partnerCapitalDelta) || 0;
-      t.loan += Number(e.loanDelta) || 0;
-      t.accumulatedProfit += Number(e.accumulatedProfitDelta) || 0;
-      t.distributedProfit += Number(e.distributedProfitDelta) || 0;
-    }
-    return t;
-  }, [financialEvents]);
+  // `ledgerTotals` vem somado pelo banco (`ledger_position`), não daqui.
 
   const getCash = useCallback(() => ledgerTotals.cash, [ledgerTotals]);
   const getInventoryCostValue = useCallback(() => ledgerTotals.inventory, [ledgerTotals]);
@@ -2774,7 +2837,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       partnerContributions,
       loans,
       loanPayments,
-      financialEvents,
+      loadFinancialEvents,
       addPartnerContribution,
       deletePartnerContribution,
       addLoan,
@@ -2880,7 +2943,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       partnerContributions,
       loans,
       loanPayments,
-      financialEvents,
+      loadFinancialEvents,
       addPartnerContribution,
       deletePartnerContribution,
       addLoan,
