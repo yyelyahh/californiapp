@@ -72,12 +72,13 @@ function input(over: Partial<ReportInput> = {}): ReportInput {
     dividends: [],
     financialEvents: [],
     modelStats: [],
-    monthly: [{ monthLong: "Setembro/2026", receita: 300, cogs: 120, despesas: 800, lucro: -620, margem: -206.7, vendas: 2, unidades: 3 }],
+    monthly: [{ monthLong: "Setembro/2026", receita: 300, cogs: 120, despesas: 800, perdas: 0, vendedores: 0, lucro: -620, margem: -206.7, vendas: 2, unidades: 3 }],
     position: {
       cash: 1234.5, inventory: 400, receivables: 100, partnerCapital: 0,
       loansOutstanding: 600, accumulatedProfit: 180, distributedProfit: 300, retainedEarnings: -120,
     },
     branchName: (id) => (id ? "Curitiba" : "Todas as filiais"),
+    costOf: (s) => products.find(p => p.id === s.productId)?.purchasePrice ?? 0,
     ...over,
   };
 }

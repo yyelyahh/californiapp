@@ -10,6 +10,7 @@ import { listItem, transitionBase } from "@/lib/motion";
 import { SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { currentMonthRange, previousWindow, parseDay } from "@/lib/date-utils";
+import { modelArchiveKey } from "@/lib/archived-models";
 import { formatCurrency as fmtCurrency, formatCurrencyShort as fmtCurrencyShort } from "@/lib/currency";
 
 type Period = "month" | "lastMonth" | "custom";
@@ -50,7 +51,7 @@ export default function InsightsPage() {
   // `products` (inteiro) dá nome ao que foi vendido no período — o passado não
   // se reescreve quando um modelo sai de linha. `activeProducts` é quem monta
   // a leitura de HOJE: cobertura, o que repor e o que está parado.
-  const { products, activeProducts, sales } = useStore();
+  const { products, activeProducts, sales, saleUnitCost } = useStore();
   const [period, setPeriod] = useState<Period>("month");
   const [customStart, setCustomStart] = useState(() => currentMonthRange().from);
   const [customEnd, setCustomEnd] = useState(() => currentMonthRange().to);
@@ -101,7 +102,10 @@ export default function InsightsPage() {
   };
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
-  const modelKey = (brand: string, model: string) => `${brand} ${model}`.trim();
+  // Marca+modelo NORMALIZADOS (sem caixa, sem espaço sobrando), a mesma chave
+  // do arquivamento e do "Repor agora": "Elfbar" e "elfbar " eram dois
+  // modelos aqui e um só no resto do sistema.
+  const modelKey = (brand: string, model: string) => modelArchiveKey(brand, model);
 
   const periodSales = useMemo(
     () => sales.filter(s => s.type === "venda" && inRange(s.date, start, end)),
@@ -129,15 +133,16 @@ export default function InsightsPage() {
       const entry = map.get(key) ?? { key, brand: p.brand, model: p.model, units: 0, revenue: 0, cost: 0, profit: 0 };
       entry.units += s.quantity;
       entry.revenue += s.totalPrice;
-      entry.cost += p.purchasePrice * s.quantity;
+      // Custo CONGELADO na venda — o de hoje reescrevia o lucro do passado.
+      entry.cost += saleUnitCost(s) * s.quantity;
       entry.profit = entry.revenue - entry.cost;
       map.set(key, entry);
     }
     return Array.from(map.values());
   };
 
-  const modelStats = useMemo(() => buildModelStats(periodSales), [periodSales, productMap]);
-  const prevModelStats = useMemo(() => buildModelStats(prevPeriodSales), [prevPeriodSales, productMap]);
+  const modelStats = useMemo(() => buildModelStats(periodSales), [periodSales, productMap, saleUnitCost]);
+  const prevModelStats = useMemo(() => buildModelStats(prevPeriodSales), [prevPeriodSales, productMap, saleUnitCost]);
 
   const totals = useMemo(() => {
     const units = modelStats.reduce((s, m) => s + m.units, 0);

@@ -28,6 +28,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
 import { getNextTier, unitsUntilNextTier, computeSellerBalance, isCommissionSeller } from "@/lib/commissions";
+import { computePeriodResult } from "@/lib/period-result";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
 type Period = "month" | "lastMonth" | "custom";
@@ -85,6 +86,7 @@ export default function CommissionsPage() {
   const {
     sellers, partners, sales, expenses, products, productAssignments, dividends,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
+    stockLosses, saleUnitCost,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, addSellerManualDebt,
@@ -151,21 +153,22 @@ export default function CommissionsPage() {
 
   const periodMetrics = useMemo(() => {
     // Índice de produtos para lookups O(1) dentro dos loops.
-    const productById = new Map(products.map(p => [p.id, p]));
-    // === LUCRO DO PERÍODO — espelha a fórmula do Dashboard ===
-    // Lucro bruto = receita (totalPrice) − CPV (product.purchasePrice × qty), vendas type=venda no período
-    const vendasNoPeriodo = sales.filter(s => s.type === "venda" && inPeriod(s.date));
-    const revenue = vendasNoPeriodo.reduce((a, s) => a + s.totalPrice, 0);
-    const cogs = vendasNoPeriodo.reduce((a, s) => {
-      const p = productById.get(s.productId);
-      return a + (p?.purchasePrice ?? 0) * s.quantity;
-    }, 0);
-
-    const grossProfit = revenue - cogs;
-
-    const periodExpenses = expenses.filter(e => inPeriod(e.date)).reduce((a, e) => a + e.amount, 0);
+    // === LUCRO DO PERÍODO — a MESMA conta do Dashboard e do relatório ===
+    // (src/lib/period-result.ts). Ela desconta o custo dos vendedores, e é isso
+    // que conserta o distribuível: antes o lucro daqui ignorava a comissão
+    // PAGA, então pagar a comissão zerava o saldo devido sem tirar nada do
+    // lucro — e o "distribuível aos sócios" SUBIA justamente quando o dinheiro
+    // saía. Agora pagar comissão tira o mesmo valor do lucro e do saldo, e o
+    // distribuível não se mexe.
+    const result = computePeriodResult({
+      sales, expenses, stockLosses, commissionPayments, sellerDebtPayments,
+      costOf: saleUnitCost,
+      inPeriod,
+    });
+    const { revenue, cogs, grossProfit } = result;
+    const periodExpenses = result.expenses;
     const periodInvestorPayments = dividends.filter(d => inPeriod(d.date)).reduce((a, d) => a + d.amount, 0);
-    const netProfit = grossProfit - periodExpenses - periodInvestorPayments;
+    const netProfit = result.netProfit - periodInvestorPayments;
 
     // === Balanço por vendedor — meses FECHADOS tocados pelo período ===
     const commissionSellers = sellers.filter(isCommissionSeller);
@@ -203,10 +206,11 @@ export default function CommissionsPage() {
 
     return {
       revenue, cogs, grossProfit, periodExpenses, periodInvestorPayments, netProfit,
+      periodLosses: result.losses, periodSellerCost: result.sellerCost,
       perSeller, totalSellerBalance, priorPayableSum, periodPayableSum,
       perPartner, totalWithdrawalsPeriod, distribuivel,
     };
-  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, period, start, end, closedStart, closedEnd, PROJECT_START]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, stockLosses, saleUnitCost, period, start, end, closedStart, closedEnd, PROJECT_START]);
 
   /** O que ainda cabe retirar sem furar o distribuível do período. */
   const stillDistributable = Math.max(0, periodMetrics.distribuivel - periodMetrics.totalWithdrawalsPeriod);
@@ -772,9 +776,21 @@ export default function CommissionsPage() {
               />
             </span>
           </div>
-          <div className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
-            <span>despesas e investidores no período</span>
-            <span>{formatCurrencyShort(periodMetrics.periodExpenses + periodMetrics.periodInvestorPayments)}</span>
+          {/* O que já saiu do lucro antes da divisão. "Vendedores" é comissão
+              paga + consumo a custo − dívida devolvida: é por ele estar aqui
+              que pagar comissão não aumenta mais o distribuível. */}
+          <div
+            className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]"
+            style={{ color: "var(--nc-text-3)" }}
+            title={`Despesas ${formatCurrencyShort(periodMetrics.periodExpenses)} · perdas ${formatCurrencyShort(periodMetrics.periodLosses)} · vendedores ${formatCurrencyShort(periodMetrics.periodSellerCost)} · investidores ${formatCurrencyShort(periodMetrics.periodInvestorPayments)}`}
+          >
+            <span>despesas, perdas, vendedores e investidores</span>
+            <span>
+              {formatCurrencyShort(
+                periodMetrics.periodExpenses + periodMetrics.periodLosses
+                + periodMetrics.periodSellerCost + periodMetrics.periodInvestorPayments,
+              )}
+            </span>
           </div>
         </div>
 

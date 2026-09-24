@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { computeModelStats, summarizeRestock, urgencyOf, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
 import { buildReport } from "@/lib/report-workbook";
+import { computePeriodResult } from "@/lib/period-result";
 import { useBranch } from "@/context/BranchContext";
 import { toast } from "sonner";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
@@ -134,45 +135,32 @@ export default function Dashboard() {
   }, [monthOptions, filter]);
 
   const computeStats = useMemo(() => {
+    /**
+     * O resultado sai de `computePeriodResult` (src/lib/period-result.ts), a
+     * MESMA conta da Distribuição e do relatório. Aqui o lucro líquido não
+     * descontava perdas nem o custo dos vendedores (comissão paga, consumo a
+     * custo) — o razão desconta os dois, e o Dashboard mostrava um lucro maior
+     * que o real. O CPV usa o custo congelado de cada venda (`saleUnitCost`).
+     *
+     * Ticket médio = FATURAMENTO ÷ contagem de vendas, a conta da tela de
+     * Vendas (`totals.ticket`); era recebido ÷ vendas, que caía justamente no
+     * mês que vendeu bem e recebeu devagar.
+     */
     return (filterFn: (dateISO: string) => boolean) => {
-      const salesInPeriod = store.sales.filter(s => s.type === "venda" && filterFn(s.date));
-      const revenue = salesInPeriod.reduce((sum, s) => sum + s.totalPrice, 0);
-      const received = salesInPeriod.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
-      const receivable = salesInPeriod.reduce((sum, s) => sum + Math.max(0, s.totalPrice - (s.paidAmount || 0)), 0);
-
-      // CPV: custo dos produtos efetivamente vendidos
-      const cogs = salesInPeriod.reduce((sum, s) => {
-        const product = productMap.get(s.productId);
-        const cost = product?.purchasePrice ?? 0;
-        return sum + cost * s.quantity;
-      }, 0);
-
-      const grossProfit = revenue - cogs;
-      const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
-
-      const expenses = store.expenses.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.amount, 0);
-      const netProfit = grossProfit - expenses;
-      const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
-
+      const result = computePeriodResult({
+        sales: store.sales,
+        expenses: store.expenses,
+        stockLosses: store.stockLosses,
+        commissionPayments: store.commissionPayments,
+        sellerDebtPayments: store.sellerDebtPayments,
+        costOf: store.saleUnitCost,
+        inPeriod: filterFn,
+      });
       // Reposição de estoque (investimento — exibido separadamente, NÃO reduz lucro)
       const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
-
-      /**
-       * Ticket médio = quanto vale a venda média, e por isso é FATURAMENTO
-       * dividido pela contagem de vendas.
-       *
-       * Era `received / salesInPeriod.length`: misturava duas populações —
-       * dinheiro só das vendas quitadas, dividido por TODAS as vendas. Uma
-       * venda em aberto entrava no divisor com valor zero no numerador e
-       * derrubava a média, então o número caía quando o mês vendia bem e
-       * recebia devagar, que é o contrário do que ele deveria dizer. É a mesma
-       * conta da tela de Vendas (`totals.ticket`), e as duas não podem divergir.
-       */
-      const ticket = salesInPeriod.length > 0 ? revenue / salesInPeriod.length : 0;
-
-      return { revenue, received, receivable, cogs, grossProfit, grossMargin, expenses, netProfit, netMargin, restock, ticket, salesCount: salesInPeriod.length, sales: salesInPeriod };
+      return { ...result, restock };
     };
-  }, [store.sales, store.expenses, store.stockEntries, productMap]);
+  }, [store.sales, store.expenses, store.stockEntries, store.stockLosses, store.commissionPayments, store.sellerDebtPayments, store.saleUnitCost]);
 
   const isGeral = filter === GERAL;
 
@@ -342,33 +330,29 @@ export default function Dashboard() {
       const end = endOfMonth(date);
       const interval = { start, end };
 
-      const salesInMonth = store.sales.filter(s => s.type === "venda" && isWithinInterval(parseISO(s.date), interval));
-      const receita = salesInMonth.reduce((sum, s) => sum + s.totalPrice, 0);
-      const cogs = salesInMonth.reduce((sum, s) => {
-        const p = productMap.get(s.productId);
-        return sum + (p?.purchasePrice ?? 0) * s.quantity;
-      }, 0);
-      const desp = store.expenses.filter(e => isWithinInterval(parseISO(e.date), interval)).reduce((sum, e) => sum + e.amount, 0);
-      const lucro = receita - cogs - desp;
-      const margem = receita > 0 ? (lucro / receita) * 100 : 0;
+      // A MESMA conta do cartão do período (`computeStats`), mês a mês — o
+      // gráfico e o número do trilho não podem contar lucro de dois jeitos.
+      const r = computeStats(d => isWithinInterval(parseISO(d), interval));
 
       months.push({
         month: format(date, "MMM", { locale: ptBR }),
         monthLong: format(date, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
-        receita,
-        lucro,
-        margem,
-        // O gráfico não desenha as quatro de baixo; o relatório imprime. Ficam
-        // aqui porque é a MESMA passada pelos mesmos meses — recalcular por
-        // fora é como as duas leituras do mínimo já divergiram uma vez.
-        cogs,
-        despesas: desp,
-        vendas: salesInMonth.length,
-        unidades: salesInMonth.reduce((sum, s) => sum + s.quantity, 0),
+        receita: r.revenue,
+        lucro: r.netProfit,
+        margem: r.netMargin,
+        // O gráfico não desenha as de baixo; o relatório imprime. Ficam aqui
+        // porque é a MESMA passada pelos mesmos meses — recalcular por fora é
+        // como as duas leituras do mínimo já divergiram uma vez.
+        cogs: r.cogs,
+        despesas: r.expenses,
+        perdas: r.losses,
+        vendedores: r.sellerCost,
+        vendas: r.salesCount,
+        unidades: r.sales.reduce((sum, s) => sum + s.quantity, 0),
       });
     }
     return months;
-  }, [store.sales, store.expenses, productMap]);
+  }, [computeStats]);
 
   const avgMargin = useMemo(() => {
     const withRevenue = monthlyData.filter(m => m.receita > 0);
@@ -453,6 +437,7 @@ export default function Dashboard() {
           retainedEarnings: store.getRetainedEarnings(),
         },
         branchName,
+        costOf: store.saleUnitCost,
       });
 
       const wb = XLSX.utils.book_new();
@@ -774,6 +759,17 @@ export default function Dashboard() {
           {formatCurrencyShort(periodStats.expenses)}{" "}
           <Delta delta={delta(periodStats.expenses, prevStats?.stats.expenses)} invert />
         </span>
+      </div>
+      {/* As duas saídas que o lucro daqui não contava e o razão sempre contou.
+          Sem elas na tela, o "Lucro líquido" embaixo não fecharia com as
+          linhas de cima. */}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Perdas</span>
+        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.losses)}</span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2" title="Comissão paga em dinheiro + consumo do vendedor a custo − dívida que ele devolveu">
+        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Vendedores</span>
+        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.sellerCost)}</span>
       </div>
       <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
         <span className="text-[12.5px]">Lucro líquido</span>

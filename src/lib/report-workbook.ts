@@ -35,6 +35,7 @@ import type { ModelStat } from "@/lib/restock";
 import { urgencyOf } from "@/lib/restock";
 import { computeSellerBalance, isCommissionSeller, PROJECT_START } from "@/lib/commissions";
 import { compareCatalog } from "@/lib/catalog-order";
+import { computePeriodResult } from "@/lib/period-result";
 import { modelArchiveKey } from "@/lib/archived-models";
 
 export type Cell = string | number | null;
@@ -75,6 +76,9 @@ export interface MonthlyRow {
   receita: number;
   cogs: number;
   despesas: number;
+  perdas: number;
+  /** Comissão paga + consumo a custo − dívida devolvida (ver period-result). */
+  vendedores: number;
   lucro: number;
   margem: number;
   vendas: number;
@@ -132,6 +136,12 @@ export interface ReportInput {
   position: LedgerPosition;
 
   branchName: (id: string | null | undefined) => string;
+  /**
+   * Custo unitário CONGELADO da venda (`saleUnitCost` do StoreContext). O
+   * relatório lia o custo de hoje do produto, e cada lote novo reescrevia o
+   * CPV de toda venda antiga na planilha.
+   */
+  costOf: (sale: Sale) => number;
 }
 
 /* ------------------------------------------------------------------ *
@@ -213,7 +223,7 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     commissionPayments, sellerDebtPayments, sellerManualDebts,
     partners, proLaborePayments, partnerContributions,
     loans, loanPayments, investors, dividends, financialEvents,
-    modelStats, monthly, position, branchName,
+    modelStats, monthly, position, branchName, costOf,
   } = input;
 
   const productById = new Map(products.map(p => [p.id, p]));
@@ -235,7 +245,8 @@ export function buildReport(input: ReportInput): ReportSheet[] {
    * filiais) apareceria dizendo que vale para as duas cidades.
    */
   const branchCell = (id: string | null | undefined) => (id ? branchName(id) : "—");
-  const cost = (id: string) => productById.get(id)?.purchasePrice ?? 0;
+  /** Custo TOTAL de uma venda, pelo custo congelado nela. */
+  const saleCost = (s: Sale) => costOf(s) * s.quantity;
 
   /* ---------------- Recortes do período ---------------- */
   const periodSales = sales.filter(s => s.type === "venda" && inPeriod(s.date));
@@ -256,13 +267,14 @@ export function buildReport(input: ReportInput): ReportSheet[] {
 
   const sum = <T,>(list: T[], f: (x: T) => number) => list.reduce((a, x) => a + f(x), 0);
 
-  const revenue = sum(periodSales, s => s.totalPrice);
-  const received = sum(periodSales, s => s.paidAmount || 0);
-  const receivable = sum(periodSales, s => Math.max(0, s.totalPrice - (s.paidAmount || 0)));
-  const cogs = sum(periodSales, s => cost(s.productId) * s.quantity);
-  const grossProfit = revenue - cogs;
-  const expensesTotal = sum(periodExpenses, e => e.amount);
-  const netProfit = grossProfit - expensesTotal;
+  // A MESMA conta de resultado do Dashboard e da Distribuição
+  // (src/lib/period-result.ts). O relatório fazia a sua, sem perdas nem
+  // custo dos vendedores, e o "Lucro líquido" da planilha discordava do razão.
+  const result = computePeriodResult({
+    sales, expenses, stockLosses, commissionPayments, sellerDebtPayments, costOf, inPeriod,
+  });
+  const { revenue, received, receivable, cogs, grossProfit, netProfit } = result;
+  const expensesTotal = result.expenses;
 
   /* ---------------- Comissão, pela mesma função da tela ---------------- */
   /**
@@ -326,7 +338,10 @@ export function buildReport(input: ReportInput): ReportSheet[] {
 
   /* ---------------- Sócios ---------------- */
   const totalPartnerPct = sum(partners, p => p.percentage || 0);
-  const distributable = Math.max(0, netProfit - commissionPayable);
+  // Igual à Distribuição: lucro − pagamentos a investidor − saldo devido aos
+  // vendedores. O relatório não descontava o investidor e dava um alvo maior
+  // que o da tela.
+  const distributable = Math.max(0, netProfit - sum(periodDividends, d => d.amount) - commissionPayable);
   const partnerRows = partners.map(partner => {
     const mine = proLaborePayments.filter(w => w.partnerId === partner.id);
     const periodAmt = sum(mine.filter(w => inPeriod(w.date)), w => w.amount);
@@ -364,7 +379,9 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     ["Lucro bruto", money(grossProfit), "Receita − CPV"],
     ["Margem bruta (%)", pct(revenue > 0 ? (grossProfit / revenue) * 100 : 0), ""],
     ["Despesas", money(expensesTotal), ""],
-    ["Lucro líquido", money(netProfit), "Lucro bruto − despesas"],
+    ["Perdas", money(result.losses), "Pelo custo gravado na perda"],
+    ["Custo dos vendedores", money(result.sellerCost), "Comissão paga + consumo a custo − dívida devolvida"],
+    ["Lucro líquido", money(netProfit), "Lucro bruto − despesas − perdas − vendedores"],
     ["Margem líquida (%)", pct(revenue > 0 ? (netProfit / revenue) * 100 : 0), ""],
     ["Ticket médio", money(periodSales.length > 0 ? revenue / periodSales.length : 0), "Receita ÷ nº de vendas"],
     ["Vendas (qtd.)", periodSales.length, ""],
@@ -433,13 +450,13 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     scope: "proprio",
     autofilter: true,
     rows: [
-      ["Mês", "Receita", "CPV", "Lucro bruto", "Despesas", "Lucro líquido", "Margem (%)", "Vendas", "Unidades"],
+      ["Mês", "Receita", "CPV", "Lucro bruto", "Despesas", "Perdas", "Vendedores", "Lucro líquido", "Margem (%)", "Vendas", "Unidades"],
       ...monthly.map(m => [
         m.monthLong, money(m.receita), money(m.cogs), money(m.receita - m.cogs),
-        money(m.despesas), money(m.lucro), pct(m.margem), m.vendas, m.unidades,
+        money(m.despesas), money(m.perdas), money(m.vendedores), money(m.lucro), pct(m.margem), m.vendas, m.unidades,
       ]),
     ],
-    widths: [16, 14, 14, 14, 14, 14, 12, 10, 10],
+    widths: [16, 14, 14, 14, 14, 12, 12, 14, 12, 10, 10],
   });
 
   /* ---------------- Vendas ---------------- */
@@ -454,7 +471,7 @@ export function buildReport(input: ReportInput): ReportSheet[] {
        "Situação", "Recebido em", "Observações"],
       ...[...periodSales].sort(byDateDesc).map(s => {
         const p = productById.get(s.productId);
-        const c = cost(s.productId) * s.quantity;
+        const c = saleCost(s);
         return [
           dayBR(s.date), productLabel(s.productId), p?.brand ?? "", p?.model ?? "", p?.flavor ?? "",
           s.quantity, money(s.unitPrice), money(s.totalPrice),
@@ -479,7 +496,7 @@ export function buildReport(input: ReportInput): ReportSheet[] {
       ["Data", "Vendedor", "Produto", "Qtd.", "Valor", "Custo", "Observações"],
       ...[...periodWithdrawals].sort(byDateDesc).map(s => [
         dayBR(s.date), sellerLabel(s.sellerId), productLabel(s.productId),
-        s.quantity, money(s.totalPrice), money(cost(s.productId) * s.quantity), s.notes ?? "",
+        s.quantity, money(s.totalPrice), money(saleCost(s)), s.notes ?? "",
       ]),
     ],
     widths: [11, 18, 28, 7, 12, 12, 34],

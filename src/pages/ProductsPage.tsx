@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { localDateToISO, todayDateString } from "@/lib/date-utils";
 import { useMediaQuery } from "@/hooks/use-mobile";
 import AddProductDialog from "@/components/AddProductDialog";
 import ModelImagesDialog from "@/components/ModelImagesDialog";
@@ -59,6 +60,7 @@ export default function ProductsPage() {
     sellers,
     updateProduct,
     deleteProduct,
+    addStockLoss,
   } = useStore();
   const { branchId } = useBranch();
   /** "Todas as filiais" é somente leitura: o estoque aqui é somado e o preço é o maior entre as cidades. */
@@ -274,6 +276,33 @@ export default function ProductsPage() {
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editId || !editForm.name.trim()) return;
+    /**
+     * O estoque NÃO se grava direto daqui. A edição escrevia o número em
+     * product_branch sem deixar rastro: o razão não via a unidade sumir, e
+     * baixar o estoque abaixo do que está com os vendedores furava a regra das
+     * atribuições. Agora a diferença vira movimento de verdade:
+     * - DIMINUIR é uma perda "Ajuste de inventário", da casa — passa pelo
+     *   `register_stock_loss`, com o teto no estoque livre e o custo no razão;
+     * - AUMENTAR é recusado: unidade que aparece precisa de entrada, que diz
+     *   de onde ela veio e quanto custou.
+     */
+    const current = realById.get(editId)?.stock ?? 0;
+    const wanted = Number(editForm.stock) || 0;
+    if (wanted > current) {
+      toast.error("Para aumentar o estoque, registre uma entrada", {
+        description: "Em Entrada. Ela diz quanto a unidade custou — um número digitado aqui não teria custo.",
+      });
+      return;
+    }
+    if (wanted < current) {
+      const ok = await addStockLoss({
+        productId: editId,
+        quantity: current - wanted,
+        reason: "Ajuste de inventário",
+        date: localDateToISO(todayDateString()),
+      });
+      if (!ok) return;
+    }
     await updateProduct(editId, {
       name: editForm.name.trim(),
       brand: editForm.brand.trim() || editForm.name.trim().split(" ")[0],
@@ -281,9 +310,7 @@ export default function ProductsPage() {
       flavor: editForm.flavor.trim(),
       purchasePrice: Number(editForm.purchasePrice) || 0,
       salePrice: Number(editForm.salePrice) || 0,
-      stock: Number(editForm.stock) || 0,
       minStock: Number(editForm.minStock) || 0,
-
     });
     setEditId(null);
   };
@@ -927,9 +954,12 @@ export default function ProductsPage() {
             <div className="grid grid-cols-4 gap-3">
               <div><Label className="text-xs">Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
               <div><Label className="text-xs">Venda (R$)</Label><Input type="number" step="0.01" value={editForm.salePrice} onChange={e => setEditForm(f => ({ ...f, salePrice: e.target.value }))} /></div>
-              <div><Label className="text-xs">Estoque</Label><Input type="number" value={editForm.stock} onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} /></div>
+              <div><Label className="text-xs">Estoque</Label><Input type="number" min="0" value={editForm.stock} onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} /></div>
               <div><Label className="text-xs">Mín.</Label><Input type="number" value={editForm.minStock} onChange={e => setEditForm(f => ({ ...f, minStock: e.target.value }))} /></div>
             </div>
+            <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+              Diminuir o estoque registra uma perda "Ajuste de inventário". Para aumentar, use a Entrada.
+            </p>
             <NcButton type="submit" variant="solid" size="md" className="w-full">Salvar alterações</NcButton>
           </form>
         </DialogContent>

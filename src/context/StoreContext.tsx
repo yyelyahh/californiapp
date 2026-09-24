@@ -66,7 +66,7 @@ function requireBranch(branchId: string | null): branchId is string {
 export type LoadProgress = { phase: "core" | "secondary" | "done"; done: number; total: number };
 
 /** Quantas consultas cada onda dispara — o tamanho de cada `track([...])`. */
-const CORE_QUERIES = 6;
+const CORE_QUERIES = 7;
 const SECONDARY_QUERIES = 14;
 
 /** A posição do razão: a soma de cada coluna `*_delta` de `financial_events`. */
@@ -273,7 +273,8 @@ interface StoreContextType {
     }[];
   }) => Promise<boolean>;
   stockLosses: StockLoss[];
-  addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost">) => Promise<void>;
+  /** `true` se a perda entrou; a recusa (teto, filial) já vira toast aqui dentro. */
+  addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost">) => Promise<boolean>;
   deleteStockLoss: (id: string) => Promise<void>;
   getTotalLossValue: () => number;
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
@@ -323,6 +324,8 @@ interface StoreContextType {
   getSellerDebt: (id: string) => number;
   getSellerPaid: (id: string) => number;
   getSellerBalance: (id: string) => number;
+  /** Custo unitário congelado da venda (ou o de hoje, se ela não tem). Todo CPV passa por aqui. */
+  saleUnitCost: (sale: Sale) => number;
   // ---- Novo modelo financeiro ----
   partnerContributions: PartnerContribution[];
   loans: Loan[];
@@ -384,6 +387,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   /** Quem é exposto (e quem as ações leem) é sempre o numerado — ver `numberPurchaseOrders`. */
   const purchaseOrders = useMemo(() => numberPurchaseOrders(purchaseOrdersRaw), [purchaseOrdersRaw]);
   const [ledgerTotals, setLedgerTotals] = useState<LedgerPosition>(EMPTY_LEDGER);
+  /** Custo unitário CONGELADO de cada venda, por id (tabela `sale_costs`). */
+  const [saleCosts, setSaleCosts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState<LoadProgress>({ phase: "core", done: 0, total: CORE_QUERIES });
   const { role } = useAuth();
@@ -500,7 +505,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       );
 
     const fetchCore = async () => {
-      const [prodList, stockRes, salesRes, selRes, paRes, slRes] = (await Promise.all(track([
+      const [prodList, stockRes, salesRes, selRes, paRes, slRes, costRes] = (await Promise.all(track([
         fetchProductsList(),
         // Histórico passa por `fetchAllRows`: cresce com o uso e um dia passa
         // do teto de 1000 linhas por consulta, que corta sem avisar.
@@ -518,6 +523,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         fetchAllRows(() =>
           scoped(supabase.from("stock_losses").select("*")).order("created_at", { ascending: true }).order("id"),
         ),
+        // O custo congelado de cada venda (`sale_costs`, só admin — a RLS
+        // corta pelas filiais dele). Sem ele o CPV usa o custo de HOJE e cada
+        // lote novo reescreve o lucro do passado. Falha (tabela ainda não
+        // criada, vendedor) é lista vazia: o custo cai no do produto, que é a
+        // leitura antiga.
+        isAdmin
+          ? fetchAllRows(() => stockDb.from("sale_costs").select("sale_id, unit_cost").order("sale_id"))
+          : Promise.resolve({ data: [], error: null }),
       // `as any`: o `track` devolve `unknown[]`, e cada `.data` é mapeado logo
       // abaixo por uma função que valida a forma da linha. (Tipar a tupla
       // estourava com "Type instantiation is excessively deep" nos tipos
@@ -533,6 +546,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (selRes.data) setSellers(selRes.data.map(mapSeller));
       if (paRes.data) setProductAssignments(paRes.data.map(mapProductAssignment));
       if (slRes?.data) setStockLosses(slRes.data.map(mapStockLoss));
+      if (costRes?.data) {
+        setSaleCosts(new Map(costRes.data.map((r: any) => [r.sale_id as string, Number(r.unit_cost)])));
+      }
     };
 
     // Wave 2: dados financeiros/administrativos, carregados logo em seguida sem travar a tela.
@@ -1386,6 +1402,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const deleteProduct = useCallback(
     async (id: string) => {
       const product = products.find((p) => p.id === id);
+      /**
+       * Primeiro excluir, DEPOIS fotografar. Produto com histórico (venda,
+       * entrada, perda, transferência, pedido) não sai mais — a chave de
+       * produto nessas tabelas é RESTRICT desde a migration 20260924140000,
+       * porque o CASCADE de antes apagava junto todo o passado dele. Com a
+       * fotografia antes, cada recusa deixaria um registro de "excluído" de um
+       * produto que continua existindo.
+       */
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) {
+        // 23503 = foreign_key_violation: tem histórico preso a ele.
+        if (error.code === "23503") {
+          toast.error("Este produto tem histórico (vendas, entradas ou perdas) — arquive o modelo em vez de excluir", {
+            description: "Em Produtos › Modelos. Arquivar tira das listas sem apagar o passado.",
+          });
+        } else {
+          toast.error("Erro ao excluir produto");
+        }
+        return;
+      }
       if (product) {
         const { data: userData } = await supabase.auth.getUser();
         // A fotografia é dos números DA FILIAL ATIVA — que é o que estava na
@@ -1403,11 +1439,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           original_created_at: product.createdAt,
           deleted_by: userData.user?.id ?? null,
         });
-      }
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) {
-        toast.error("Erro ao excluir produto");
-        return;
       }
       setProducts((prev) => prev.filter((p) => p.id !== id));
       toast.success("Produto excluído");
@@ -1554,8 +1585,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * que a cidade não tinha. Do VENDEDOR é a caixa dele.
    */
   const addStockLoss = useCallback(
-    async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost">) => {
-      if (!requireBranch(branchId)) return;
+    async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost">): Promise<boolean> => {
+      if (!requireBranch(branchId)) return false;
       const { data, error } = await stockDb.rpc("register_stock_loss", {
         p_branch_id: branchId,
         p_product_id: l.productId,
@@ -1566,7 +1597,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       if (error) {
         toast.error(stockErrorMessage(error.message, "Erro ao registrar perda"));
-        return;
+        return false;
       }
       setStockLosses((prev) => [...prev, mapStockLoss(data)]);
       setProducts((prev) =>
@@ -1580,6 +1611,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (refreshed) setProductAssignments(refreshed.map(mapProductAssignment));
       }
       toast.success("Perda registrada");
+      return true;
     },
     [branchId],
   );
@@ -2401,6 +2433,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     () => getTotalRevenue() - getTotalCosts() - getTotalExpenses() - getTotalLossValue() - getTotalPartnerPayments(),
     [getTotalRevenue, getTotalCosts, getTotalExpenses, getTotalLossValue, getTotalPartnerPayments],
   );
+  /**
+   * O custo UNITÁRIO de uma venda: o congelado nela (`sale_costs`) ou, na
+   * falta dele, o custo de hoje do produto na filial — que é o mesmo número
+   * no instante da venda, e a leitura antiga. É o que todo CPV do app usa
+   * (ver src/lib/period-result.ts); ler `product.purchasePrice` direto
+   * reescrevia o lucro do passado a cada lote novo.
+   */
+  const productCostById = useMemo(
+    () => new Map(products.map((p) => [p.id, p.purchasePrice || 0])),
+    [products],
+  );
+  const saleUnitCost = useCallback(
+    (s: Sale) => saleCosts.get(s.id) ?? productCostById.get(s.productId) ?? 0,
+    [saleCosts, productCostById],
+  );
+
   const getProductName = useCallback(
     (id: string) => {
       const p = products.find((p) => p.id === id);
@@ -2817,6 +2865,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getSellerDebt,
       getSellerPaid,
       getSellerBalance,
+      saleUnitCost,
       purchaseOrders,
       addPurchaseOrder,
       deletePurchaseOrder,
@@ -2924,6 +2973,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getSellerDebt,
       getSellerPaid,
       getSellerBalance,
+      saleUnitCost,
       purchaseOrders,
       addPurchaseOrder,
       deletePurchaseOrder,
