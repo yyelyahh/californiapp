@@ -216,6 +216,13 @@ export interface Seller {
    * aí e não pode parar de funcionar.
    */
   slug?: string;
+  /**
+   * Quando foi arquivado. Ausente = ativo. Vendedor não se exclui (a exclusão
+   * apagava os pagamentos de comissão dele e mudava o razão do passado): se
+   * arquiva, e o arquivado sai das listas de ESCOLHA mas continua dando nome
+   * ao histórico — a mesma divisão de `products` / `activeProducts`.
+   */
+  archivedAt?: string;
 }
 
 export interface ProductAssignment {

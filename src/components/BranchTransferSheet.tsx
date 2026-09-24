@@ -80,7 +80,7 @@ const lineKey = (l: Pick<Line, "originId" | "productId">) => `${l.originId}|${l.
 export default function BranchTransferSheet() {
   const {
     products, stockTransfers, transferBranchStock,
-    getProductName, getSellerName, sellers, productAssignments,
+    getProductName, getSellerName, activeSellers, productAssignments,
   } = useStore();
   const { branches, branchId, branchName } = useBranch();
 
@@ -311,7 +311,7 @@ export default function BranchTransferSheet() {
                           <SelectItem value={CASA} disabled={freeTotal <= 0}>
                             Estoque da casa ({freeTotal} un. livres)
                           </SelectItem>
-                          {sellers.map(s => {
+                          {activeSellers.map(s => {
                             const held = heldTotalBySeller.get(s.id) ?? 0;
                             return (
                               <SelectItem key={s.id} value={s.id} disabled={held <= 0}>

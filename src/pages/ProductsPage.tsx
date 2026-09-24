@@ -2,10 +2,9 @@ import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
 import type { Product } from "@/types";
 import { useState, useMemo } from "react";
-import { Trash2, Search, Package, ChevronRight, Pencil, Tag, X } from "lucide-react";
+import { Search, Package, ChevronRight, Pencil, Tag, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -57,9 +56,8 @@ export default function ProductsPage() {
     activeProducts,
     archivedModels,
     productAssignments,
-    sellers,
+    activeSellers,
     updateProduct,
-    deleteProduct,
     addStockLoss,
   } = useStore();
   const { branchId } = useBranch();
@@ -73,7 +71,6 @@ export default function ProductsPage() {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState({ name: "", brand: "", model: "", flavor: "", purchasePrice: "", salePrice: "", stock: "", minStock: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ brand: "", model: "", purchasePrice: "", salePrice: "" });
@@ -81,17 +78,17 @@ export default function ProductsPage() {
   const [bulkMinForm, setBulkMinForm] = useState({ brand: "", model: "", minStock: "" });
 
   /**
-   * Vendedor que saiu da lista (foi excluído) deixaria a tela presa num recorte
+   * Vendedor que saiu da lista (foi arquivado) deixaria a tela presa num recorte
    * sem dono, mostrando zero em tudo — parece "sumiu o estoque", não "esse
    * vendedor não existe mais". Mesma decisão do `pickBranch` e do filtro de
    * pessoa da Auditoria: volta sozinho para o geral.
    */
   const activeLens =
-    lens === LENS_GERAL || lens === LENS_CASA || sellers.some(s => s.id === lens) ? lens : LENS_GERAL;
+    lens === LENS_GERAL || lens === LENS_CASA || activeSellers.some(s => s.id === lens) ? lens : LENS_GERAL;
 
   /**
    * A lista que a tela inteira lê, já pela lente escolhida. `activeProducts`
-   * segue sendo a verdade da filial — quem ESCREVE (editar, excluir) resolve o
+   * segue sendo a verdade da filial — quem ESCREVE (editar) resolve o
    * produto por ele, nunca por esta cópia, senão gravaria a conta do vendedor
    * como estoque da cidade.
    */
@@ -105,16 +102,16 @@ export default function ProductsPage() {
   const lensLabel =
     activeLens === LENS_GERAL ? "Estoque geral"
       : activeLens === LENS_CASA ? "a casa"
-        : sellers.find(s => s.id === activeLens)?.name ?? "";
+        : activeSellers.find(s => s.id === activeLens)?.name ?? "";
 
   /** As opções da lente: o geral, a casa e cada vendedor da filial. */
   const lensOptions = useMemo(
     () => [
       { value: LENS_GERAL, label: "Estoque geral" },
       { value: LENS_CASA, label: "Casa" },
-      ...sellers.map(s => ({ value: s.id, label: s.name })),
+      ...activeSellers.map(s => ({ value: s.id, label: s.name })),
     ],
-    [sellers],
+    [activeSellers],
   );
 
   const outOfStockCount = useMemo(() => products.filter(p => p.stock <= 0).length, [products]);
@@ -255,10 +252,10 @@ export default function ProductsPage() {
 
 
   /**
-   * Edita e exclui SEMPRE o produto de verdade, resolvido pelo id — nunca a
+   * Edita SEMPRE o produto de verdade, resolvido pelo id — nunca a
    * cópia que a lente devolveu. Sob a lente de um vendedor, `p.stock` é a caixa
    * DELE: salvar a partir dali gravaria essa conta como o estoque da cidade
-   * inteira, e o `deleted_products` guardaria a fotografia errada.
+   * inteira.
    */
   const startEdit = (id: string) => {
     const p = realById.get(id);
@@ -271,7 +268,6 @@ export default function ProductsPage() {
     });
   };
 
-  const startDelete = (id: string) => setDeleteTarget(realById.get(id) ?? null);
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -659,7 +655,6 @@ export default function ProductsPage() {
                                               product={p}
                                               readOnly={readOnly}
                                               onEdit={() => startEdit(p.id)}
-                                              onDelete={() => startDelete(p.id)}
                                             />
                                           ))}
                                         </tbody>
@@ -964,25 +959,6 @@ export default function ProductsPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={v => { if (!v) setDeleteTarget(null); }}>
-        <AlertDialogContent className="nocturne">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget && (<>Tem certeza que deseja excluir <strong>{deleteTarget.flavor || deleteTarget.name}</strong>
-                {deleteTarget.flavor && deleteTarget.name && <> · {deleteTarget.name}</>}? Esta ação ficará registrada na auditoria.</>)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => { if (deleteTarget) await deleteProduct(deleteTarget.id); setDeleteTarget(null); }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -1020,12 +996,10 @@ function FlavorRow({
   product: p,
   readOnly,
   onEdit,
-  onDelete,
 }: {
   product: Product;
   readOnly?: boolean;
   onEdit: () => void;
-  onDelete: () => void;
 }) {
   const profit = p.salePrice - p.purchasePrice;
   const stockColor = p.stock === 0
@@ -1069,6 +1043,9 @@ function FlavorRow({
         {/* No desktop as ações só aparecem no hover da linha; no toque não há
             hover, então ficam sempre visíveis abaixo de sm. */}
         <div className="flex justify-end gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+          {/* Sem excluir: produto se ARQUIVA (painel "Modelos"). A exclusão
+              levava junto vendas, entradas e perdas do sabor, e hoje o banco
+              nem oferece o DELETE (migration 20260924150000). */}
           <NcButton
             variant="ghost"
             size="icon"
@@ -1077,15 +1054,6 @@ function FlavorRow({
             aria-label={`Editar ${p.flavor || p.name}`}
           >
             <Pencil size={13} />
-          </NcButton>
-          <NcButton
-            variant="danger"
-            size="icon"
-            onClick={onDelete}
-            disabled={readOnly}
-            aria-label={`Excluir ${p.flavor || p.name}`}
-          >
-            <Trash2 size={13} />
           </NcButton>
         </div>
       </td>

@@ -228,7 +228,10 @@ interface StoreContextType {
   investors: Investor[];
   dividends: Dividend[];
   partners: Partner[];
+  /** Todos os vendedores, arquivados inclusive. Use para RESOLVER NOME no histórico. */
   sellers: Seller[];
+  /** Sem os arquivados. É o que toda lista de ESCOLHA deve ler. */
+  activeSellers: Seller[];
   productAssignments: ProductAssignment[];
   sellerDebtPayments: SellerDebtPayment[];
   partnerPayments: PartnerPayment[];
@@ -245,7 +248,6 @@ interface StoreContextType {
   loadProgress: LoadProgress;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "stock">) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
-  deleteProduct: (id: string) => Promise<void>;
   addStockEntry: (e: Omit<StockEntry, "id" | "totalCost">) => Promise<void>;
   deleteStockEntry: (id: string) => Promise<void>;
   /** Só as que tocam a filial ativa — de um lado ou do outro. */
@@ -295,7 +297,8 @@ interface StoreContextType {
   getPartnerPaidForMonth: (partnerId: string, month: string) => number;
   addSeller: (s: Omit<Seller, "id" | "createdAt">) => Promise<void>;
   updateSeller: (id: string, s: Partial<Seller>) => Promise<void>;
-  deleteSeller: (id: string) => Promise<void>;
+  /** Arquiva (true) ou desarquiva (false). `true` se passou; a recusa já vira toast. */
+  setSellerArchived: (id: string, archived: boolean) => Promise<boolean>;
   addProductAssignment: (a: Omit<ProductAssignment, "id" | "createdAt">) => Promise<void>;
   deleteProductAssignment: (id: string) => Promise<void>;
   transferProductAssignment: (assignmentId: string, toSellerId: string, quantity: number) => Promise<void>;
@@ -852,6 +855,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     debtPercentage: r.debt_percentage != null ? Number(r.debt_percentage) : 10,
     branchId: r.branch_id ?? undefined,
     slug: r.slug ?? undefined,
+    archivedAt: r.archived_at ?? undefined,
   });
 
   const mapProductAssignment = (r: any): ProductAssignment => ({
@@ -1397,53 +1401,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
     },
     [branchId],
-  );
-
-  const deleteProduct = useCallback(
-    async (id: string) => {
-      const product = products.find((p) => p.id === id);
-      /**
-       * Primeiro excluir, DEPOIS fotografar. Produto com histórico (venda,
-       * entrada, perda, transferência, pedido) não sai mais — a chave de
-       * produto nessas tabelas é RESTRICT desde a migration 20260924140000,
-       * porque o CASCADE de antes apagava junto todo o passado dele. Com a
-       * fotografia antes, cada recusa deixaria um registro de "excluído" de um
-       * produto que continua existindo.
-       */
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) {
-        // 23503 = foreign_key_violation: tem histórico preso a ele.
-        if (error.code === "23503") {
-          toast.error("Este produto tem histórico (vendas, entradas ou perdas) — arquive o modelo em vez de excluir", {
-            description: "Em Produtos › Modelos. Arquivar tira das listas sem apagar o passado.",
-          });
-        } else {
-          toast.error("Erro ao excluir produto");
-        }
-        return;
-      }
-      if (product) {
-        const { data: userData } = await supabase.auth.getUser();
-        // A fotografia é dos números DA FILIAL ATIVA — que é o que estava na
-        // tela quando alguém apertou excluir. Em "Todas" seriam os somados, e
-        // a tela não oferece exclusão nesse modo.
-        await supabase.from("deleted_products").insert({
-          original_id: product.id,
-          name: product.name,
-          brand: product.brand,
-          model: product.model,
-          flavor: product.flavor,
-          purchase_price: product.purchasePrice,
-          sale_price: product.salePrice,
-          stock: product.stock,
-          original_created_at: product.createdAt,
-          deleted_by: userData.user?.id ?? null,
-        });
-      }
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-      toast.success("Produto excluído");
-    },
-    [products],
   );
 
   /**
@@ -2145,16 +2102,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSellers((prev) => prev.map((s) => (s.id === id ? (saved ?? { ...s, ...updates }) : s)));
   }, []);
 
-  const deleteSeller = useCallback(async (id: string) => {
-    const { error } = await supabase
+  /**
+   * Arquivar (ou desarquivar) um vendedor. Não existe mais excluir: a exclusão
+   * apagava em cascata os pagamentos de comissão dele, e com eles uma saída de
+   * caixa do razão (migration 20260924150000, que também tira o DELETE do
+   * alcance do app).
+   *
+   * O banco recusa arquivar com estoque na mão ou pedido pendente; o saldo de
+   * comissão zerado é conta do front e quem confere é a tela, antes de chamar.
+   */
+  const setSellerArchived = useCallback(async (id: string, archived: boolean): Promise<boolean> => {
+    // `stockDb`: a coluna `archived_at` ainda não está no types.ts gerado.
+    const { data, error } = await stockDb
       .from("sellers")
-      .delete()
-      .eq("id", id);
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq("id", id)
+      .select()
+      .maybeSingle();
     if (error) {
-      toast.error("Erro ao excluir vendedor");
-      return;
+      const m = error.message || "";
+      const n = m.match(/:(\d+)/)?.[1] ?? "";
+      if (m.includes("vendedor_com_estoque")) {
+        toast.error(`Ele ainda tem ${n} un. na mão — devolva ou transfira antes de arquivar`);
+      } else if (m.includes("vendedor_com_pedido_pendente")) {
+        toast.error(`Ele tem ${n} pedido(s) pendente(s) na loja — confirme ou recuse antes de arquivar`);
+      } else {
+        toast.error(archived ? "Erro ao arquivar vendedor" : "Erro ao desarquivar vendedor");
+      }
+      return false;
     }
-    setSellers((prev) => prev.filter((s) => s.id !== id));
+    if (data) setSellers((prev) => prev.map((s) => (s.id === id ? mapSeller(data) : s)));
+    toast.success(archived ? "Vendedor arquivado" : "Vendedor de volta às listas");
+    return true;
   }, []);
 
   // ---- Product Assignments ----
@@ -2763,6 +2742,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [sortedProducts, hiddenModels],
   );
   const sortedSellers = useMemo(() => sortByName(sellers), [sellers]);
+  // Sem os arquivados: é o que as listas de ESCOLHA leem. `sellers` (todos)
+  // continua dando nome ao histórico — a divisão de products / activeProducts.
+  const activeSellers = useMemo(() => sortedSellers.filter((s) => !s.archivedAt), [sortedSellers]);
   const sortedPartners = useMemo(() => sortByName(partners), [partners]);
 
   /**
@@ -2815,7 +2797,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       loadProgress,
       addProduct,
       updateProduct,
-      deleteProduct,
       addStockEntry,
       deleteStockEntry,
       addStockLoss,
@@ -2840,7 +2821,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getTotalPartnerPayments,
       addSeller,
       updateSeller,
-      deleteSeller,
+      setSellerArchived,
+      activeSellers,
       addProductAssignment,
       deleteProductAssignment,
       transferProductAssignment,
@@ -2923,7 +2905,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       loadProgress,
       addProduct,
       updateProduct,
-      deleteProduct,
       addStockEntry,
       deleteStockEntry,
       addStockLoss,
@@ -2948,7 +2929,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getTotalPartnerPayments,
       addSeller,
       updateSeller,
-      deleteSeller,
+      setSellerArchived,
+      activeSellers,
       addProductAssignment,
       deleteProductAssignment,
       transferProductAssignment,

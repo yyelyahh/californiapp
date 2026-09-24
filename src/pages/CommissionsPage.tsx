@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Wallet, Trash2, Plus, ArrowRight, Users, X,
+  Wallet, Trash2, Plus, ArrowRight, Users, X, Archive, ArchiveRestore,
   HandCoins, Receipt, Package, Share2, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +23,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
@@ -91,7 +92,7 @@ export default function CommissionsPage() {
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, addSellerManualDebt,
     addProductAssignment, transferProductAssignment,
-    getSellerName, deleteSeller,
+    getSellerName, setSellerArchived, activeSellers,
   } = store;
 
   // Retiradas dos sócios = proLaborePayments (apenas relabel semântico)
@@ -212,6 +213,39 @@ export default function CommissionsPage() {
     };
   }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, stockLosses, saleUnitCost, period, start, end, closedStart, closedEnd, PROJECT_START]);
 
+  /**
+   * A lista de vendedores mostra os ATIVOS. Arquivado só aparece com o botão
+   * "Arquivados" ligado — ou sozinho, se tiver saldo em aberto: venda antiga
+   * dele recebida depois do arquivamento gera comissão, e dinheiro devido não
+   * pode morar escondido atrás de um filtro. As contas (distribuível, repartição)
+   * usam todos, sempre; o corte é só de lista.
+   */
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedCount = periodMetrics.perSeller.filter(r => r.seller.archivedAt).length;
+  const listedSellers = periodMetrics.perSeller.filter(
+    r => !r.seller.archivedAt || showArchived || Math.abs(r.balance) > 0.01,
+  );
+
+  /**
+   * Saldo de HOJE de um vendedor, independente do período escolhido na tela.
+   * É o que decide se dá para arquivar: olhando um mês passado, o saldo do
+   * painel não conta o que aconteceu depois.
+   */
+  const currentBalanceOf = (seller: Seller) => {
+    const now = new Date();
+    const s = startOfMonth(now);
+    const e = endOfMonth(now);
+    return computeSellerBalance(seller, {
+      sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
+      start: s, end: e, closedStart: s, PROJECT_START,
+      isLegacy,
+      inClosedPeriod: (iso: string) => {
+        const d = new Date(iso);
+        return !isNaN(d.getTime()) && d >= s && d <= e;
+      },
+    }).balance;
+  };
+
   /** O que ainda cabe retirar sem furar o distribuível do período. */
   const stillDistributable = Math.max(0, periodMetrics.distribuivel - periodMetrics.totalWithdrawalsPeriod);
 
@@ -253,9 +287,13 @@ export default function CommissionsPage() {
 
   const panelRow = panelSellerId ? periodMetrics.perSeller.find(r => r.seller.id === panelSellerId) : null;
 
+  const [panelTab, setPanelTab] = useState<"saldo" | "cadastro">("saldo");
+
   const openSeller = (sellerId: string) => {
     setPanelSellerId(sellerId);
     setPanelMode("resumo");
+    // Abre sempre no saldo: é para isso que se clica num vendedor.
+    setPanelTab("saldo");
   };
 
   /** Abre um dos formulários com o valor que a tela já sabe sugerir. */
@@ -482,15 +520,35 @@ export default function CommissionsPage() {
         <section className="flex flex-col gap-2">
           <SectionHead
             title="Vendedores"
-            sub={`${periodMetrics.perSeller.length} no período · falta pagar ${formatCurrency(periodMetrics.totalSellerBalance)}`}
+            sub={`${listedSellers.length} no período · falta pagar ${formatCurrency(periodMetrics.totalSellerBalance)}`}
+            action={
+              // Sempre montado, escondido quando não há arquivado: botão que
+              // aparece e some mexe na largura da linha (regra do projeto). O
+              // estado é dito pelo realce, com rótulo fixo — como o "Zerados"
+              // de Produtos.
+              <button
+                type="button"
+                onClick={() => setShowArchived(v => !v)}
+                aria-pressed={showArchived}
+                disabled={archivedCount === 0}
+                className={cn("nc-btn nc-btn--quiet", archivedCount === 0 && "invisible")}
+                style={showArchived ? {
+                  color: "var(--nc-accent)",
+                  boxShadow: "inset 0 0 0 1px var(--nc-accent)",
+                  background: "color-mix(in srgb, var(--nc-accent) 10%, transparent)",
+                } : undefined}
+              >
+                <Archive size={13} />Arquivados ({archivedCount})
+              </button>
+            }
           />
-          {periodMetrics.perSeller.length === 0 ? (
+          {listedSellers.length === 0 ? (
             <div className="nc-card py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
-              Nenhum vendedor cadastrado.
+              {archivedCount > 0 ? "Nenhum vendedor ativo." : "Nenhum vendedor cadastrado."}
             </div>
           ) : (
             <Stagger className="nc-card overflow-hidden">
-              {periodMetrics.perSeller.map(r => {
+              {listedSellers.map(r => {
                 const next = getNextTier(r.tier);
                 return (
                   <motion.button
@@ -514,6 +572,9 @@ export default function CommissionsPage() {
                             dentro do painel. Selo neutro: faixa não é estado de
                             dinheiro, é em qual degrau ele está. */}
                         <span className="nc-pill nc-pill--mute flex-none">{r.tier.label}</span>
+                        {r.seller.archivedAt && (
+                          <span className="nc-pill nc-pill--mute flex-none">arquivado</span>
+                        )}
                       </div>
                       <div className="flex flex-none items-center gap-2">
                         <span className="nc-num text-[13px]" style={{ color: balanceTone(r.balance) }}>
@@ -833,9 +894,13 @@ export default function CommissionsPage() {
 
       {/* ================= Painel do vendedor ================= */}
       <Sheet open={!!panelSellerId} onOpenChange={v => { if (!v) { setPanelSellerId(null); setPanelMode("resumo"); } }}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
+        <SheetContent className="nocturne w-full sm:max-w-xl p-0 flex flex-col">
           {panelRow && (
             <>
+              {/* Só o nome e a faixa no cabeçalho. A situação ("Falta pagar
+                  ao vendedor") morava aqui E em cima do número, dita duas
+                  vezes a dois centímetros de distância — agora ela é o
+                  sobretítulo do número, que é onde ela explica alguma coisa. */}
               <NcSheetHeader
                 eyebrow={`Distribuição · ${label}`}
                 title={
@@ -844,196 +909,269 @@ export default function CommissionsPage() {
                     <span className="nc-pill nc-pill--mute">{panelRow.tier.label}</span>
                   </span>
                 }
-                description={balanceLabel(panelRow.balance)}
               />
 
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
-                {/* Saldo */}
-                <div>
-                  <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Saldo do vendedor</span>
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <span style={{ color: balanceTone(panelRow.balance) }}>
-                      <AnimatedNumber
-                        value={panelRow.balance}
-                        format={formatCurrency}
-                        duration={0.7}
-                        animateOnMount
-                        className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
-                      />
-                    </span>
-                  </div>
+              {/* Duas abas porque são duas conversas: o DINHEIRO (o que se faz
+                  todo mês) e o CADASTRO (link da loja, remover — o que se faz
+                  uma vez). Juntos, o botão de apagar o vendedor ficava na mesma
+                  rolagem do botão de pagar. */}
+              <Tabs value={panelTab} onValueChange={v => setPanelTab(v as "saldo" | "cadastro")} className="flex min-h-0 flex-1 flex-col">
+                <div className="flex-none px-5 pt-3">
+                  <NcTabsList
+                    value={panelTab}
+                    tabs={[{ value: "saldo", label: "Saldo" }, { value: "cadastro", label: "Cadastro" }]}
+                  />
                 </div>
 
-                <Rule />
-
-                {/* A conta inteira, na ordem em que ela acontece. */}
-                <section className="space-y-1.5">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Como se chega nesse saldo</p>
-                  <LedgerLine label="Unidades vendidas" value={String(panelRow.units)} />
-                  <LedgerLine label="Vendas no período" value={formatCurrency(panelRow.vendasTotal)} />
-                  <LedgerLine
-                    label="Saldo trazido dos meses anteriores"
-                    value={formatCurrency(panelRow.priorBalance)}
-                    tone={panelRow.priorBalance < -0.01 ? "var(--nc-crit)" : undefined}
-                  />
-                  <LedgerLine label="Comissão gerada" value={`+${formatCurrency(panelRow.accrued)}`} tone="var(--nc-ok)" />
-                  {panelRow.retiradasTotal > 0.01 && (
-                    <LedgerLine label="Consumo próprio" value={`−${formatCurrency(panelRow.retiradasTotal)}`} tone="var(--nc-alert)" />
-                  )}
-                  {panelRow.manualDebtsTotal > 0.01 && (
-                    <LedgerLine label="Dívidas lançadas" value={`−${formatCurrency(panelRow.manualDebtsTotal)}`} tone="var(--nc-alert)" />
-                  )}
-                  {panelRow.debtPaymentsTotal > 0.01 && (
-                    <LedgerLine label="Dívida já paga por ele" value={`+${formatCurrency(panelRow.debtPaymentsTotal)}`} tone="var(--nc-ok)" />
-                  )}
-                  <LedgerLine label="Comissão já paga a ele" value={`−${formatCurrency(panelRow.commPaid)}`} tone={panelRow.commPaid > 0.01 ? "var(--nc-alert)" : undefined} />
-                  <div className="nc-rule-top flex items-center justify-between gap-2 pt-2 text-[13px]">
-                    <span>Saldo</span>
-                    <span className="nc-num font-medium" style={{ color: balanceTone(panelRow.balance) }}>
-                      {formatCurrency(panelRow.balance)}
-                    </span>
-                  </div>
-                </section>
-
-                {/* Próxima faixa */}
-                {getNextTier(panelRow.tier) && (
-                  <p className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
-                    Próxima faixa{" "}
-                    <span style={{ color: "var(--nc-accent)" }}>{getNextTier(panelRow.tier)!.label}</span>
-                    {" · faltam "}
-                    <span className="nc-num">{unitsUntilNextTier(panelRow.units)}</span> un.
-                  </p>
-                )}
-
-                {/* Vendas dele ainda em aberto: o que pode mudar a faixa. */}
-                {panelRow.pendingToReceive > 0.01 && (
-                  <div className="rounded-lg p-3 text-xs" style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
-                    <div className="flex justify-between">
-                      <span style={{ color: "var(--nc-text-2)" }}>Vendas dele ainda a receber</span>
-                      <span className="nc-num" style={{ color: "var(--nc-alert)" }}>{formatCurrency(panelRow.pendingToReceive)}</span>
-                    </div>
-                    <div className="nc-rule-top mt-1.5 flex justify-between pt-1.5">
-                      <span style={{ color: "var(--nc-text-2)" }}>Saldo se tudo for recebido</span>
-                      <span className="nc-num">{formatCurrency(panelRow.projectedBalance)}</span>
-                    </div>
-                  </div>
-                )}
-
-                <Rule />
-
-                {/* ---- Formulário, quando um dos modos está ativo ----
-                    Sem `AnimatePresence`: a troca é só entre dois blocos e o
-                    `key` já refaz a entrada. Com `mode="wait"` aqui a fila
-                    travaria justamente no caminho mais comum — registrar um
-                    pagamento re-renderiza o painel inteiro (o saldo mudou) bem
-                    dentro da janela de saída, e o bloco novo ficaria parado no
-                    `initial`, invisível. É o mesmo defeito que o PageTransition
-                    já teve. */}
-                {panelMode === "resumo" ? (
-                  <motion.section
-                    key="acoes"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={transitionBase}
-                    className="space-y-3"
-                  >
-                      <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Registrar</p>
-                      <div className="flex flex-wrap gap-2">
-                        <NcButton variant="outline" size="md" onClick={() => startMode("comissao", Math.max(0, panelRow.balance))}>
-                          <Wallet size={14} />Pagar comissão
-                        </NcButton>
-                        <NcButton variant="quiet" size="md" onClick={() => startMode("divida", panelRow.saldoConsumo)}>
-                          <Receipt size={14} />Receber dívida
-                        </NcButton>
-                        <NcButton variant="quiet" size="md" onClick={() => startMode("lancar", 0)}>
-                          <HandCoins size={14} />Lançar dívida
-                        </NcButton>
-                      </div>
-
-                      <p className={cn(EYEBROW, "pt-2")} style={{ color: "var(--nc-text-3)" }}>Ver</p>
-                      <div className="flex flex-wrap gap-2">
-                        <NcButton variant="ghost" size="md" onClick={() => setExtractFor(panelRow.seller.id)}>
-                          Extrato completo<ArrowRight size={13} />
-                        </NcButton>
-                        <NcButton variant="ghost" size="md" onClick={() => shareSellerWhatsApp(panelRow)}>
-                          <Share2 size={14} />Enviar no WhatsApp
-                        </NcButton>
-                      </div>
-
-                      {/* O link da loja mora aqui pela mesma regra do resto:
-                          tudo o que se faz com um vendedor acontece DENTRO do
-                          painel dele. O `key` remonta o bloco ao trocar de
-                          vendedor, para o campo não ficar com o apelido do
-                          anterior. */}
-                      <StoreLinkBlock key={panelRow.seller.id} seller={panelRow.seller} onSave={store.updateSeller} />
-                  </motion.section>
-                ) : (
-                  <motion.section
-                    key={panelMode}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={transitionBase}
-                    className="space-y-3"
-                  >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{PANEL_TITLES[panelMode]}</p>
-                        <NcButton variant="ghost" onClick={() => setPanelMode("resumo")}>
-                          <X size={13} />Cancelar
-                        </NcButton>
-                      </div>
-                      <p className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
-                        {panelMode === "comissao" && "Sai do caixa para a mão do vendedor e abate o saldo."}
-                        {panelMode === "divida" && "Dinheiro que o vendedor devolveu do que consumiu."}
-                        {panelMode === "lancar" && "Adiantamento, empréstimo ou acerto que ele passa a dever."}
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Valor (R$)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={panelForm.amount}
-                            onChange={e => setPanelForm(f => ({ ...f, amount: e.target.value }))}
-                            placeholder="0,00"
-                            className="nc-num"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Data</Label>
-                          <Input type="date" value={panelForm.date} onChange={e => setPanelForm(f => ({ ...f, date: e.target.value }))} />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Observação</Label>
-                        <Input
-                          value={panelForm.notes}
-                          onChange={e => setPanelForm(f => ({ ...f, notes: e.target.value }))}
-                          placeholder={panelMode === "lancar" ? "Ex: adiantamento, empréstimo" : "Opcional"}
+                <TabsContent value="saldo" className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+                  <div className="space-y-6">
+                    {/* ---- O número, e o que fazer com ele ----
+                        A ação vem COLADA no saldo: é por causa dele que se abre
+                        este painel. Antes o botão de pagar ficava abaixo da conta,
+                        da faixa e do quadro de "a receber", fora da tela.
+                        A ação principal segue o sinal do saldo — devendo a ele,
+                        pagar; ele devendo, receber —, e as outras continuam ao
+                        lado, só mais quietas. */}
+                    <section>
+                      <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>{balanceLabel(panelRow.balance)}</p>
+                      <span style={{ color: balanceTone(panelRow.balance) }}>
+                        <AnimatedNumber
+                          value={Math.abs(panelRow.balance)}
+                          format={formatCurrency}
+                          duration={0.7}
+                          animateOnMount
+                          className="nc-num mt-1 block text-[30px] font-semibold tracking-[-0.025em]"
                         />
-                      </div>
-                  </motion.section>
-                )}
+                      </span>
+                      {/* O que as vendas em aberto dele ainda vão mudar — uma
+                          linha, embaixo do número a que ela se refere. */}
+                      {panelRow.pendingToReceive > 0.01 && (
+                        <p className="nc-num mt-1 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+                          Com {formatCurrency(panelRow.pendingToReceive)} em vendas dele ainda a receber, vai a{" "}
+                          <span style={{ color: "var(--nc-text-2)" }}>{formatCurrency(panelRow.projectedBalance)}</span>
+                        </p>
+                      )}
 
-                {panelMode === "resumo" && (
-                  <>
-                    <Rule />
-                    <NcButton
-                      variant="danger"
-                      size="md"
-                      className="w-full"
-                      onClick={async () => {
-                        if (await confirm({ title: "Remover vendedor", description: `Remover ${panelRow.seller.name}?`, destructive: true })) {
-                          deleteSeller(panelRow.seller.id);
-                          setPanelSellerId(null);
+                      {panelMode === "resumo" ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {(() => {
+                            const owesSeller = panelRow.balance > 0.01;
+                            const sellerOwes = panelRow.balance < -0.01;
+                            const pay = (
+                              <NcButton
+                                key="pagar"
+                                variant={owesSeller ? "solid" : "quiet"}
+                                size="md"
+                                className={owesSeller ? "w-full sm:w-auto sm:flex-1" : undefined}
+                                onClick={() => startMode("comissao", Math.max(0, panelRow.balance))}
+                              >
+                                <Wallet size={14} />Pagar comissão
+                              </NcButton>
+                            );
+                            const receive = (
+                              <NcButton
+                                key="receber"
+                                variant={sellerOwes ? "solid" : "quiet"}
+                                size="md"
+                                className={sellerOwes ? "w-full sm:w-auto sm:flex-1" : undefined}
+                                onClick={() => startMode("divida", sellerOwes ? -panelRow.balance : panelRow.saldoConsumo)}
+                              >
+                                <Receipt size={14} />Receber dívida
+                              </NcButton>
+                            );
+                            const lancar = (
+                              <NcButton key="lancar" variant="quiet" size="md" onClick={() => startMode("lancar", 0)}>
+                                <HandCoins size={14} />Lançar dívida
+                              </NcButton>
+                            );
+                            return sellerOwes ? [receive, pay, lancar] : [pay, receive, lancar];
+                          })()}
+                        </div>
+                      ) : (
+                        /* ---- Formulário no lugar dos botões ----
+                           Sem `AnimatePresence`: com `mode="wait"` a fila
+                           travaria no caminho mais comum — registrar re-renderiza
+                           o painel (o saldo mudou) dentro da janela de saída, e o
+                           bloco novo ficaria parado invisível. Mesmo defeito que
+                           o PageTransition já teve. */
+                        <motion.div
+                          key={panelMode}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={transitionBase}
+                          className="mt-4 space-y-3 rounded-lg p-3.5"
+                          style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={EYEBROW} style={{ color: "var(--nc-accent)" }}>{PANEL_TITLES[panelMode]}</p>
+                            <NcButton variant="ghost" onClick={() => setPanelMode("resumo")}>
+                              <X size={13} />Cancelar
+                            </NcButton>
+                          </div>
+                          <p className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+                            {panelMode === "comissao" && "Sai do caixa para a mão do vendedor e abate o saldo."}
+                            {panelMode === "divida" && "Dinheiro que o vendedor devolveu do que consumiu."}
+                            {panelMode === "lancar" && "Adiantamento, empréstimo ou acerto que ele passa a dever."}
+                          </p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Valor (R$)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={panelForm.amount}
+                                onChange={e => setPanelForm(f => ({ ...f, amount: e.target.value }))}
+                                placeholder="0,00"
+                                className="nc-num"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Data</Label>
+                              <Input type="date" value={panelForm.date} onChange={e => setPanelForm(f => ({ ...f, date: e.target.value }))} />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Observação</Label>
+                            <Input
+                              value={panelForm.notes}
+                              onChange={e => setPanelForm(f => ({ ...f, notes: e.target.value }))}
+                              placeholder={panelMode === "lancar" ? "Ex: adiantamento, empréstimo" : "Opcional"}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </section>
+
+                    {/* ---- O mês dele, em três números ----
+                        Unidades e vendas saíram da conta do saldo: não são
+                        dinheiro que soma nem subtrai, e no meio das linhas
+                        de + e − elas faziam a conta parecer não fechar. */}
+                    <section className="grid grid-cols-3 gap-px overflow-hidden rounded-lg" style={{ background: "var(--nc-track)" }}>
+                      <PanelStat label="Unidades" value={`${panelRow.units} un.`} />
+                      <PanelStat label="Vendas" value={formatCurrencyShort(panelRow.vendasTotal)} />
+                      <PanelStat
+                        label="Faixa"
+                        value={panelRow.tier.label}
+                        sub={
+                          getNextTier(panelRow.tier)
+                            ? `${unitsUntilNextTier(panelRow.units)} un. p/ ${getNextTier(panelRow.tier)!.label}`
+                            : "faixa máxima"
                         }
-                      }}
-                    >
-                      <Trash2 size={13} />Remover vendedor
-                    </NcButton>
-                  </>
-                )}
-              </div>
+                      />
+                    </section>
+
+                    {/* ---- A conta, só com dinheiro, na ordem em que acontece ----
+                        Linha zerada não aparece: "Dívidas lançadas R$ 0,00" só
+                        faz procurar uma coisa que não existe. */}
+                    <section className="space-y-1.5">
+                      <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>A conta do saldo</p>
+                      <LedgerLine
+                        label="Trazido dos meses anteriores"
+                        value={formatCurrency(panelRow.priorBalance)}
+                        tone={panelRow.priorBalance < -0.01 ? "var(--nc-crit)" : undefined}
+                      />
+                      <LedgerLine label={`Comissão gerada (${panelRow.tier.label})`} value={`+${formatCurrency(panelRow.accrued)}`} tone="var(--nc-ok)" />
+                      {panelRow.retiradasTotal > 0.01 && (
+                        <LedgerLine label="Consumo próprio" value={`−${formatCurrency(panelRow.retiradasTotal)}`} tone="var(--nc-alert)" />
+                      )}
+                      {panelRow.manualDebtsTotal > 0.01 && (
+                        <LedgerLine label="Dívidas lançadas" value={`−${formatCurrency(panelRow.manualDebtsTotal)}`} tone="var(--nc-alert)" />
+                      )}
+                      {panelRow.debtPaymentsTotal > 0.01 && (
+                        <LedgerLine label="Dívida paga por ele" value={`+${formatCurrency(panelRow.debtPaymentsTotal)}`} tone="var(--nc-ok)" />
+                      )}
+                      {panelRow.commPaid > 0.01 && (
+                        <LedgerLine label="Comissão já paga a ele" value={`−${formatCurrency(panelRow.commPaid)}`} tone="var(--nc-alert)" />
+                      )}
+                      <div className="nc-rule-top flex items-center justify-between gap-2 pt-2 text-[13px]">
+                        <span>Saldo</span>
+                        <span className="nc-num font-medium" style={{ color: balanceTone(panelRow.balance) }}>
+                          {formatCurrency(panelRow.balance)}
+                        </span>
+                      </div>
+                    </section>
+
+                    {/* Ver mais — o detalhe venda a venda e o resumo para mandar a
+                        ele. `-ml-3`: o botão fantasma tem recuo interno, e sem
+                        compensar o texto começava deslocado da coluna de cima. */}
+                    <div className="-ml-3 flex flex-wrap gap-1">
+                      <NcButton variant="ghost" size="md" onClick={() => setExtractFor(panelRow.seller.id)}>
+                        Extrato completo<ArrowRight size={13} />
+                      </NcButton>
+                      <NcButton variant="ghost" size="md" onClick={() => shareSellerWhatsApp(panelRow)}>
+                        <Share2 size={14} />Enviar no WhatsApp
+                      </NcButton>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="cadastro" className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+                  <div className="space-y-6">
+                    {/* O `key` remonta o bloco ao trocar de vendedor, para o
+                        campo não ficar com o apelido do anterior. */}
+                    <StoreLinkBlock key={panelRow.seller.id} seller={panelRow.seller} onSave={store.updateSeller} />
+
+                    {/* Vendedor não se exclui, se ARQUIVA (migration
+                        20260924150000): a exclusão apagava em cascata os
+                        pagamentos de comissão dele e mudava o razão do passado.
+                        Arquivado sai das listas de escolha e continua dando nome
+                        ao histórico. O banco recusa com estoque na mão ou pedido
+                        pendente; o saldo zerado é conta daqui, e é conferido no
+                        saldo de HOJE, não no do período que está na tela. */}
+                    {(() => {
+                      const seller = panelRow.seller;
+                      if (seller.archivedAt) {
+                        return (
+                          <section className="space-y-2">
+                            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Arquivado</p>
+                            <p className="text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+                              Desde {formatDateBR(seller.archivedAt)}. Não aparece nas listas de escolha; o histórico continua com o nome dele.
+                            </p>
+                            <NcButton size="md" onClick={() => void setSellerArchived(seller.id, false)}>
+                              <ArchiveRestore size={13} />Desarquivar
+                            </NcButton>
+                          </section>
+                        );
+                      }
+                      const today = currentBalanceOf(seller);
+                      const blocked = Math.abs(today) > 0.01;
+                      return (
+                        <section className="space-y-2">
+                          <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Arquivar</p>
+                          <p className="text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+                            Tira o vendedor das listas de escolha sem apagar nada do histórico. Precisa estar
+                            com o saldo zerado, sem estoque na mão e sem pedido pendente na loja.
+                          </p>
+                          {blocked && (
+                            <p className="text-[11.5px]" style={{ color: "var(--nc-crit)" }}>
+                              {today > 0
+                                ? `Ainda falta pagar ${formatCurrency(today)} a ele — acerte o saldo antes de arquivar.`
+                                : `Ele ainda deve ${formatCurrency(-today)} — acerte o saldo antes de arquivar.`}
+                            </p>
+                          )}
+                          <NcButton
+                            size="md"
+                            disabled={blocked}
+                            onClick={async () => {
+                              if (await confirm({
+                                title: "Arquivar vendedor",
+                                description: `${seller.name} sai das listas de escolha. Dá para desarquivar a qualquer momento.`,
+                                confirmText: "Arquivar",
+                              })) {
+                                await setSellerArchived(seller.id, true);
+                              }
+                            }}
+                          >
+                            <Archive size={13} />Arquivar vendedor
+                          </NcButton>
+                        </section>
+                      );
+                    })()}
+                  </div>
+                </TabsContent>
+              </Tabs>
 
               {panelMode !== "resumo" && (
                 <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
@@ -1148,7 +1286,7 @@ export default function CommissionsPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent className="nocturne">
                       <SelectItem value="casa">Estoque da casa</SelectItem>
-                      {sellers.map(s => {
+                      {activeSellers.map(s => {
                         const held = productAssignments
                           .filter(a => a.sellerId === s.id)
                           .reduce((sum, a) => sum + a.quantity, 0);
@@ -1166,7 +1304,7 @@ export default function CommissionsPage() {
                   <Select value={moveTo} onValueChange={setMoveTo}>
                     <SelectTrigger><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
                     <SelectContent className="nocturne">
-                      {sellers.filter(s => s.id !== moveFrom).map(s => (
+                      {activeSellers.filter(s => s.id !== moveFrom).map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1267,6 +1405,21 @@ function SectionHead({ title, sub, action }: { title: string; sub?: string; acti
         {sub && <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>{sub}</p>}
       </div>
       {action}
+    </div>
+  );
+}
+
+/**
+ * Uma célula da faixa "o mês dele" no painel do vendedor: rótulo terciário,
+ * número, e uma sublinha opcional. As três células dividem uma grade com 1px
+ * de régua entre elas (o `gap-px` sobre o fundo --nc-track).
+ */
+function PanelStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5" style={{ background: "var(--nc-bg)" }}>
+      <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>{label}</span>
+      <span className="nc-num truncate text-[15px] font-medium">{value}</span>
+      {sub && <span className="nc-num truncate text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>{sub}</span>}
     </div>
   );
 }

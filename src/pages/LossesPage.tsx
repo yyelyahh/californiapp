@@ -23,7 +23,7 @@ const MAX_TOP_MODELS = 6;
 const MAX_STAGGERED_ROWS = 20;
 
 export default function LossesPage() {
-  const { products, stockLosses, stockEntries, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue, sellers, productAssignments } = useStore();
+  const { products, stockLosses, stockEntries, addStockLoss, deleteStockLoss, getProductName, getTotalLossValue, sellers, activeSellers, productAssignments } = useStore();
   const { branchId } = useBranch();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
@@ -229,7 +229,7 @@ export default function LossesPage() {
                         <SelectItem value="estoque" disabled={!!productId && freeStock <= 0}>
                           Estoque interno{productId ? ` (${freeStock} un. livres)` : ""}
                         </SelectItem>
-                        {sellers.map(s => {
+                        {activeSellers.map(s => {
                           const held = heldBy(s.id);
                           return (
                             <SelectItem key={s.id} value={s.id} disabled={!!productId && held <= 0}>
