@@ -13,11 +13,11 @@ import {
 import { toast } from "sonner";
 import type { Seller } from "@/types";
 import {
-  format, startOfMonth, endOfMonth, endOfYear,
+  format, startOfMonth, endOfMonth, endOfYear, startOfDay, endOfDay,
   isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
+import { todayDateString, localDateToISO, formatDateBR, parseDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
@@ -119,9 +119,15 @@ export default function CommissionsPage() {
       s = startOfMonth(prev); e = endOfMonth(prev);
       l = format(prev, "MMMM/yyyy", { locale: ptBR });
     } else {
-      try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
-      try { e = parseISO(customEnd); } catch { e = endOfMonth(now); }
-      if (e < s) e = s;
+      // O fim é o FIM do dia: `parseISO("2026-09-24")` é meia-noite, e todo
+      // lançamento é gravado ao meio-dia (localDateToISO) — o último dia do
+      // intervalo ficava inteiro de fora do lucro, das despesas e das retiradas.
+      // `parseDay` e não `parseISO` num try/catch: digitando a data à mão o
+      // campo passa por vazio, `parseISO("")` devolve data inválida SEM lançar,
+      // e o `format` do rótulo derrubava a tela inteira.
+      s = startOfDay(parseDay(customStart, startOfMonth(now)));
+      e = endOfDay(parseDay(customEnd, endOfMonth(now)));
+      if (e < s) e = endOfDay(s);
       l = `${format(s, "dd/MM/yyyy")} – ${format(e, "dd/MM/yyyy")}`;
     }
     return { start: s, end: e, label: l };

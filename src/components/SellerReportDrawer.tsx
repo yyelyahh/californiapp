@@ -3,7 +3,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useStore } from "@/context/StoreContext";
 import { computeClosedCommission, computePriorCommissionBalance, getTierForUnits, COMMISSION_TIERS } from "@/lib/commissions";
-import { formatDateBR } from "@/lib/date-utils";
+import { formatDateBR, parseDay } from "@/lib/date-utils";
 import {
   startOfDay, endOfDay, startOfMonth, endOfMonth, subDays, subMonths, parseISO, format,
 } from "date-fns";
@@ -95,12 +95,6 @@ export default function SellerReportDrawer({
   const { start, end, label } = useMemo(() => {
     const now = new Date();
     let s: Date, e: Date, l: string;
-    const safeParse = (v: string, fallback: Date) => {
-      try {
-        const d = parseISO(v);
-        return isNaN(d.getTime()) ? fallback : d;
-      } catch { return fallback; }
-    };
     switch (periodKey) {
       case "today":
         s = startOfDay(now); e = endOfDay(now); l = `Hoje · ${format(now, "dd/MM/yyyy")}`; break;
@@ -112,8 +106,11 @@ export default function SellerReportDrawer({
         break;
       }
       case "custom":
-        s = startOfDay(safeParse(customStart, startOfMonth(now)));
-        e = endOfDay(safeParse(customEnd, now));
+        // Mesma leitura da Distribuição e da Insights (`parseDay`): data
+        // digitada pela metade cai no padrão em vez de derrubar a tela.
+        s = startOfDay(parseDay(customStart, startOfMonth(now)));
+        e = endOfDay(parseDay(customEnd, now));
+        if (e < s) e = endOfDay(s);
         l = `${format(s, "dd/MM/yy")} – ${format(e, "dd/MM/yy")}`; break;
       case "month":
       default:

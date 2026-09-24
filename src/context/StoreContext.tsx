@@ -142,19 +142,25 @@ function assignmentError(message?: string): string {
 }
 
 /**
- * Soma (ou subtrai, com `quantity` negativo) unidades ao estoque de um sabor
- * NUMA cidade, criando a linha de `product_branch` quando aquela cidade ainda
- * não vendia esse sabor.
+ * As functions de estoque da migration 20260924130000 ainda não estão no
+ * types.ts gerado. O cast é no CLIENTE e a chamada continua sendo método dele
+ * (ver "Gotchas de front" no CLAUDE.md).
+ */
+const stockDb = supabase as unknown as SupabaseClient;
+
+/**
+ * SOMA unidades ao estoque de um sabor NUMA cidade, criando a linha de
+ * `product_branch` quando aquela cidade ainda não vendia esse sabor.
  *
  * A tabela é esparsa de propósito — produto sem linha é produto que a cidade
- * não vende —, então toda entrada de estoque precisa saber criar a linha. É
- * aqui que `sale_price` e `min_stock` de referência entram: linha nova sem
- * preço venderia de graça, que é exatamente o que a esparsidade existe para
- * impedir.
+ * não vende —, então toda entrada precisa saber criar a linha. É aqui que
+ * `sale_price` e `min_stock` de referência entram como semente.
  *
- * Leitura-e-escrita, como era em `products.stock`: quem precisa de atomicidade
- * é a venda, e essa passa por `create_sale`/`decrement_product_stock`, onde o
- * UPDATE é condicional.
+ * Quem soma é o BANCO (`add_branch_stock`), num UPDATE só. Antes era
+ * ler-somar-gravar daqui, e uma venda confirmada pela loja entre a leitura e a
+ * escrita era sobrescrita: a unidade vendida voltava para a prateleira. Só
+ * soma — tirar estoque tem regra (livre, caixa do vendedor) e mora em
+ * `register_stock_loss` e `delete_stock_entry`.
  */
 async function addBranchStock(
   productId: string,
@@ -162,42 +168,44 @@ async function addBranchStock(
   quantity: number,
   seed: { unitCost?: number; salePrice?: number; minStock?: number } = {},
 ): Promise<boolean> {
-  const { data: existing } = await supabase
-    .from("product_branch")
-    .select("stock")
-    .eq("product_id", productId)
-    .eq("branch_id", branchId)
-    .maybeSingle();
-
-  if (existing) {
-    const next = Math.max(0, Number(existing?.stock ?? 0) + quantity);
-    const updates: { stock: number; purchase_price?: number } = { stock: next };
-    if (seed.unitCost !== undefined) updates.purchase_price = seed.unitCost;
-    const { error } = await supabase
-      .from("product_branch")
-      .update(updates)
-      .eq("product_id", productId)
-      .eq("branch_id", branchId);
-    if (error) {
-      toast.error("Erro ao atualizar o estoque da filial");
-      return false;
-    }
-    return true;
-  }
-
-  const { error } = await supabase.from("product_branch").insert({
-    product_id: productId,
-    branch_id: branchId,
-    stock: Math.max(0, quantity),
-    purchase_price: seed.unitCost ?? 0,
-    sale_price: seed.salePrice ?? 0,
-    min_stock: seed.minStock ?? 0,
+  const { error } = await stockDb.rpc("add_branch_stock", {
+    p_product_id: productId,
+    p_branch_id: branchId,
+    p_quantity: quantity,
+    p_unit_cost: seed.unitCost ?? null,
+    p_sale_price: seed.salePrice ?? null,
+    p_min_stock: seed.minStock ?? null,
   });
   if (error) {
-    toast.error("Erro ao cadastrar o produto nesta filial");
+    console.error("add_branch_stock:", error);
+    toast.error(stockErrorMessage(error.message, "Erro ao atualizar o estoque da filial"));
     return false;
   }
   return true;
+}
+
+/**
+ * As recusas das functions de estoque, em português. O banco manda o número
+ * que viu junto do código (`codigo:N`) — é o que deixa a tela dizer o limite
+ * em vez de "não deu".
+ */
+function stockErrorMessage(message: string | undefined, fallback: string): string {
+  const m = message ?? "";
+  const n = m.match(/:(\d+)/)?.[1] ?? "0";
+  if (m.includes("estoque_livre_insuficiente")) {
+    return `Só ${n} un. livres no estoque da casa — o resto está com os vendedores. Escolha de quem saiu.`;
+  }
+  if (m.includes("estoque_vendedor_insuficiente")) return `Esse vendedor tem apenas ${n} un. deste produto`;
+  if (m.includes("entrada_ja_consumida")) {
+    return `Essas unidades já saíram (vendidas, perdidas ou distribuídas) — só ${n} un. livres agora. Registre uma perda em vez de excluir a entrada.`;
+  }
+  if (m.includes("estoque_insuficiente")) return "Estoque insuficiente nesta filial";
+  if (m.includes("vendedor_de_outra_filial")) return "Esse vendedor não é desta filial";
+  if (m.includes("produto_nao_vendido_nesta_filial")) return "Esta filial não vende esse produto";
+  if (m.includes("filial_obrigatoria")) return "Escolha uma filial para lançar";
+  if (m.includes("nao_autorizado")) return "Você não tem acesso a esta filial";
+  if (m.includes("quantidade_invalida")) return "Quantidade inválida";
+  return fallback;
 }
 
 interface StoreContextType {
@@ -265,7 +273,7 @@ interface StoreContextType {
     }[];
   }) => Promise<boolean>;
   stockLosses: StockLoss[];
-  addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => Promise<void>;
+  addStockLoss: (l: Omit<StockLoss, "id" | "totalCost" | "unitCost">) => Promise<void>;
   deleteStockLoss: (id: string) => Promise<void>;
   getTotalLossValue: () => number;
   addSale: (s: Omit<Sale, "id" | "totalPrice">) => Promise<void>;
@@ -1510,167 +1518,91 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [products, branchId],
   );
 
+  /**
+   * Excluir entrada = apagar a linha E tirar as unidades, numa transação só
+   * (`delete_stock_entry`), na filial GRAVADA NA ENTRADA. Se as unidades já
+   * saíram (vendidas, perdidas, distribuídas), o banco recusa com o livre que
+   * existe: antes a linha sumia e o estoque ia a zero calado.
+   */
   const deleteStockEntry = useCallback(
     async (id: string) => {
       const entry = stockEntries.find((e) => e.id === id);
-      const { error } = await supabase.from("stock_entries").delete().eq("id", id);
+      const { error } = await stockDb.rpc("delete_stock_entry", { p_entry_id: id });
       if (error) {
-        toast.error("Erro ao excluir entrada");
+        toast.error(stockErrorMessage(error.message, "Erro ao excluir entrada"));
         return;
       }
       setStockEntries((prev) => prev.filter((e) => e.id !== id));
       if (entry) {
-        // A filial DA ENTRADA, não a ativa: em "Todas" a lista mostra as duas
-        // cidades, e tirar estoque da filial errada é a única forma de esta
-        // exclusão corromper um número em silêncio.
-        const entryBranch = entry.branchId ?? branchId;
-        if (!requireBranch(entryBranch)) return;
-        const ok = await addBranchStock(entry.productId, entryBranch, -entry.quantity);
-        if (ok) {
-          setProducts((prev) =>
-            prev.map((p) =>
-              p.id === entry.productId ? { ...p, stock: Math.max(0, p.stock - entry.quantity) } : p,
-            ),
-          );
-        }
+        setProducts((prev) =>
+          prev.map((p) => (p.id === entry.productId ? { ...p, stock: p.stock - entry.quantity } : p)),
+        );
       }
     },
-    [stockEntries, branchId],
+    [stockEntries],
   );
 
   // ---- Stock Losses ----
+  /**
+   * A perda inteira acontece no banco (`register_stock_loss`), numa transação:
+   * confere o teto, tira da caixa do vendedor quando saiu dele, tira do
+   * estoque da filial e grava o registro com o custo lido lá dentro.
+   *
+   * O teto depende da origem. Da CASA é o LIVRE (estoque menos o distribuído),
+   * não o total: com tudo distribuído, a perda da casa derrubava o estoque
+   * abaixo das atribuições e a loja do vendedor passava a oferecer unidade
+   * que a cidade não tinha. Do VENDEDOR é a caixa dele.
+   */
   const addStockLoss = useCallback(
-    async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost"> & { unitCost?: number }) => {
+    async (l: Omit<StockLoss, "id" | "totalCost" | "unitCost">) => {
       if (!requireBranch(branchId)) return;
-      const product = products.find((p) => p.id === l.productId);
-      if (!product) {
-        toast.error("Produto não encontrado");
-        return;
-      }
-      if (product.stock < l.quantity) {
-        toast.error("Quantidade maior que o estoque disponível");
-        return;
-      }
-
-      // Se a perda ocorreu com um vendedor, valida e baixa também da atribuição dele
-      let sellerAssignmentRows: any[] = [];
-      if (l.sellerId) {
-        const { data: assignmentRows, error: assignmentError } = await supabase
-          .from("product_assignments")
-          .select("*")
-          .eq("seller_id", l.sellerId)
-          .eq("product_id", l.productId)
-          .order("created_at", { ascending: true });
-        if (assignmentError) {
-          toast.error("Erro ao verificar estoque do vendedor");
-          return;
-        }
-        sellerAssignmentRows = assignmentRows ?? [];
-        const available = sellerAssignmentRows.reduce((sum, a) => sum + Number(a.quantity || 0), 0);
-        if (available < l.quantity) {
-          toast.error(`Vendedor possui apenas ${available} unidade(s) deste produto`);
-          return;
-        }
-      }
-
-      const unitCost = l.unitCost ?? product.purchasePrice;
-      const totalCost = unitCost * l.quantity;
-      const { data, error } = await supabase
-        .from("stock_losses")
-        .insert({
-          product_id: l.productId,
-          quantity: l.quantity,
-          unit_cost: unitCost,
-          total_cost: totalCost,
-          reason: l.reason,
-          date: l.date,
-          branch_id: branchId,
-          seller_id: l.sellerId ?? null,
-        })
-        .select()
-        .single();
+      const { data, error } = await stockDb.rpc("register_stock_loss", {
+        p_branch_id: branchId,
+        p_product_id: l.productId,
+        p_quantity: l.quantity,
+        p_seller_id: l.sellerId ?? null,
+        p_reason: l.reason ?? null,
+        p_date: l.date,
+      });
       if (error) {
-        toast.error("Erro ao registrar perda");
+        toast.error(stockErrorMessage(error.message, "Erro ao registrar perda"));
         return;
       }
       setStockLosses((prev) => [...prev, mapStockLoss(data)]);
-      const newStock = Math.max(0, product.stock - l.quantity);
-      await addBranchStock(l.productId, branchId, -l.quantity);
-      setProducts((prev) => prev.map((p) => (p.id === l.productId ? { ...p, stock: newStock } : p)));
-
+      setProducts((prev) =>
+        prev.map((p) => (p.id === l.productId ? { ...p, stock: p.stock - l.quantity } : p)),
+      );
       if (l.sellerId) {
-        let remaining = l.quantity;
-        for (const assignment of sellerAssignmentRows) {
-          if (remaining <= 0) break;
-          const currentQty = Number(assignment.quantity || 0);
-          if (currentQty <= remaining) {
-            await supabase.from("product_assignments").delete().eq("id", assignment.id);
-            remaining -= currentQty;
-          } else {
-            await supabase
-              .from("product_assignments")
-              .update({ quantity: currentQty - remaining })
-              .eq("id", assignment.id);
-            remaining = 0;
-          }
-        }
         const { data: refreshed } = await supabase
           .from("product_assignments")
           .select("*")
           .order("created_at", { ascending: true });
         if (refreshed) setProductAssignments(refreshed.map(mapProductAssignment));
       }
-
       toast.success("Perda registrada");
     },
-    [products, branchId],
+    [branchId],
   );
 
+  /**
+   * Excluir perda devolve a unidade para onde ela estava — o estoque da filial
+   * GRAVADA NA PERDA e, se saiu de um vendedor, a caixa dele —, tudo numa
+   * transação (`delete_stock_loss`).
+   */
   const deleteStockLoss = useCallback(
     async (id: string) => {
       const loss = stockLosses.find((l) => l.id === id);
-      const { error } = await supabase
-        .from("stock_losses")
-        .delete()
-        .eq("id", id);
+      const { error } = await stockDb.rpc("delete_stock_loss", { p_loss_id: id });
       if (error) {
-        toast.error("Erro ao excluir perda");
+        toast.error(stockErrorMessage(error.message, "Erro ao excluir perda"));
         return;
       }
       setStockLosses((prev) => prev.filter((l) => l.id !== id));
       if (loss) {
-        // A filial DA PERDA, não a ativa — a mesma leitura de
-        // `deleteStockEntry`: devolver estoque na cidade errada corrompe dois
-        // números de uma vez e não deixa rastro na tela.
-        const lossBranch = loss.branchId ?? branchId;
-        if (lossBranch) {
-          const ok = await addBranchStock(loss.productId, lossBranch, loss.quantity);
-          if (ok) {
-            setProducts((prev) =>
-              prev.map((p) => (p.id === loss.productId ? { ...p, stock: p.stock + loss.quantity } : p)),
-            );
-          }
-        }
-        // Devolve a unidade para o vendedor, se a perda estava vinculada a ele
+        setProducts((prev) =>
+          prev.map((p) => (p.id === loss.productId ? { ...p, stock: p.stock + loss.quantity } : p)),
+        );
         if (loss.sellerId) {
-          const { data: existing } = await supabase
-            .from("product_assignments")
-            .select("*")
-            .eq("seller_id", loss.sellerId)
-            .eq("product_id", loss.productId)
-            .order("created_at", { ascending: true });
-          if (existing && existing.length > 0) {
-            await supabase
-              .from("product_assignments")
-              .update({ quantity: Number(existing[0].quantity || 0) + loss.quantity })
-              .eq("id", existing[0].id);
-          } else {
-            await supabase.from("product_assignments").insert({
-              seller_id: loss.sellerId,
-              product_id: loss.productId,
-              quantity: loss.quantity,
-            });
-          }
           const { data: refreshed } = await supabase
             .from("product_assignments")
             .select("*")
@@ -1679,7 +1611,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [stockLosses, branchId],
+    [stockLosses],
   );
 
   // ---- Transferência entre filiais ----
@@ -1845,6 +1777,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const updateSale = useCallback(
     async (id: string, updates: Partial<Sale>) => {
       const existing = sales.find((s) => s.id === id);
+      // A quantidade de uma venda gravada não muda por aqui: este UPDATE vai
+      // direto na tabela e não mexe no estoque nem na caixa do vendedor —
+      // editar 2 → 5 deixava 3 unidades sobrando no estoque, caladas. Corrigir
+      // quantidade é excluir (`delete_sale` devolve o estoque) e lançar de novo.
+      if (updates.quantity !== undefined && existing && updates.quantity !== existing.quantity) {
+        toast.error("Para mudar a quantidade, exclua a venda e lance de novo");
+        return;
+      }
       const dbUpdates: any = {};
       if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity;
       if (updates.unitPrice !== undefined) dbUpdates.unit_price = updates.unitPrice;

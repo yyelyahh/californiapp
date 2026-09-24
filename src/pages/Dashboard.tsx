@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
+import { sameStretchOfPreviousMonth } from "@/lib/date-utils";
 import { ptBR } from "date-fns/locale";
 import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
@@ -214,8 +215,24 @@ export default function Dashboard() {
     if (isGeral) return null;
     const [y, m] = filter.split("-").map(Number);
     const prev = subMonths(new Date(y, m - 1, 15), 1);
+    const prevLabel = format(prev, "MMM", { locale: ptBR });
+    // Mês EM CURSO compara com o MESMO TRECHO do mês anterior (até o mesmo
+    // dia), não com o mês fechado — a mesma régua do "Ritmo do mês" das
+    // Despesas. Dia 5 contra um mês inteiro dava "−80%" em todo começo de mês,
+    // e a seta vermelha deixava de querer dizer alguma coisa. Mês já fechado
+    // compara com o mês anterior inteiro, que é trecho igual de fato.
+    const now = new Date();
+    const running = y === now.getFullYear() && m - 1 === now.getMonth();
+    if (running) {
+      const stretch = sameStretchOfPreviousMonth(y, m - 1, now.getDate());
+      const interval = { start: stretch.start, end: stretch.end };
+      return {
+        stats: computeStats((d) => isWithinInterval(parseISO(d), interval)),
+        label: `${prevLabel} até o dia ${stretch.day}`,
+      };
+    }
     const interval = { start: startOfMonth(prev), end: endOfMonth(prev) };
-    return { stats: computeStats((d) => isWithinInterval(parseISO(d), interval)), label: format(prev, "MMM", { locale: ptBR }) };
+    return { stats: computeStats((d) => isWithinInterval(parseISO(d), interval)), label: prevLabel };
   }, [filter, isGeral, computeStats]);
 
   /**

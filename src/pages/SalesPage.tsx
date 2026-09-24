@@ -868,7 +868,22 @@ export default function SalesPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Quantidade</Label>
-            <Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} className="nc-num" />
+            {/* Travada na edição: mudar a quantidade de uma venda gravada não
+                mexia no estoque nem na caixa do vendedor (o estoque ficava
+                com a diferença sobrando, calado). Quem corrige a quantidade
+                exclui a venda — que devolve o estoque — e lança de novo. */}
+            <Input
+              type="number"
+              value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+              disabled={!!editingSale}
+              className="nc-num"
+            />
+            {editingSale && (
+              <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                Para mudar a quantidade, exclua e lance de novo — a exclusão devolve o estoque.
+              </p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Preço unitário (R$)</Label>

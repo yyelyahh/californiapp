@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { format, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, differenceInCalendarDays, addDays } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, differenceInCalendarDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PackageX, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
@@ -9,7 +9,7 @@ import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
 import { SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
-import { currentMonthRange } from "@/lib/date-utils";
+import { currentMonthRange, previousWindow, parseDay } from "@/lib/date-utils";
 import { formatCurrency as fmtCurrency, formatCurrencyShort as fmtCurrencyShort } from "@/lib/currency";
 
 type Period = "month" | "lastMonth" | "custom";
@@ -67,15 +67,19 @@ export default function InsightsPage() {
       s = startOfMonth(prev); e = endOfMonth(prev);
       l = format(prev, "MMMM/yyyy", { locale: ptBR });
     } else {
-      try { s = parseISO(customStart); } catch { s = startOfMonth(now); }
-      try { e = parseISO(customEnd); } catch { e = endOfMonth(now); }
-      if (e < s) e = s;
+      // Fim = FIM do dia: `parseISO` dá meia-noite e todo lançamento é
+      // gravado ao meio-dia — o último dia do intervalo ficava de fora.
+      // `parseDay`: digitando à mão o campo passa por vazio, e a data inválida
+      // derrubava a tela no `format` do rótulo (ver a função).
+      s = startOfDay(parseDay(customStart, startOfMonth(now)));
+      e = endOfDay(parseDay(customEnd, endOfMonth(now)));
+      if (e < s) e = endOfDay(s);
       l = `${format(s, "dd/MM/yyyy")} – ${format(e, "dd/MM/yyyy")}`;
     }
-    const days = differenceInCalendarDays(e, s) + 1;
-    const pe = addDays(s, -1);
-    const ps = addDays(pe, -(days - 1));
-    return { start: s, end: e, prevStart: ps, prevEnd: pe, label: l };
+    // Do tamanho do trecho JÁ CORRIDO e terminando no FIM do dia anterior —
+    // ver `previousWindow`.
+    const prev = previousWindow(s, e, now);
+    return { start: s, end: e, prevStart: prev.start, prevEnd: prev.end, label: l };
   }, [period, customStart, customEnd]);
 
   /**
@@ -157,10 +161,10 @@ export default function InsightsPage() {
    * Estoque de hoje por modelo, com o mínimo configurado e o dinheiro que ele
    * representa a custo.
    *
-   * O mínimo é a SOMA dos mínimos dos sabores, não o maior deles: somar o
-   * estoque de oito sabores e comparar com o mínimo de um só dava um modelo
-   * "saudável" com seis sabores zerados. `zeroed` continua contando os sabores
-   * em falta, porque é o que o cliente pede pelo nome.
+   * O mínimo do modelo é o MAIOR entre os dos sabores (ver o comentário dentro
+   * do laço e o `minUnits` em src/lib/restock.ts). Como esse número não conta
+   * sabor em falta, `zeroed` conta à parte os sabores zerados — é o que o
+   * cliente pede pelo nome.
    */
   const stockByModel = useMemo(() => {
     const map = new Map<string, {

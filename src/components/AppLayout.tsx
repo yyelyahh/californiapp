@@ -8,6 +8,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import PageTransition from "@/components/motion/PageTransition";
+import PageErrorBoundary from "@/components/PageErrorBoundary";
 import BranchSwitcher from "@/components/BranchSwitcher";
 import { EYEBROW } from "@/components/nocturne";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -269,7 +270,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
           >
             <PageTransition className={fullBleed ? "flex flex-1 flex-col" : undefined}>
-              {children}
+              {/* `key` pela rota: trocar de tela limpa o erro. Não dá para
+                  contar com o PageTransition para isso — com "reduzir
+                  movimento" ligado ele vira uma div sem key e não remonta. */}
+              <PageErrorBoundary key={location.pathname}>{children}</PageErrorBoundary>
             </PageTransition>
           </div>
         </main>

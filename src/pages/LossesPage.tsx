@@ -37,6 +37,24 @@ export default function LossesPage() {
   const selectedProduct = products.find(p => p.id === productId);
   const totalLoss = getTotalLossValue();
 
+  /**
+   * O teto da perda depende de ONDE ela aconteceu, e é a mesma regra que o
+   * banco aplica em `register_stock_loss`: da casa, só o LIVRE (estoque menos
+   * o que está com os vendedores); de um vendedor, só a caixa dele. O teto
+   * antigo era o estoque total — com tudo distribuído, a perda da casa levava
+   * unidade de vendedor e a loja dele passava a oferecer o que não existia.
+   */
+  const heldBy = (sid: string) =>
+    productAssignments
+      .filter(a => a.sellerId === sid && a.productId === productId)
+      .reduce((sum, a) => sum + a.quantity, 0);
+  const assignedTotal = productAssignments
+    .filter(a => a.productId === productId)
+    .reduce((sum, a) => sum + a.quantity, 0);
+  const freeStock = Math.max(0, (selectedProduct?.stock ?? 0) - assignedTotal);
+  const originCap = sellerId === "estoque" ? freeStock : heldBy(sellerId);
+  const overCap = !!selectedProduct && Number(quantity) > originCap;
+
   /** Quanto sai do estoque com o que está preenchido no painel. */
   const lossValue = (selectedProduct?.purchasePrice ?? 0) * (Number(quantity) || 0);
 
@@ -184,7 +202,14 @@ export default function LossesPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Quantidade</Label>
-                      <Input type="number" min="1" max={selectedProduct?.stock || undefined} value={quantity} onChange={e => setQuantity(e.target.value)} className="nc-num" />
+                      <Input type="number" min="1" max={selectedProduct ? originCap : undefined} value={quantity} onChange={e => setQuantity(e.target.value)} className="nc-num" />
+                      {overCap && (
+                        <p className="text-[11px]" style={{ color: "var(--nc-crit)" }}>
+                          {sellerId === "estoque"
+                            ? `Só ${originCap} un. livres na casa — o resto está com vendedores.`
+                            : `Esse vendedor tem ${originCap} un.`}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Data</Label>
@@ -201,11 +226,11 @@ export default function LossesPage() {
                     <Select value={sellerId} onValueChange={setSellerId}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent className="nocturne">
-                        <SelectItem value="estoque">Estoque interno</SelectItem>
+                        <SelectItem value="estoque" disabled={!!productId && freeStock <= 0}>
+                          Estoque interno{productId ? ` (${freeStock} un. livres)` : ""}
+                        </SelectItem>
                         {sellers.map(s => {
-                          const held = productAssignments
-                            .filter(a => a.sellerId === s.id && a.productId === productId)
-                            .reduce((sum, a) => sum + a.quantity, 0);
+                          const held = heldBy(s.id);
                           return (
                             <SelectItem key={s.id} value={s.id} disabled={!!productId && held <= 0}>
                               {s.name}{productId ? ` (${held} un.)` : ""}
@@ -248,7 +273,7 @@ export default function LossesPage() {
                     variant="solid"
                     size="md"
                     onClick={handleSubmit}
-                    disabled={!productId || !Number(quantity) || submitting}
+                    disabled={!productId || !Number(quantity) || overCap || submitting}
                   >
                     {submitting ? "Registrando…" : "Registrar perda"}
                   </NcButton>
