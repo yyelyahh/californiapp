@@ -249,6 +249,12 @@ export default function SellerReportDrawer({
       | { kind: "venda"; when: string; label: string; amount: number; saleTotal: number }
       | { kind: "retirada"; when: string; label: string; amount: number; sub: string; source?: { type: DeletableKind; id: string } }
       | { kind: "pagamento"; when: string; label: string; amount: number; sub?: string; source?: { type: DeletableKind; id: string } }
+      // Comissão PAGA tem tipo próprio: para o saldo de comissão ela é o
+      // oposto do pagamento de dívida. Dívida paga SOMA ao saldo (o vendedor
+      // devolveu o que tinha consumido); comissão paga TIRA dele (o que era
+      // devido saiu). Os dois dividiam o tipo "pagamento" e a comissão paga
+      // aparecia como "+500" verde — a conta estava certa, o sinal na tela não.
+      | { kind: "comissao_paga"; when: string; label: string; amount: number; sub?: string; source?: { type: DeletableKind; id: string } }
       | { kind: "ajuste"; when: string; label: string; amount: number; sub?: string };
 
     const movs: Mov[] = [];
@@ -275,7 +281,7 @@ export default function SellerReportDrawer({
       movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de dívida", amount: p.amount, sub: p.notes, source: { type: "debt_payment", id: p.id } });
     });
     commissionPayments.filter(p => p.sellerId === seller.id && inPeriod(p.date)).forEach(p => {
-      movs.push({ kind: "pagamento", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes, source: { type: "commission_payment", id: p.id } });
+      movs.push({ kind: "comissao_paga", when: p.date, label: "Pagamento de comissão", amount: p.amount, sub: p.notes, source: { type: "commission_payment", id: p.id } });
     });
     adjustments.forEach(a => movs.push({ kind: "ajuste", when: a.when, label: a.label, amount: a.amount }));
     movs.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
@@ -546,6 +552,10 @@ export default function SellerReportDrawer({
               ) : (
                 <Stagger className="nc-card overflow-hidden">
                   {report.movs.map((m, i) => {
+                    // Crédito/débito é do ponto de vista do SALDO DE COMISSÃO,
+                    // a mesma leitura do resumo acima: comissão gerada, ajuste
+                    // de faixa e dívida paga somam; consumo e comissão paga
+                    // tiram (ver o tipo `comissao_paga`).
                     const credit = m.kind === "venda" || m.kind === "ajuste" || m.kind === "pagamento";
                     // Venda e ajuste de faixa não se apagam daqui (a venda é da
                     // tela de Vendas, o ajuste é calculado) — mas o lugar do
