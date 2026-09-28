@@ -1,7 +1,7 @@
 import { useStore } from "@/context/StoreContext";
-import { Package, Percent, Download, ArrowRight } from "lucide-react";
+import { Package, Percent, Download, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { sameStretchOfPreviousMonth } from "@/lib/date-utils";
@@ -10,7 +10,7 @@ import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import { listItem } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
-import { SegmentedChips, Rule, RAIL, STICKY_HEAD } from "@/components/nocturne";
+import { SegmentedChips, Rule, RAIL, STICKY_HEAD, EYEBROW } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { computeModelStats, summarizeRestock, urgencyOf, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
@@ -72,6 +72,8 @@ const QUICK_MONTHS = 3;
 const MAX_RESTOCK_ROWS = 6;
 /** Modelos nomeados na barra empilhada; o resto vira "Outros". */
 const TOP_MODELS = 5;
+/** Blocos do trilho que sobem para o topo da coluna abaixo do xl (ver `railEarly`). */
+const EARLY_ON_SMALL: WidgetId[] = ["revenue", "result"];
 
 export default function Dashboard() {
   const store = useStore();
@@ -132,6 +134,23 @@ export default function Dashboard() {
     const selected = months.find(o => o.value === filter);
     const list = selected && !quick.some(o => o.value === filter) ? [...quick, selected] : quick;
     return [...list, monthOptions[monthOptions.length - 1]];
+  }, [monthOptions, filter]);
+
+  /**
+   * As setas ‹ › andam por TODOS os meses com lançamento. Sem elas, o que
+   * passava dos atalhos não tinha como ser aberto: a lista acima só acrescenta
+   * o mês escolhido, e nada escolhia um mês mais antigo — junho sumia da tela e
+   * do relatório em Excel, que segue o mesmo filtro. A lista vem do mais novo
+   * para o mais antigo, então "anterior" é o índice seguinte. Em "Geral" as
+   * duas ficam desligadas (e montadas, para a linha não mudar de largura).
+   */
+  const monthSteps = useMemo(() => {
+    const months = monthOptions.filter(o => o.value !== GERAL);
+    const i = months.findIndex(o => o.value === filter);
+    return {
+      older: i >= 0 ? months[i + 1] : undefined,
+      newer: i > 0 ? months[i - 1] : undefined,
+    };
   }, [monthOptions, filter]);
 
   const computeStats = useMemo(() => {
@@ -369,9 +388,14 @@ export default function Dashboard() {
     return { pct: ((current - previous) / Math.abs(previous)) * 100, label: prevStats.label };
   };
 
+  /**
+   * Segue o período, como todo o resto do trilho. Era o histórico inteiro com
+   * "673 total" embaixo de "Dinheiro do mês", e num mês fechado a lista
+   * mostrava vendas de hoje — número de fora do recorte sem dizer que era.
+   */
   const recentSales = useMemo(
-    () => store.sales.filter(s => s.type === "venda"),
-    [store.sales],
+    () => store.sales.filter(s => s.type === "venda" && period.inPeriod(s.date)),
+    [store.sales, period],
   );
 
   /**
@@ -718,13 +742,25 @@ export default function Dashboard() {
     );
   };
 
+  const revenueDelta = delta(periodStats.revenue, prevStats?.stats.revenue);
+
   const revenueWidget = (
     <div className="flex flex-col gap-3.5">
-      <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>
+      <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
         Dinheiro do {isGeral ? "período" : "mês"}
       </span>
       <div>
-        <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
+        {/* A base da comparação ESCRITA, não num `title`: "+41%" sem dizer
+            contra o quê é número que não se explica, e no toque o `title`
+            nunca aparece. A mesma base vale para as outras variações da tela. */}
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
+          {revenueDelta && (
+            <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+              vs {revenueDelta.label}
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap items-baseline gap-2">
           <AnimatedNumber
             value={periodStats.revenue}
@@ -733,7 +769,7 @@ export default function Dashboard() {
             animateOnMount
             className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
           />
-          <Delta delta={delta(periodStats.revenue, prevStats?.stats.revenue)} />
+          <Delta delta={revenueDelta} />
         </div>
         <div className="mt-2 flex h-[5px] gap-0.5">
           <div style={{ flex: Math.max(periodStats.received, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
@@ -767,9 +803,16 @@ export default function Dashboard() {
         <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Perdas</span>
         <span className="nc-num text-sm">{formatCurrencyShort(periodStats.losses)}</span>
       </div>
-      <div className="flex items-baseline justify-between gap-2" title="Comissão paga em dinheiro + consumo do vendedor a custo − dívida que ele devolveu">
-        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Vendedores</span>
-        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.sellerCost)}</span>
+      {/* A composição fica escrita embaixo: era um `title`, e "Vendedores" é
+          a única linha da conta que não se explica pelo nome. */}
+      <div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Vendedores</span>
+          <span className="nc-num text-sm">{formatCurrencyShort(periodStats.sellerCost)}</span>
+        </div>
+        <span className="block text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          comissão paga + consumo a custo − dívida devolvida
+        </span>
       </div>
       <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
         <span className="text-[12.5px]">Lucro líquido</span>
@@ -801,9 +844,11 @@ export default function Dashboard() {
         </div>
       </div>
       <div>
+        {/* Posição de HOJE, não do mês: ao lado do ticket (que segue o
+            período) ela precisa dizer isso na própria linha. */}
         <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>Estoque a custo</span>
         <div className="nc-num text-base font-semibold">{formatCurrencyShort(inventoryAtCost)}</div>
-        <span className="text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>{totalStock} un.</span>
+        <span className="text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>{totalStock} un. hoje</span>
       </div>
     </div>
   );
@@ -821,13 +866,15 @@ export default function Dashboard() {
   const recentSalesWidget = (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>
+        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
           Últimas vendas
         </span>
-        <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>{recentSales.length} total</span>
+        <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          {recentSales.length} no {isGeral ? "período" : "mês"}
+        </span>
       </div>
       {recentSales.length === 0 ? (
-        <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda registrada.</p>
+        <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
       ) : (
         <Stagger className="flex flex-col">
           {recentSales.slice(-6).reverse().map(s => {
@@ -876,6 +923,19 @@ export default function Dashboard() {
   // Trilho vazio não é desenhado: a coluna ocupa a largura inteira em vez de
   // deixar uma faixa escura sem nada dentro.
   const hasRail = !isCards && shown.rail.length > 0;
+  /**
+   * Abaixo do xl o trilho cai para o FIM da página (`RAIL`, não `RAIL_FIRST`:
+   * a coluna do Dashboard é gráfico e tabela, e o trilho inteiro em cima
+   * empurraria o "Repor agora" para a terceira tela). Mas ali o dinheiro do
+   * mês só aparecia depois de ~1.200px de rolagem, e o celular é metade do
+   * uso. Então Receita e Resultado — os dois blocos que respondem "como foi o
+   * mês" — sobem para o topo da coluna abaixo do xl e somem do trilho nesse
+   * tamanho: o mesmo bloco, desenhado em um lugar por vez. O resto do trilho
+   * continua embaixo. Vale só no modo vertical; nos cards a ordem já é a que
+   * a pessoa escolheu.
+   */
+  const railEarly = hasRail ? shown.rail.filter(w => EARLY_ON_SMALL.includes(w.id)) : [];
+  const railRest = shown.rail.filter(w => !EARLY_ON_SMALL.includes(w.id));
 
   return (
     // `/dashboard` está em `fullBleedRoutes` (AppLayout), então chega aqui sem
@@ -887,7 +947,7 @@ export default function Dashboard() {
       <div className="flex-1 min-w-0 p-4 md:p-6 flex flex-col gap-4">
         <header className={cn(STICKY_HEAD, "flex flex-wrap items-end justify-between gap-4")}>
           <div>
-            <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-accent)" }}>
+            <span className={EYEBROW} style={{ color: "var(--nc-accent)" }}>
               {isGeral ? "Todo o período" : filterLabel}
             </span>
             <h1 className="mt-1 text-xl sm:text-[22px]">Dashboard</h1>
@@ -902,6 +962,28 @@ export default function Dashboard() {
               44px a todos os outros. Agora é a peça do sistema, com o mesmo
               fantasma de ícone da sidebar. */}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => monthSteps.older && setFilter(monthSteps.older.value)}
+                disabled={!monthSteps.older}
+                title={monthSteps.older ? `Abrir ${monthSteps.older.label}` : "Não há mês anterior com lançamento"}
+                aria-label="Mês anterior"
+                className="nc-btn nc-btn--ghost nc-btn--icon disabled:opacity-40"
+              >
+                <ChevronLeft size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => monthSteps.newer && setFilter(monthSteps.newer.value)}
+                disabled={!monthSteps.newer}
+                title={monthSteps.newer ? `Abrir ${monthSteps.newer.label}` : "Este é o mês mais recente"}
+                aria-label="Mês seguinte"
+                className="nc-btn nc-btn--ghost nc-btn--icon disabled:opacity-40"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
             <SegmentedChips options={periodOptions} value={filter} onChange={setFilter} />
             <DashboardCustomizeSheet layout={layout} onChange={updateLayout} onReset={resetLayout} />
             <button
@@ -933,26 +1015,46 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-          shown.main.map(w => (
-            <div key={w.id} className={cn("min-w-0", w.id === "performance" && "flex flex-col xl:flex-1")}>
-              {renderWidget(w.id, "card", true)}
-            </div>
-          ))
+          <>
+            {railEarly.length > 0 && (
+              <section className="nc-card flex flex-col gap-3.5 p-4 xl:hidden">
+                {railEarly[0].id !== "revenue" && <h2 className="text-[15px]">{CARD_TITLE.result}</h2>}
+                {railEarly.map((w, i) => (
+                  <Fragment key={w.id}>
+                    {i > 0 && <Rule />}
+                    {renderWidget(w.id, "rail")}
+                  </Fragment>
+                ))}
+              </section>
+            )}
+            {shown.main.map(w => (
+              <div key={w.id} className={cn("min-w-0", w.id === "performance" && "flex flex-col xl:flex-1")}>
+                {renderWidget(w.id, "card", true)}
+              </div>
+            ))}
+          </>
         )}
       </div>
 
       {/* ---------------- Trilho da direita ---------------- */}
       {hasRail && (
         <aside
-          className={RAIL}
+          // Só com os blocos que subiram, o trilho ficaria vazio embaixo.
+          className={cn(RAIL, railRest.length === 0 && "max-xl:hidden")}
           style={{ background: "var(--nc-rail)" }}
         >
-          {shown.rail.map((w, i) => (
-            <div key={w.id} className="contents">
-              {i > 0 && <Rule />}
-              {renderWidget(w.id, "rail")}
-            </div>
-          ))}
+          {shown.rail.map((w, i) => {
+            const early = railEarly.includes(w);
+            // Abaixo do xl a régua só separa dos blocos que FICARAM: a do
+            // primeiro deles seria uma linha solta no topo do trilho.
+            const firstThatStays = !early && railRest[0] === w;
+            return (
+              <div key={w.id} className={cn("contents", early && "max-xl:hidden")}>
+                {i > 0 && <Rule className={cn(firstThatStays && "max-xl:hidden")} />}
+                {renderWidget(w.id, "rail")}
+              </div>
+            );
+          })}
         </aside>
       )}
     </div>
