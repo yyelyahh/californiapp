@@ -149,7 +149,7 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   esmaece só o **preenchimento** (`--sf-accent-soft`), mantendo o texto legível.
   Com `href` ele vira uma âncora com a mesma cara: navegador embutido do
   Instagram e do Facebook bloqueia `window.open`, e é de lá que vem boa parte
-  dos links colados. Ação que SAI da página (compartilhar no WhatsApp) usa
+  dos links colados. Ação que SAI da página (enviar o pedido no WhatsApp da loja) usa
   `href`; ação que muda a própria tela continua botão.
 - `AddToCartButton` — a confirmação por varredura de tinta com fumaça. Peça cara e
   específica; não replique em outra tela sem motivo forte. **Quem chama subtrai o

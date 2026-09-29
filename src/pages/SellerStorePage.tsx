@@ -20,7 +20,6 @@ import {
   Minus,
   Plus,
   Search,
-  MessageCircle,
   Package,
   Check,
   ArrowLeft,
@@ -210,6 +209,29 @@ const ALL = "__all__";
  */
 const COMPANY = "California Company";
 
+/**
+ * WhatsApp da loja (+55 51 9714-1255), só dígitos, no formato do wa.me. O
+ * pedido finalizado vai direto para esta conversa, e o botão flutuante do
+ * catálogo abre a mesma conversa para quem só quer tirar uma dúvida.
+ */
+const STORE_WHATSAPP = "555197141255";
+
+function storeWhatsAppLink(text?: string) {
+  return `https://wa.me/${STORE_WHATSAPP}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+}
+
+/**
+ * Glifo do WhatsApp desenhado (o lucide não tem marcas). Pinta por
+ * `currentColor`, então segue o token de quem o usa.
+ */
+function WhatsAppIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35zM12.05 21.5h-.01a9.4 9.4 0 0 1-4.8-1.31l-.34-.2-3.57.94.95-3.48-.22-.36a9.4 9.4 0 0 1-1.44-5.02c0-5.2 4.23-9.43 9.44-9.43 2.52 0 4.89.98 6.67 2.77a9.37 9.37 0 0 1 2.76 6.67c0 5.2-4.23 9.43-9.44 9.43zm8.03-17.46A11.29 11.29 0 0 0 12.05.72C5.8.72.7 5.8.7 12.07c0 2 .52 3.95 1.52 5.67L.6 23.28l5.67-1.49a11.3 11.3 0 0 0 5.42 1.38h.01c6.26 0 11.35-5.09 11.35-11.35 0-3.03-1.18-5.88-3.33-8.02z" />
+    </svg>
+  );
+}
+
 /** Marca da casa: vem sempre primeiro no catálogo e com a cor de destaque. */
 const FEATURED_BRAND = "ignite";
 
@@ -340,7 +362,7 @@ function PillButton({
 
   // Um `window.open` em `onClick` é bloqueado pelo navegador embutido do
   // Instagram e do Facebook — de onde vem boa parte dos links colados. Âncora
-  // não é: ela é navegação, não popup. Só o compartilhar usa isto.
+  // não é: ela é navegação, não popup. Só o envio para o WhatsApp usa isto.
   if (href) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} style={style} className={cls}>
@@ -894,7 +916,7 @@ function ProductMedia({
         <>
           {fit === "contain" && loaded && (
             // Decoração: o alt de verdade está na imagem da frente. É a mesma
-            // URL da outra <img>, então o navegador serve do cache em vez de
+            // URL da imagem da frente, então o navegador serve do cache em vez de
             // baixar duas vezes. `scale-110` cobre o halo transparente que o
             // blur deixa na borda.
             //
@@ -2225,8 +2247,8 @@ export default function SellerStorePage() {
                 sem aviso, e quem só queria conferir o resumo se perde. O envio
                 é um toque, e o botão fica aqui até a pessoa querer. */}
             <p className="text-[13.5px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
-              Seu pedido <span className="font-bold">{success.ref}</span> está reservado. Toque abaixo e escolha a
-              conversa do vendedor no WhatsApp — ele confirma e fala com você.
+              Seu pedido <span className="font-bold">{success.ref}</span> está reservado. Toque abaixo para mandar
+              o pedido no nosso WhatsApp. A gente confirma e fala com você.
             </p>
           </motion.div>
 
@@ -2249,9 +2271,12 @@ export default function SellerStorePage() {
           )}
 
           <motion.div variants={fadeUp} className="mt-2.5 flex w-full flex-col gap-2.5">
-            <PillButton href={`https://wa.me/?text=${encodeURIComponent(success.message)}`}>
-              <MessageCircle size={15} />
-              Compartilhar no WhatsApp
+            {/* Vai direto para a conversa da loja, já com a mensagem escrita.
+                Antes o wa.me sem número fazia a pessoa escolher o contato, e
+                o pedido podia parar em qualquer conversa. */}
+            <PillButton href={storeWhatsAppLink(success.message)}>
+              <WhatsAppIcon size={16} />
+              Enviar pedido no WhatsApp
             </PillButton>
             <button
               type="button"
@@ -2437,6 +2462,30 @@ export default function SellerStorePage() {
               <ShoppingCart size={15} />
               Ver carrinho · {cartCount} · {fmt(total)}
             </PillButton>
+          </div>
+        </div>
+      )}
+
+      {/* Atalho para a conversa da loja, no canto direito de baixo. Some com
+          sheet aberto, como a barra do carrinho, e sobe acima dela quando ela
+          aparece. A camada fixa segue a coluna de 480px, para o botão não
+          fugir para a borda da janela no computador. */}
+      {!overlayOpen && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">
+          <div
+            className={`${COLUMN} flex justify-end px-5`}
+            style={{ paddingBottom: cartCount > 0 ? 96 : 26 }}
+          >
+            <a
+              href={storeWhatsAppLink()}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Falar com a loja no WhatsApp"
+              className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+              style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+            >
+              <WhatsAppIcon size={26} />
+            </a>
           </div>
         </div>
       )}
