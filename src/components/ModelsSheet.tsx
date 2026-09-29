@@ -97,8 +97,10 @@ export default function ModelsSheet() {
 
   return (
     <>
-      <NcButton size="md" onClick={openPanel}>
-        <Archive size={14} />Modelos
+      {/* Tamanho padrão, como os vizinhos da faixa "Por modelo": o `md`
+          deixava este botão mais alto que os outros três. */}
+      <NcButton onClick={openPanel}>
+        <Archive size={13} />Modelos
       </NcButton>
 
       {/* `nocturne` repetido: o Radix porta o painel para o <body> e os tokens

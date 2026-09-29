@@ -109,8 +109,7 @@ export default function ModelImagesDialog() {
       <DialogTrigger asChild>
         <NcButton>
           <ImageIcon size={13} />
-          <span className="hidden sm:inline">Fotos por Modelo</span>
-          <span className="sm:hidden">Fotos</span>
+          Fotos
         </NcButton>
       </DialogTrigger>
       <DialogContent className="nocturne max-w-2xl">

@@ -17,13 +17,12 @@
  */
 
 export type WidgetId =
+  | "verdict"
   | "restock"
   | "performance"
   | "topModels"
-  | "revenue"
   | "result"
   | "indicators"
-  | "grossProfit"
   | "recentSales"
   | "sellers";
 
@@ -49,6 +48,12 @@ export interface WidgetDef {
   sizes: WidgetSize[];
   defaultArea: WidgetArea;
   defaultSize: WidgetSize;
+  /**
+   * Bloco novo entra no FIM do layout salvo (ver `normalizeLayout`); este
+   * entra no COMEÇO. Só o Resumo usa: ele é a resposta da tela, e no fim da
+   * coluna quem já arrumou o Dashboard o veria depois de tudo o que ele resume.
+   */
+  newGoesFirst?: boolean;
 }
 
 const ALL_SIZES: WidgetSize[] = ["s", "m", "l"];
@@ -56,6 +61,18 @@ const BOTH_AREAS: WidgetArea[] = ["main", "rail"];
 
 /** O catálogo de blocos, NA ORDEM do layout padrão. */
 export const WIDGETS: WidgetDef[] = [
+  {
+    // A faixa do veredito. Absorveu o antigo bloco "Receita" (revenue), que
+    // saiu em 29/09/2026; layout gravado que ainda o cita perde a entrada.
+    id: "verdict",
+    label: "Resumo",
+    description: "Lucro e receita do período; vendedores e reposição de hoje",
+    areas: ["main"],
+    sizes: ["l"],
+    defaultArea: "main",
+    defaultSize: "l",
+    newGoesFirst: true,
+  },
   {
     id: "restock",
     label: "Repor agora",
@@ -84,18 +101,9 @@ export const WIDGETS: WidgetDef[] = [
     defaultSize: "m",
   },
   {
-    id: "revenue",
-    label: "Receita",
-    description: "Faturamento, recebido e a receber",
-    areas: BOTH_AREAS,
-    sizes: ALL_SIZES,
-    defaultArea: "rail",
-    defaultSize: "s",
-  },
-  {
     id: "result",
     label: "Resultado",
-    description: "CPV, despesas e lucro líquido",
+    description: "CPV, lucro bruto, despesas e lucro líquido",
     areas: BOTH_AREAS,
     sizes: ALL_SIZES,
     defaultArea: "rail",
@@ -110,15 +118,9 @@ export const WIDGETS: WidgetDef[] = [
     defaultArea: "rail",
     defaultSize: "s",
   },
-  {
-    id: "grossProfit",
-    label: "Lucro bruto",
-    description: "Receita menos o custo do que saiu",
-    areas: BOTH_AREAS,
-    sizes: ALL_SIZES,
-    defaultArea: "rail",
-    defaultSize: "s",
-  },
+  // "Lucro bruto" (grossProfit) foi bloco até 29/09/2026 e virou o subtotal do
+  // Resultado. Layout gravado que ainda o cita perde a entrada no
+  // `normalizeLayout` (id que não existe é descartado), sem erro.
   {
     id: "recentSales",
     label: "Últimas vendas",
@@ -181,7 +183,8 @@ function isObject(v: unknown): v is Record<string, unknown> {
  *
  * Bloco NOVO, que o app ganhou depois que a pessoa salvou o layout dela, entra
  * no fim e VISÍVEL: escondido ele nunca seria descoberto, porque ninguém abre o
- * painel procurando o que não sabe que existe.
+ * painel procurando o que não sabe que existe. Quem tem `newGoesFirst` (o
+ * Resumo) entra no começo.
  */
 export function normalizeLayout(raw: unknown): DashboardLayout {
   if (!isObject(raw)) return DEFAULT_LAYOUT;
@@ -205,9 +208,12 @@ export function normalizeLayout(raw: unknown): DashboardLayout {
     }
   }
 
+  const first: WidgetConfig[] = [];
   for (const def of WIDGETS) {
-    if (!seen.has(def.id)) widgets.push(defaultConfig(def));
+    if (seen.has(def.id)) continue;
+    (def.newGoesFirst ? first : widgets).push(defaultConfig(def));
   }
+  widgets.unshift(...first);
 
   return { mode, widgets };
 }

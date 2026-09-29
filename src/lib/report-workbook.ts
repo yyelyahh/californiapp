@@ -99,7 +99,7 @@ export interface LedgerPosition {
 
 export interface ReportInput {
   generatedAt: Date;
-  /** "Setembro/2026" ou "Geral (todo período)". */
+  /** "Setembro/2026" ou "Geral (todo o período)". */
   periodLabel: string;
   /** "Todas as filiais" ou o nome da cidade. */
   branchLabel: string;

@@ -54,7 +54,9 @@ export default function LoginPage() {
         >
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className={cn(EYEBROW, "text-muted-foreground")}>Email</Label>
+              {/* Rótulo de campo, não sobretítulo: fica em 11px em todo tamanho
+                  (o EYEBROW cai para 10px a partir do sm). */}
+              <Label htmlFor="email" className={cn(EYEBROW, "sm:text-[11px] text-muted-foreground")}>Email</Label>
               <div className="relative">
                 <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -69,7 +71,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password" className={cn(EYEBROW, "text-muted-foreground")}>Senha</Label>
+              <Label htmlFor="password" className={cn(EYEBROW, "sm:text-[11px] text-muted-foreground")}>Senha</Label>
               <div className="relative">
                 <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input

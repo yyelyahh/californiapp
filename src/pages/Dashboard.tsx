@@ -1,16 +1,16 @@
 import { useStore } from "@/context/StoreContext";
-import { Package, Percent, Download, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Package, Download, ArrowRight, ChevronLeft, ChevronRight, Loader2, SlidersHorizontal } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
+import { Fragment, useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
-import { sameStretchOfPreviousMonth, isoDay } from "@/lib/date-utils";
+import { sameStretchOfPreviousMonth, isoDay, formatDateBR } from "@/lib/date-utils";
 import { ptBR } from "date-fns/locale";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
-import { listItem } from "@/lib/motion";
+import { listItem, transitionBase } from "@/lib/motion";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
-import { SegmentedChips, Rule, RAIL, STICKY_HEAD, EYEBROW } from "@/components/nocturne";
+import { NcButton, Rule, RAIL, STICKY_HEAD, EYEBROW } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { computeModelStats, summarizeRestock, urgencyOf, STALE_DAYS, type ModelStat } from "@/lib/restock";
 // xlsx é carregado sob demanda (dynamic import) para não pesar no bundle inicial.
@@ -44,17 +44,35 @@ const SPAN: Record<WidgetSize, string> = {
 };
 
 /**
- * Título do bloco de trilho quando ele vira card. No trilho eles não têm título
- * (o trilho inteiro é "o dinheiro do período"); soltos na grade, "− CPV" sem
- * cabeçalho não diria de onde veio. Receita e Últimas vendas já trazem o seu.
+ * O recorte de tempo de um bloco, sempre no mesmo lugar: ao lado do título.
+ *
+ * A tela mistura três recortes — o mês escolhido, HOJE (estoque, saldo dos
+ * vendedores) e os últimos seis meses do gráfico — e cada bloco dizia o seu de
+ * um jeito: uma ressalva de 11px embaixo ("Não segue o período: …"), um "un.
+ * hoje" no rodapé, ou nada (o Repor agora). Agora é um selo só, com a mesma
+ * forma em todo bloco, e o olho aprende onde procurar.
  */
-const CARD_TITLE: Partial<Record<WidgetId, string>> = {
-  result: "Resultado",
-  indicators: "Ticket e estoque",
-};
+function ScopeTag({ children }: { children: string }) {
+  // Maiúscula só na primeira letra ("Setembro", "Hoje", "Últimos 6 meses").
+  // Feita no texto e não com `::first-letter`, que não vale em `inline-flex`.
+  return <span className="nc-pill nc-pill--mute nc-num">{children.charAt(0).toUpperCase() + children.slice(1)}</span>;
+}
 
 function formatPct(value: number, digits = 1) {
   return `${value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+}
+
+/**
+ * Rótulo do eixo do gráfico: "1,5k", "−2k", "800". Era `v >= 1000`, que deixava
+ * o prejuízo de mil para cima sem abreviar ("-1500") e escrevia o decimal com
+ * ponto ("1.5k") no meio de uma tela em pt-BR.
+ */
+function axisMoney(v: number) {
+  const abs = Math.abs(v);
+  const text = abs >= 1000
+    ? `${(abs / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k`
+    : abs.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+  return v < 0 ? `−${text}` : text;
 }
 
 /**
@@ -63,22 +81,18 @@ function formatPct(value: number, digits = 1) {
  * --nc-accent / --nc-profit / --nc-crit em src/index.css — mudou lá, mude aqui.
  */
 const CHART_REVENUE = "#85B7EB";
-const CHART_PROFIT = "#9184d9";
+const CHART_PROFIT = "#A3D977";
 const CHART_LOSS = "#F09595";
 const CHART_GRID = "#3f424d";
 const CHART_AXIS = "#75798c";
 
 const GERAL = "geral";
-/** Quantos meses aparecem como atalho no seletor de período. */
-const QUICK_MONTHS = 3;
 /** Quantos pedidos cabem na tabela de reposição. */
 const MAX_RESTOCK_ROWS = 6;
 /** Modelos nomeados na barra empilhada; o resto vira "Outros". */
 const TOP_MODELS = 5;
 /** Quantos vendedores a lista do bloco mostra; o resto vira uma linha de rodapé. */
 const MAX_SELLER_ROWS = 6;
-/** Blocos do trilho que sobem para o topo da coluna abaixo do xl (ver `railEarly`). */
-const EARLY_ON_SMALL: WidgetId[] = ["revenue", "result"];
 
 export default function Dashboard() {
   const store = useStore();
@@ -116,7 +130,7 @@ export default function Dashboard() {
         short: format(d, "MMM", { locale: ptBR }).replace(/^./, c => c.toUpperCase()).replace(".", ""),
       });
     });
-    opts.push({ value: GERAL, label: "Geral (todo período)", short: "Geral" });
+    opts.push({ value: GERAL, label: "Geral (todo o período)", short: "Geral" });
     return opts;
   }, [store.sales, store.expenses, store.stockEntries]);
 
@@ -149,24 +163,23 @@ export default function Dashboard() {
   const [exporting, setExporting] = useState(false);
 
   /**
-   * Atalhos do seletor: os meses mais recentes + Geral. Se o mês escolhido for
-   * mais antigo que isso, ele entra na lista para não sumir da tela.
+   * O mês que o "Geral" devolve. O período mora no endereço, e ao ir para
+   * Geral o mês sai dele; sem isto, voltar do Geral caía sempre no mês
+   * corrente, e quem estava em junho perdia o lugar.
    */
-  const periodOptions = useMemo(() => {
-    const months = monthOptions.filter(o => o.value !== GERAL);
-    const quick = months.slice(0, QUICK_MONTHS);
-    const selected = months.find(o => o.value === filter);
-    const list = selected && !quick.some(o => o.value === filter) ? [...quick, selected] : quick;
-    return [...list, monthOptions[monthOptions.length - 1]];
-  }, [monthOptions, filter]);
+  const [lastMonth, setLastMonth] = useState(filter === GERAL ? currentMonth : filter);
+  useEffect(() => {
+    if (filter !== GERAL) setLastMonth(filter);
+  }, [filter]);
 
   /**
-   * As setas ‹ › andam por TODOS os meses com lançamento. Sem elas, o que
-   * passava dos atalhos não tinha como ser aberto: a lista acima só acrescenta
-   * o mês escolhido, e nada escolhia um mês mais antigo — junho sumia da tela e
-   * do relatório em Excel, que segue o mesmo filtro. A lista vem do mais novo
-   * para o mais antigo, então "anterior" é o índice seguinte. Em "Geral" as
-   * duas ficam desligadas (e montadas, para a linha não mudar de largura).
+   * As setas ‹ › andam por TODOS os meses com lançamento, e são o único
+   * seletor de mês. Havia também uma fileira de chips com os três meses mais
+   * recentes: duas ferramentas para a mesma escolha, nove controles numa faixa
+   * que quebrava linha no celular, e os chips só poupavam um toque para pular
+   * dois meses. A lista vem do mais novo para o mais antigo, então "anterior" é
+   * o índice seguinte. Em "Geral" as duas ficam desligadas (e montadas, para a
+   * linha não mudar de largura).
    */
   const monthSteps = useMemo(() => {
     const months = monthOptions.filter(o => o.value !== GERAL);
@@ -340,15 +353,21 @@ export default function Dashboard() {
    * projeta nada, é a decisão do dono sobre o que quer ter na prateleira.
    */
   const restockAsides = useMemo(() => {
+    // "Pedido", no app, é o pedido que chega da loja; o que se faz ao
+    // fornecedor é COMPRA ("Nova compra", "Montar compra"). O rodapé dizia
+    // "pedidos menores" e "já pedidos", e o sujeito (modelo) ficava implícito.
     const parts: string[] = [];
+    const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
     const hidden = restock.urgent.length - restockRows.length;
-    if (hidden > 0) parts.push(`+${hidden} pedido${hidden > 1 ? "s" : ""} menor${hidden > 1 ? "es" : ""}`);
+    if (hidden > 0) parts.push(`+${hidden} ${plural(hidden, "modelo", "modelos")} com menos a repor`);
     if (restock.orderedCount > 0) {
-      parts.push(`${restock.orderedCount} já pedido${restock.orderedCount > 1 ? "s" : ""}, ${restock.orderedUnits} un. a caminho`);
+      parts.push(
+        `${restock.orderedCount} ${plural(restock.orderedCount, "modelo já comprado", "modelos já comprados")}, ${restock.orderedUnits} un. a caminho`,
+      );
     }
     if (restock.staleCount > 0) {
       parts.push(
-        `${restock.staleCount} parado${restock.staleCount > 1 ? "s" : ""} há mais de ${STALE_DAYS} dias travando ${formatCurrencyShort(restock.staleValue)}`,
+        `${restock.staleCount} ${plural(restock.staleCount, "modelo parado", "modelos parados")} há mais de ${STALE_DAYS} dias (${formatCurrencyShort(restock.staleValue)} a custo)`,
       );
     }
     return parts;
@@ -466,13 +485,52 @@ export default function Dashboard() {
   }, [monthlyData]);
   const partialMonth = monthlyData.find(m => m.partial);
 
-  const avgMargin = useMemo(() => {
-    const withRevenue = monthlyData.filter(m => m.receita > 0);
-    if (!withRevenue.length) return 0;
-    return withRevenue.reduce((s, m) => s + m.margem, 0) / withRevenue.length;
+  /**
+   * Margem dos seis meses do gráfico = lucro somado ÷ receita somada. Era a
+   * média simples das margens de cada mês: um mês fraco, de R$ 300 e margem
+   * −80%, pesava tanto quanto um de R$ 30 mil, e o número ao lado do gráfico
+   * não fechava com as duas curvas que ele resume.
+   */
+  const sixMonthMargin = useMemo(() => {
+    const revenue = monthlyData.reduce((s, m) => s + m.receita, 0);
+    const profit = monthlyData.reduce((s, m) => s + m.lucro, 0);
+    return revenue > 0 ? (profit / revenue) * 100 : 0;
   }, [monthlyData]);
 
+  /**
+   * O mês escolhido marcado no gráfico, quando ele está entre os seis. O
+   * gráfico não segue o período, e sem a marca quem abre junho não sabe onde
+   * junho está na curva. O mês em curso não ganha marca: ele já é o trecho
+   * tracejado no fim.
+   */
+  const chartMark = useMemo(() => {
+    // Casa por ano-mês, os mesmos seis meses do `monthlyData`: a sigla sozinha
+    // ("jun") casaria junho do ano passado com o deste ano.
+    for (let i = 1; i <= 5; i++) {
+      const date = subMonths(new Date(), i);
+      if (format(date, "yyyy-MM") === filter) return format(date, "MMM", { locale: ptBR });
+    }
+    return undefined;
+  }, [filter]);
+
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
+  const exportScope = isGeral ? "todo o período" : filterLabel;
+  /** O recorte no selo dos blocos que seguem o período: "setembro", "todo o período". */
+  const periodTag = isGeral
+    ? "todo o período"
+    : format(period.start, filter.slice(0, 4) === currentMonth.slice(0, 4) ? "MMMM" : "MMMM/yy", { locale: ptBR });
+
+  /**
+   * O mês entre as setas: a sigla, e o ano só quando não é o corrente
+   * ("Set/25"). O nome inteiro já está no sobretítulo, logo à esquerda.
+   */
+  const lastMonthOption = monthOptions.find(o => o.value === lastMonth);
+  const lastMonthLabel = lastMonthOption?.label ?? "";
+  const lastMonthShort = lastMonthOption
+    ? lastMonth.slice(0, 4) === currentMonth.slice(0, 4)
+      ? lastMonthOption.short
+      : `${lastMonthOption.short}/${lastMonth.slice(2, 4)}`
+    : "";
 
   /**
    * O período da tela no vocabulário do endereço de Vendas. Todo link que sai
@@ -516,6 +574,17 @@ export default function Dashboard() {
   );
 
   /**
+   * As seis mais recentes pela DATA DA VENDA. `store.sales` vem na ordem de
+   * lançamento (created_at), e uma venda lançada hoje com data de dia 3
+   * aparecia no topo, como se fosse a última. O `reverse` antes do `sort`
+   * (estável) deixa o lançamento mais novo na frente entre as do mesmo dia.
+   */
+  const latestSales = useMemo(
+    () => [...recentSales].reverse().sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice(0, 6),
+    [recentSales],
+  );
+
+  /**
    * O relatório em Excel.
    *
    * A MONTAGEM mora em `src/lib/report-workbook.ts` (função pura, testada em
@@ -535,7 +604,7 @@ export default function Dashboard() {
 
       const sheets = buildReport({
         generatedAt: new Date(),
-        periodLabel: isGeral ? "Geral (todo período)" : filterLabel,
+        periodLabel: isGeral ? "Geral (todo o período)" : filterLabel,
         branchLabel: branchId ? branchName(branchId) : "Todas as filiais",
         start: period.start,
         end: period.end,
@@ -596,10 +665,11 @@ export default function Dashboard() {
           .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       const place = branchId ? `-${slug(branchName(branchId))}` : "";
       XLSX.writeFile(wb, `california${place}-${isGeral ? "geral" : filter}.xlsx`);
-      toast.success(`Relatório com ${sheets.length} abas`);
+      toast.success(`Relatório baixado (${sheets.length} abas)`);
     } catch (err) {
       console.error(err);
-      toast.error("Falha ao exportar");
+      // Quase sempre é a leitura do razão que falhou (rede): dizer o que fazer.
+      toast.error("Erro ao gerar o relatório. Tente de novo.");
     } finally {
       // Sem o `finally` um erro deixaria o botão desabilitado para sempre — a
       // mesma regra de toda tela que troca de estado depois de um `await`.
@@ -614,56 +684,47 @@ export default function Dashboard() {
 
   const restockWidget = (
     <section className="nc-card overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-3">
-        <div className="flex items-center gap-2">
-          <Package size={16} style={{ color: "var(--nc-accent)" }} />
-          <h2 className="text-[15px]">Repor agora</h2>
-        </div>
-        <span
-          className="rounded-full px-2 py-0.5 text-[11px] nc-num"
-          style={{ color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }}
-        >
-          {restock.urgent.length} de {restock.totalModels} modelo{restock.totalModels === 1 ? "" : "s"}
-        </span>
+      {/* Sem o selo "N de M modelos": o N é o do botão "Montar compra" no
+          rodapé, e o "de M" (todos os modelos cadastrados) não decide nada. */}
+      <div className="flex items-center gap-2 px-4 pt-3.5 pb-3">
+        <Package size={16} style={{ color: "var(--nc-accent)" }} />
+        <h2 className="text-[15px]">Repor agora</h2>
+        <ScopeTag>hoje</ScopeTag>
       </div>
 
       <div className="px-4 pb-3.5">
         {restockRows.length === 0 ? (
+          // O vazio diz POR QUE está vazio. "Nada abaixo do mínimo" era dito
+          // também quando havia modelo abaixo dele já comprado, e quando
+          // nenhum modelo tinha mínimo — modelo sem mínimo não entra nesta
+          // conta, e sem dizer isso o card vazio parecia estoque em ordem.
           <p className="py-6 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
-            {modelStats.length === 0 ? "Nenhum modelo cadastrado ainda." : "Nenhum modelo em giro precisa de pedido."}
+            {modelStats.length === 0
+              ? "Nenhum modelo cadastrado ainda."
+              : restock.orderedCount > 0
+                ? "O que está abaixo do mínimo já foi pedido."
+                : modelStats.some(m => m.minUnits > 0)
+                  ? "Todos os modelos estão no mínimo ou acima."
+                  : "Nenhum modelo tem estoque mínimo. Defina em Produtos."}
           </p>
         ) : (
           <div className="overflow-x-auto">
-            {/* Nem toda coluna cabe num telefone, e alargar não resolve: o
-                `min-w` de 560px virava arrasto lateral. O card responde UMA
-                pergunta — quanto pedir hoje —, e ela se lê com o estoque, o
-                mínimo e o quanto pedir; o resto é o PORQUÊ do número, e o
-                porquê cabe na tela grande. Foi assim que saíram "Vende/dia" e
-                "Margem", e é por isso que "Vendeu" sai abaixo do `sm`. A
-                ordem ("Pedir" por último, e a lista ordenada por unidades a
-                pedir) não muda: é ela que decide quem entra aqui. */}
-            <table className="w-full min-w-0 text-[13px] sm:min-w-[560px]">
-              {/* A conta fecha na horizontal: o estoque de hoje contra o
-                  mínimo, o que saiu no período (só no `sm` para cima), e o
-                  que pedir. "Dura tantos dias", "Vende/dia" e "Margem" saíram —
-                  eram a leitura da conta ANTIGA, que projetava giro; a de
-                  agora é uma subtração contra o mínimo, e mostrar a projeção
-                  ao lado dela seria oferecer duas réguas para o mesmo
-                  número. O que está a caminho aparece embaixo do "Pedir",
-                  porque é o que explica um pedido menor que a falta. */}
+            {/* O card responde UMA pergunta — quanto pedir hoje — e tudo nele
+                é de HOJE: o estoque contra o mínimo, e o que pedir. A coluna
+                "Vendeu" saiu: era do MÊS ESCOLHIDO, e punha na mesma linha o
+                estoque de hoje ao lado das vendas de junho, dois recortes que
+                a linha não dizia. "Dura tantos dias", "Vende/dia" e "Margem"
+                já tinham saído por serem a leitura da conta antiga, que
+                projetava giro. O que está a caminho aparece embaixo do
+                "Pedir", porque é o que explica um pedido menor que a falta.
+                O `whitespace-nowrap` das colunas de número segura cada linha
+                numa altura só em 390px. */}
+            <table className="w-full min-w-0 text-[13px]">
               <thead>
                 <tr style={{ color: "var(--nc-text-3)" }}>
-                  <th className="px-2 py-1.5 text-left font-normal">Modelo</th>
-                  <th className="whitespace-nowrap px-2 py-1.5 text-right font-normal">Estoque / mín.</th>
-                  {/* Com as quatro colunas em 390px não sobrava largura para
-                      os números ficarem numa linha: "16 un." quebrava em duas,
-                      a régua "12 / 20" quebrava junto, e cada modelo ficava
-                      com uma altura diferente — tabela que não alinha deixa de
-                      ser tabela. O `whitespace-nowrap` das colunas de número é
-                      o par disto: sem uma delas, ou volta a quebra, ou volta o
-                      arrasto lateral. */}
-                  <th className="hidden whitespace-nowrap px-2 py-1.5 text-right font-normal sm:table-cell">Vendeu</th>
-                  <th className="whitespace-nowrap px-2 py-1.5 text-right font-normal">Pedir</th>
+                  <th scope="col" className="px-2 py-1.5 text-left font-normal">Modelo</th>
+                  <th scope="col" className="whitespace-nowrap px-2 py-1.5 text-right font-normal">Estoque / mín.</th>
+                  <th scope="col" className="whitespace-nowrap px-2 py-1.5 text-right font-normal">Pedir</th>
                 </tr>
               </thead>
               <tbody>
@@ -681,23 +742,21 @@ export default function Dashboard() {
               custa voltar ao mínimo são a CONCLUSÃO do card, e estavam no
               mesmo corpo do rodapé de ressalvas logo abaixo. O que se lê antes
               de decidir não pode ser do tamanho do que se lê depois. */}
+          {/* Sem pedido, a linha de cima não é desenhada: o vazio da tabela já
+              diz o porquê, e repetir aqui dava duas frases para o mesmo fato. */}
           <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
-              {restock.horizonUnits > 0 ? (
-                <>
-                  <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
-                    {restock.horizonUnits} un.
-                  </strong>{" "}
-                  para voltar ao mínimo ·{" "}
-                  <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
-                    {formatCurrencyShort(restock.horizonCost)}
-                  </strong>{" "}
-                  a custo
-                </>
-              ) : (
-                <>Nenhum modelo abaixo do mínimo.</>
-              )}
-            </span>
+            {restock.horizonUnits > 0 && (
+              <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
+                <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
+                  {restock.horizonUnits} un.
+                </strong>{" "}
+                para voltar ao mínimo ·{" "}
+                <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
+                  {formatCurrencyShort(restock.horizonCost)}
+                </strong>{" "}
+                a custo
+              </span>
+            )}
             {restockAsides.length > 0 && (
               <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
                 {restockAsides.join(" · ")}
@@ -732,7 +791,13 @@ export default function Dashboard() {
   const performanceWidget = (frame: Frame, grow: boolean) => (
     <section className={cn("min-w-0 flex flex-col", frame === "card" && "nc-card p-4", grow && "xl:flex-1")}>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <h2 className="text-[15px]">Desempenho financeiro</h2>
+        {/* O gráfico é sempre os últimos seis meses, com qualquer período
+            escolhido: o selo diz isso no mesmo lugar em que os outros blocos
+            dizem o deles. */}
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px]">Desempenho financeiro</h2>
+          <ScopeTag>últimos 6 meses</ScopeTag>
+        </div>
         <div className="flex flex-wrap items-center gap-3.5 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-3.5" style={{ background: "var(--nc-accent)" }} /> Receita
@@ -746,13 +811,13 @@ export default function Dashboard() {
           {partialMonth && (
             <span className="flex items-center gap-1.5">
               <span className="w-3.5 border-t border-dashed" style={{ borderColor: "var(--nc-text-2)" }} />
-              {partialMonth.month} até o dia {new Date().getDate()}
+              {partialMonth.month.replace(/^./, c => c.toUpperCase())} até o dia {new Date().getDate()}
             </span>
           )}
           <span className="pl-3" style={{ borderLeft: "1px solid var(--nc-divider)" }}>
-            Margem média{" "}
+            Margem em 6 meses{" "}
             <strong className="nc-num font-semibold" style={{ color: "var(--nc-text)" }}>
-              {formatPct(avgMargin)}
+              {formatPct(sixMonthMargin)}
             </strong>
           </span>
         </div>
@@ -780,8 +845,16 @@ export default function Dashboard() {
               tickLine={false}
               axisLine={false}
               width={frame === "rail" ? 40 : 50}
-              tickFormatter={v => (v >= 1000 ? `${(v / 1000).toFixed(1).replace(".0", "")}k` : `${v}`)}
+              tickFormatter={axisMoney}
             />
+            {chartMark && (
+              <ReferenceLine
+                x={chartMark}
+                stroke={CHART_AXIS}
+                strokeOpacity={0.7}
+                label={{ value: "período", position: "insideTopRight", fill: CHART_AXIS, fontSize: 10 }}
+              />
+            )}
             <Tooltip
               cursor={{ stroke: CHART_GRID }}
               content={({ active, payload }) => {
@@ -835,13 +908,12 @@ export default function Dashboard() {
     const pad = frame === "card" ? "px-4" : "";
     return (
       <section className={cn(frame === "card" && "nc-card overflow-hidden")}>
-        <div className={cn("flex flex-wrap items-baseline justify-between gap-2 pb-3", pad, frame === "card" && "pt-3.5")}>
+        {/* Sem total no cabeçalho: ele repetia a Receita, mas sem os modelos
+            arquivados, e dois números quase iguais que não batem fazem duvidar
+            dos dois. */}
+        <div className={cn("flex items-center gap-2 pb-3", pad, frame === "card" && "pt-3.5")}>
           <h2 className="text-[15px]">Modelos mais vendidos</h2>
-          {topModels.total > 0 && (
-            <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-              {formatCurrencyShort(topModels.total)} no período
-            </span>
-          )}
+          <ScopeTag>{periodTag}</ScopeTag>
         </div>
 
         {topModels.rows.length === 0 ? (
@@ -856,7 +928,6 @@ export default function Dashboard() {
               <Link
                 key={m.key}
                 to={buildSalesLink({ ...salesPeriod, model: { brand: m.brand, model: m.model } })}
-                aria-label={`Ver as vendas de ${m.model} · ${m.brand}`}
                 className={cn("nc-row nc-hover nc-drill block py-2.5", pad)}
               >
                 <div className="flex items-baseline justify-between gap-3">
@@ -892,10 +963,12 @@ export default function Dashboard() {
                 quanto ficou de fora — número que encolhe sem explicação faz
                 duvidar do número — sem ocupar o lugar do que se pode ler. */}
             {topModels.restCount > 0 && (
-              <p className={cn("py-2.5 text-[11px]", pad)} style={{ color: "var(--nc-text-3)" }}>
-                + {topModels.restCount} modelo{topModels.restCount > 1 ? "s" : ""} somam{" "}
-                <span className="nc-num">{formatCurrencyShort(topModels.restRevenue)}</span>
-                {" "}({formatPct(topModels.restPct, 0)} do período)
+              // Na mesma forma das linhas de cima ("R$ · %"). Dizia "do
+              // período", mas a fatia é do total dos modelos listados, que
+              // deixa os arquivados de fora — não da receita do período.
+              <p className={cn("nc-num py-2.5 text-[11px]", pad)} style={{ color: "var(--nc-text-3)" }}>
+                + {topModels.restCount} {topModels.restCount === 1 ? "outro modelo" : "outros modelos"}:{" "}
+                {formatCurrencyShort(topModels.restRevenue)} · {formatPct(topModels.restPct, 0)}
               </p>
             )}
           </>
@@ -906,39 +979,74 @@ export default function Dashboard() {
 
   const revenueDelta = delta(periodStats.revenue, prevStats?.stats.revenue);
 
-  const revenueWidget = (
-    <div className="flex flex-col gap-3.5">
-      <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
-        Dinheiro do {isGeral ? "período" : "mês"}
-      </span>
-      <div>
-        {/* A base da comparação ESCRITA, não num `title`: "+41%" sem dizer
-            contra o quê é número que não se explica, e no toque o `title`
-            nunca aparece. A mesma base vale para as outras variações da tela. */}
-        {/* O rótulo e o número abrem as vendas do período: em Vendas o trilho
-            mostra a MESMA receita, e o mesmo par recebido/a receber. */}
-        <Link to={buildSalesLink(salesPeriod)} className="nc-drill block" aria-label="Ver as vendas do período">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="inline-flex items-center gap-0.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
-              Receita <ChevronRight size={12} className="nc-drill-cue" />
+  const profitDelta = delta(periodStats.netProfit, prevStats?.stats.netProfit);
+  const criticalCount = restock.urgent.filter(m => urgencyOf(m.stock, m.minUnits) === "critical").length;
+
+  /**
+   * O veredito: a faixa que responde "como foi o mês e o que fazer agora",
+   * no topo da coluna em todos os tamanhos.
+   *
+   * Antes o maior número da tela era a RECEITA (30px, no trilho), e o lucro
+   * líquido — o que o fechamento procura — saía em 20px no pé do trilho; no
+   * celular o dinheiro do mês só aparecia depois de ~1.200px de rolagem. Aqui
+   * o lucro é o herói, a receita (com recebido e a receber) é o segundo
+   * número, e os dois acertos de HOJE que pedem ação — vendedores e reposição
+   * — ficam ao lado, cada metade com o seu recorte escrito no alto.
+   *
+   * Absorveu o antigo bloco "Receita": mesmo número, mesmos links, mesma
+   * barra. O detalhe continua nos blocos de baixo (Resultado, Vendedores,
+   * Repor agora).
+   *
+   * Os números entram sem contar desde zero (sem `animateOnMount`): quem abre
+   * a tela veio ler o valor, e 0,7 s mostrando um número errado atrapalha.
+   * Mudança de período continua animando.
+   */
+  const verdictWidget = (
+    <section aria-label="Resumo" className="nc-card grid grid-cols-1 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
+      <div className="flex min-w-0 flex-col gap-3 p-4 md:p-5">
+        <ScopeTag>{periodTag}</ScopeTag>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] sm:gap-6">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Lucro líquido</span>
+            {/* --nc-profit, a cor da série de lucro no gráfico; prejuízo em --nc-crit. */}
+            <span style={{ color: netPositive ? "var(--nc-profit)" : "var(--nc-crit)" }}>
+              <AnimatedNumber
+                value={periodStats.netProfit}
+                format={formatCurrencyShort}
+                duration={0.5}
+                className="nc-num text-[40px] font-semibold leading-[1.05] tracking-[-0.03em] sm:text-[46px]"
+              />
             </span>
-            {revenueDelta && (
-              <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-                vs {revenueDelta.label}
+            {/* A base da comparação ESCRITA, não num `title`: "+12%" sem dizer
+                contra o quê é número que não se explica. */}
+            <span className="nc-num text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
+              margem {formatPct(periodStats.netMargin)}
+              {profitDelta && <> · <Delta delta={profitDelta} /> vs {profitDelta.label}</>}
+            </span>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1">
+            {/* O rótulo e o número abrem as vendas do período: em Vendas o
+                trilho mostra a MESMA receita e o mesmo par recebido/a receber.
+                Sem `aria-label`: ele trocava o nome do link e o leitor de tela
+                ouvia "Ver as vendas do período", nunca o valor. */}
+            <Link to={buildSalesLink(salesPeriod)} className="nc-drill block">
+              <span className="inline-flex items-center gap-0.5 text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
+                Receita <ChevronRight size={12} className="nc-drill-cue" />
               </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-baseline gap-2">
-            <AnimatedNumber
-              value={periodStats.revenue}
-              format={formatCurrencyShort}
-              duration={0.7}
-              animateOnMount
-              className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
-            />
-            <Delta delta={revenueDelta} />
-          </div>
-        </Link>
+              <span className="flex flex-wrap items-baseline gap-x-2">
+                <AnimatedNumber
+                  value={periodStats.revenue}
+                  format={formatCurrencyShort}
+                  duration={0.5}
+                  className="nc-num text-[26px] font-semibold tracking-[-0.02em]"
+                />
+                {revenueDelta && (
+                  <span className="nc-num text-[12px]" style={{ color: "var(--nc-text-3)" }}>
+                    <Delta delta={revenueDelta} /> vs {revenueDelta.label}
+                  </span>
+                )}
+              </span>
+            </Link>
         {/* Divisão REAL do total: cada real vendido está de um lado ou do
             outro. O recebido é --nc-ok e NÃO --nc-accent — o verde é dinheiro
             que já está na mão, e o accent é o dinheiro todo (a receita logo
@@ -946,10 +1054,16 @@ export default function Dashboard() {
             total que ela divide, e o par com o --nc-alert só se lia depois de
             ler os dois números. É a mesma barra de Vendas e do Financeiro, que
             já usavam o verde: este era o único lugar fora do vocabulário. */}
-        <div className="mt-2 flex h-[5px] gap-0.5">
-          <div style={{ flex: Math.max(periodStats.received, 0.001), background: "var(--nc-ok)", borderRadius: 2 }} />
-          <div style={{ flex: Math.max(periodStats.receivable, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
-        </div>
+        {/* Sem receita não há o que dividir: os dois `flex` mínimos davam
+            metade verde e metade âmbar num mês sem venda. Aí fica só o trilho. */}
+        {periodStats.revenue > 0 ? (
+          <div className="mt-2 flex h-[5px] gap-0.5">
+            <div style={{ flex: Math.max(periodStats.received, 0.001), background: "var(--nc-ok)", borderRadius: 2 }} />
+            <div style={{ flex: Math.max(periodStats.receivable, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
+          </div>
+        ) : (
+          <div className="mt-2 h-[5px]" style={{ background: "var(--nc-track)", borderRadius: 2 }} />
+        )}
         {/* "A receber" abre as vendas com saldo do período — em Vendas, o "a
             receber" do trilho é este mesmo número. O "recebido" NÃO é link: ele
             soma a parte paga das vendas parciais, e nenhuma lista de vendas
@@ -969,15 +1083,86 @@ export default function Dashboard() {
             <span style={{ color: "var(--nc-alert)" }}>a receber {formatCurrencyShort(periodStats.receivable)}</span>
           )}
         </div>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* HOJE: os dois acertos que pedem ação, com o recorte escrito no alto
+          — eles não mudam com o mês escolhido. */}
+      <div
+        className="flex min-w-0 flex-col gap-3 border-t p-4 md:p-5 lg:border-l lg:border-t-0"
+        style={{ borderColor: "var(--nc-divider)" }}
+      >
+        <ScopeTag>hoje</ScopeTag>
+        <div className="grid grid-cols-2 gap-4">
+          <Link to="/commissions" className="nc-drill flex min-w-0 flex-col gap-1">
+            <span className="inline-flex items-center gap-0.5 text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
+              Vendedores <ChevronRight size={12} className="nc-drill-cue" />
+            </span>
+            <span className="nc-num text-[20px] font-semibold">{formatCurrencyShort(sellerBalances.payable)}</span>
+            <span className="text-[12px]" style={{ color: "var(--nc-text-3)" }}>a pagar</span>
+            {sellerBalances.owed > 0.01 && (
+              <span className="nc-num text-[12px]" style={{ color: "var(--nc-alert)" }}>
+                devem {formatCurrencyShort(sellerBalances.owed)}
+              </span>
+            )}
+          </Link>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Repor</span>
+            {restock.urgent.length > 0 ? (
+              <>
+                <span className="nc-num text-[20px] font-semibold">
+                  {restock.urgent.length} modelo{restock.urgent.length === 1 ? "" : "s"}
+                </span>
+                <span className="nc-num text-[12px]" style={{ color: "var(--nc-text-3)" }}>
+                  {restock.horizonUnits} un. · {formatCurrencyShort(restock.horizonCost)} a custo
+                </span>
+                {criticalCount > 0 && (
+                  <span className="text-[12px]" style={{ color: "var(--nc-crit)" }}>
+                    {criticalCount} crítico{criticalCount === 1 ? "" : "s"}
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="text-[20px] font-semibold">Nada</span>
+                <span className="text-[12px]" style={{ color: "var(--nc-text-3)" }}>abaixo do mínimo</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 
   const resultWidget = (
     <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Resultado</span>
+        <ScopeTag>{periodTag}</ScopeTag>
+      </div>
+      {/* A conta começa na receita. Ela morava no bloco "Receita", logo acima
+          no trilho; com ele virando a faixa do veredito, o Resultado passou a
+          abrir com "− CPV" sem dizer de onde se subtrai. */}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
+        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.revenue)}</span>
+      </div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− CPV</span>
         <span className="nc-num text-sm">{formatCurrencyShort(periodStats.cogs)}</span>
+      </div>
+      {/* Subtotal da conta: receita − CPV. Era um bloco à parte, com ícone,
+          para um número que se lê aqui, no meio da mesma subtração, e cuja
+          margem já estava no rodapé deste bloco. */}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12.5px]">
+          Lucro bruto{" "}
+          <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+            {formatPct(periodStats.grossMargin)}
+          </span>
+        </span>
+        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.grossProfit)}</span>
       </div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Despesas</span>
@@ -1017,45 +1202,38 @@ export default function Dashboard() {
           <AnimatedNumber
             value={periodStats.netProfit}
             format={formatCurrencyShort}
-            duration={0.7}
-            animateOnMount
+            duration={0.5}
             className="nc-num text-xl font-semibold"
           />
         </span>
       </div>
       <div className="flex items-baseline justify-between gap-2 text-[11.5px] nc-num" style={{ color: "var(--nc-text-3)" }}>
         <span>margem líquida</span>
-        <span>{formatPct(periodStats.netMargin)} · bruta {formatPct(periodStats.grossMargin)}</span>
+        <span>{formatPct(periodStats.netMargin)}</span>
       </div>
     </div>
   );
 
+  /**
+   * Dois recortes lado a lado — o ticket segue o período, o estoque é de
+   * HOJE —, então cada metade leva o seu selo em vez de um título comum.
+   */
   const indicatorsWidget = (
     <div className="grid grid-cols-2 gap-3">
-      <div>
+      <div className="flex flex-col items-start gap-1">
+        <ScopeTag>{periodTag}</ScopeTag>
         <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>Ticket médio</span>
         <div className="nc-num text-base font-semibold">
           {formatCurrency(periodStats.ticket)}{" "}
           <Delta delta={delta(periodStats.ticket, prevStats?.stats.ticket)} />
         </div>
       </div>
-      <div>
-        {/* Posição de HOJE, não do mês: ao lado do ticket (que segue o
-            período) ela precisa dizer isso na própria linha. */}
+      <div className="flex flex-col items-start gap-1">
+        <ScopeTag>hoje</ScopeTag>
         <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>Estoque a custo</span>
         <div className="nc-num text-base font-semibold">{formatCurrencyShort(inventoryAtCost)}</div>
-        <span className="text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>{totalStock} un. hoje</span>
+        <span className="text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>{totalStock} un.</span>
       </div>
-    </div>
-  );
-
-  const grossProfitWidget = (
-    <div className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
-      <Percent size={12} />
-      <span>Lucro bruto do período</span>
-      <span className="ml-auto nc-num font-semibold" style={{ color: "var(--nc-text)" }}>
-        {formatCurrencyShort(periodStats.grossProfit)}
-      </span>
     </div>
   );
 
@@ -1078,11 +1256,14 @@ export default function Dashboard() {
         <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
       ) : (
         <Stagger className="flex flex-col">
-          {recentSales.slice(-6).reverse().map(s => {
+          {latestSales.map(s => {
             const product = productMap.get(s.productId);
             const productLabel = product ? `${product.flavor} · ${product.model}` : store.getProductName(s.productId);
             return (
               <motion.div key={s.id} variants={listItem} className="nc-row flex items-center justify-between gap-2 py-1.5 text-xs">
+                <span className="nc-num flex-none text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                  {formatDateBR(s.date).slice(0, 5)}
+                </span>
                 <span className="min-w-0 flex-1 truncate">{productLabel}</span>
                 <span className="nc-num flex-none">{formatCurrencyShort(s.totalPrice)}</span>
               </motion.div>
@@ -1103,9 +1284,10 @@ export default function Dashboard() {
   const sellersWidget = (
     <div className="flex flex-col gap-3">
       <div>
-        <div className="flex items-baseline justify-between gap-2">
-          <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
-            Vendedores
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Vendedores</span>
+            <ScopeTag>hoje</ScopeTag>
           </span>
           <Link
             to="/commissions"
@@ -1115,9 +1297,6 @@ export default function Dashboard() {
             Distribuição <ChevronRight size={12} className="nc-drill-cue" />
           </Link>
         </div>
-        <span className="mt-0.5 block text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-          Não segue o período: é o saldo de hoje
-        </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -1161,28 +1340,22 @@ export default function Dashboard() {
   );
 
   /** Bloco nascido no trilho, levado para a coluna ou para a grade: ganha a moldura. */
-  const inCard = (id: WidgetId, body: ReactNode) => (
-    <section className="nc-card flex flex-col gap-3 p-4">
-      {CARD_TITLE[id] && <h2 className="text-[15px]">{CARD_TITLE[id]}</h2>}
-      {body}
-    </section>
-  );
+  const inCard = (body: ReactNode) => <section className="nc-card flex flex-col gap-3 p-4">{body}</section>;
 
   const renderWidget = (id: WidgetId, frame: Frame, grow = false): ReactNode => {
     switch (id) {
+      case "verdict": return verdictWidget;
       case "restock": return restockWidget;
       case "performance": return performanceWidget(frame, grow);
       case "topModels": return topModelsWidget(frame);
       default: {
         const body = {
-          revenue: revenueWidget,
           result: resultWidget,
           indicators: indicatorsWidget,
-          grossProfit: grossProfitWidget,
           recentSales: recentSalesWidget,
           sellers: sellersWidget,
         }[id];
-        return frame === "card" ? inCard(id, body) : body;
+        return frame === "card" ? inCard(body) : body;
       }
     }
   };
@@ -1192,19 +1365,6 @@ export default function Dashboard() {
   // Trilho vazio não é desenhado: a coluna ocupa a largura inteira em vez de
   // deixar uma faixa escura sem nada dentro.
   const hasRail = !isCards && shown.rail.length > 0;
-  /**
-   * Abaixo do xl o trilho cai para o FIM da página (`RAIL`, não `RAIL_FIRST`:
-   * a coluna do Dashboard é gráfico e tabela, e o trilho inteiro em cima
-   * empurraria o "Repor agora" para a terceira tela). Mas ali o dinheiro do
-   * mês só aparecia depois de ~1.200px de rolagem, e o celular é metade do
-   * uso. Então Receita e Resultado — os dois blocos que respondem "como foi o
-   * mês" — sobem para o topo da coluna abaixo do xl e somem do trilho nesse
-   * tamanho: o mesmo bloco, desenhado em um lugar por vez. O resto do trilho
-   * continua embaixo. Vale só no modo vertical; nos cards a ordem já é a que
-   * a pessoa escolheu.
-   */
-  const railEarly = hasRail ? shown.rail.filter(w => EARLY_ON_SMALL.includes(w.id)) : [];
-  const railRest = shown.rail.filter(w => !EARLY_ON_SMALL.includes(w.id));
 
   return (
     // `/dashboard` está em `fullBleedRoutes` (AppLayout), então chega aqui sem
@@ -1222,58 +1382,55 @@ export default function Dashboard() {
             <h1 className="mt-1 text-xl sm:text-[22px]">Dashboard</h1>
           </div>
 
-          {/* `flex-wrap`: são até cinco chips de período mais o exportar, o que
-              passa da largura de um telefone — sem quebra a faixa saía do
-              cabeçalho.
-
-              O exportar era um <button> cru com `p-2`, ou seja, 31px de alvo, e
-              por não ser `.nc-btn` ficava de fora do `pointer: coarse` que dá
-              44px a todos os outros. Agora é a peça do sistema, com o mesmo
-              fantasma de ícone da sidebar. */}
+          {/* `flex-wrap` por garantia no telefone estreito. O exportar é
+              `.nc-btn` (e não um <button> cru) para ganhar os 44px do
+              `pointer: coarse`, com o mesmo fantasma de ícone da sidebar. */}
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex items-center">
-              <button
-                type="button"
-                onClick={() => monthSteps.older && setFilter(monthSteps.older.value)}
-                disabled={!monthSteps.older}
-                title={monthSteps.older ? `Abrir ${monthSteps.older.label} (←)` : "Não há mês anterior com lançamento"}
-                aria-label="Mês anterior"
-                aria-keyshortcuts="ArrowLeft"
-                className="nc-btn nc-btn--ghost nc-btn--icon disabled:opacity-40"
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => monthSteps.newer && setFilter(monthSteps.newer.value)}
-                disabled={!monthSteps.newer}
-                title={monthSteps.newer ? `Abrir ${monthSteps.newer.label} (→)` : "Este é o mês mais recente"}
-                aria-label="Mês seguinte"
-                aria-keyshortcuts="ArrowRight"
-                className="nc-btn nc-btn--ghost nc-btn--icon disabled:opacity-40"
-              >
-                <ChevronRight size={15} />
-              </button>
-            </div>
-            <SegmentedChips options={periodOptions} value={filter} onChange={setFilter} />
+            <PeriodPicker
+              label={lastMonthShort}
+              title={lastMonthLabel}
+              isGeral={isGeral}
+              older={monthSteps.older}
+              newer={monthSteps.newer}
+              onPick={setFilter}
+              onMonth={() => setFilter(lastMonth)}
+              onGeral={() => setFilter(GERAL)}
+            />
             <DashboardCustomizeSheet layout={layout} onChange={updateLayout} onReset={resetLayout} />
             <button
               type="button"
               onClick={handleExport}
               disabled={exporting}
-              title={exporting ? "Montando o relatório…" : "Baixar relatório em Excel"}
-              aria-label={exporting ? "Montando o relatório" : "Baixar relatório em Excel"}
+              // O relatório segue o período da tela, e o ícone sozinho não diz
+              // isso: o nome do botão leva o recorte que vai para o arquivo.
+              title={exporting ? "Gerando o relatório…" : `Baixar o relatório de ${exportScope} em Excel`}
+              aria-label={exporting ? "Gerando o relatório" : `Baixar o relatório de ${exportScope} em Excel`}
+              aria-busy={exporting}
               className="nc-btn nc-btn--ghost nc-btn--icon"
             >
-              <Download size={15} />
+              {/* O relatório leva alguns segundos em máquina lenta; desligado e
+                  com o mesmo ícone, o botão parecia não ter ouvido o clique. */}
+              {exporting
+                ? <Loader2 size={15} className="motion-safe:animate-spin" />
+                : <Download size={15} />}
             </button>
           </div>
         </header>
 
         {shown.all.length === 0 ? (
-          <p className="py-16 text-center text-[13px]" style={{ color: "var(--nc-text-3)" }}>
-            Todos os blocos estão escondidos. Use o botão de personalizar, no alto, para trazer algum de volta.
-          </p>
+          // A saída mais curta fica aqui mesmo. Antes o texto mandava procurar
+          // "o botão de personalizar", que é só um ícone — agora o ícone
+          // aparece na frase, para ser reconhecido lá em cima.
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-[13px]" style={{ color: "var(--nc-text-2)" }}>Todos os blocos estão escondidos.</p>
+            <NcButton size="md" onClick={resetLayout}>Restaurar padrão</NcButton>
+            <p className="text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+              Ou escolha quais mostrar em{" "}
+              <span role="img" aria-label="Personalizar">
+                <SlidersHorizontal size={12} aria-hidden className="inline align-[-1px]" />
+              </span>, no alto.
+            </p>
+          </div>
         ) : isCards ? (
           // A grade: 1 coluna no celular, 2 no md, 4 no xl. Os cards de uma
           // mesma linha ficam da mesma altura (`h-full`), senão a grade vira
@@ -1286,46 +1443,27 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-          <>
-            {railEarly.length > 0 && (
-              <section className="nc-card flex flex-col gap-3.5 p-4 xl:hidden">
-                {railEarly[0].id !== "revenue" && <h2 className="text-[15px]">{CARD_TITLE.result}</h2>}
-                {railEarly.map((w, i) => (
-                  <Fragment key={w.id}>
-                    {i > 0 && <Rule />}
-                    {renderWidget(w.id, "rail")}
-                  </Fragment>
-                ))}
-              </section>
-            )}
-            {shown.main.map(w => (
-              <div key={w.id} className={cn("min-w-0", w.id === "performance" && "flex flex-col xl:flex-1")}>
-                {renderWidget(w.id, "card", true)}
-              </div>
-            ))}
-          </>
+          shown.main.map(w => (
+            <div key={w.id} className={cn("min-w-0", w.id === "performance" && "flex flex-col xl:flex-1")}>
+              {renderWidget(w.id, "card", true)}
+            </div>
+          ))
         )}
       </div>
 
-      {/* ---------------- Trilho da direita ---------------- */}
+      {/* ---------------- Trilho da direita ----------------
+          Abaixo do xl ele cai para o fim da página. Receita e Resultado
+          subiam para o topo nesse tamanho, para o dinheiro do mês não ficar
+          ~1.200px abaixo; quem responde isso agora é a faixa do veredito, no
+          topo em todos os tamanhos, e o trilho é só o detalhe. */}
       {hasRail && (
-        <aside
-          // Só com os blocos que subiram, o trilho ficaria vazio embaixo.
-          className={cn(RAIL, railRest.length === 0 && "max-xl:hidden")}
-          style={{ background: "var(--nc-rail)" }}
-        >
-          {shown.rail.map((w, i) => {
-            const early = railEarly.includes(w);
-            // Abaixo do xl a régua só separa dos blocos que FICARAM: a do
-            // primeiro deles seria uma linha solta no topo do trilho.
-            const firstThatStays = !early && railRest[0] === w;
-            return (
-              <div key={w.id} className={cn("contents", early && "max-xl:hidden")}>
-                {i > 0 && <Rule className={cn(firstThatStays && "max-xl:hidden")} />}
-                {renderWidget(w.id, "rail")}
-              </div>
-            );
-          })}
+        <aside aria-label="Detalhes" className={RAIL} style={{ background: "var(--nc-rail)" }}>
+          {shown.rail.map((w, i) => (
+            <Fragment key={w.id}>
+              {i > 0 && <Rule />}
+              {renderWidget(w.id, "rail")}
+            </Fragment>
+          ))}
         </aside>
       )}
     </div>
@@ -1346,20 +1484,126 @@ function segmentTint(index: number) {
   return `color-mix(in srgb, var(--nc-accent) ${mix}%, var(--nc-bg))`;
 }
 
+type MonthStep = { value: string; label: string } | undefined;
+
+/**
+ * O seletor de período: ‹ mês › e "Geral", na mesma cápsula e com o mesmo
+ * realce deslizante do `SegmentedChips` — o realce cobre o trio do mês quando
+ * se olha um mês e passa para o "Geral" quando não.
+ *
+ * No Geral as setas desligam e a sigla continua mostrando o último mês visto:
+ * tocar nela volta para ele.
+ */
+function PeriodPicker({
+  label,
+  title,
+  isGeral,
+  older,
+  newer,
+  onPick,
+  onMonth,
+  onGeral,
+}: {
+  label: string;
+  title: string;
+  isGeral: boolean;
+  older: MonthStep;
+  newer: MonthStep;
+  onPick: (value: string) => void;
+  onMonth: () => void;
+  onGeral: () => void;
+}) {
+  const reduce = useReducedMotion();
+  const pillId = useId();
+  const highlight = (
+    <motion.span
+      layoutId={reduce ? undefined : pillId}
+      className="absolute inset-0 rounded-md"
+      style={{
+        boxShadow: "inset 0 0 0 1px var(--nc-accent)",
+        background: "color-mix(in srgb, var(--nc-accent) 10%, transparent)",
+      }}
+      transition={transitionBase}
+    />
+  );
+  const tone = (active: boolean) => ({ color: active ? "var(--nc-accent)" : "var(--nc-text-2)" });
+  const arrow = "nc-chip relative z-10 inline-flex min-w-9 items-center justify-center rounded-md py-1.5 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40";
+
+  return (
+    <div role="group" aria-label="Período" className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--nc-track)" }}>
+      <div className="relative flex items-center">
+        {!isGeral && highlight}
+        <button
+          type="button"
+          onClick={() => older && onPick(older.value)}
+          disabled={!older}
+          title={older ? `Abrir ${older.label} (←)` : "Não há mês anterior com lançamento"}
+          aria-label="Mês anterior"
+          aria-keyshortcuts="ArrowLeft"
+          className={arrow}
+          style={tone(!isGeral)}
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {/* Largura mínima para "Set/25" e "Set" ocuparem o mesmo lugar: a seta
+            da direita não anda quando a sigla ganha o ano. */}
+        <button
+          type="button"
+          onClick={onMonth}
+          aria-pressed={!isGeral}
+          aria-label={title}
+          title={isGeral ? `Voltar para ${title}` : title}
+          className="nc-chip nc-num relative z-10 inline-flex min-w-[3.25rem] items-center justify-center py-1.5 text-xs transition-colors duration-200"
+          style={tone(!isGeral)}
+        >
+          {label}
+        </button>
+        <button
+          type="button"
+          onClick={() => newer && onPick(newer.value)}
+          disabled={!newer}
+          title={newer ? `Abrir ${newer.label} (→)` : "Este é o mês mais recente"}
+          aria-label="Mês seguinte"
+          aria-keyshortcuts="ArrowRight"
+          className={arrow}
+          style={tone(!isGeral)}
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={onGeral}
+        aria-pressed={isGeral}
+        title="Todo o período"
+        className="nc-chip relative inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs transition-colors duration-200"
+        style={tone(isGeral)}
+      >
+        {isGeral && highlight}
+        <span className="relative z-10">Geral</span>
+      </button>
+    </div>
+  );
+}
+
 type DeltaValue = { pct: number; label: string } | undefined;
 
-/** Variação vs. o mês anterior. `invert` = subir é ruim (despesas). */
+/**
+ * Variação vs. o mês anterior. `invert` = subir é ruim (despesas).
+ *
+ * O sinal e a cor saem do número JÁ ARREDONDADO, o que se lê. Com o valor cru,
+ * −0,3% virava "−0%" e ganhava cor de bom ou de ruim, uma mudança que não
+ * aparece no próprio número. Zero fica neutro e sem sinal.
+ */
 function Delta({ delta, invert }: { delta: DeltaValue; invert?: boolean }) {
   if (!delta || !isFinite(delta.pct)) return null;
-  const good = invert ? delta.pct <= 0 : delta.pct >= 0;
+  const pct = Math.round(delta.pct);
+  const good = invert ? pct < 0 : pct > 0;
+  const color = pct === 0 ? "var(--nc-text-3)" : good ? "var(--nc-accent)" : "var(--nc-alert)";
   return (
-    <span
-      className="nc-num text-[11px] font-normal"
-      style={{ color: good ? "var(--nc-accent)" : "var(--nc-alert)" }}
-      title={`vs ${delta.label}`}
-    >
-      {delta.pct >= 0 ? "+" : "−"}
-      {Math.abs(delta.pct).toFixed(0)}%
+    <span className="nc-num text-[11px] font-normal" style={{ color }} title={`vs ${delta.label}`}>
+      {pct > 0 ? "+" : pct < 0 ? "−" : ""}
+      {Math.abs(pct)}%
     </span>
   );
 }
@@ -1378,7 +1622,15 @@ function RestockRow({ model }: { model: ModelStat }) {
             que cortar, a célula reserva a linha inteira do texto e a tabela sai
             da tela — o que se via como arrasto lateral no celular. */}
         <div className="flex min-w-0 items-center gap-2">
-          <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: dot }} />
+          {/* Crítico é bolinha CHEIA, abaixo do mínimo é ANEL: a forma separa
+              os dois sem depender da cor. O texto oculto é o que o leitor de
+              tela ouve no lugar dela. */}
+          <span
+            aria-hidden
+            className="h-2 w-2 flex-none rounded-full"
+            style={urgency === "critical" ? { background: dot } : { boxShadow: `inset 0 0 0 1.5px ${dot}` }}
+          />
+          <span className="sr-only">{urgency === "critical" ? "Crítico:" : "Abaixo do mínimo:"}</span>
           <span className="min-w-0 truncate">{model.model}</span>
           <span className="min-w-0 truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>{model.brand}</span>
         </div>
@@ -1391,14 +1643,11 @@ function RestockRow({ model }: { model: ModelStat }) {
         <span style={urgency === "ok" ? undefined : { color: dot }}>{model.stock}</span>
         <span style={{ color: "var(--nc-text-3)" }}> / {model.minUnits}</span>
       </td>
-      {/* Escondida no celular junto com o próprio cabeçalho — ver o `thead`. */}
-      <td className="nc-num hidden whitespace-nowrap px-2 py-1.5 text-right sm:table-cell" style={{ color: "var(--nc-text-2)" }}>
-        {model.qty} un.
-      </td>
       {/* Quanto pedir, já descontado o que está a caminho — e o abatimento
-          aparece embaixo, senão o número menor não teria explicação. */}
+          aparece embaixo, senão o número menor não teria explicação. É a
+          resposta do card, então pesa mais que a régua ao lado. */}
       <td className="whitespace-nowrap px-2 py-1.5 text-right">
-        <span className="nc-num">{model.restockUnits} un.</span>
+        <span className="nc-num font-semibold">{model.restockUnits} un.</span>
         {model.incoming > 0 && (
           <span className="block text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>
             {model.incoming} a caminho

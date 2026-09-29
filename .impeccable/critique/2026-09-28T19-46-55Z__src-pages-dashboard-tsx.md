@@ -10,6 +10,7 @@ target_fingerprint: "sha256:652dfe592487137f2c4e107f3b51446d739330f55e2a65079f4f
 target_path: "C:\\Users\\base2\\Documents\\californiapp\\src\\pages\\Dashboard.tsx"
 timestamp: 2026-09-28T19-46-55Z
 slug: src-pages-dashboard-tsx
+closed: true
 ---
 # Critique — Dashboard (src/pages/Dashboard.tsx)
 

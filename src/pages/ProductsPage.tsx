@@ -30,9 +30,14 @@ const MAX_LOW_ROWS = 6;
 /** Linhas mínimas na lista do trilho, para o bloco não ficar vazio. */
 const MIN_LOW_ROWS = 3;
 
-/** Lucro é accent quando positivo e crítico quando negativo — regra do painel. */
+/**
+ * Lucro é --nc-profit quando positivo e crítico quando negativo — a cor do
+ * lucro no sistema inteiro. Era --nc-accent (a cor da receita), e o trilho
+ * desta mesma tela já pintava o "lucro" da barra em --nc-profit: o mesmo
+ * número saía com duas cores a dois centímetros de distância.
+ */
 function profitColor(v: number) {
-  return v >= 0 ? "var(--nc-accent)" : "var(--nc-crit)";
+  return v >= 0 ? "var(--nc-profit)" : "var(--nc-crit)";
 }
 
 /**
@@ -215,6 +220,22 @@ export default function ProductsPage() {
     });
     return Array.from(map.values()).sort((a, b) => a.stock - b.stock || compareText(a.model, b.model));
   }, [activeProducts]);
+
+  /**
+   * Sabores zerados por modelo, sob a lente da tela. Contado sobre a lista
+   * INTEIRA, não sobre a filtrada: com "Zerados" desligado os zerados nem
+   * aparecem, e é justamente aí que a linha do modelo precisa dizer que eles
+   * existem — senão "3 sabores" esconde o quarto, que acabou.
+   */
+  const zeroByModel = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach(p => {
+      if (p.stock > 0) return;
+      const key = `${p.brand || "Sem Marca"}|${(p.model || "").trim() || "Sem Modelo"}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    });
+    return map;
+  }, [products]);
 
   /** Abaixo do mínimo configurado. Modelo sem mínimo definido não entra. */
   const belowMin = useMemo(
@@ -410,18 +431,21 @@ export default function ProductsPage() {
    * fica sem `disabled` em "Todas": ali ele mostra o que cada cidade arquivou,
    * que é leitura, e o próprio painel recusa a escrita.
    */
+  // Rótulo curto em todo tamanho ("Preço", não "Preço por modelo"): o "por
+  // modelo" é dito UMA vez, no rótulo do grupo, como o celular já fazia. No
+  // desktop cada botão repetia a expressão e os quatro somavam ~560px de
+  // cabeçalho. Fotos vem antes de Modelos: as três primeiras editam o modelo,
+  // a última abre o painel de arquivar.
   const modelActions = (
     <>
       <NcButton onClick={() => setBulkOpen(true)} disabled={readOnly}>
-        <Tag size={13} />
-        <span className="hidden sm:inline">Preço por modelo</span><span className="sm:hidden">Preço</span>
+        <Tag size={13} />Preço
       </NcButton>
       <NcButton onClick={() => setBulkMinOpen(true)} disabled={readOnly}>
-        <Package size={13} />
-        <span className="hidden sm:inline">Mínimo por modelo</span><span className="sm:hidden">Mínimo</span>
+        <Package size={13} />Mínimo
       </NcButton>
-      <ModelsSheet />
       <ModelImagesDialog />
+      <ModelsSheet />
     </>
   );
 
@@ -443,7 +467,12 @@ export default function ProductsPage() {
             {/* No celular só a ação PRIMÁRIA fica no cabeçalho travado. As
                 quatro de modelo descem para uma faixa própria, logo abaixo —
                 ver `modelActions`. */}
-            {!compactHeader && modelActions}
+            {!compactHeader && (
+              <div role="group" aria-label="Por modelo" className="flex items-center gap-2">
+                <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Por modelo</span>
+                {modelActions}
+              </div>
+            )}
             <AddProductDialog disabled={readOnly} />
           </div>
         </header>
@@ -459,8 +488,10 @@ export default function ProductsPage() {
             diz a que se referem — e o que os une é serem todas por MODELO, não
             por sabor, que é a distinção que a tela inteira faz. */}
         {compactHeader && (
-          <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
-            <span className={cn(EYEBROW, "w-full")} style={{ color: "var(--nc-text-3)" }}>
+          // Grade 2×2: com `flex-wrap` o quarto botão caía sozinho numa
+          // segunda linha.
+          <div role="group" aria-label="Por modelo" className="nc-card grid grid-cols-2 gap-2 px-3 py-2.5 [&>button]:w-full">
+            <span className={cn(EYEBROW, "col-span-2")} style={{ color: "var(--nc-text-3)" }}>
               Por modelo
             </span>
             {modelActions}
@@ -469,7 +500,10 @@ export default function ProductsPage() {
 
         {/* ---------------- Busca e filtro ---------------- */}
         <div className="nc-card flex flex-wrap items-center gap-2 px-3 py-2.5">
-          <div className="relative w-full min-w-[160px] flex-1 sm:w-auto">
+          {/* `basis-full` no celular: com `flex-1` a base era 0 e a busca
+              dividia a linha com a lente, cortando o placeholder em "Buscar
+              por nom". Ela ganha a linha dela; lente e Zerados descem juntos. */}
+          <div className="relative min-w-[160px] flex-1 max-sm:basis-full">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--nc-text-3)" }} />
             <input
               type="text"
@@ -566,12 +600,15 @@ export default function ProductsPage() {
                       </motion.span>
                       <div className="min-w-0">
                         <h2 className="truncate text-[15px]">{group.brand}</h2>
+                        {/* "sabores", não "produtos": o trilho e o resto do
+                            sistema contam sabor, e uma linha de sabor É um
+                            produto — duas palavras para a mesma coisa. */}
                         <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-                          {group.products.length} produto{group.products.length !== 1 ? "s" : ""} · {group.totalStock} un.
+                          {group.products.length} sabor{group.products.length !== 1 ? "es" : ""} · {group.totalStock} un.
                         </p>
                       </div>
                     </div>
-                    <GroupTotals invested={group.totalInvested} saleValue={group.totalSaleValue} profit={group.totalProfit} />
+                    <GroupTotals invested={group.totalInvested} saleValue={group.totalSaleValue} profit={group.totalProfit} labels />
                   </button>
 
                   <AnimatePresence initial={false}>
@@ -607,7 +644,12 @@ export default function ProductsPage() {
                                   <div className="min-w-0">
                                     <h3 className="truncate text-[13px]">{m.model}</h3>
                                     <p className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-                                      {m.products.length} produto{m.products.length !== 1 ? "s" : ""} · {m.totalStock} un.
+                                      {m.products.length} sabor{m.products.length !== 1 ? "es" : ""} · {m.totalStock} un.
+                                      {(zeroByModel.get(modelKey) ?? 0) > 0 && (
+                                        <span style={{ color: "var(--nc-crit)" }}>
+                                          {" "}· {zeroByModel.get(modelKey)} zerado{zeroByModel.get(modelKey)! > 1 ? "s" : ""}
+                                        </span>
+                                      )}
                                     </p>
                                   </div>
                                 </div>
@@ -697,8 +739,7 @@ export default function ProductsPage() {
             <AnimatedNumber
               value={totals.saleValue}
               format={formatCurrencyShort}
-              duration={0.7}
-              animateOnMount
+              duration={0.5}
               className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
             />
           </div>
@@ -712,31 +753,13 @@ export default function ProductsPage() {
             <span>custo {formatCurrencyShort(totals.invested)}</span>
             <span style={{ color: "var(--nc-profit)" }}>lucro {formatCurrencyShort(totals.profit)}</span>
           </div>
-        </div>
-
-        <Rule />
-
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Investido no que está parado</span>
-            <span className="nc-num text-sm">{formatCurrencyShort(totals.invested)}</span>
-          </div>
-          <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
-            <span className="text-[12.5px]">Lucro previsto</span>
-            <span style={{ color: profitColor(totals.profit) }}>
-              <AnimatedNumber
-                value={totals.profit}
-                format={formatCurrencyShort}
-                duration={0.7}
-                animateOnMount
-                className="nc-num text-xl font-semibold"
-              />
-            </span>
-          </div>
-          <div className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
-            <span>margem sobre o potencial</span>
-            <span>{marginPct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
-          </div>
+          {/* A margem sobe para cá. Embaixo havia um bloco "Investido no que
+              está parado / Lucro previsto" que repetia os dois números desta
+              barra — custo e lucro — com outro nome e outro tamanho, e o
+              trilho tinha dois números grandes disputando o primeiro olhar. */}
+          <p className="nc-num mt-1 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+            margem de {marginPct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% sobre o potencial
+          </p>
         </div>
 
         <Rule />
@@ -964,23 +987,41 @@ export default function ProductsPage() {
 }
 
 /**
- * Investido / Potencial / Lucro do cabeçalho de marca e de modelo. Rótulo é
- * sobretítulo terciário e valor é `nc-num`; investido e potencial somem em tela
- * estreita porque o lucro é o número que decide se aquele grupo interessa.
+ * Investido / Potencial / Lucro do cabeçalho de marca e de modelo; investido e
+ * potencial somem em tela estreita porque o lucro é o número que decide se
+ * aquele grupo interessa.
+ *
+ * Os rótulos saem só na linha da MARCA (`labels`). Eles se repetiam em toda
+ * linha de modelo — "INVESTIDO POTENCIAL LUCRO" oito vezes numa tela de oito
+ * linhas — e o que se lia primeiro era o rótulo, não o número. Com largura fixa
+ * por coluna, os números dos modelos caem exatamente embaixo dos da marca, e o
+ * cabeçalho dela vale para o grupo inteiro, como numa tabela.
  */
-function GroupTotals({ invested, saleValue, profit }: { invested: number; saleValue: number; profit: number }) {
+function GroupTotals({
+  invested,
+  saleValue,
+  profit,
+  labels,
+}: {
+  invested: number;
+  saleValue: number;
+  profit: number;
+  labels?: boolean;
+}) {
+  const label = (text: string) =>
+    labels ? <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>{text}</p> : null;
   return (
-    <div className="flex flex-none items-center gap-4 text-[11px]">
-      <div className="hidden text-right sm:block">
-        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Investido</p>
+    <div className="flex flex-none items-center gap-3 text-[11.5px]">
+      <div className="hidden w-[92px] text-right sm:block">
+        {label("Investido")}
         <p className="nc-num">{formatCurrency(invested)}</p>
       </div>
-      <div className="hidden text-right md:block">
-        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Potencial</p>
+      <div className="hidden w-[92px] text-right md:block">
+        {label("Potencial")}
         <p className="nc-num">{formatCurrency(saleValue)}</p>
       </div>
-      <div className="text-right">
-        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Lucro</p>
+      <div className="w-[92px] text-right">
+        {label("Lucro")}
         <p className="nc-num" style={{ color: profitColor(profit) }}>{formatCurrency(profit)}</p>
       </div>
     </div>

@@ -184,8 +184,13 @@
     --nc-rail: #141522;
     --nc-surface: #232532;
     --nc-text: #e9e9ed;
-    --nc-text-2: color-mix(in srgb, var(--nc-text) 62%, transparent);
-    --nc-text-3: color-mix(in srgb, var(--nc-text) 45%, transparent);
+    /* 70% e 55%: o terciário a 45% dava ~3,7:1 sobre o --nc-surface, abaixo
+       dos 4,5:1 de texto comum, e é nele que moram marca do modelo, "a
+       caminho" e as ressalvas de 11px. A 55% passa no fundo, no card e no
+       trilho; o secundário subiu junto para o degrau entre os dois continuar
+       visível. */
+    --nc-text-2: color-mix(in srgb, var(--nc-text) 70%, transparent);
+    --nc-text-3: color-mix(in srgb, var(--nc-text) 55%, transparent);
     --nc-divider: color-mix(in srgb, var(--nc-text) 16%, transparent);
     --nc-track: color-mix(in srgb, var(--nc-text) 8%, transparent);
 
@@ -193,7 +198,14 @@
     --nc-accent: #85B7EB;  /* principal: receita, deltas positivos, ativo */
     --nc-alert: #EF9F27;   /* alerta: a receber, deltas negativos */
     --nc-crit: #F09595;    /* crítico: estoque prestes a acabar */
-    --nc-profit: #9184d9;  /* série de lucro no gráfico */
+    /* Lucro: verde-lima, e não o verde-menta do --nc-ok. Os dois ficam lado a
+       lado no Resumo do Dashboard (lucro líquido e a barra do recebido), e
+       lucro não é "dinheiro que já entrou": a matiz mais amarela os separa. */
+    --nc-profit: #A3D977;
+    /* O lilás que era do lucro continua sendo da MARCA: o degradê do
+       "California" e as ondas do login. Separado para trocar a cor do lucro
+       não mudar o logotipo. */
+    --nc-brand-2: #9184d9;
     /* Dinheiro que JÁ entrou: venda quitada, valor recebido. O accent também é
      * dinheiro, mas é o dinheiro todo (receita) — o verde é o pedaço dele que
      * já está na mão, e ao lado do --nc-alert ("falta receber") a leitura fica
@@ -600,16 +612,16 @@
      3. 12s em vez de 6s, num degradê duas vezes mais largo: o mesmo caminho,
         devagar, é o que faz a cor parecer escorrer em vez de trocar. */
   .nc-wordmark {
-    --nc-wordmark-mix: color-mix(in oklab, var(--nc-accent), var(--nc-profit));
+    --nc-wordmark-mix: color-mix(in oklab, var(--nc-accent), var(--nc-brand-2));
     background-image: linear-gradient(
       100deg,
       var(--nc-accent),
       var(--nc-wordmark-mix),
-      var(--nc-profit),
+      var(--nc-brand-2),
       var(--nc-wordmark-mix),
       var(--nc-accent),
       var(--nc-wordmark-mix),
-      var(--nc-profit),
+      var(--nc-brand-2),
       var(--nc-wordmark-mix),
       var(--nc-accent)
     );
