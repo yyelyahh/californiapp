@@ -24,7 +24,8 @@ export type WidgetId =
   | "result"
   | "indicators"
   | "grossProfit"
-  | "recentSales";
+  | "recentSales"
+  | "sellers";
 
 /** Coluna do meio ou trilho da direita — só existe no modo vertical. */
 export type WidgetArea = "main" | "rail";
@@ -122,6 +123,17 @@ export const WIDGETS: WidgetDef[] = [
     id: "recentSales",
     label: "Últimas vendas",
     description: "As 6 vendas mais recentes",
+    areas: BOTH_AREAS,
+    sizes: ALL_SIZES,
+    defaultArea: "rail",
+    defaultSize: "m",
+  },
+  {
+    // Nasceu depois do layout padrão: entra no FIM e visível, pela regra do
+    // normalizeLayout — quem já arrumou a tela o encontra embaixo do trilho.
+    id: "sellers",
+    label: "Vendedores",
+    description: "Comissão a pagar e o que devem, hoje",
     areas: BOTH_AREAS,
     sizes: ALL_SIZES,
     defaultArea: "rail",

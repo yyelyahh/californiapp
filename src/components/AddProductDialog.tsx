@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { sortNames } from "@/lib/catalog-order";
 import { useStore } from "@/context/StoreContext";
 import { toast } from "sonner";
-import { NcButton, NcSheetHeader } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, EYEBROW } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 
 const BRAND_PRESETS: Record<string, { purchasePrice: number; salePrice: number }> = {
@@ -132,7 +133,7 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
           {/* Identificação */}
           <section className="space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Identificação</p>
+            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Identificação</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Marca</Label>
@@ -165,7 +166,7 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
 
           {/* Preços */}
           <section className="space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Preços por unidade</p>
+            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Preços por unidade</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Compra (R$)</Label>
@@ -188,7 +189,7 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
 
           {/* Sabores */}
           <section className="space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Sabores (um por linha)</p>
+            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Sabores (um por linha)</p>
             <textarea
               value={flavorsText}
               onChange={e => setFlavorsText(e.target.value)}
@@ -223,21 +224,21 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
           {/* Resumo financeiro */}
           {newProducts.length > 0 && pPrice > 0 && sPrice > 0 && (
             <section className="space-y-2">
-              <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>
+              <p className={cn(EYEBROW, "flex items-center gap-1.5")} style={{ color: "var(--nc-text-3)" }}>
                 <Sparkles size={11} style={{ color: "var(--nc-accent)" }} /> Impacto estimado
               </p>
               <div className="grid grid-cols-3 gap-2">
                 <div className="nc-card px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Investimento</p>
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Investimento</p>
                   <p className="nc-num mt-0.5 text-sm font-semibold">{formatCurrency(investment)}</p>
                 </div>
                 <div className="nc-card px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Receita pot.</p>
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Receita pot.</p>
                   <p className="nc-num mt-0.5 text-sm font-semibold">{formatCurrency(potential)}</p>
                 </div>
                 <div className="nc-card px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-[0.1em]" style={{ color: "var(--nc-text-3)" }}>Lucro pot.</p>
-                  <p className="nc-num mt-0.5 text-sm font-semibold" style={{ color: potentialProfit >= 0 ? "var(--nc-accent)" : "var(--nc-crit)" }}>{formatCurrency(potentialProfit)}</p>
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Lucro pot.</p>
+                  <p className="nc-num mt-0.5 text-sm font-semibold" style={{ color: potentialProfit >= 0 ? "var(--nc-profit)" : "var(--nc-crit)" }}>{formatCurrency(potentialProfit)}</p>
                 </div>
               </div>
             </section>

@@ -28,7 +28,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
 import { compareCatalog } from "@/lib/catalog-order";
-import { getNextTier, unitsUntilNextTier, computeSellerBalance, isCommissionSeller } from "@/lib/commissions";
+import { getNextTier, unitsUntilNextTier, computeSellerBalance, isCommissionSeller, currentBalanceContext } from "@/lib/commissions";
 import { computePeriodResult } from "@/lib/period-result";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
@@ -231,20 +231,13 @@ export default function CommissionsPage() {
    * É o que decide se dá para arquivar: olhando um mês passado, o saldo do
    * painel não conta o que aconteceu depois.
    */
-  const currentBalanceOf = (seller: Seller) => {
-    const now = new Date();
-    const s = startOfMonth(now);
-    const e = endOfMonth(now);
-    return computeSellerBalance(seller, {
-      sales, commissionPayments, sellerDebtPayments, sellerManualDebts,
-      start: s, end: e, closedStart: s, PROJECT_START,
-      isLegacy,
-      inClosedPeriod: (iso: string) => {
-        const d = new Date(iso);
-        return !isNaN(d.getTime()) && d >= s && d <= e;
-      },
-    }).balance;
-  };
+  const currentBalanceOf = (seller: Seller) =>
+    // O MESMO contexto do bloco de vendedores do Dashboard: montado aqui à mão
+    // e lá de novo, os dois "saldos de hoje" podiam divergir sem aviso.
+    computeSellerBalance(
+      seller,
+      currentBalanceContext({ sales, commissionPayments, sellerDebtPayments, sellerManualDebts }),
+    ).balance;
 
   /** O que ainda cabe retirar sem furar o distribuível do período. */
   const stillDistributable = Math.max(0, periodMetrics.distribuivel - periodMetrics.totalWithdrawalsPeriod);

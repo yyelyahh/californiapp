@@ -29,6 +29,9 @@ import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 import { orderRef } from "@/lib/order-ref";
 import { useMediaQuery } from "@/hooks/use-mobile";
 import { sellersWithAssignedStock } from "@/lib/sellers-with-stock";
+import { useSearchParams } from "react-router-dom";
+import { parseSalesLink } from "@/lib/sales-link";
+import { modelKey } from "@/lib/restock";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -129,6 +132,36 @@ const PERIOD_OPTIONS: { value: DateRangePreset; label: string; short: string }[]
  * mais pesada da tela.
  */
 const DEFAULT_PRESET: DateRangePreset = "month";
+
+/**
+ * Qual chip um intervalo acende. Quem chega pelo Dashboard traz datas, não um
+ * chip: o mês corrente precisa acender "Mês" (e não virar "personalizado", que
+ * deixaria o "Limpar" aceso oferecendo limpar o estado padrão), e o mês
+ * anterior acende "Mês ant.".
+ */
+function presetForRange(from: string, to: string): DateRangePreset {
+  const m = currentMonthRange();
+  if (from === m.from && to === m.to) return "month";
+  const now = new Date();
+  const lastFrom = isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const lastTo = isoDay(new Date(now.getFullYear(), now.getMonth(), 0));
+  if (from === lastFrom && to === lastTo) return "lastMonth";
+  return "custom";
+}
+
+/**
+ * "Junho/2026" quando o intervalo é um mês de calendário inteiro, no mesmo
+ * formato do Dashboard. Sem isto, abrir as vendas de junho pelo Dashboard dizia
+ * "Intervalo personalizado" no alto da tela — verdade, mas não diz qual.
+ */
+function wholeMonthLabel(from: string, to: string): string | null {
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  if (!fy || fd !== 1 || fy !== ty || fm !== tm) return null;
+  if (td !== new Date(fy, fm, 0).getDate()) return null;
+  const name = new Date(fy, fm - 1, 1).toLocaleDateString("pt-BR", { month: "long" });
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)}/${fy}`;
+}
 
 /** Quantas linhas cabem na lista do trilho antes de virar "+ N outros". */
 const MAX_TOP_ROWS = 6;
@@ -510,19 +543,52 @@ export default function SalesPage() {
   const selectedProduct = products.find(p => p.id === form.productId);
 
   // === Filtros (somente aba Vendas, admin) ===
-  type PaymentStatus = "all" | "paid" | "partial" | "open";
+  // "due" = tudo o que tem saldo (em aberto OU parcial). É o "a receber" do
+  // trilho e do Dashboard: "Em aberto" sozinho deixaria as parciais de fora, e
+  // a lista não fecharia no número que se clicou para chegar aqui.
+  type PaymentStatus = "all" | "paid" | "partial" | "open" | "due";
   type SortKey = "date" | "total" | "remaining";
-  const [fSeller, setFSeller] = useState<string>("all"); // all | none | <id>
-  const [fStatus, setFStatus] = useState<PaymentStatus>("all");
-  const [fProduct, setFProduct] = useState("");
-  const [fPreset, setFPreset] = useState<DateRangePreset>(DEFAULT_PRESET);
+
   // Uma leitura só do relógio alimenta os dois campos. Com `currentMonthRange()`
   // chamado duas vezes, uma montagem em cima da virada da meia-noite do último
   // dia do mês devolve o "de" de um mês e o "até" de outro — e o helper existe
   // justamente para o estado inicial e o chip "Mês" produzirem o MESMO intervalo.
   const [defaultRange] = useState(currentMonthRange);
-  const [fFrom, setFFrom] = useState(defaultRange.from);
-  const [fTo, setFTo] = useState(defaultRange.to);
+
+  /**
+   * A tela pode abrir JÁ FILTRADA pelo endereço — é assim que o Dashboard
+   * leva a um número (ver src/lib/sales-link.ts). O endereço é lido UMA vez,
+   * na montagem, e apagado logo em seguida: os filtros daí em diante são da
+   * tela, e um endereço que continuasse dizendo "junho" depois de a pessoa
+   * trocar para julho reabriria junho no recarregar. O voltar do navegador
+   * não depende disso: ele cai no Dashboard, que guarda o próprio mês.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [linked] = useState(() => parseSalesLink(searchParams.toString()));
+  useEffect(() => {
+    if (searchParams.toString()) setSearchParams({}, { replace: true });
+    // Só na montagem: depois disso o endereço não é mais lido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [fSeller, setFSeller] = useState<string>("all"); // all | none | <id>
+  const [fStatus, setFStatus] = useState<PaymentStatus>(linked?.status ?? "all");
+  const [fProduct, setFProduct] = useState("");
+  /**
+   * Modelo por MARCA + modelo, com a mesma chave que agrupa o Dashboard
+   * (`modelKey`). Não é a busca de texto: ela olha "sabor · modelo" sem a
+   * marca, e o "10K" de uma marca traria junto o "10K" da outra. Só chega pelo
+   * endereço e aparece como etiqueta removível na barra — não há seletor dele,
+   * porque escolher um modelo aqui é o que a busca já faz.
+   */
+  const [fModel, setFModel] = useState<{ brand: string; model: string } | null>(linked?.model ?? null);
+  const [fFrom, setFFrom] = useState(linked?.all ? "" : linked?.from ?? defaultRange.from);
+  const [fTo, setFTo] = useState(linked?.all ? "" : linked?.to ?? defaultRange.to);
+  const [fPreset, setFPreset] = useState<DateRangePreset>(() => {
+    if (linked?.all) return "all";
+    if (!linked?.from) return DEFAULT_PRESET;
+    return presetForRange(linked.from, linked.to ?? linked.from);
+  });
   const [fSortKey, setFSortKey] = useState<SortKey>("date");
   const [fSortDir, setFSortDir] = useState<"asc" | "desc">("desc");
 
@@ -532,7 +598,7 @@ export default function SalesPage() {
   const [shownRetiradas, setShownRetiradas] = useState(ROW_PAGE);
   useEffect(() => {
     setShownSales(ROW_PAGE);
-  }, [fSeller, fStatus, fProduct, fFrom, fTo, fSortKey, fSortDir]);
+  }, [fSeller, fStatus, fProduct, fModel, fFrom, fTo, fSortKey, fSortDir]);
 
   const applyPreset = (p: DateRangePreset) => {
     setFPreset(p);
@@ -545,15 +611,17 @@ export default function SalesPage() {
   };
 
   const clearFilters = () => {
-    setFSeller("all"); setFStatus("all"); setFProduct(""); setFSortKey("date"); setFSortDir("desc");
+    setFSeller("all"); setFStatus("all"); setFProduct(""); setFModel(null); setFSortKey("date"); setFSortDir("desc");
     applyPreset(DEFAULT_PRESET);
   };
 
   // O período só conta como filtro quando NÃO é o padrão da tela: senão o
   // "Limpar" nasceria aceso, oferecendo limpar o estado em que a tela abriu.
-  const hasActiveFilters = fSeller !== "all" || fStatus !== "all" || fProduct !== "" || fPreset !== DEFAULT_PRESET || fSortKey !== "date" || fSortDir !== "desc";
+  const hasActiveFilters = fSeller !== "all" || fStatus !== "all" || fProduct !== "" || fModel !== null || fPreset !== DEFAULT_PRESET || fSortKey !== "date" || fSortDir !== "desc";
 
-  const periodLabel = PERIOD_OPTIONS.find(o => o.value === fPreset)?.label ?? "Intervalo personalizado";
+  const periodLabel = PERIOD_OPTIONS.find(o => o.value === fPreset)?.label
+    ?? (fFrom && fTo ? wholeMonthLabel(fFrom, fTo) : null)
+    ?? "Intervalo personalizado";
 
   const getProductDisplayName = (productId: string) => {
     const product = productMap.get(productId);
@@ -575,6 +643,7 @@ export default function SalesPage() {
     const fromTs = fFrom ? new Date(fFrom + "T00:00:00").getTime() : null;
     const toTs = fTo ? new Date(fTo + "T23:59:59").getTime() : null;
     const productQ = fProduct.trim().toLowerCase();
+    const wantedModel = fModel ? modelKey(fModel) : null;
 
     const filtered = baseSales.filter(s => {
       if (fSeller === "none" && s.sellerId) return false;
@@ -586,6 +655,11 @@ export default function SalesPage() {
       if (fStatus === "paid" && remaining > 0) return false;
       if (fStatus === "open" && s.paidAmount > 0) return false;
       if (fStatus === "partial" && (s.paidAmount === 0 || remaining === 0)) return false;
+      if (fStatus === "due" && remaining <= 0) return false;
+      if (wantedModel) {
+        const p = productMap.get(s.productId);
+        if (!p || modelKey(p) !== wantedModel) return false;
+      }
       if (productQ) {
         const p = productMap.get(s.productId);
         const name = (p ? `${p.flavor} · ${p.model}` : getProductName(s.productId)).toLowerCase();
@@ -603,7 +677,7 @@ export default function SalesPage() {
       return (ra - rb) * dirMul;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseSales, productMap, fSeller, fStatus, fProduct, fFrom, fTo, fSortKey, fSortDir]);
+  }, [baseSales, productMap, fSeller, fStatus, fProduct, fModel, fFrom, fTo, fSortKey, fSortDir]);
 
   // === Números do trilho ===
   const totals = useMemo(() => {
@@ -1265,8 +1339,31 @@ export default function SalesPage() {
         <SelectItem value="paid">Pagas</SelectItem>
         <SelectItem value="partial">Parcial</SelectItem>
         <SelectItem value="open">Em aberto</SelectItem>
+        <SelectItem value="due">A receber</SelectItem>
       </SelectContent>
     </Select>
+  );
+
+  /**
+   * O filtro de modelo, quando a tela chegou com um (ver `fModel`). Fica numa
+   * linha PRÓPRIA, em cima da barra, e não ao lado da busca: a busca é
+   * `flex-1`, e uma etiqueta nascendo ao lado dela mudaria a largura de tudo
+   * na linha — o solavanco que a barra já recusou no "Limpar". O X é a saída;
+   * o "Limpar" também tira.
+   */
+  const modelChip = fModel && (
+    <div className="flex items-center gap-2">
+      <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Modelo</span>
+      <NcButton
+        variant="outline"
+        onClick={() => setFModel(null)}
+        aria-label={`Tirar o filtro de modelo ${fModel.model} · ${fModel.brand}`}
+        className="min-w-0"
+      >
+        <span className="truncate">{fModel.model} · {fModel.brand}</span>
+        <X size={12} className="flex-none" />
+      </NcButton>
+    </div>
   );
 
   const sortControl = (
@@ -1453,6 +1550,7 @@ export default function SalesPage() {
                aparece precisa dizer que está ligado, senão a lista some sem
                explicação. */
             <div className="nc-card flex flex-col gap-2 px-3 py-2.5">
+              {modelChip}
               <div className="flex items-center gap-2">
                 {searchField}
                 <NcButton
@@ -1469,6 +1567,7 @@ export default function SalesPage() {
             </div>
           ) : (
             <div className="nc-card flex flex-col gap-2 px-3 py-2.5">
+              {modelChip}
               <div className="flex flex-wrap items-center gap-2">
                 {searchField}
                 {sellerSelect}

@@ -89,7 +89,13 @@ export function urgencyOf(stock: number, minUnits: number): Urgency {
   return stock <= minUnits * CRITICAL_MIN_RATIO ? "critical" : "warning";
 }
 
-const modelKey = (p: { brand: string; model: string }) => `${p.brand}|${p.model}`;
+/**
+ * A identidade de um modelo: marca + modelo, exatamente como estão no produto.
+ * Exportada porque a tela de Vendas filtra por ela quando o Dashboard abre as
+ * vendas de um modelo — agrupar aqui de um jeito e filtrar lá de outro faria a
+ * lista discordar da receita que levou até ela.
+ */
+export const modelKey = (p: { brand: string; model: string }) => `${p.brand}|${p.model}`;
 
 /**
  * Chave para casar a COMPRA com o modelo. Normalizada (sem caixa, sem sobra de

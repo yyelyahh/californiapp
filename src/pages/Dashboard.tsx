@@ -1,10 +1,10 @@
 import { useStore } from "@/context/StoreContext";
 import { Package, Percent, Download, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { Fragment, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
-import { sameStretchOfPreviousMonth } from "@/lib/date-utils";
+import { sameStretchOfPreviousMonth, isoDay } from "@/lib/date-utils";
 import { ptBR } from "date-fns/locale";
 import { motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
@@ -22,6 +22,9 @@ import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 import { useDashboardLayout } from "@/hooks/useDashboardLayout";
 import { visibleWidgets, type WidgetId, type WidgetSize } from "@/lib/dashboard-layout";
 import DashboardCustomizeSheet from "@/components/DashboardCustomizeSheet";
+import { buildSalesLink, type SalesLinkFilter } from "@/lib/sales-link";
+import { restockToPurchaseDraft, PURCHASE_DRAFT_KEY } from "@/lib/purchase-draft";
+import { computeSellerBalance, currentBalanceContext, summarizeSellerBalances } from "@/lib/commissions";
 
 /**
  * Onde cada bloco é desenhado: `card` é a moldura `.nc-card` (coluna do meio e
@@ -72,6 +75,8 @@ const QUICK_MONTHS = 3;
 const MAX_RESTOCK_ROWS = 6;
 /** Modelos nomeados na barra empilhada; o resto vira "Outros". */
 const TOP_MODELS = 5;
+/** Quantos vendedores a lista do bloco mostra; o resto vira uma linha de rodapé. */
+const MAX_SELLER_ROWS = 6;
 /** Blocos do trilho que sobem para o topo da coluna abaixo do xl (ver `railEarly`). */
 const EARLY_ON_SMALL: WidgetId[] = ["revenue", "result"];
 
@@ -115,7 +120,26 @@ export default function Dashboard() {
     return opts;
   }, [store.sales, store.expenses, store.stockEntries]);
 
-  const [filter, setFilter] = useState<string>(format(new Date(), "yyyy-MM"));
+  /**
+   * O período mora no ENDEREÇO (`?mes=2026-06`, `?mes=geral`), não num
+   * estado da tela. Os números do Dashboard abrem Vendas já filtrada, e o voltar
+   * do navegador tem de cair no mesmo mês que se estava olhando — com estado
+   * local, voltar de junho caía no mês corrente, e a pessoa perdia o lugar a
+   * cada consulta.
+   *
+   * `replace`: andar pelos meses não empilha histórico, senão o voltar
+   * refaria de trás para frente cada seta apertada. Mês que não está na lista
+   * (endereço velho, mês sem lançamento) cai no corrente; o corrente não vai
+   * para o endereço, que fica limpo no caso comum.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const requestedMonth = searchParams.get("mes");
+  const filter = requestedMonth && monthOptions.some(o => o.value === requestedMonth) ? requestedMonth : currentMonth;
+  const setFilter = useCallback(
+    (value: string) => setSearchParams(value === currentMonth ? {} : { mes: value }, { replace: true }),
+    [setSearchParams, currentMonth],
+  );
   /**
    * O relatório monta ~24 abas sobre o histórico inteiro e carrega o `xlsx` na
    * hora: em máquina lenta dá para clicar duas vezes antes de o arquivo sair, e
@@ -152,6 +176,37 @@ export default function Dashboard() {
       newer: i > 0 ? months[i - 1] : undefined,
     };
   }, [monthOptions, filter]);
+
+  /**
+   * ← e → andam pelos meses, as mesmas setas do cabeçalho. Quem fecha o mês
+   * no notebook vai e volta entre dois meses várias vezes, e mirar num botão
+   * de 15px a cada ida é o atrito que o atalho tira.
+   *
+   * Só age quando a tecla não tem outro dono: foco no corpo da página ou num
+   * botão/link comum (é onde o foco fica depois de clicar na própria seta).
+   * Campo de texto, o gráfico (o recharts anda pelos pontos com as setas),
+   * lista, menu, abas e qualquer painel aberto ficam com a tecla — trocar o
+   * mês por baixo do painel de personalizar mudaria a tela que a pessoa nem
+   * está vendo. Com modificador também não: Alt+← é o voltar do navegador.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && el !== document.body) {
+        if (!el.matches("button, a")) return;
+        if (el.closest('[role="dialog"], [role="menu"], [role="listbox"], [role="tablist"], [role="radiogroup"]')) return;
+      }
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      const step = e.key === "ArrowLeft" ? monthSteps.older : monthSteps.newer;
+      if (!step) return;
+      e.preventDefault();
+      setFilter(step.value);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [monthSteps, setFilter]);
 
   const computeStats = useMemo(() => {
     /**
@@ -264,6 +319,13 @@ export default function Dashboard() {
   const restock = useMemo(() => summarizeRestock(modelStats), [modelStats]);
 
   /**
+   * A compra que o botão do card monta: TODOS os modelos que precisam de
+   * pedido, não só os seis da tabela (ver src/lib/purchase-draft.ts). Vai no
+   * estado do link e o painel "Nova compra" da Entrada abre preenchido.
+   */
+  const purchaseDraft = useMemo(() => restockToPurchaseDraft(restock.urgent), [restock.urgent]);
+
+  /**
    * Os maiores pedidos. NÃO completa a tabela com modelo que não precisa de
    * nada: linha de enchimento era ruído ocupando o lugar de decisão.
    */
@@ -353,9 +415,17 @@ export default function Dashboard() {
       // gráfico e o número do trilho não podem contar lucro de dois jeitos.
       const r = computeStats(d => isWithinInterval(parseISO(d), interval));
 
+      // O último ponto é o mês EM CURSO: tem só os dias que já passaram, e
+      // desenhado como mês fechado ele caía em todo começo de mês — uma queda
+      // que não existe. O rótulo leva o dia, e é o mesmo texto que o tooltip
+      // mostra e que a aba "Evolução 6 meses" do Excel imprime.
+      const partial = i === 0;
+      const longLabel = format(date, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase());
+
       months.push({
         month: format(date, "MMM", { locale: ptBR }),
-        monthLong: format(date, "MMMM/yyyy", { locale: ptBR }).replace(/^./, c => c.toUpperCase()),
+        monthLong: partial ? `${longLabel} · até o dia ${date.getDate()}` : longLabel,
+        partial,
         receita: r.revenue,
         lucro: r.netProfit,
         margem: r.netMargin,
@@ -373,6 +443,29 @@ export default function Dashboard() {
     return months;
   }, [computeStats]);
 
+  /**
+   * A série do gráfico partida em duas: os meses fechados em linha cheia e o
+   * trecho que chega ao mês em curso tracejado — o jeito de um gráfico dizer
+   * "isto ainda não acabou". O ponto do último mês fechado entra nas duas,
+   * senão a linha teria um buraco entre eles. Fica fora do `monthlyData`
+   * porque é desenho: o relatório recebe o `monthlyData` e não usaria isto.
+   */
+  const chartData = useMemo(() => {
+    const cut = monthlyData.findIndex(m => m.partial);
+    return monthlyData.map((m, i) => {
+      const solid = cut === -1 || i < cut;
+      const dashed = cut !== -1 && i >= cut - 1;
+      return {
+        ...m,
+        receitaCheia: solid ? m.receita : null,
+        lucroCheio: solid ? m.lucro : null,
+        receitaParcial: dashed ? m.receita : null,
+        lucroParcial: dashed ? m.lucro : null,
+      };
+    });
+  }, [monthlyData]);
+  const partialMonth = monthlyData.find(m => m.partial);
+
   const avgMargin = useMemo(() => {
     const withRevenue = monthlyData.filter(m => m.receita > 0);
     if (!withRevenue.length) return 0;
@@ -380,6 +473,30 @@ export default function Dashboard() {
   }, [monthlyData]);
 
   const filterLabel = monthOptions.find(o => o.value === filter)?.label ?? "";
+
+  /**
+   * O período da tela no vocabulário do endereço de Vendas. Todo link que sai
+   * daqui leva ESTE recorte, e só filtros que reproduzem lá o número clicado
+   * aqui (ver src/lib/sales-link.ts) — é por isso que o "recebido" não é link.
+   */
+  const salesPeriod: SalesLinkFilter = isGeral
+    ? { all: true }
+    : { from: isoDay(period.start), to: isoDay(period.end) };
+
+  /**
+   * Saldo de HOJE com cada vendedor — a mesma conta que decide o arquivamento
+   * na Distribuição (`currentBalanceContext`), e não a do período da tela: o
+   * que se deve a alguém não muda porque se está olhando junho.
+   */
+  const sellerBalances = useMemo(() => {
+    const ctx = currentBalanceContext({
+      sales: store.sales,
+      commissionPayments: store.commissionPayments,
+      sellerDebtPayments: store.sellerDebtPayments,
+      sellerManualDebts: store.sellerManualDebts,
+    });
+    return summarizeSellerBalances(store.sellers, seller => computeSellerBalance(seller, ctx).balance);
+  }, [store.sales, store.commissionPayments, store.sellerDebtPayments, store.sellerManualDebts, store.sellers]);
   const netPositive = periodStats.netProfit >= 0;
 
   const delta = (current: number, previous: number | undefined) => {
@@ -517,18 +634,18 @@ export default function Dashboard() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            {/* Seis colunas não cabem num telefone, e o `min-w` de 560px
-                virava arrasto lateral. Abaixo do `sm` saem "Vende/dia" e
-                "Margem": o card responde UMA pergunta — quanto pedir hoje
-                —, e ela se lê com estoque, quanto tempo dura e quanto
-                pedir. As duas que saem são o porquê do número, e o porquê
-                cabe na tela grande. A ordem ("Pedir" por último, e a lista
-                ordenada por unidades a pedir) não muda: é ela que decide
-                quem entra aqui. */}
+            {/* Nem toda coluna cabe num telefone, e alargar não resolve: o
+                `min-w` de 560px virava arrasto lateral. O card responde UMA
+                pergunta — quanto pedir hoje —, e ela se lê com o estoque, o
+                mínimo e o quanto pedir; o resto é o PORQUÊ do número, e o
+                porquê cabe na tela grande. Foi assim que saíram "Vende/dia" e
+                "Margem", e é por isso que "Vendeu" sai abaixo do `sm`. A
+                ordem ("Pedir" por último, e a lista ordenada por unidades a
+                pedir) não muda: é ela que decide quem entra aqui. */}
             <table className="w-full min-w-0 text-[13px] sm:min-w-[560px]">
-              {/* Quatro colunas e a conta fecha na horizontal: o estoque de
-                  hoje contra o mínimo, o que saiu no período, e o que
-                  pedir. "Dura tantos dias", "Vende/dia" e "Margem" saíram —
+              {/* A conta fecha na horizontal: o estoque de hoje contra o
+                  mínimo, o que saiu no período (só no `sm` para cima), e o
+                  que pedir. "Dura tantos dias", "Vende/dia" e "Margem" saíram —
                   eram a leitura da conta ANTIGA, que projetava giro; a de
                   agora é uma subtração contra o mínimo, e mostrar a projeção
                   ao lado dela seria oferecer duas réguas para o mesmo
@@ -537,9 +654,16 @@ export default function Dashboard() {
               <thead>
                 <tr style={{ color: "var(--nc-text-3)" }}>
                   <th className="px-2 py-1.5 text-left font-normal">Modelo</th>
-                  <th className="px-2 py-1.5 text-right font-normal">Estoque / mín.</th>
-                  <th className="px-2 py-1.5 text-right font-normal">Vendeu</th>
-                  <th className="px-2 py-1.5 text-right font-normal">Pedir</th>
+                  <th className="whitespace-nowrap px-2 py-1.5 text-right font-normal">Estoque / mín.</th>
+                  {/* Com as quatro colunas em 390px não sobrava largura para
+                      os números ficarem numa linha: "16 un." quebrava em duas,
+                      a régua "12 / 20" quebrava junto, e cada modelo ficava
+                      com uma altura diferente — tabela que não alinha deixa de
+                      ser tabela. O `whitespace-nowrap` das colunas de número é
+                      o par disto: sem uma delas, ou volta a quebra, ou volta o
+                      arrasto lateral. */}
+                  <th className="hidden whitespace-nowrap px-2 py-1.5 text-right font-normal sm:table-cell">Vendeu</th>
+                  <th className="whitespace-nowrap px-2 py-1.5 text-right font-normal">Pedir</th>
                 </tr>
               </thead>
               <tbody>
@@ -551,9 +675,14 @@ export default function Dashboard() {
 
         <div className="nc-rule-top mt-3 flex flex-wrap items-center justify-between gap-3 pt-3">
           {/* O total do pedido em cima; embaixo, em tom terciário, o que
-              NÃO está na tabela — nada sai da lista em silêncio. */}
+              NÃO está na tabela — nada sai da lista em silêncio.
+
+              12,5px e não 11,5 na linha de cima: quantas unidades e quanto
+              custa voltar ao mínimo são a CONCLUSÃO do card, e estavam no
+              mesmo corpo do rodapé de ressalvas logo abaixo. O que se lê antes
+              de decidir não pode ser do tamanho do que se lê depois. */}
           <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
               {restock.horizonUnits > 0 ? (
                 <>
                   <strong className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>
@@ -575,12 +704,20 @@ export default function Dashboard() {
               </span>
             )}
           </div>
+          {/* Com pedido a fazer, o botão LEVA a lista: o painel "Nova compra"
+              abre preenchido na Entrada, para conferir quantidade e custo e
+              registrar. Sem pedido, continua sendo só o caminho da Entrada.
+              É `.nc-btn` (e não um link desenhado à mão) para ganhar os 40px
+              de alvo no toque, como todo botão do sistema. */}
           <Link
             to="/stock"
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors hover:bg-white/5"
-            style={{ color: "var(--nc-accent)", boxShadow: "inset 0 0 0 1px var(--nc-accent)" }}
+            state={purchaseDraft.length > 0 ? { [PURCHASE_DRAFT_KEY]: purchaseDraft } : undefined}
+            className="nc-btn nc-btn--outline flex-none"
           >
-            Abrir entrada de estoque <ArrowRight size={13} />
+            {purchaseDraft.length > 0
+              ? <>Montar compra · {purchaseDraft.length} modelo{purchaseDraft.length === 1 ? "" : "s"}</>
+              : <>Abrir entrada de estoque</>}
+            <ArrowRight size={13} />
           </Link>
         </div>
       </div>
@@ -603,6 +740,15 @@ export default function Dashboard() {
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-3.5" style={{ background: "var(--nc-profit)" }} /> Lucro líquido
           </span>
+          {/* O tracejado explicado na legenda, e não só no tooltip: quem não
+              passa o mouse no último ponto também precisa saber que ele é
+              parcial. */}
+          {partialMonth && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-3.5 border-t border-dashed" style={{ borderColor: "var(--nc-text-2)" }} />
+              {partialMonth.month} até o dia {new Date().getDate()}
+            </span>
+          )}
           <span className="pl-3" style={{ borderLeft: "1px solid var(--nc-divider)" }}>
             Margem média{" "}
             <strong className="nc-num font-semibold" style={{ color: "var(--nc-text)" }}>
@@ -615,7 +761,7 @@ export default function Dashboard() {
           nunca ficando menor que a altura original. */}
       <div className={cn(frame === "rail" ? "h-[180px]" : "h-[212px]", grow && "xl:h-auto xl:min-h-[212px] xl:flex-1")}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={monthlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={CHART_REVENUE} stopOpacity={0.28} />
@@ -671,8 +817,12 @@ export default function Dashboard() {
                 );
               }}
             />
-            <Area type="monotone" dataKey="receita" stroke={CHART_REVENUE} strokeWidth={2} fill="url(#gradReceita)" name="Receita" />
-            <Area type="monotone" dataKey="lucro" stroke={CHART_PROFIT} strokeWidth={2} fill="url(#gradLucro)" name="Lucro Líquido" />
+            <Area type="monotone" dataKey="receitaCheia" stroke={CHART_REVENUE} strokeWidth={2} fill="url(#gradReceita)" name="Receita" />
+            <Area type="monotone" dataKey="lucroCheio" stroke={CHART_PROFIT} strokeWidth={2} fill="url(#gradLucro)" name="Lucro Líquido" />
+            {/* O trecho do mês em curso: mesma cor, traço interrompido e
+                preenchimento pela metade. */}
+            <Area type="monotone" dataKey="receitaParcial" stroke={CHART_REVENUE} strokeWidth={2} strokeDasharray="4 4" fill="url(#gradReceita)" fillOpacity={0.5} name="Receita (parcial)" />
+            <Area type="monotone" dataKey="lucroParcial" stroke={CHART_PROFIT} strokeWidth={2} strokeDasharray="4 4" fill="url(#gradLucro)" fillOpacity={0.5} name="Lucro Líquido (parcial)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -698,14 +848,26 @@ export default function Dashboard() {
           <p className={cn("pb-4 text-xs", pad)} style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
         ) : (
           <>
+            {/* Cada linha abre Vendas com o modelo e o período — por MARCA +
+                modelo, porque o nome sozinho junta dois produtos. O chevron é
+                o aviso de que a linha é tocável, e não um efeito de hover: no
+                toque não existe hover para anunciar nada. */}
             {topModels.rows.map((m, i) => (
-              <div key={m.key} className={cn("nc-row py-2.5", pad)}>
+              <Link
+                key={m.key}
+                to={buildSalesLink({ ...salesPeriod, model: { brand: m.brand, model: m.model } })}
+                aria-label={`Ver as vendas de ${m.model} · ${m.brand}`}
+                className={cn("nc-row nc-hover nc-drill block py-2.5", pad)}
+              >
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="min-w-0 truncate text-[13px]">
                     {m.model}
                     <span style={{ color: "var(--nc-text-3)" }}> · {m.brand}</span>
                   </p>
-                  <span className="nc-num flex-none text-[13px]">{formatCurrencyShort(m.revenue)}</span>
+                  <span className="nc-num flex flex-none items-center gap-1 text-[13px]">
+                    {formatCurrencyShort(m.revenue)}
+                    <ChevronRight size={13} className="nc-drill-cue" />
+                  </span>
                 </div>
                 <div className="mt-1.5 flex items-center gap-2.5">
                   {/* A barra é escalada pelo LÍDER, a porcentagem é do TOTAL.
@@ -723,7 +885,7 @@ export default function Dashboard() {
                     {m.qty} un. · {formatPct(m.pct, 0)}
                   </span>
                 </div>
-              </div>
+              </Link>
             ))}
 
             {/* A cauda como LINHA, não como faixa na barra: continua dizendo
@@ -753,31 +915,59 @@ export default function Dashboard() {
         {/* A base da comparação ESCRITA, não num `title`: "+41%" sem dizer
             contra o quê é número que não se explica, e no toque o `title`
             nunca aparece. A mesma base vale para as outras variações da tela. */}
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
-          {revenueDelta && (
-            <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-              vs {revenueDelta.label}
+        {/* O rótulo e o número abrem as vendas do período: em Vendas o trilho
+            mostra a MESMA receita, e o mesmo par recebido/a receber. */}
+        <Link to={buildSalesLink(salesPeriod)} className="nc-drill block" aria-label="Ver as vendas do período">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="inline-flex items-center gap-0.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>
+              Receita <ChevronRight size={12} className="nc-drill-cue" />
             </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-baseline gap-2">
-          <AnimatedNumber
-            value={periodStats.revenue}
-            format={formatCurrencyShort}
-            duration={0.7}
-            animateOnMount
-            className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
-          />
-          <Delta delta={revenueDelta} />
-        </div>
+            {revenueDelta && (
+              <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+                vs {revenueDelta.label}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <AnimatedNumber
+              value={periodStats.revenue}
+              format={formatCurrencyShort}
+              duration={0.7}
+              animateOnMount
+              className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
+            />
+            <Delta delta={revenueDelta} />
+          </div>
+        </Link>
+        {/* Divisão REAL do total: cada real vendido está de um lado ou do
+            outro. O recebido é --nc-ok e NÃO --nc-accent — o verde é dinheiro
+            que já está na mão, e o accent é o dinheiro todo (a receita logo
+            acima). Com o accent aqui, a metade recebida tinha a mesma cor do
+            total que ela divide, e o par com o --nc-alert só se lia depois de
+            ler os dois números. É a mesma barra de Vendas e do Financeiro, que
+            já usavam o verde: este era o único lugar fora do vocabulário. */}
         <div className="mt-2 flex h-[5px] gap-0.5">
-          <div style={{ flex: Math.max(periodStats.received, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
+          <div style={{ flex: Math.max(periodStats.received, 0.001), background: "var(--nc-ok)", borderRadius: 2 }} />
           <div style={{ flex: Math.max(periodStats.receivable, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
         </div>
-        <div className="mt-1.5 flex justify-between gap-2 text-[11px] nc-num" style={{ color: "var(--nc-text-2)" }}>
-          <span>recebido {formatCurrencyShort(periodStats.received)}</span>
-          <span style={{ color: "var(--nc-alert)" }}>a receber {formatCurrencyShort(periodStats.receivable)}</span>
+        {/* "A receber" abre as vendas com saldo do período — em Vendas, o "a
+            receber" do trilho é este mesmo número. O "recebido" NÃO é link: ele
+            soma a parte paga das vendas parciais, e nenhuma lista de vendas
+            fecha nesse valor. Sublinhado pontilhado e não chevron: é texto
+            corrido de 11px, e o chevron ali disputaria com o número. */}
+        <div className="mt-1.5 flex justify-between gap-2 text-[11px] nc-num">
+          <span style={{ color: "var(--nc-ok)" }}>recebido {formatCurrencyShort(periodStats.received)}</span>
+          {periodStats.receivable > 0.01 ? (
+            <Link
+              to={buildSalesLink({ ...salesPeriod, status: "due" })}
+              className="nc-drill underline decoration-dotted underline-offset-[3px]"
+              style={{ color: "var(--nc-alert)" }}
+            >
+              a receber {formatCurrencyShort(periodStats.receivable)}
+            </Link>
+          ) : (
+            <span style={{ color: "var(--nc-alert)" }}>a receber {formatCurrencyShort(periodStats.receivable)}</span>
+          )}
         </div>
       </div>
     </div>
@@ -816,8 +1006,14 @@ export default function Dashboard() {
       </div>
       <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
         <span className="text-[12.5px]">Lucro líquido</span>
-        {/* Prejuízo em vermelho; lucro na cor principal do painel. */}
-        <span style={{ color: netPositive ? "var(--nc-accent)" : "var(--nc-crit)" }}>
+        {/* Lucro em --nc-profit, a MESMA cor da série "Lucro líquido" do
+            gráfico e da legenda dele — o mesmo número em duas peças da mesma
+            tela não pode ter duas cores. Estava em --nc-accent, que é a cor da
+            RECEITA (a série de cima no gráfico, a barra do recebido): as duas
+            pontas da conta saíam iguais justamente onde a tela existe para
+            separá-las. Prejuízo continua em --nc-crit, que é o mesmo #F09595
+            do CHART_LOSS. */}
+        <span style={{ color: netPositive ? "var(--nc-profit)" : "var(--nc-crit)" }}>
           <AnimatedNumber
             value={periodStats.netProfit}
             format={formatCurrencyShort}
@@ -869,9 +1065,14 @@ export default function Dashboard() {
         <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
           Últimas vendas
         </span>
-        <span className="nc-num text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+        <Link
+          to={buildSalesLink(salesPeriod)}
+          className="nc-drill nc-num inline-flex items-center gap-0.5 text-[11px]"
+          style={{ color: "var(--nc-text-3)" }}
+        >
           {recentSales.length} no {isGeral ? "período" : "mês"}
-        </span>
+          <ChevronRight size={12} className="nc-drill-cue" />
+        </Link>
       </div>
       {recentSales.length === 0 ? (
         <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma venda no período.</p>
@@ -888,6 +1089,73 @@ export default function Dashboard() {
             );
           })}
         </Stagger>
+      )}
+    </div>
+  );
+
+  /**
+   * O saldo com os vendedores, HOJE. As duas pontas separadas (ver
+   * `summarizeSellerBalances`): o que se deve a eles e o que eles devem são
+   * dois acertos com pessoas diferentes, e um líquido esconderia os dois.
+   * "Devem" em --nc-alert porque é dinheiro a receber; "a pagar" fica neutro —
+   * verde é dinheiro que ENTROU, e isto é o contrário.
+   */
+  const sellersWidget = (
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
+            Vendedores
+          </span>
+          <Link
+            to="/commissions"
+            className="nc-drill inline-flex items-center gap-0.5 text-[11px]"
+            style={{ color: "var(--nc-text-3)" }}
+          >
+            Distribuição <ChevronRight size={12} className="nc-drill-cue" />
+          </Link>
+        </div>
+        <span className="mt-0.5 block text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          Não segue o período: é o saldo de hoje
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>A pagar</span>
+          <div className="nc-num text-base font-semibold">{formatCurrencyShort(sellerBalances.payable)}</div>
+        </div>
+        <div>
+          <span className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>Devem</span>
+          <div
+            className="nc-num text-base font-semibold"
+            style={sellerBalances.owed > 0.01 ? { color: "var(--nc-alert)" } : undefined}
+          >
+            {formatCurrencyShort(sellerBalances.owed)}
+          </div>
+        </div>
+      </div>
+      {sellerBalances.rows.length === 0 ? (
+        <p className="py-2 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhum saldo em aberto.</p>
+      ) : (
+        <div className="flex flex-col">
+          {sellerBalances.rows.slice(0, MAX_SELLER_ROWS).map(({ seller, balance }) => (
+            <div key={seller.id} className="nc-row flex items-center justify-between gap-2 py-1.5 text-xs">
+              <span className="min-w-0 flex-1 truncate">
+                {seller.name}
+                {seller.archivedAt && <span style={{ color: "var(--nc-text-3)" }}> · arquivado</span>}
+              </span>
+              <span className="nc-num flex-none" style={balance < 0 ? { color: "var(--nc-alert)" } : undefined}>
+                {balance > 0 ? "a pagar " : "deve "}
+                {formatCurrencyShort(Math.abs(balance))}
+              </span>
+            </div>
+          ))}
+          {sellerBalances.rows.length > MAX_SELLER_ROWS && (
+            <p className="pt-1.5 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+              + {sellerBalances.rows.length - MAX_SELLER_ROWS} com saldo, na Distribuição
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -912,6 +1180,7 @@ export default function Dashboard() {
           indicators: indicatorsWidget,
           grossProfit: grossProfitWidget,
           recentSales: recentSalesWidget,
+          sellers: sellersWidget,
         }[id];
         return frame === "card" ? inCard(id, body) : body;
       }
@@ -967,8 +1236,9 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => monthSteps.older && setFilter(monthSteps.older.value)}
                 disabled={!monthSteps.older}
-                title={monthSteps.older ? `Abrir ${monthSteps.older.label}` : "Não há mês anterior com lançamento"}
+                title={monthSteps.older ? `Abrir ${monthSteps.older.label} (←)` : "Não há mês anterior com lançamento"}
                 aria-label="Mês anterior"
+                aria-keyshortcuts="ArrowLeft"
                 className="nc-btn nc-btn--ghost nc-btn--icon disabled:opacity-40"
               >
                 <ChevronLeft size={15} />
@@ -977,8 +1247,9 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => monthSteps.newer && setFilter(monthSteps.newer.value)}
                 disabled={!monthSteps.newer}
-                title={monthSteps.newer ? `Abrir ${monthSteps.newer.label}` : "Este é o mês mais recente"}
+                title={monthSteps.newer ? `Abrir ${monthSteps.newer.label} (→)` : "Este é o mês mais recente"}
                 aria-label="Mês seguinte"
+                aria-keyshortcuts="ArrowRight"
                 className="nc-btn nc-btn--ghost nc-btn--icon disabled:opacity-40"
               >
                 <ChevronRight size={15} />
@@ -1116,16 +1387,17 @@ function RestockRow({ model }: { model: ModelStat }) {
           produz o "Pedir", e vê-la inteira é o que deixa conferir a linha sem
           abrir outra tela. O estoque herda a cor da bolinha; o mínimo fica em
           terciário, porque ele é a régua e não o número que se persegue. */}
-      <td className="nc-num px-2 py-1.5 text-right">
+      <td className="nc-num whitespace-nowrap px-2 py-1.5 text-right">
         <span style={urgency === "ok" ? undefined : { color: dot }}>{model.stock}</span>
         <span style={{ color: "var(--nc-text-3)" }}> / {model.minUnits}</span>
       </td>
-      <td className="nc-num px-2 py-1.5 text-right" style={{ color: "var(--nc-text-2)" }}>
+      {/* Escondida no celular junto com o próprio cabeçalho — ver o `thead`. */}
+      <td className="nc-num hidden whitespace-nowrap px-2 py-1.5 text-right sm:table-cell" style={{ color: "var(--nc-text-2)" }}>
         {model.qty} un.
       </td>
       {/* Quanto pedir, já descontado o que está a caminho — e o abatimento
           aparece embaixo, senão o número menor não teria explicação. */}
-      <td className="px-2 py-1.5 text-right">
+      <td className="whitespace-nowrap px-2 py-1.5 text-right">
         <span className="nc-num">{model.restockUnits} un.</span>
         {model.incoming > 0 && (
           <span className="block text-[11px] nc-num" style={{ color: "var(--nc-text-3)" }}>

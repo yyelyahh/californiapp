@@ -238,7 +238,12 @@ export function SegmentedChips({
             onClick={() => onChange(o.value)}
             aria-pressed={active}
             title={o.label}
-            className="relative rounded-md px-2.5 py-1.5 text-xs transition-colors duration-200"
+            /* `nc-chip` existe só para o bloco `pointer: coarse` do index.css
+               alcançar este botão: ele não é `.nc-btn` e por isso ficava de
+               fora do alvo de 40px, o mesmo furo que o botão de exportar do
+               Dashboard já tinha. `inline-flex` centra o rótulo quando o
+               min-height do toque sobra. */
+            className="nc-chip relative inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs transition-colors duration-200"
             style={{ color: active ? "var(--nc-accent)" : "var(--nc-text-2)" }}
           >
             {active && (

@@ -14,11 +14,11 @@ import {
 const ids = (list: { id: WidgetId }[]) => list.map(w => w.id);
 
 describe("layout padrão", () => {
-  it("é o Dashboard de antes: três blocos na coluna, o resto no trilho", () => {
+  it("é o Dashboard de antes, com os blocos novos no fim do trilho", () => {
     const { main, rail } = visibleWidgets(DEFAULT_LAYOUT);
     expect(DEFAULT_LAYOUT.mode).toBe("vertical");
     expect(ids(main)).toEqual(["restock", "performance", "topModels"]);
-    expect(ids(rail)).toEqual(["revenue", "result", "indicators", "grossProfit", "recentSales"]);
+    expect(ids(rail)).toEqual(["revenue", "result", "indicators", "grossProfit", "recentSales", "sellers"]);
   });
 });
 

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { PurchaseOrder } from "@/types";
 import { sortNames } from "@/lib/catalog-order";
+import { readPurchaseDraft } from "@/lib/purchase-draft";
 import { NcButton, NcSheetHeader, EYEBROW } from "@/components/nocturne";
 
 type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string; unitPrice: string };
@@ -159,7 +161,54 @@ export default function PurchaseOrdersSection() {
   const resolveBrand = (i: DraftItem) => (i.brand === "__new__" ? i.brandNew : i.brand).trim();
   const resolveModel = (i: DraftItem) => (i.model === "__new__" ? i.modelNew : i.model).trim();
 
-  const resetNew = () => { setDate(todayDateString()); setNotes(""); setFreightNew(""); setItems([emptyItem()]); };
+  /**
+   * Quantos modelos vieram do "Repor agora" do Dashboard, para o cabeçalho do
+   * painel dizer de onde a lista saiu. Nulo = compra digitada do zero.
+   */
+  const [draftFrom, setDraftFrom] = useState<number | null>(null);
+
+  const resetNew = () => { setDate(todayDateString()); setNotes(""); setFreightNew(""); setItems([emptyItem()]); setDraftFrom(null); };
+
+  /**
+   * A compra montada pelo Dashboard chega no estado do link (ver
+   * src/lib/purchase-draft.ts) e abre este painel já preenchido, para CONFERIR
+   * e registrar — nada é gravado sozinho.
+   *
+   * O estado é consumido e apagado na hora (`replace` com estado nulo): sem
+   * isso, voltar para a Entrada pelo histórico, ou recarregar, abriria a mesma
+   * compra de novo, e registrá-la duas vezes seria um clique.
+   *
+   * Marca e modelo entram como OPÇÃO da lista quando existem nela (o caso
+   * normal: o Dashboard lê os mesmos produtos). Se não existirem, entram como
+   * "nova marca" / "novo modelo" com o nome já escrito — um seletor vazio
+   * perderia a linha calado, e a pessoa só descobriria no "Informe marca e
+   * modelo".
+   */
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const draft = readPurchaseDraft(location.state);
+    if (!draft) return;
+    navigate(location.pathname + location.search, { replace: true, state: null });
+    const knownModel = (brand: string, model: string) =>
+      products.some(p => p.brand.toLowerCase() === brand.toLowerCase() && p.model === model);
+    setItems(draft.map(d => {
+      const brandKnown = brands.includes(d.brand);
+      const modelKnown = brandKnown && knownModel(d.brand, d.model);
+      return {
+        brand: brandKnown ? d.brand : "__new__",
+        brandNew: brandKnown ? "" : d.brand,
+        model: modelKnown ? d.model : "__new__",
+        modelNew: modelKnown ? "" : d.model,
+        quantity: String(d.quantity),
+        unitPrice: d.unitPrice !== undefined ? String(d.unitPrice) : "",
+      };
+    }));
+    setDraftFrom(draft.length);
+    setNewOpen(true);
+    // Só a chegada importa: o efeito lê o estado uma vez e o apaga.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const handleCreate = async () => {
     const payload = items
@@ -321,7 +370,9 @@ export default function PurchaseOrdersSection() {
           <NcSheetHeader
             eyebrow="Compras"
             title="Nova compra"
-            description="Registre o pedido agora; os sabores entram no recebimento."
+            description={draftFrom
+              ? `${draftFrom} modelo${draftFrom === 1 ? "" : "s"} abaixo do mínimo, vindos do Dashboard, com o que falta pedir e o custo médio. Confira com o fornecedor antes de registrar.`
+              : "Registre o pedido agora; os sabores entram no recebimento."}
           />
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">

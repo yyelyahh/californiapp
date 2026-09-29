@@ -1,3 +1,4 @@
+import { parseISO } from "date-fns";
 import type { Sale, Seller, CommissionPayment, SellerDebtPayment, SellerManualDebt } from "@/types";
 
 // Cutoff legado: tudo antes de 01/06/2026 é tratado como legado (10% de comissão, só abate consumo).
@@ -513,5 +514,84 @@ export function computeSellerBalance(seller: Seller, ctx: SellerBalanceContext) 
     consumoTotal, debtPaymentsTotal, legacyCredit, saldoConsumo,
     retiradasTotal, manualDebtsTotal, retiradasCount,
     periodBalance, priorBalance,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Saldo de HOJE (não o do período da tela)
+ * ------------------------------------------------------------------ */
+
+/**
+ * O contexto do saldo de HOJE: o mês corrente como período, com o histórico
+ * anterior entrando pelo `priorBalance`. É o saldo que decide se o vendedor
+ * pode ser arquivado na Distribuição e o que o Dashboard mostra no bloco de
+ * vendedores — as duas telas liam a mesma coisa montando o contexto cada uma,
+ * e contexto montado duas vezes é o jeito de um dia as duas discordarem.
+ *
+ * `now` é parâmetro para o teste poder fixar o relógio.
+ */
+export function currentBalanceContext(
+  data: Pick<SellerBalanceContext, "sales" | "commissionPayments" | "sellerDebtPayments" | "sellerManualDebts">,
+  now: Date = new Date(),
+): SellerBalanceContext {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const valid = (iso: string) => {
+    // parseISO, como a Distribuição: data sem hora é meia-noite LOCAL, e
+    // new Date a leria em UTC — três horas antes, no dia anterior.
+    const d = parseISO(iso);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  return {
+    ...data,
+    start,
+    end,
+    closedStart: start,
+    PROJECT_START,
+    isLegacy: iso => {
+      const d = valid(iso);
+      return d !== null && d < PROJECT_START;
+    },
+    inClosedPeriod: iso => {
+      const d = valid(iso);
+      return d !== null && d >= start && d <= end;
+    },
+  };
+}
+
+export interface SellerBalanceSummary {
+  /** Comissão que o negócio deve aos vendedores (soma dos saldos positivos). */
+  payable: number;
+  /** O que os vendedores devem ao negócio (soma dos negativos, em módulo). */
+  owed: number;
+  /** Quem tem saldo, do maior para o menor em módulo. */
+  rows: { seller: Seller; balance: number }[];
+}
+
+/**
+ * O resumo do bloco de vendedores do Dashboard.
+ *
+ * As duas pontas ficam SEPARADAS, nunca líquidas: dever R$ 300 a um e ter
+ * R$ 300 a receber de outro não é "zero com os vendedores" — são dois
+ * acertos, com duas pessoas. Um número líquido esconderia os dois.
+ *
+ * Quem não recebe comissão (os donos cadastrados como vendedor) fica fora, pela
+ * mesma lista da Distribuição. Arquivado com saldo ENTRA: dinheiro devido não
+ * some porque a pessoa saiu. Saldo de menos de um centavo é arredondamento, não
+ * acerto a fazer.
+ */
+export function summarizeSellerBalances(
+  sellers: Seller[],
+  balanceOf: (seller: Seller) => number,
+): SellerBalanceSummary {
+  const rows = sellers
+    .filter(isCommissionSeller)
+    .map(seller => ({ seller, balance: balanceOf(seller) }))
+    .filter(r => Math.abs(r.balance) > 0.01)
+    .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance) || a.seller.name.localeCompare(b.seller.name, "pt-BR"));
+  return {
+    payable: rows.reduce((a, r) => a + Math.max(0, r.balance), 0),
+    owed: rows.reduce((a, r) => a + Math.max(0, -r.balance), 0),
+    rows,
   };
 }

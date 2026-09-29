@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-09-29T01:14:23.059Z",
+        "reason": "Claude triage: Inter is the established Nocturne ERP font (src/index.css .nocturne), predates this session; prior critique 2026-09-28 classified it as a false positive. Changing it is a redesign decision, not a polish fix."
+      }
+    ]
+  }
+}

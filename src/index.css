@@ -62,11 +62,6 @@
     --sidebar-border: 220 15% 90%;
     --sidebar-ring: 220 70% 50%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(220 70% 50%), hsl(220 80% 60%));
-    --gradient-income: linear-gradient(135deg, hsl(152 60% 40%), hsl(152 65% 50%));
-    --gradient-expense: linear-gradient(135deg, hsl(0 72% 51%), hsl(0 75% 60%));
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 15% 98%));
-    --shadow-glow: 0 0 30px -5px hsl(220 70% 50% / 0.15);
     --shadow-card: 0 1px 3px 0 hsl(220 25% 10% / 0.04), 0 1px 2px -1px hsl(220 25% 10% / 0.04);
     --shadow-elevated: 0 10px 30px -10px hsl(220 25% 10% / 0.1);
   }
@@ -136,11 +131,6 @@
     --sidebar-border: 232 16% 18%;
     --sidebar-ring: 211 72% 72%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(211 72% 72%), hsl(249 53% 68%));
-    --gradient-income: linear-gradient(135deg, hsl(211 72% 72%), hsl(211 72% 60%));
-    --gradient-expense: linear-gradient(135deg, hsl(36 86% 55%), hsl(0 75% 76%));
-    --gradient-card: linear-gradient(145deg, hsl(232 18% 17%), hsl(232 22% 14%));
-    --shadow-glow: 0 0 30px -5px hsl(211 72% 72% / 0.2);
     --shadow-card: 0 4px 24px -4px hsl(0 0% 0% / 0.4);
     --shadow-elevated: 0 10px 30px -10px hsl(0 0% 0% / 0.6);
   }
@@ -165,24 +155,6 @@
   .glass-card {
     @apply bg-card border border-border/40 rounded-2xl;
     box-shadow: var(--shadow-card);
-  }
-
-  .stat-card {
-    @apply glass-card p-5 relative overflow-hidden;
-  }
-
-  .stat-card::before {
-    content: '';
-    @apply absolute top-0 left-0 w-full h-0.5;
-    background: var(--gradient-primary);
-  }
-
-  .stat-card-accent::before {
-    background: var(--gradient-income);
-  }
-
-  .glow-text {
-    text-shadow: 0 0 20px hsl(var(--primary) / 0.4);
   }
 
   .mono {
@@ -526,17 +498,55 @@
       padding-left: 0.75rem;
       padding-right: 0.75rem;
     }
+    /* O chip do SegmentedChips (período do Dashboard, da Entrada, de Vendas,
+       das Despesas, da Insights, da Auditoria; tipo de lançamento na
+       Distribuição; área e tamanho no painel de personalizar). Ele não é
+       .nc-btn e ficava de fora deste bloco: 12px de texto com py-1.5 dá 28px
+       de alvo, na MESMA fileira de botões que aqui têm 40 e 44 — o mesmo furo
+       do botão de exportar, que foi resolvido virando .nc-btn. Aqui não pode
+       virar: o chip tem o realce com layoutId, que é o desenho da peça.
+
+       40px, e não 44: com o p-0.5 da cápsula em volta o conjunto fecha em 44,
+       exatamente a altura do .nc-btn--icon que anda ao lado dele no cabeçalho
+       do Dashboard e na linha do painel de personalizar. */
+    .nc-chip {
+      min-height: 40px;
+    }
 
     /* O zoom do celular fica TRAVADO (ver o index.html), e quem trava o zoom
        assume a conta de deixar o texto legível sem ele. O selo de situação é o
        menor texto que carrega decisão no sistema ("Falta Dinheiro", "Parcial"),
        e 10,5px com o dedo a 30cm do olho não é leitura, é adivinhação.
 
-       Só o selo e o sobretítulo sobem por CSS, porque os dois são classe. O
-       resto do texto pequeno (os 11px e 11,5px de metadado) está escrito tela a
-       tela em `text-[11px]`, e sobe junto com a migração de cada uma. */
+       O selo e o sobretítulo sobem por serem classe. O resto do texto pequeno
+       está escrito tela a tela como `text-[11px]` e afins, e a ideia era ele
+       subir "junto com a migração de cada tela" — a migração acabou e ele não
+       subiu: eram ~260 ocorrências em 23 arquivos. Então sobe aqui, pelo
+       mesmo caminho do selo: +1px em cada degrau, que é a conta que o
+       .nc-pill (10,5 → 11,5) e o EYEBROW (10 → 11) já fazem. Mais um pixel em
+       tudo, e não um piso único de 12px, porque um piso achataria 11 e 11,5
+       no mesmo corpo e a diferença entre eles é hierarquia escrita de
+       propósito.
+
+       Presa ao .nocturne: a loja e o /minhas-vendas têm o tema .storefront e
+       a tipografia deles não é assunto deste bloco. O `sm:text-[10px]` é o
+       do EYEBROW, que num tablet ou notebook de toque passava do `sm` e
+       voltava a 10px. */
     .nc-pill {
       font-size: 11.5px;
+    }
+    .nocturne .text-\[10px\],
+    .nocturne .sm\:text-\[10px\] {
+      font-size: 11px;
+    }
+    .nocturne .text-\[10\.5px\] {
+      font-size: 11.5px;
+    }
+    .nocturne .text-\[11px\] {
+      font-size: 12px;
+    }
+    .nocturne .text-\[11\.5px\] {
+      font-size: 12.5px;
     }
   }
 
@@ -548,6 +558,33 @@
   }
   .nc-hover:hover {
     background-color: color-mix(in srgb, var(--nc-text) 4%, transparent);
+  }
+
+  /* Número ou linha que ABRE O DETALHE — o Dashboard leva a Vendas já
+     filtrada. O aviso de que dá para tocar é um chevron À VISTA
+     (.nc-drill-cue), não um efeito de hover: no toque não existe hover para
+     anunciar nada, e link que só se descobre passando o mouse não existe no
+     celular. O hover só reforça: o chevron acende e anda 2px, o gesto de "vai
+     para lá". Texto corrido sem espaço para chevron (o "a receber" do
+     trilho) usa sublinhado pontilhado, que fica cheio no hover. */
+  .nc-drill-cue {
+    flex: none;
+    color: var(--nc-text-3);
+    transition: color 150ms ease, transform 150ms ease;
+  }
+  .nc-drill:hover .nc-drill-cue,
+  .nc-drill:focus-visible .nc-drill-cue {
+    color: var(--nc-accent);
+    transform: translateX(2px);
+  }
+  .nc-drill:hover {
+    text-decoration-style: solid;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nc-drill:hover .nc-drill-cue,
+    .nc-drill:focus-visible .nc-drill-cue {
+      transform: none;
+    }
   }
 
   /* Marca da casa dentro do app-shell Nocturne. Mesmo movimento do
@@ -757,13 +794,6 @@
 }
 
 @layer utilities {
-  .text-gradient-primary {
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
   .text-income { color: hsl(var(--income)); }
   .text-expense { color: hsl(var(--expense)); }
   .text-investment { color: hsl(var(--investment)); }
