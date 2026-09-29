@@ -8,8 +8,8 @@
  * em que aparecem, no de cards a grade lê todos. Duas ordens (uma por modo)
  * fariam a pessoa arrumar a tela duas vezes e estranhar a outra ao trocar.
  *
- * O layout padrão é o Dashboard como ele era antes de existir personalização —
- * quem nunca abriu o painel não vê diferença nenhuma.
+ * O layout padrão (`DEFAULT_LAYOUT`) vale para quem nunca mexeu no painel e
+ * para o "Restaurar padrão"; layout já salvo não muda.
  *
  * Tudo aqui é função pura (testada em src/test/dashboard-layout.test.ts): o que
  * vem do banco é jsonb que qualquer versão antiga do app pode ter gravado, e é
@@ -59,7 +59,7 @@ export interface WidgetDef {
 const ALL_SIZES: WidgetSize[] = ["s", "m", "l"];
 const BOTH_AREAS: WidgetArea[] = ["main", "rail"];
 
-/** O catálogo de blocos, NA ORDEM do layout padrão. */
+/** O catálogo de blocos. A ordem daqui é a de quem entra no fim de um layout salvo; o padrão está em `DEFAULT_ARRANGEMENT`. */
 export const WIDGETS: WidgetDef[] = [
   {
     // A faixa do veredito. Absorveu o antigo bloco "Receita" (revenue), que
@@ -165,9 +165,31 @@ function defaultConfig(def: WidgetDef): WidgetConfig {
   return { id: def.id, visible: true, area: def.defaultArea, size: def.defaultSize };
 }
 
+/**
+ * O padrão escrito por extenso, e não derivado do catálogo: é o arranjo que o
+ * dono escolheu em 29/09/2026 (cards; Resumo, Desempenho M, Resultado P,
+ * Últimas vendas P, Repor agora M, Modelos M; Ticket e estoque e Vendedores
+ * escondidos). A área de cada bloco segue a do catálogo, que é o que vale se a
+ * pessoa trocar para o modo vertical.
+ */
+const DEFAULT_ARRANGEMENT: { id: WidgetId; size: WidgetSize; visible?: false }[] = [
+  { id: "verdict", size: "l" },
+  { id: "performance", size: "m" },
+  { id: "result", size: "s" },
+  { id: "recentSales", size: "s" },
+  { id: "indicators", size: "l", visible: false },
+  { id: "restock", size: "m" },
+  { id: "topModels", size: "m" },
+  { id: "sellers", size: "m", visible: false },
+];
+
 export const DEFAULT_LAYOUT: DashboardLayout = {
-  mode: "vertical",
-  widgets: WIDGETS.map(defaultConfig),
+  mode: "cards",
+  widgets: DEFAULT_ARRANGEMENT.map(({ id, size, visible }) => ({
+    ...defaultConfig(widgetDef(id)),
+    size,
+    visible: visible ?? true,
+  })),
 };
 
 function isObject(v: unknown): v is Record<string, unknown> {

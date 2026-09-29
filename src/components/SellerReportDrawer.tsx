@@ -14,6 +14,7 @@ import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem } from "@/lib/motion";
 import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import type { Sale } from "@/types";
 import { compareCatalog } from "@/lib/catalog-order";
@@ -309,7 +310,7 @@ export default function SellerReportDrawer({
     const lines: string[] = [];
     lines.push(`📊 Relatório de ${label}`);
     lines.push(``);
-    lines.push(`👤 Funcionário: ${seller.name}`);
+    lines.push(`👤 Vendedor: ${seller.name}`);
     lines.push(``);
     lines.push(`💰 COMISSÃO — ${label}`);
     lines.push(`• Faixa: ${report.tier.label} (${report.units} un.)`);
@@ -459,7 +460,7 @@ export default function SellerReportDrawer({
 
           {/* ---- A conta ---- */}
           <section className="space-y-1.5">
-            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Como se chega nesse saldo</p>
+            <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Como se chega nesse saldo</h3>
             <Line label="Saldo anterior" value={fmt(report.previousBalance)} tone={report.previousBalance < -0.01 ? "var(--nc-crit)" : undefined} />
             <Line label="Comissão gerada" value={`+${fmt(report.accrued)}`} tone="var(--nc-ok)" />
             <Line label="Consumo" value={`−${fmt(report.saldoConsumo)}`} tone={report.saldoConsumo > 0.01 ? "var(--nc-alert)" : undefined} />
@@ -597,9 +598,7 @@ export default function SellerReportDrawer({
                             {credit ? "+" : "−"}{fmt(m.amount)}
                           </p>
                         </div>
-                        {/* No desktop só aparece no hover; no toque não há hover,
-                            então fica sempre visível abaixo de sm. */}
-                        <div className="flex-none transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                        <div className="flex-none nc-reveal">
                           <NcButton
                             variant="danger"
                             size="icon"

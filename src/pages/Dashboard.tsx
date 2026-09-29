@@ -55,7 +55,8 @@ const SPAN: Record<WidgetSize, string> = {
 function ScopeTag({ children }: { children: string }) {
   // Maiúscula só na primeira letra ("Setembro", "Hoje", "Últimos 6 meses").
   // Feita no texto e não com `::first-letter`, que não vale em `inline-flex`.
-  return <span className="nc-pill nc-pill--mute nc-num">{children.charAt(0).toUpperCase() + children.slice(1)}</span>;
+  // `self-start`: dentro de coluna flex o selo esticava na largura inteira.
+  return <span className="nc-pill nc-pill--mute nc-num self-start">{children.charAt(0).toUpperCase() + children.slice(1)}</span>;
 }
 
 function formatPct(value: number, digits = 1) {
@@ -1124,9 +1125,15 @@ export default function Dashboard() {
                 )}
               </>
             ) : (
+              // Mesma leitura do vazio do Repor agora: "nada abaixo do mínimo"
+              // era dito também quando havia modelo abaixo dele já comprado.
               <>
-                <span className="text-[20px] font-semibold">Nada</span>
-                <span className="text-[12px]" style={{ color: "var(--nc-text-3)" }}>abaixo do mínimo</span>
+                <span className="text-[20px] font-semibold">Nada a pedir</span>
+                <span className="text-[12px]" style={{ color: "var(--nc-text-3)" }}>
+                  {restock.orderedCount > 0
+                    ? `${restock.orderedCount} já comprado${restock.orderedCount === 1 ? "" : "s"}, a caminho`
+                    : "tudo no mínimo ou acima"}
+                </span>
               </>
             )}
           </div>
@@ -1138,7 +1145,7 @@ export default function Dashboard() {
   const resultWidget = (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Resultado</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Resultado</h2>
         <ScopeTag>{periodTag}</ScopeTag>
       </div>
       {/* A conta começa na receita. Ela morava no bloco "Receita", logo acima
@@ -1240,9 +1247,9 @@ export default function Dashboard() {
   const recentSalesWidget = (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>
           Últimas vendas
-        </span>
+        </h2>
         <Link
           to={buildSalesLink(salesPeriod)}
           className="nc-drill nc-num inline-flex items-center gap-0.5 text-[11px]"
@@ -1286,7 +1293,7 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Vendedores</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Vendedores</h2>
             <ScopeTag>hoje</ScopeTag>
           </span>
           <Link

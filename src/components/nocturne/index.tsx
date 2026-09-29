@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+export { Field } from "./field";
+
 type NcButtonVariant = "solid" | "outline" | "quiet" | "ghost" | "danger";
 type NcButtonSize = "sm" | "md" | "icon";
 

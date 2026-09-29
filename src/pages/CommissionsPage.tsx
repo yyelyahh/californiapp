@@ -17,13 +17,13 @@ import {
   isWithinInterval, parseISO, isToday, isYesterday, subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { todayDateString, localDateToISO, formatDateBR, parseDay } from "@/lib/date-utils";
+import { todayDateString, localDateToISO, formatDateBR, parseDay, isoDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, Field } from "@/components/nocturne";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SellerReportDrawer from "@/components/SellerReportDrawer";
@@ -54,15 +54,24 @@ const TIMELINE_OPTIONS = [
 const MAX_TOP_SELLERS = 6;
 
 /**
- * Saldo do vendedor em cor, com o MESMO vocabulário dos selos do painel:
- * positivo é o que a casa ainda deve a ele (--nc-alert, "falta pagar");
- * negativo é dívida dele com a casa (--nc-crit, "não entrou nada"); zerado não
- * é notícia e fica neutro.
+ * Saldo do vendedor em cor, no vocabulário do sistema inteiro (e do bloco
+ * Vendedores do Dashboard): negativo é dívida dele com a casa, ou seja,
+ * dinheiro A RECEBER — --nc-alert. Positivo é o que a casa deve a ele: fica em
+ * texto normal, porque não é recebível nem prejuízo. Era alert para "a pagar"
+ * e crit para "deve", o contrário do Dashboard: o mesmo saldo mudava de cor
+ * entre as duas telas. Zerado não é notícia e fica secundário.
  */
 function balanceTone(v: number) {
-  if (v > 0.01) return "var(--nc-alert)";
-  if (v < -0.01) return "var(--nc-crit)";
+  if (v > 0.01) return "var(--nc-text)";
+  if (v < -0.01) return "var(--nc-alert)";
   return "var(--nc-text-2)";
+}
+
+/** O saldo em palavras, como no Dashboard: "a pagar R$ 94" / "deve R$ 177". */
+function balanceWords(v: number) {
+  if (v > 0.01) return `a pagar ${formatCurrency(v)}`;
+  if (v < -0.01) return `deve ${formatCurrency(-v)}`;
+  return formatCurrency(0);
 }
 
 function balanceLabel(v: number) {
@@ -487,19 +496,32 @@ export default function CommissionsPage() {
               dividem uma linha própria (os 132px cravados somam 276 e não cabem
               ao lado dos chips) e o corpo sobe para 16px, porque o Safari do
               iOS dá zoom sozinho ao focar abaixo disso e o zoom está travado. */}
+          {/* Os campos mostram o período que a tela está CALCULANDO. Eles
+              mostravam o intervalo personalizado (que nasce hoje–hoje) mesmo
+              com "Mês" ligado: a tela somava setembro inteiro e dizia
+              29/09 – 29/09. Mexer num campo a partir de um atalho leva a outra
+              ponta do atalho junto, em vez da data velha do personalizado. */}
           <div className="flex items-center gap-1.5 max-sm:w-full">
             <input
               type="date"
-              value={customStart}
-              onChange={e => { setCustomStart(e.target.value); setPeriod("custom"); }}
+              value={period === "custom" ? customStart : isoDay(start)}
+              onChange={e => {
+                if (period !== "custom") setCustomEnd(isoDay(end));
+                setCustomStart(e.target.value);
+                setPeriod("custom");
+              }}
               aria-label="Data inicial"
               className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
             <span className="text-xs" style={{ color: "var(--nc-text-3)" }}>–</span>
             <input
               type="date"
-              value={customEnd}
-              onChange={e => { setCustomEnd(e.target.value); setPeriod("custom"); }}
+              value={period === "custom" ? customEnd : isoDay(end)}
+              onChange={e => {
+                if (period !== "custom") setCustomStart(isoDay(start));
+                setCustomEnd(e.target.value);
+                setPeriod("custom");
+              }}
               aria-label="Data final"
               className="nc-input nc-num h-8 w-[132px] px-2 text-[12px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 max-sm:text-[16px]"
             />
@@ -570,8 +592,10 @@ export default function CommissionsPage() {
                         )}
                       </div>
                       <div className="flex flex-none items-center gap-2">
+                        {/* Em palavras e não pelo sinal: "−R$ 177" pedia para
+                            lembrar quem deve a quem. */}
                         <span className="nc-num text-[13px]" style={{ color: balanceTone(r.balance) }}>
-                          {formatCurrency(r.balance)}
+                          {balanceWords(r.balance)}
                         </span>
                         <ArrowRight size={13} style={{ color: "var(--nc-text-3)" }} />
                       </div>
@@ -727,7 +751,7 @@ export default function CommissionsPage() {
                           <span className="nc-num hidden flex-none text-[11px] sm:inline" style={{ color: "var(--nc-text-3)" }}>
                             {formatDateBR(it.when)}
                           </span>
-                          <div className="flex-none transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                          <div className="flex-none nc-reveal">
                             <NcButton
                               variant="danger"
                               size="icon"
@@ -759,11 +783,11 @@ export default function CommissionsPage() {
       {/* ---------------- Coluna direita: o que há para repartir ----------------
           No celular ela vem ANTES das listas (`order-first`), como nas outras
           telas migradas. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Distribuição do período</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Distribuição do período</h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Para distribuir aos sócios</span>
@@ -790,7 +814,7 @@ export default function CommissionsPage() {
             quem vendeu e quem é dono. É a única barra desta tela que divide um
             total de verdade — por isso ela existe aqui, e não em cada card. */}
         <div>
-          <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Como o lucro se reparte</span>
+          <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Como o lucro se reparte</h2>
           {periodMetrics.netProfit <= 0 ? (
             <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>
               Sem lucro no período para repartir.
@@ -852,7 +876,7 @@ export default function CommissionsPage() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quem mais vendeu</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Quem mais vendeu</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {periodMetrics.perSeller.length} no período
             </span>
@@ -926,7 +950,7 @@ export default function CommissionsPage() {
                         pagar; ele devendo, receber —, e as outras continuam ao
                         lado, só mais quietas. */}
                     <section>
-                      <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>{balanceLabel(panelRow.balance)}</p>
+                      <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>{balanceLabel(panelRow.balance)}</h3>
                       <span style={{ color: balanceTone(panelRow.balance) }}>
                         <AnimatedNumber
                           value={Math.abs(panelRow.balance)}
@@ -1007,7 +1031,7 @@ export default function CommissionsPage() {
                             {panelMode === "lancar" && "Adiantamento, empréstimo ou acerto que ele passa a dever."}
                           </p>
                           <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
+                            <Field className="space-y-1.5">
                               <Label className="text-xs">Valor (R$)</Label>
                               <Input
                                 type="number"
@@ -1019,20 +1043,20 @@ export default function CommissionsPage() {
                                 className="nc-num"
                                 autoFocus
                               />
-                            </div>
-                            <div className="space-y-1.5">
+                            </Field>
+                            <Field className="space-y-1.5">
                               <Label className="text-xs">Data</Label>
                               <Input type="date" value={panelForm.date} onChange={e => setPanelForm(f => ({ ...f, date: e.target.value }))} />
-                            </div>
+                            </Field>
                           </div>
-                          <div className="space-y-1.5">
+                          <Field className="space-y-1.5">
                             <Label className="text-xs">Observação</Label>
                             <Input
                               value={panelForm.notes}
                               onChange={e => setPanelForm(f => ({ ...f, notes: e.target.value }))}
                               placeholder={panelMode === "lancar" ? "Ex: adiantamento, empréstimo" : "Opcional"}
                             />
-                          </div>
+                          </Field>
                         </motion.div>
                       )}
                     </section>
@@ -1059,7 +1083,7 @@ export default function CommissionsPage() {
                         Linha zerada não aparece: "Dívidas lançadas R$ 0,00" só
                         faz procurar uma coisa que não existe. */}
                     <section className="space-y-1.5">
-                      <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>A conta do saldo</p>
+                      <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>A conta do saldo</h3>
                       <LedgerLine
                         label="Trazido dos meses anteriores"
                         value={formatCurrency(panelRow.priorBalance)}
@@ -1118,7 +1142,7 @@ export default function CommissionsPage() {
                       if (seller.archivedAt) {
                         return (
                           <section className="space-y-2">
-                            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Arquivado</p>
+                            <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Arquivado</h3>
                             <p className="text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
                               Desde {formatDateBR(seller.archivedAt)}. Não aparece nas listas de escolha; o histórico continua com o nome dele.
                             </p>
@@ -1132,7 +1156,7 @@ export default function CommissionsPage() {
                       const blocked = Math.abs(today) > 0.01;
                       return (
                         <section className="space-y-2">
-                          <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Arquivar</p>
+                          <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Arquivar</h3>
                           <p className="text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
                             Tira o vendedor das listas de escolha sem apagar nada do histórico. Precisa estar
                             com o saldo zerado, sem estoque na mão e sem pedido pendente na loja.
@@ -1206,7 +1230,7 @@ export default function CommissionsPage() {
               />
               <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 <section className="space-y-1.5">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde ele está</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Onde ele está</h3>
                   <LedgerLine label="Retirado no período" value={formatCurrency(partnerRow.periodAmt)} />
                   <LedgerLine label="Retirado no ano" value={formatCurrency(partnerRow.yearAmt)} />
                   <LedgerLine
@@ -1217,9 +1241,9 @@ export default function CommissionsPage() {
                 </section>
                 <Rule />
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Registrar retirada</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Registrar retirada</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Valor (R$)</Label>
                       <Input
                         type="number"
@@ -1230,16 +1254,16 @@ export default function CommissionsPage() {
                         placeholder="0,00"
                         className="nc-num"
                       />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Data</Label>
                       <Input type="date" value={wdForm.date} onChange={e => setWdForm(f => ({ ...f, date: e.target.value }))} />
-                    </div>
+                    </Field>
                   </div>
-                  <div className="space-y-1.5">
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Observação</Label>
                     <Input value={wdForm.notes} onChange={e => setWdForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
-                  </div>
+                  </Field>
                 </section>
               </div>
               <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
@@ -1271,9 +1295,9 @@ export default function CommissionsPage() {
 
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De onde sai e para quem vai</p>
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>De onde sai e para quem vai</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Origem</Label>
                   <Select value={moveFrom} onValueChange={v => { setMoveFrom(v); setMoveSelected({}); if (v === moveTo) setMoveTo(""); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1291,8 +1315,8 @@ export default function CommissionsPage() {
                       })}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-1.5">
+                </Field>
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Destino</Label>
                   <Select value={moveTo} onValueChange={setMoveTo}>
                     <SelectTrigger><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
@@ -1302,7 +1326,7 @@ export default function CommissionsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </Field>
               </div>
             </section>
 

@@ -14,11 +14,29 @@ import {
 const ids = (list: { id: WidgetId }[]) => list.map(w => w.id);
 
 describe("layout padrão", () => {
-  it("abre com o Resumo no topo da coluna e o detalhe no trilho", () => {
+  it("abre em cards, no arranjo escolhido pelo dono", () => {
+    expect(DEFAULT_LAYOUT.mode).toBe("cards");
+    expect(DEFAULT_LAYOUT.widgets.map(w => `${w.id}:${w.size}${w.visible ? "" : ":oculto"}`)).toEqual([
+      "verdict:l",
+      "performance:m",
+      "result:s",
+      "recentSales:s",
+      "indicators:l:oculto",
+      "restock:m",
+      "topModels:m",
+      "sellers:m:oculto",
+    ]);
+  });
+
+  it("tem todos os blocos do catálogo e passa intacto pelo normalizeLayout", () => {
+    expect(DEFAULT_LAYOUT.widgets).toHaveLength(WIDGETS.length);
+    expect(normalizeLayout(DEFAULT_LAYOUT)).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("no modo vertical, o Resumo abre a coluna", () => {
     const { main, rail } = visibleWidgets(DEFAULT_LAYOUT);
-    expect(DEFAULT_LAYOUT.mode).toBe("vertical");
-    expect(ids(main)).toEqual(["verdict", "restock", "performance", "topModels"]);
-    expect(ids(rail)).toEqual(["result", "indicators", "recentSales", "sellers"]);
+    expect(ids(main)).toEqual(["verdict", "performance", "restock", "topModels"]);
+    expect(ids(rail)).toEqual(["result", "recentSales"]);
   });
 });
 
@@ -100,7 +118,7 @@ describe("updateWidget", () => {
   it("move um bloco do trilho para a coluna sem mudar a ordem global", () => {
     const got = updateWidget(DEFAULT_LAYOUT, "recentSales", { area: "main" });
     expect(ids(got.widgets)).toEqual(ids(DEFAULT_LAYOUT.widgets));
-    expect(ids(visibleWidgets(got).main)).toEqual(["verdict", "restock", "performance", "topModels", "recentSales"]);
+    expect(ids(visibleWidgets(got).main)).toEqual(["verdict", "performance", "recentSales", "restock", "topModels"]);
   });
 });
 
@@ -108,7 +126,7 @@ describe("reorderGroup", () => {
   it("reordena o trilho sem encostar na coluna", () => {
     const rail = ids(groupOf(DEFAULT_LAYOUT, "rail")).reverse();
     const got = reorderGroup(DEFAULT_LAYOUT, rail);
-    expect(ids(groupOf(got, "main"))).toEqual(["verdict", "restock", "performance", "topModels"]);
+    expect(ids(groupOf(got, "main"))).toEqual(["verdict", "performance", "restock", "topModels"]);
     expect(ids(groupOf(got, "rail"))).toEqual(rail);
   });
 
@@ -122,7 +140,7 @@ describe("moveWithin", () => {
   it("troca com o vizinho do mesmo grupo e para nas pontas", () => {
     const peers = ids(groupOf(DEFAULT_LAYOUT, "main"));
     const down = moveWithin(DEFAULT_LAYOUT, "restock", 1, peers);
-    expect(ids(groupOf(down, "main"))).toEqual(["verdict", "performance", "restock", "topModels"]);
+    expect(ids(groupOf(down, "main"))).toEqual(["verdict", "performance", "topModels", "restock"]);
     expect(moveWithin(DEFAULT_LAYOUT, "verdict", -1, peers)).toBe(DEFAULT_LAYOUT);
   });
 });

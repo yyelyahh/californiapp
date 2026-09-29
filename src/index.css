@@ -572,6 +572,22 @@
     background-color: color-mix(in srgb, var(--nc-text) 4%, transparent);
   }
 
+  /* Editar/excluir que moram no hover da linha (`group`). Somem SÓ onde existe
+     hover de verdade: o corte antigo era `sm:opacity-0`, largura de tela, e num
+     tablet (≥640px, sem mouse) as ações ficavam invisíveis e só funcionavam
+     tocando às cegas. A mesma pergunta do bloco `pointer: coarse`: dedo ou
+     ponteiro, não telefone ou monitor. O foco pelo teclado também revela. */
+  @media (hover: hover) and (pointer: fine) {
+    .nc-reveal {
+      opacity: 0;
+      transition: opacity 150ms ease;
+    }
+    .group:hover .nc-reveal,
+    .group:focus-within .nc-reveal {
+      opacity: 1;
+    }
+  }
+
   /* Número ou linha que ABRE O DETALHE — o Dashboard leva a Vendas já
      filtrada. O aviso de que dá para tocar é um chevron À VISTA
      (.nc-drill-cue), não um efeito de hover: no toque não existe hover para

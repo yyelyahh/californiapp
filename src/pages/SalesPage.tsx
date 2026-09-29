@@ -5,7 +5,7 @@ import { Plus, Pencil, Trash2, AlertCircle, X, ArrowUpDown, Clock, Check, Ban, S
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetTrigger } from "@/components/ui/sheet";
-import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, ShowMore, LIST_PAGE } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, ShowMore, LIST_PAGE, Field } from "@/components/nocturne";
 import { Label } from "@/components/ui/label";
 import { todayDateString, localDateToISO, formatDateBR, isoDay, currentMonthRange } from "@/lib/date-utils";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -233,6 +233,7 @@ function ConfirmOrderPopover({
             value={note}
             onChange={e => setNote(e.target.value)}
             maxLength={ORDER_NOTE_MAX}
+            aria-label="Observação (opcional)"
             placeholder="dia 20, fiado…"
             className="nc-input h-8 w-full px-2.5 text-xs max-sm:text-[16px]"
           />
@@ -727,7 +728,7 @@ export default function SalesPage() {
       } else {
         bySeller.set(key, {
           key,
-          name: s.sellerId ? getSellerName(s.sellerId) : "Sem funcionário",
+          name: s.sellerId ? getSellerName(s.sellerId) : "Casa",
           value: s.totalPrice,
           units: s.quantity,
         });
@@ -793,7 +794,7 @@ export default function SalesPage() {
 
     // Retirada exige vendedor
     if (form.type === "retirada_funcionario" && !form.sellerId) {
-      alert("Selecione o funcionário para a retirada.");
+      alert("Selecione o vendedor da retirada.");
       return;
     }
 
@@ -855,13 +856,13 @@ export default function SalesPage() {
   const saleForm = (
     <form id={SALE_FORM_ID} onSubmit={handleSubmit} className="space-y-5">
       <section className="space-y-3">
-        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Tipo de registro</p>
+        <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Tipo de registro</h3>
         <SegmentedToggle
           value={form.type}
           onChange={(v) => setForm(f => ({ ...f, type: v }))}
           options={[
             { id: "venda" as const, label: "Venda" },
-            { id: "retirada_funcionario" as const, label: "Retirada de funcionário" },
+            { id: "retirada_funcionario" as const, label: "Retirada de vendedor" },
           ]}
         />
         {isRetirada && (
@@ -870,15 +871,15 @@ export default function SalesPage() {
             style={{ background: "color-mix(in srgb, var(--nc-alert) 10%, transparent)", color: "var(--nc-alert)" }}
           >
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
-            <span>Não entra no faturamento. Vai para o saldo devedor do funcionário.</span>
+            <span>Não entra no faturamento. Vai para o saldo devedor do vendedor.</span>
           </div>
         )}
       </section>
 
       <section className="space-y-3">
-        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que saiu</p>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Funcionário {isRetirada && <span style={{ color: "var(--nc-crit)" }}>*</span>}</Label>
+        <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>O que saiu</h3>
+        <Field className="space-y-1.5">
+          <Label className="text-xs">Vendedor {isRetirada && <span style={{ color: "var(--nc-crit)" }}>*</span>}</Label>
           <Select value={form.sellerId} onValueChange={v => setForm(f => ({ ...f, sellerId: v, productId: "" }))} disabled={!!editingSale}>
             <SelectTrigger><SelectValue placeholder={isRetirada ? "Obrigatório" : "Selecione o vendedor"} /></SelectTrigger>
             <SelectContent className="nocturne">
@@ -897,7 +898,7 @@ export default function SalesPage() {
               Só aparecem vendedores com estoque atribuído.
             </p>
           )}
-        </div>
+        </Field>
 
         <motion.div
           key={!form.sellerId ? "produto-off" : "produto-on"}
@@ -906,6 +907,7 @@ export default function SalesPage() {
           transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-1.5"
         >
+          <Field className="space-y-1.5">
           <Label className="text-xs">Produto</Label>
           <Select
             value={form.productId}
@@ -929,6 +931,7 @@ export default function SalesPage() {
               })}
             </SelectContent>
           </Select>
+          </Field>
           {selectedProduct && !editingSale && (
             <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
               Disponível:{" "}
@@ -940,7 +943,7 @@ export default function SalesPage() {
         </motion.div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
+          <Field className="space-y-1.5">
             <Label className="text-xs">Quantidade</Label>
             {/* Travada na edição: mudar a quantidade de uma venda gravada não
                 mexia no estoque nem na caixa do vendedor (o estoque ficava
@@ -958,26 +961,26 @@ export default function SalesPage() {
                 Para mudar a quantidade, exclua e lance de novo — a exclusão devolve o estoque.
               </p>
             )}
-          </div>
-          <div className="space-y-1.5">
+          </Field>
+          <Field className="space-y-1.5">
             <Label className="text-xs">Preço unitário (R$)</Label>
             <Input type="number" step="0.01" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} className="nc-num" />
-          </div>
+          </Field>
         </div>
       </section>
 
       {!isRetirada && (
         <section className="space-y-3">
-          <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Pagamento</p>
+          <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Pagamento</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <Field className="space-y-1.5">
               <Label className="text-xs">Parcelas</Label>
               <Input type="number" min="1" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="nc-num" />
-            </div>
-            <div className="space-y-1.5">
+            </Field>
+            <Field className="space-y-1.5">
               <Label className="text-xs">Valor recebido (R$)</Label>
               <Input type="number" step="0.01" value={form.paidAmount} onChange={e => setForm(f => ({ ...f, paidAmount: e.target.value }))} className="nc-num" />
-            </div>
+            </Field>
           </div>
 
           {(() => {
@@ -1002,7 +1005,7 @@ export default function SalesPage() {
               }
             }
             return (
-              <div className="space-y-1.5">
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Forma de pagamento</Label>
                 <SegmentedToggle
                   value={form.paymentMethod}
@@ -1015,33 +1018,33 @@ export default function SalesPage() {
                     title: o.disabled ? "Selecione um vendedor para usar esta opção" : undefined,
                   }))}
                 />
-              </div>
+              </Field>
             );
           })()}
 
           {formTotal > 0 && formPaid >= formTotal - 0.01 && (
-            <div className="space-y-1.5">
+            <Field className="space-y-1.5">
               <Label className="text-xs">Data do recebimento</Label>
               <Input type="date" value={form.paidDate} onChange={e => setForm(f => ({ ...f, paidDate: e.target.value }))} />
               <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
                 A comissão entra no mês em que o valor foi recebido.
               </p>
-            </div>
+            </Field>
           )}
         </section>
       )}
 
       <section className="space-y-3">
-        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Registro</p>
+        <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Registro</h3>
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
+          <Field className="space-y-1.5">
             <Label className="text-xs">Data</Label>
             <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
+          </Field>
+          <Field className="space-y-1.5">
             <Label className="text-xs">Observações</Label>
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
-          </div>
+          </Field>
         </div>
       </section>
 
@@ -1060,7 +1063,7 @@ export default function SalesPage() {
           <div className="nc-rule-top flex justify-between pt-1.5">
             {isRetirada ? (
               <>
-                <span style={{ color: "var(--nc-text-2)" }}>Saldo devedor do funcionário</span>
+                <span style={{ color: "var(--nc-text-2)" }}>Saldo devedor do vendedor</span>
                 <span className="nc-num" style={{ color: "var(--nc-alert)" }}>{formatCurrency(formTotal)}</span>
               </>
             ) : (
@@ -1087,7 +1090,7 @@ export default function SalesPage() {
   const readSale = (s: typeof sales[number]) => ({
     remaining: Math.max(0, s.totalPrice - s.paidAmount),
     isRet: s.type === "retirada_funcionario",
-    sellerName: s.sellerId ? getSellerName(s.sellerId) : "Sem funcionário",
+    sellerName: s.sellerId ? getSellerName(s.sellerId) : "Casa",
     label: getProductDisplayName(s.productId),
     // Fallback diferente do `sellerName` de propósito: o selo fala em segunda
     // pessoa ("Dinheiro c/ vendedor"), a linha fala em terceira.
@@ -1148,12 +1151,14 @@ export default function SalesPage() {
         )}
         {!isRet && (
           <td className="nc-num px-3 py-2.5 text-right">
-            {/* Verde é o dinheiro que já entrou; laranja é o que falta. A coluna
-                inteira responde uma pergunta só ("quanto desta venda está na
-                mão?"), e a cor responde antes de a pessoa ler o número. */}
+            {/* A coluna responde UMA pergunta: quanto falta receber. Ela era
+                "Valor" e mudava de sentido conforme a linha — na venda quitada
+                mostrava o pago (repetindo o Total ao lado, em verde), na aberta
+                o que faltava. Quitada agora é "—"; o selo de situação já diz
+                "Pago". É o mesmo "falta R$ X" do card do celular. */}
             {remaining > 0
               ? <span style={{ color: "var(--nc-alert)" }}>{formatCurrency(remaining)}</span>
-              : <span style={{ color: "var(--nc-ok)" }}>{formatCurrency(s.paidAmount)}</span>}
+              : <span style={{ color: "var(--nc-text-3)" }}>—</span>}
           </td>
         )}
         {!isRet && (
@@ -1177,9 +1182,9 @@ export default function SalesPage() {
           </td>
         )}
         <td className="px-3 py-2">
-          {/* A tabela só existe onde há ponteiro (a partir do `lg`), então a
-              ação pode morar no hover: no toque quem responde é o card. */}
-          <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {/* A ação mora no hover (`.nc-reveal`), que some só onde há mouse:
+              num tablet de toque largo o bastante para a tabela, fica à vista. */}
+          <div className="flex items-center justify-end gap-0.5 nc-reveal">
             {rowActions(s, label)}
           </div>
         </td>
@@ -1318,12 +1323,12 @@ export default function SalesPage() {
 
   const sellerSelect = (
     <Select value={fSeller} onValueChange={setFSeller}>
-      <SelectTrigger className={cn(triggerClass, !compactFilters && "min-w-[130px]")} aria-label="Filtrar por funcionário">
-        <SelectValue placeholder="Funcionário" />
+      <SelectTrigger className={cn(triggerClass, !compactFilters && "min-w-[130px]")} aria-label="Filtrar por vendedor">
+        <SelectValue placeholder="Vendedor" />
       </SelectTrigger>
       <SelectContent className="nocturne">
-        <SelectItem value="all">Todos funcionários</SelectItem>
-        <SelectItem value="none">Sem funcionário</SelectItem>
+        <SelectItem value="all">Todos os vendedores</SelectItem>
+        <SelectItem value="none">Casa</SelectItem>
         {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
       </SelectContent>
     </Select>
@@ -1431,7 +1436,7 @@ export default function SalesPage() {
     (fSortKey !== "date" || fSortDir !== "desc" ? 1 : 0) +
     (fPreset === "custom" ? 1 : 0);
 
-  const headerEyebrow = tab === "vendas" ? periodLabel : tab === "retiradas" ? "Saldo devedor de funcionário" : "Pedidos do catálogo";
+  const headerEyebrow = tab === "vendas" ? periodLabel : tab === "retiradas" ? "Saldo devedor de vendedor" : "Pedidos do catálogo";
 
   return (
     // `/sales` está em `fullBleedRoutes` (AppLayout): chega sem padding e sem
@@ -1531,7 +1536,11 @@ export default function SalesPage() {
 
           <SalesTabs
             value={tab}
-            counts={{ vendas: baseSales.length, retiradas: sortedRetiradas.length, pedidos: pendingOrders.length }}
+            // Vendas conta o que a lista MOSTRA (o filtro de período), não o
+            // histórico inteiro: "Vendas 150" em cima de uma lista e de um
+            // trilho que diziam 44 eram dois números para a mesma coisa.
+            // Retiradas e pedidos não têm filtro, então contam tudo.
+            counts={{ vendas: sortedSales.length, retiradas: sortedRetiradas.length, pedidos: pendingOrders.length }}
           />
         </div>
 
@@ -1609,7 +1618,7 @@ export default function SalesPage() {
               />
               <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5">
                 <div className="space-y-1.5">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Funcionário</p>
+                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Vendedor</p>
                   {sellerSelect}
                 </div>
                 <div className="space-y-1.5">
@@ -1671,7 +1680,7 @@ export default function SalesPage() {
                       <th className="w-[50px] px-3 py-2 text-right font-normal">Qtd</th>
                       <th className="w-[100px] px-3 py-2 text-right font-normal">Total</th>
                       <th className="w-[120px] px-3 py-2 text-center font-normal">Pagamento</th>
-                      <th className="w-[110px] px-3 py-2 text-right font-normal">Valor</th>
+                      <th className="w-[110px] px-3 py-2 text-right font-normal">Falta</th>
                       <th className="w-[80px] px-3 py-2 text-left font-normal">Situação</th>
                       <th className="w-[70px] px-3 py-2" />
                     </tr>
@@ -1745,13 +1754,13 @@ export default function SalesPage() {
           No celular ele vem ANTES da lista (`order-first`), como nas outras
           telas migradas: a lista rola por telas e um resumo embaixo dela não
           seria lido. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
         {tab === "vendas" && (
           <>
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Vendas no filtro</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Vendas no filtro</h2>
 
             <div>
               <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
@@ -1765,9 +1774,8 @@ export default function SalesPage() {
                 />
               </div>
               {/* Divisão REAL do total, como no Dashboard: cada real vendido está
-                  de um lado ou do outro da barra. Aqui os dois lados são as duas
-                  cores da coluna "Valor" da tabela — verde entrou, laranja falta
-                  —, então o trilho e a lista contam a mesma história. */}
+                  de um lado ou do outro da barra: verde entrou, laranja falta —
+                  o laranja é a soma da coluna "Falta" da tabela. */}
               <div className="mt-2 flex h-[5px] gap-0.5">
                 <div style={{ flex: Math.max(totals.paid, 0.001), background: "var(--nc-ok)", borderRadius: 2 }} />
                 <div style={{ flex: Math.max(totals.open, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
@@ -1783,12 +1791,9 @@ export default function SalesPage() {
 
             <Rule />
 
+            {/* Sem "Unidades vendidas": era o "N un." escrito logo acima. */}
             <div className="flex flex-col gap-2.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Unidades vendidas</span>
-                <span className="nc-num text-sm">{totals.units}</span>
-              </div>
-              <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
                 <span className="text-[12.5px]">Ticket médio</span>
                 <AnimatedNumber
                   value={totals.ticket}
@@ -1811,7 +1816,7 @@ export default function SalesPage() {
             <div>
               <div className="mb-1.5 flex items-center gap-1.5">
                 <Clock size={12} style={{ color: "var(--nc-alert)" }} />
-                <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Esperando decisão</span>
+                <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Esperando decisão</h2>
               </div>
               {orderStats.count === 0 ? (
                 <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhum pedido do catálogo pendente.</p>
@@ -1843,7 +1848,7 @@ export default function SalesPage() {
 
             <div className="hidden xl:block">
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Modelos que mais vendem</span>
+                <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Modelos que mais vendem</h2>
                 <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
                   {topModels.length} no filtro
                 </span>
@@ -1879,7 +1884,7 @@ export default function SalesPage() {
 
         {tab === "retiradas" && (
           <>
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Retiradas de funcionário</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Retiradas de vendedor</h2>
 
             <div>
               <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Valor retirado</span>
@@ -1917,7 +1922,7 @@ export default function SalesPage() {
                 </span>
               </div>
               <p className="text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
-                Não entra no faturamento: vira saldo devedor do funcionário.
+                Não entra no faturamento: vira saldo devedor do vendedor.
               </p>
             </div>
 
@@ -1925,7 +1930,7 @@ export default function SalesPage() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quem mais retirou</span>
+                <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Quem mais retirou</h2>
                 <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
                   {retiradaStats.bySeller.length} no total
                 </span>
@@ -1958,7 +1963,7 @@ export default function SalesPage() {
 
         {tab === "pedidos" && (
           <>
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Pedidos do catálogo</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Pedidos do catálogo</h2>
 
             <div>
               <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Reservado esperando decisão</span>
@@ -2002,7 +2007,7 @@ export default function SalesPage() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Por vendedor</span>
+                <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Por vendedor</h2>
                 <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
                   {orderStats.bySeller.length} no total
                 </span>

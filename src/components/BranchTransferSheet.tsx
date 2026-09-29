@@ -11,7 +11,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
-import { NcButton, NcSheetHeader, NcTabsList, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, NcTabsList, EYEBROW, Field } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 import { groupTransfers, transferTotals } from "@/lib/transfer-groups";
 import { listItem, transitionBase } from "@/lib/motion";
 
@@ -291,7 +292,7 @@ export default function BranchTransferSheet() {
               ) : (
                 <>
                   <section className="space-y-3">
-                    <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que sai daqui</p>
+                    <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>O que sai daqui</h3>
 
                     {/* A ORIGEM VEM PRIMEIRO, e o produto sai dela. Escolher o
                         sabor antes é descobrir no fim que aquele vendedor não
@@ -300,7 +301,7 @@ export default function BranchTransferSheet() {
                         automática acerta o total e erra a pessoa. Ela fica de
                         pé entre um item e outro: a viagem costuma sair toda da
                         mesma caixa. */}
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">De onde sai</Label>
                       <Select
                         value={origin}
@@ -321,13 +322,13 @@ export default function BranchTransferSheet() {
                           })}
                         </SelectContent>
                       </Select>
-                    </div>
+                    </Field>
 
                     {/* Produto + quantidade + adicionar numa linha só: o gesto
                         se repete, e cada sabor é uma ida curta ao mesmo lugar
                         em vez de uma reabertura do painel. */}
                     <div className="flex flex-wrap items-end gap-2">
-                      <div className="min-w-[180px] flex-1 space-y-1.5">
+                      <Field className="min-w-[180px] flex-1 space-y-1.5">
                         <Label className="text-xs">Produto</Label>
                         <Select value={productId} onValueChange={setProductId}>
                           <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
@@ -345,8 +346,8 @@ export default function BranchTransferSheet() {
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="w-[92px] space-y-1.5">
+                      </Field>
+                      <Field className="w-[92px] space-y-1.5">
                         <Label className="text-xs">Qtd</Label>
                         <Input
                           type="number"
@@ -357,7 +358,7 @@ export default function BranchTransferSheet() {
                           onChange={e => setQuantity(e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLine(); } }}
                         />
-                      </div>
+                      </Field>
                       <NcButton variant="outline" size="md" onClick={addLine} disabled={!canAdd}>
                         <Plus size={13} />Adicionar
                       </NcButton>
@@ -453,9 +454,9 @@ export default function BranchTransferSheet() {
                   </section>
 
                   <section className="space-y-3">
-                    <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Para onde vai</p>
+                    <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Para onde vai</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
+                      <Field className="space-y-1.5">
                         <Label className="text-xs">Filial de destino</Label>
                         <Select value={toBranch} onValueChange={setToBranch}>
                           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -465,14 +466,14 @@ export default function BranchTransferSheet() {
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="space-y-1.5">
+                      </Field>
+                      <Field className="space-y-1.5">
                         <Label className="text-xs">Data</Label>
                         <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-                      </div>
+                      </Field>
                     </div>
 
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Observação</Label>
                       <Input
                         value={notes}
@@ -483,7 +484,7 @@ export default function BranchTransferSheet() {
                       <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
                         Vale para a viagem inteira: é uma operação só.
                       </p>
-                    </div>
+                    </Field>
 
                     {/* Transferência errada se conserta com uma de volta, não
                         apagando: o histórico conta o que aconteceu com a

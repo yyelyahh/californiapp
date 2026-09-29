@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { sortNames } from "@/lib/catalog-order";
 import { useStore } from "@/context/StoreContext";
 import { toast } from "sonner";
-import { NcButton, NcSheetHeader, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, EYEBROW, Field } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 
@@ -133,9 +133,9 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
           {/* Identificação */}
           <section className="space-y-3">
-            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Identificação</p>
+            <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Identificação</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Marca</Label>
                 <Select value={brandSelect} onValueChange={handleBrandChange}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -144,8 +144,8 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
                     <SelectItem value="__new__">+ Nova marca</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
+              </Field>
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Modelo / Puffs</Label>
                 <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
                   <SelectTrigger><SelectValue placeholder={brand ? "Selecione" : "Marca primeiro"} /></SelectTrigger>
@@ -154,28 +154,28 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
                     <SelectItem value="__new__">+ Novo modelo</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
             </div>
             {brandSelect === "__new__" && (
-              <Input value={brand} onChange={e => setBrand(e.target.value)} placeholder="Nome da nova marca" autoFocus />
+              <Input value={brand} onChange={e => setBrand(e.target.value)} aria-label="Nome da nova marca" placeholder="Nome da nova marca" autoFocus />
             )}
             {modelSelect === "__new__" && (
-              <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, 30K, TE 30K" autoFocus />
+              <Input value={model} onChange={e => setModel(e.target.value)} aria-label="Nome do novo modelo" placeholder="Ex: V155, 30K, TE 30K" autoFocus />
             )}
           </section>
 
           {/* Preços */}
           <section className="space-y-3">
-            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Preços por unidade</p>
+            <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Preços por unidade</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Compra (R$)</Label>
                 <Input type="number" step="0.01" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} placeholder="0,00" />
-              </div>
-              <div className="space-y-1.5">
+              </Field>
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Venda (R$)</Label>
                 <Input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)} placeholder="0,00" />
-              </div>
+              </Field>
             </div>
             {pPrice > 0 && sPrice > 0 && (
               <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
@@ -189,10 +189,11 @@ export default function AddProductDialog({ disabled }: { disabled?: boolean } = 
 
           {/* Sabores */}
           <section className="space-y-3">
-            <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Sabores (um por linha)</p>
+            <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Sabores (um por linha)</h3>
             <textarea
               value={flavorsText}
               onChange={e => setFlavorsText(e.target.value)}
+              aria-label="Sabores, um por linha"
               placeholder={"Grape Ice\nStrawberry Ice\nWatermelon Ice\nGreen Apple"}
               rows={6}
               className="nc-input flex w-full px-3 py-2 text-sm"

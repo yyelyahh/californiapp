@@ -11,7 +11,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, ShowMore, LIST_PAGE } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, ShowMore, LIST_PAGE, Field } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
@@ -236,16 +236,16 @@ export default function ExpensesPage() {
               <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 {/* O que foi pago */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que foi pago</p>
-                  <div className="space-y-1.5">
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>O que foi pago</h3>
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Descrição</Label>
                     <Input
                       value={form.description}
                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                       placeholder="Ex: frete da remessa de setembro"
                     />
-                  </div>
-                  <div className="space-y-1.5">
+                  </Field>
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Categoria</Label>
                     <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
                       <SelectTrigger>
@@ -255,14 +255,14 @@ export default function ExpensesPage() {
                         {allCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </Field>
                 </section>
 
                 {/* Quanto e quando */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quanto e quando</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Quanto e quando</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Valor (R$)</Label>
                       <Input
                         type="number"
@@ -273,11 +273,11 @@ export default function ExpensesPage() {
                         placeholder="0,00"
                         className="nc-num"
                       />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Data</Label>
                       <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-                    </div>
+                    </Field>
                   </div>
                 </section>
               </div>
@@ -315,9 +315,9 @@ export default function ExpensesPage() {
               />
             </div>
             <Select value={fCategory} onValueChange={setFCategory}>
-              <SelectTrigger className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Categoria" className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue /></SelectTrigger>
               <SelectContent className="nocturne">
-                <SelectItem value="all">Todas categorias</SelectItem>
+                <SelectItem value="all">Todas as categorias</SelectItem>
                 {allCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -392,9 +392,7 @@ export default function ExpensesPage() {
                     <p className="nc-num min-w-[86px] text-right text-[13px]" style={{ color: "var(--nc-crit)" }}>
                       {formatCurrency(e.amount)}
                     </p>
-                    {/* No desktop a ação só aparece no hover da linha; no toque
-                        não há hover, então fica sempre visível abaixo de sm. */}
-                    <div className="transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                    <div className="nc-reveal">
                       <NcButton
                         variant="danger"
                         size="icon"
@@ -426,11 +424,11 @@ export default function ExpensesPage() {
           reparte em N categorias, não em duas metades — uma barra dividida
           inventaria uma divisão que não existe. A repartição real está na lista
           do fim, com a participação de cada categoria. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Custos da operação</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Custos da operação</h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Despesa no período</span>
@@ -455,26 +453,30 @@ export default function ExpensesPage() {
 
         <Rule />
 
+        {/* A descrição do maior lançamento mora embaixo DELE. Ficava embaixo
+            da média, e "Média por lançamento R$ 355 / Aluguel do depósito"
+            lia como se a média fosse do aluguel. */}
         <div className="flex flex-col gap-2.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Maior lançamento</span>
-            <span className="nc-num text-sm">
-              {totals.biggest ? formatCurrencyShort(totals.biggest.amount) : "—"}
-            </span>
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Maior lançamento</span>
+              <span className="nc-num text-sm">
+                {totals.biggest ? formatCurrencyShort(totals.biggest.amount) : "—"}
+              </span>
+            </div>
+            <p className="truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
+              {totals.biggest ? totals.biggest.description : "Nenhum lançamento no período"}
+            </p>
           </div>
           <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
             <span className="text-[12.5px]">Média por lançamento</span>
             <AnimatedNumber
               value={totals.average}
               format={formatCurrency}
-              duration={0.7}
-              animateOnMount
+              duration={0.5}
               className="nc-num text-xl font-semibold"
             />
           </div>
-          <p className="truncate text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
-            {totals.biggest ? totals.biggest.description : "Nenhum lançamento no período"}
-          </p>
         </div>
 
         <Rule />
@@ -484,7 +486,7 @@ export default function ExpensesPage() {
         <div>
           <div className="mb-1.5 flex items-center gap-1.5">
             <CalendarDays size={12} style={{ color: "var(--nc-text-3)" }} />
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Ritmo do mês</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Ritmo do mês</h2>
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-2">
@@ -519,7 +521,7 @@ export default function ExpensesPage() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde o dinheiro sai</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Onde o dinheiro sai</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {byCategory.length} no período
             </span>

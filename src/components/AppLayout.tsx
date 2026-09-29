@@ -176,6 +176,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 key={item.to}
                 to={item.to}
                 title={collapsed ? item.label : undefined}
+                aria-label={collapsed ? item.label : undefined}
                 data-active={isActive}
                 className="nc-nav-item relative flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px]"
               >

@@ -76,7 +76,10 @@ type Scope = "key" | "all";
 
 const SCOPE_OPTIONS: { value: Scope; label: string; short: string }[] = [
   { value: "key", label: "Ações principais", short: "Principais" },
-  { value: "all", label: "Tudo o que foi escrito", short: "Tudo" },
+  // "Todos", e não "Tudo": o seletor de período, colado a este, também tem um
+  // "Tudo" — eram dois chips com o mesmo nome lado a lado, um de escopo e um
+  // de data.
+  { value: "all", label: "Tudo o que foi escrito", short: "Todos" },
 ];
 
 const DEFAULT_SCOPE: Scope = "key";
@@ -347,14 +350,14 @@ export default function AuditPage() {
               />
             </div>
             <Select value={fArea} onValueChange={setFArea}>
-              <SelectTrigger className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Área" className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue /></SelectTrigger>
               <SelectContent className="nocturne">
                 <SelectItem value="all">Todas as áreas</SelectItem>
                 {AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={activeActor} onValueChange={setFActor}>
-              <SelectTrigger className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Pessoa" className="h-8 w-auto min-w-[130px] text-[12.5px]"><SelectValue /></SelectTrigger>
               <SelectContent className="nocturne">
                 <SelectItem value="all">Qualquer pessoa</SelectItem>
                 {actorOptions.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
@@ -416,7 +419,7 @@ export default function AuditPage() {
             {rows.length === 0
               ? "Nenhum movimento neste período."
               : scope === "key" && movements.length > 0
-                ? "Nenhuma ação principal neste período. Em “Tudo” aparece o resto do que foi escrito."
+                ? "Nenhuma ação principal neste período. Em “Todos” aparece o resto do que foi escrito."
                 : "Nenhum movimento encontrado com os filtros aplicados."}
           </div>
         ) : (
@@ -469,8 +472,8 @@ export default function AuditPage() {
           não existe divisão REAL do total em duas metades aqui. Movimento não
           se reparte em recebido/a receber; ele se reparte entre pessoas e
           entre áreas, e é isso que as duas listas do fim mostram. */}
-      <aside className={RAIL_FIRST} style={{ background: "var(--nc-rail)" }}>
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Rastro do painel</span>
+      <aside aria-label="Resumo" className={RAIL_FIRST} style={{ background: "var(--nc-rail)" }}>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Rastro do painel</h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Movimentos no período</span>
@@ -492,7 +495,7 @@ export default function AuditPage() {
               propósito, e some dizer por quê é o que faria duvidar dele. */}
           {scope === "key" && hiddenByScope > 0 && (
             <p className="mt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-              + {hiddenByScope} de cadastro e correção, em “Tudo”
+              + {hiddenByScope} de cadastro e correção, em “Todos”
             </p>
           )}
         </div>
@@ -500,7 +503,7 @@ export default function AuditPage() {
         <Rule />
 
         <div>
-          <span className={cn(EYEBROW, "mb-1.5 block")} style={{ color: "var(--nc-text-3)" }}>Quem mexeu</span>
+          <h2 className={cn(EYEBROW, "font-normal mb-1.5 block")} style={{ color: "var(--nc-text-3)" }}>Quem mexeu</h2>
           {stats.actors.length === 0 ? (
             <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Ninguém no período.</p>
           ) : (
@@ -528,7 +531,7 @@ export default function AuditPage() {
         <Rule />
 
         <div>
-          <span className={cn(EYEBROW, "mb-1.5 block")} style={{ color: "var(--nc-text-3)" }}>Onde mexeram</span>
+          <h2 className={cn(EYEBROW, "font-normal mb-1.5 block")} style={{ color: "var(--nc-text-3)" }}>Onde mexeram</h2>
           {stats.areas.length === 0 ? (
             <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma área no período.</p>
           ) : (
@@ -554,7 +557,7 @@ export default function AuditPage() {
             --nc-alert, não em --nc-crit: não é um erro, é algo que merece ser
             reconhecido — quase sempre é o próprio dono mexendo no SQL Editor. */}
         <div>
-          <span className={cn(EYEBROW, "mb-1.5 block")} style={{ color: "var(--nc-text-3)" }}>Fora do painel</span>
+          <h2 className={cn(EYEBROW, "font-normal mb-1.5 block")} style={{ color: "var(--nc-text-3)" }}>Fora do painel</h2>
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Escritas direto no banco</span>
             <span

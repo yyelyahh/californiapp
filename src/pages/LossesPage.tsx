@@ -12,7 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, Field } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
@@ -181,8 +181,8 @@ export default function LossesPage() {
               <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 {/* O que se perdeu */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>O que se perdeu</p>
-                  <div className="space-y-1.5">
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>O que se perdeu</h3>
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Produto</Label>
                     <Select value={productId} onValueChange={setProductId}>
                       <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
@@ -198,9 +198,9 @@ export default function LossesPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Quantidade</Label>
                       <Input type="number" min="1" max={selectedProduct ? originCap : undefined} value={quantity} onChange={e => setQuantity(e.target.value)} className="nc-num" />
                       {overCap && (
@@ -210,24 +210,24 @@ export default function LossesPage() {
                             : `Esse vendedor tem ${originCap} un.`}
                         </p>
                       )}
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Data</Label>
                       <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-                    </div>
+                    </Field>
                   </div>
                 </section>
 
                 {/* De onde saiu */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De onde saiu</p>
-                  <div className="space-y-1.5">
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>De onde saiu</h3>
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Origem da perda</Label>
                     <Select value={sellerId} onValueChange={setSellerId}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent className="nocturne">
                         <SelectItem value="estoque" disabled={!!productId && freeStock <= 0}>
-                          Estoque interno{productId ? ` (${freeStock} un. livres)` : ""}
+                          Casa{productId ? ` (${freeStock} un. livres)` : ""}
                         </SelectItem>
                         {activeSellers.map(s => {
                           const held = heldBy(s.id);
@@ -239,11 +239,11 @@ export default function LossesPage() {
                         })}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-1.5">
+                  </Field>
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Motivo</Label>
                     <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: quebrado, vencido, extraviado" />
-                  </div>
+                  </Field>
                 </section>
 
                 {selectedProduct && Number(quantity) > 0 && (
@@ -297,7 +297,7 @@ export default function LossesPage() {
             <AnimatePresence initial={false}>
               {sortedLosses.map((l, i) => {
                 const label = getProductName(l.productId);
-                const originLabel = l.sellerId ? (sellerMap.get(l.sellerId) ?? "Vendedor") : "Estoque interno";
+                const originLabel = l.sellerId ? (sellerMap.get(l.sellerId) ?? "Vendedor") : "Casa";
                 return (
                   <motion.div
                     key={l.id}
@@ -313,18 +313,17 @@ export default function LossesPage() {
                         {formatDateBR(l.date)} · {originLabel}{l.reason ? ` · ${l.reason}` : ""}
                       </p>
                     </div>
-                    <div className="flex flex-none items-center gap-4 text-[11px]">
-                      <div className="text-right">
-                        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Qtd</p>
-                        <p className="nc-num">{l.quantity}</p>
+                    {/* Sem os rótulos "QTD / VALOR" em cada linha: eles se
+                        repetiam na lista inteira, e "2 un." já diz o que é. */}
+                    {/* No celular a quantidade desce para baixo do valor: lado
+                        a lado, as duas colunas fixas espremiam a linha e o
+                        motivo da perda sumia em reticências. */}
+                    <div className="flex flex-none items-center gap-3 text-[12.5px] sm:gap-4">
+                      <div className="flex flex-col items-end sm:flex-row-reverse sm:items-center sm:gap-4">
+                        <span className="nc-num text-right sm:w-[88px]" style={{ color: "var(--nc-crit)" }}>{formatCurrency(l.totalCost)}</span>
+                        <span className="nc-num text-right text-[11.5px] sm:w-[44px] sm:text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>{l.quantity} un.</span>
                       </div>
-                      <div className="text-right">
-                        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Valor</p>
-                        <p className="nc-num" style={{ color: "var(--nc-crit)" }}>{formatCurrency(l.totalCost)}</p>
-                      </div>
-                      {/* No desktop a ação só aparece no hover da linha; no toque
-                          não há hover, então fica sempre visível abaixo de sm. */}
-                      <div className="transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                      <div className="nc-reveal">
                         <NcButton
                           variant="danger"
                           size="icon"
@@ -351,11 +350,11 @@ export default function LossesPage() {
           No celular ela vem ANTES da lista (`order-first`), como nas outras
           telas migradas: a lista rola por telas e um resumo embaixo dela não
           seria lido. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Estoque perdido</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Estoque perdido</h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Prejuízo acumulado</span>
@@ -379,12 +378,9 @@ export default function LossesPage() {
 
         <Rule />
 
+        {/* Sem "Unidades perdidas": era o "N un." escrito logo acima. */}
         <div className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Unidades perdidas</span>
-            <span className="nc-num text-sm">{totalUnits}</span>
-          </div>
-          <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
             <span className="text-[12.5px]">Perda deste mês</span>
             <span style={{ color: monthLoss > 0 ? "var(--nc-crit)" : undefined }}>
               <AnimatedNumber
@@ -410,7 +406,7 @@ export default function LossesPage() {
         <div>
           <div className="mb-1.5 flex items-center gap-1.5">
             <AlertTriangle size={12} style={{ color: "var(--nc-crit)" }} />
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De onde saiu</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>De onde saiu</h2>
           </div>
           {totalLoss === 0 ? (
             <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma perda registrada.</p>
@@ -432,7 +428,7 @@ export default function LossesPage() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Modelos que mais se perdem</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Modelos que mais se perdem</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {topModels.length} no total
             </span>

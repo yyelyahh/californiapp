@@ -13,7 +13,8 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import type { PurchaseOrder } from "@/types";
 import { sortNames } from "@/lib/catalog-order";
 import { readPurchaseDraft } from "@/lib/purchase-draft";
-import { NcButton, NcSheetHeader, EYEBROW } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, EYEBROW, Field } from "@/components/nocturne";
+import { cn } from "@/lib/utils";
 
 type DraftItem = { brand: string; brandNew: string; model: string; modelNew: string; quantity: string; unitPrice: string };
 /**
@@ -376,29 +377,29 @@ export default function PurchaseOrdersSection() {
           />
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Pedido</p>
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Pedido</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Data</Label>
                   <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
+                </Field>
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Frete (R$)</Label>
                   <Input type="number" step="0.01" min={0} value={freightNew} onChange={e => setFreightNew(e.target.value)} placeholder="0,00" className="nc-num" />
-                </div>
+                </Field>
               </div>
-              <div className="space-y-1.5">
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Observações</Label>
                 <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" />
-              </div>
+              </Field>
             </section>
 
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Produtos esperados</p>
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Produtos esperados</h3>
               {items.map((item, idx) => (
                 <div key={idx} className="space-y-2.5 rounded-lg p-3" style={INSET_BOX}>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Produto {idx + 1}</Label>
+                    <p className="text-xs font-medium leading-none">Produto {idx + 1}</p>
                     {items.length > 1 && (
                       <NcButton
                         variant="danger"
@@ -412,14 +413,14 @@ export default function PurchaseOrdersSection() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Select value={item.brand} onValueChange={v => setItems(prev => prev.map((it, i) => i === idx ? { ...it, brand: v, model: "", modelNew: "" } : it))}>
-                      <SelectTrigger><SelectValue placeholder="Marca" /></SelectTrigger>
+                      <SelectTrigger aria-label={`Marca do produto ${idx + 1}`}><SelectValue placeholder="Marca" /></SelectTrigger>
                       <SelectContent className="nocturne">
                         {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                         <SelectItem value="__new__">+ Nova marca</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={item.model} onValueChange={v => setItems(prev => prev.map((it, i) => i === idx ? { ...it, model: v } : it))}>
-                      <SelectTrigger><SelectValue placeholder="Modelo" /></SelectTrigger>
+                      <SelectTrigger aria-label={`Modelo do produto ${idx + 1}`}><SelectValue placeholder="Modelo" /></SelectTrigger>
                       <SelectContent className="nocturne">
                         {modelsFor(resolveBrand(item)).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                         <SelectItem value="__new__">+ Novo modelo</SelectItem>
@@ -427,17 +428,17 @@ export default function PurchaseOrdersSection() {
                     </Select>
                   </div>
                   {item.brand === "__new__" && (
-                    <Input value={item.brandNew} placeholder="Nome da nova marca"
+                    <Input value={item.brandNew} placeholder="Nome da nova marca" aria-label={`Nova marca do produto ${idx + 1}`}
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, brandNew: e.target.value } : it))} />
                   )}
                   {item.model === "__new__" && (
-                    <Input value={item.modelNew} placeholder="Nome do novo modelo"
+                    <Input value={item.modelNew} placeholder="Nome do novo modelo" aria-label={`Novo modelo do produto ${idx + 1}`}
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, modelNew: e.target.value } : it))} />
                   )}
                   <div className="grid grid-cols-2 gap-2">
-                    <Input type="number" min={1} value={item.quantity} placeholder="Qtd esperada" className="nc-num"
+                    <Input type="number" min={1} value={item.quantity} placeholder="Qtd esperada" aria-label={`Quantidade esperada do produto ${idx + 1}`} className="nc-num"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))} />
-                    <Input type="number" step="0.01" min={0} value={item.unitPrice} placeholder="Valor unitário" className="nc-num"
+                    <Input type="number" step="0.01" min={0} value={item.unitPrice} placeholder="Valor unitário" aria-label={`Valor unitário do produto ${idx + 1}`} className="nc-num"
                       onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, unitPrice: e.target.value } : it))} />
                   </div>
                 </div>
@@ -485,16 +486,16 @@ export default function PurchaseOrdersSection() {
           />
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Recebimento</p>
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Recebimento</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Data do recebimento</Label>
                   <Input type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
+                </Field>
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Frete total (R$)</Label>
                   <Input type="number" step="0.01" min={0} value={freight} onChange={e => setFreight(e.target.value)} placeholder="0,00" className="nc-num" />
-                </div>
+                </Field>
               </div>
               {freightValue > 0 && (
                 <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
@@ -523,7 +524,7 @@ export default function PurchaseOrdersSection() {
                         : `${total - it.expectedQuantity} unidades a mais que o esperado`}
                     </p>
                   )}
-                  <div className="space-y-1.5">
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Custo unitário (R$)</Label>
                     <Input type="number" step="0.01" className="nc-num" value={costs[it.id] ?? ""}
                       onChange={e => setCosts(prev => ({ ...prev, [it.id]: e.target.value }))} placeholder="0,00" />
@@ -532,7 +533,7 @@ export default function PurchaseOrdersSection() {
                         Com frete: {brl((Number(costs[it.id]) || 0) + freightPerUnit)}
                       </p>
                     )}
-                  </div>
+                  </Field>
                   <div className="space-y-1.5">
                     {(flavors[it.id] ?? []).map((row, i) => (
                       // `flex-wrap` porque a linha não cabe num telefone: campo
@@ -543,7 +544,7 @@ export default function PurchaseOrdersSection() {
                       // encolhe um <input> abaixo do tamanho intrínseco dele, e
                       // com a quebra ele passa a poder.
                       <div key={i} className="flex flex-wrap items-center gap-1.5">
-                        <Input value={row.flavor} placeholder="Sabor" className="min-w-[7rem] flex-1"
+                        <Input value={row.flavor} placeholder="Sabor" aria-label={`Sabor ${i + 1} de ${it.brand} ${it.model}`} className="min-w-[7rem] flex-1"
                           onChange={e => setRow(it.id, i, { flavor: e.target.value })} />
                         {/* Seletor por LINHA, e só quando há mais de uma cidade:
                             com uma filial só ele seria um campo de uma opção. */}
@@ -559,7 +560,7 @@ export default function PurchaseOrdersSection() {
                             </SelectContent>
                           </Select>
                         )}
-                        <Input type="number" min={0} value={row.quantity} placeholder="Qtd" className="nc-num w-20"
+                        <Input type="number" min={0} value={row.quantity} placeholder="Qtd" aria-label={`Quantidade do sabor ${i + 1}`} className="nc-num w-20"
                           onChange={e => setRow(it.id, i, { quantity: e.target.value })} />
                         <NcButton
                           variant="danger"

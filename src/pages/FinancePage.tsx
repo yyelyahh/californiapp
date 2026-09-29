@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, Field } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 
@@ -238,9 +238,7 @@ export default function FinancePage() {
                       </div>
                       <div className="flex flex-none items-center gap-3">
                         <span className="nc-num text-[13px]">{formatCurrency(c.amount)}</span>
-                        {/* No desktop a ação só aparece no hover; no toque não há
-                            hover, então fica sempre visível abaixo de sm. */}
-                        <div className="transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                        <div className="nc-reveal">
                           <NcButton
                             variant="danger"
                             size="icon"
@@ -306,7 +304,7 @@ export default function FinancePage() {
                             teste) não tinha como sair da tela. O banco apaga os
                             pagamentos junto, por ON DELETE CASCADE em
                             loan_payments.loan_id. */}
-                        <div className="transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                        <div className="nc-reveal">
                           <NcButton
                             variant="danger"
                             size="icon"
@@ -357,11 +355,11 @@ export default function FinancePage() {
       {/* ---------------- Coluna direita: a posição de hoje ----------------
           A tela ignorava o razão (`financial_events`) por completo, embora ele
           já estivesse calculado no StoreContext. É dele que sai tudo aqui. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Posição de hoje</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Posição de hoje</h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Caixa</span>
@@ -397,7 +395,7 @@ export default function FinancePage() {
         <div>
           <div className="mb-1.5 flex items-center gap-1.5">
             <Wallet size={12} style={{ color: "var(--nc-text-3)" }} />
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De onde veio o dinheiro</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>De onde veio o dinheiro</h2>
           </div>
           {funding <= 0 ? (
             <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>
@@ -454,7 +452,7 @@ export default function FinancePage() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Capital por sócio</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Capital por sócio</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {byPartner.length} no total
             </span>
@@ -494,8 +492,8 @@ export default function FinancePage() {
           />
           <form id="form-aporte" onSubmit={submitContrib} className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quem e quanto</p>
-              <div className="space-y-1.5">
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Quem e quanto</h3>
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Sócio</Label>
                 <Select value={contribForm.partnerId} onValueChange={v => setContribForm(f => ({ ...f, partnerId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione o sócio" /></SelectTrigger>
@@ -503,21 +501,21 @@ export default function FinancePage() {
                     {partners.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Valor (R$)</Label>
                   <Input type="number" step="0.01" min="0" value={contribForm.amount} onChange={e => setContribForm(f => ({ ...f, amount: e.target.value }))} placeholder="0,00" className="nc-num" />
-                </div>
-                <div className="space-y-1.5">
+                </Field>
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Data</Label>
                   <Input type="date" value={contribForm.date} onChange={e => setContribForm(f => ({ ...f, date: e.target.value }))} />
-                </div>
+                </Field>
               </div>
-              <div className="space-y-1.5">
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Observação</Label>
                 <Input value={contribForm.notes} onChange={e => setContribForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
-              </div>
+              </Field>
             </section>
           </form>
           <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
@@ -545,32 +543,32 @@ export default function FinancePage() {
           />
           <form id="form-emprestimo" onSubmit={submitLoan} className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>De quem veio</p>
-              <div className="space-y-1.5">
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>De quem veio</h3>
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Credor</Label>
                 <Input value={loanForm.lenderName} onChange={e => setLoanForm(f => ({ ...f, lenderName: e.target.value }))} placeholder="Nome de quem emprestou" />
-              </div>
-              <div className="space-y-1.5">
+              </Field>
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Data de recebimento</Label>
                 <Input type="date" value={loanForm.receivedDate} onChange={e => setLoanForm(f => ({ ...f, receivedDate: e.target.value }))} />
-              </div>
+              </Field>
             </section>
             <section className="space-y-3">
-              <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Quanto</p>
+              <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Quanto</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Principal (R$)</Label>
                   <Input type="number" step="0.01" min="0" value={loanForm.principal} onChange={e => setLoanForm(f => ({ ...f, principal: e.target.value }))} placeholder="0,00" className="nc-num" />
-                </div>
-                <div className="space-y-1.5">
+                </Field>
+                <Field className="space-y-1.5">
                   <Label className="text-xs">Juros totais (R$)</Label>
                   <Input type="number" step="0.01" min="0" value={loanForm.interestAmount} onChange={e => setLoanForm(f => ({ ...f, interestAmount: e.target.value }))} placeholder="0,00" className="nc-num" />
-                </div>
+                </Field>
               </div>
-              <div className="space-y-1.5">
+              <Field className="space-y-1.5">
                 <Label className="text-xs">Observação</Label>
                 <Input value={loanForm.notes} onChange={e => setLoanForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
-              </div>
+              </Field>
             </section>
           </form>
           <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
@@ -600,7 +598,7 @@ export default function FinancePage() {
               />
               <form id="form-pagamento" onSubmit={submitPay} className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
                 <section className="space-y-1.5">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde este empréstimo está</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Onde este empréstimo está</h3>
                   <LedgerLine label="Total com juros" value={formatCurrency(payingLoan.total)} />
                   <LedgerLine label="Já pago" value={formatCurrency(payingLoan.paid)} tone="var(--nc-ok)" />
                   <div className="nc-rule-top flex items-center justify-between gap-2 pt-2 text-[13px]">
@@ -612,25 +610,25 @@ export default function FinancePage() {
                 </section>
                 <Rule />
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Registrar pagamento</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Registrar pagamento</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Principal (R$)</Label>
                       <Input type="number" step="0.01" min="0" value={payForm.principalAmount} onChange={e => setPayForm(f => ({ ...f, principalAmount: e.target.value }))} placeholder="0,00" className="nc-num" />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Juros (R$)</Label>
                       <Input type="number" step="0.01" min="0" value={payForm.interestAmount} onChange={e => setPayForm(f => ({ ...f, interestAmount: e.target.value }))} placeholder="0,00" className="nc-num" />
-                    </div>
+                    </Field>
                   </div>
-                  <div className="space-y-1.5">
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Data</Label>
                     <Input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
+                  </Field>
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Observação</Label>
                     <Input value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
-                  </div>
+                  </Field>
                 </section>
               </form>
               <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>

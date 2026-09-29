@@ -503,21 +503,24 @@ export default function InsightsPage() {
       </div>
 
       {/* ---------------- Coluna direita: o que o período rendeu ---------------- */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Insights do período</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Insights do período</h2>
 
         <div>
-          <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Lucro do período</span>
+          {/* "Lucro BRUTO": é receita menos o custo do que saiu. Dizia "Lucro
+              do período", e o Dashboard chama de lucro o LÍQUIDO — o mesmo mês
+              aparecia com dois "lucros" diferentes em duas telas. Na cor do
+              lucro, como em todo o sistema. */}
+          <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Lucro bruto do período</span>
           <div className="flex flex-wrap items-baseline gap-2">
-            <span style={{ color: totals.profit < 0 ? "var(--nc-crit)" : undefined }}>
+            <span style={{ color: totals.profit < 0 ? "var(--nc-crit)" : "var(--nc-profit)" }}>
               <AnimatedNumber
                 value={totals.profit}
                 format={fmtCurrencyShort}
-                duration={0.7}
-                animateOnMount
+                duration={0.5}
                 className="nc-num text-[30px] font-semibold tracking-[-0.025em]"
               />
             </span>
@@ -531,18 +534,20 @@ export default function InsightsPage() {
 
         {/* Divisão real da receita: o que pagou o produto e o que sobrou. */}
         <div>
-          <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Onde a receita foi parar</span>
+          <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Onde a receita foi parar</h2>
           {totals.revenue <= 0 ? (
             <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>Sem vendas no período.</p>
           ) : (
             <>
               <div className="mt-1.5 flex h-[5px] gap-0.5">
-                <div style={{ flex: Math.max(totals.cost, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
-                <div style={{ flex: Math.max(totals.profit, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
+                {/* Mesmas cores da barra custo/lucro de Produtos: o custo não é
+                    "a receber" (laranja), e o lucro não é receita (azul). */}
+                <div style={{ flex: Math.max(totals.cost, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
+                <div style={{ flex: Math.max(totals.profit, 0.001), background: "var(--nc-profit)", borderRadius: 2 }} />
               </div>
               <div className="nc-num mt-1.5 flex justify-between gap-2 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
-                <span style={{ color: "var(--nc-alert)" }}>custo {fmtCurrencyShort(totals.cost)}</span>
-                <span>lucro {fmtCurrencyShort(totals.profit)}</span>
+                <span>custo {fmtCurrencyShort(totals.cost)}</span>
+                <span style={{ color: "var(--nc-profit)" }}>lucro bruto {fmtCurrencyShort(totals.profit)}</span>
               </div>
             </>
           )}
@@ -552,14 +557,14 @@ export default function InsightsPage() {
 
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Contra o período anterior</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Contra o período anterior</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {format(prevStart, "dd/MM")} – {format(prevEnd, "dd/MM")}
             </span>
           </div>
           <Trend label="Unidades" now={`${totals.units} un.`} before={`${prevTotals.units} un.`} change={unitsChange} />
           <div className="nc-rule-top pt-2.5">
-            <Trend label="Lucro" now={fmtCurrencyShort(totals.profit)} before={fmtCurrencyShort(prevTotals.profit)} change={profitChange} />
+            <Trend label="Lucro bruto" now={fmtCurrencyShort(totals.profit)} before={fmtCurrencyShort(prevTotals.profit)} change={profitChange} />
           </div>
         </div>
 
@@ -568,7 +573,7 @@ export default function InsightsPage() {
         <div>
           <div className="mb-1.5 flex items-center gap-1.5">
             <PackageX size={12} style={{ color: "var(--nc-text-3)" }} />
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Por marca</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Por marca</h2>
           </div>
           {byBrand.length === 0 ? (
             <p className="py-4 text-center text-xs" style={{ color: "var(--nc-text-3)" }}>
@@ -612,10 +617,10 @@ function SectionHead({
   return (
     <div className="flex flex-wrap items-end justify-between gap-2">
       <div className="min-w-0">
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>
           {title}
           {count !== undefined && <span className="nc-num ml-1.5">{count}</span>}
-        </span>
+        </h2>
         {sub && <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>{sub}</p>}
       </div>
       {action}

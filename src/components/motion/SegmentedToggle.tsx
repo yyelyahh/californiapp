@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { useFieldId } from "@/components/nocturne/field";
 
 export interface SegmentedOption<T extends string> {
   id: T;
@@ -34,9 +35,14 @@ export default function SegmentedToggle<T extends string>({
 }: SegmentedToggleProps<T>) {
   const reduce = useReducedMotion();
   const layoutId = useId();
+  // Dentro de um `Field` o grupo é nomeado pelo rótulo dele.
+  const fieldId = useFieldId();
 
   return (
-    <div className={cn("grid gap-1 rounded-lg border border-border/60 bg-secondary/40 p-1", gridClassName, className)}>
+    <div
+      role="group"
+      aria-labelledby={fieldId ? `${fieldId}-label` : undefined}
+      className={cn("grid gap-1 rounded-lg border border-border/60 bg-secondary/40 p-1", gridClassName, className)}>
       {options.map((opt) => {
         const active = opt.id === value;
         return (
@@ -44,6 +50,7 @@ export default function SegmentedToggle<T extends string>({
             key={opt.id}
             type="button"
             disabled={opt.disabled}
+            aria-pressed={active}
             title={opt.title}
             onClick={() => !opt.disabled && onChange(opt.id)}
             className={cn(

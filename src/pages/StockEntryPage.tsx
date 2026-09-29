@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { NcButton, NcSheetHeader, SegmentedChips, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, Field } from "@/components/nocturne";
 import { sortNames } from "@/lib/catalog-order";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
@@ -326,9 +326,9 @@ export default function StockEntryPage() {
               <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5">
                 {/* Identificação */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Identificação</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Identificação</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Marca</Label>
                       <Select value={brand} onValueChange={handleBrandChange}>
                         <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -336,8 +336,8 @@ export default function StockEntryPage() {
                           {allBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Modelo / Puffs</Label>
                       <Select value={modelSelect} onValueChange={handleModelSelectChange} disabled={!brand}>
                         <SelectTrigger><SelectValue placeholder={brand ? "Selecione" : "Marca primeiro"} /></SelectTrigger>
@@ -346,38 +346,39 @@ export default function StockEntryPage() {
                           <SelectItem value="__new__">+ Novo modelo</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
+                    </Field>
                   </div>
                   {modelSelect === "__new__" && (
-                    <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: V155, TE 30K" autoFocus />
+                    <Input value={model} onChange={e => setModel(e.target.value)} aria-label="Nome do novo modelo" placeholder="Ex: V155, TE 30K" autoFocus />
                   )}
                 </section>
 
                 {/* Custo e data */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Custo e data</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Custo e data</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Custo unitário (R$)</Label>
                       <Input type="number" step="0.01" value={unitCost} onChange={e => setUnitCost(e.target.value)} placeholder="0,00" className="nc-num" />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field className="space-y-1.5">
                       <Label className="text-xs">Data</Label>
                       <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-                    </div>
+                    </Field>
                   </div>
-                  <div className="space-y-1.5">
+                  <Field className="space-y-1.5">
                     <Label className="text-xs">Observações</Label>
                     <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional" />
-                  </div>
+                  </Field>
                 </section>
 
                 {/* Sabores */}
                 <section className="space-y-3">
-                  <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Sabores · quantidade (um por linha)</p>
+                  <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Sabores · quantidade (um por linha)</h3>
                   <textarea
                     value={flavorsText}
                     onChange={e => setFlavorsText(e.target.value)}
+                    aria-label="Sabores e quantidade, um por linha"
                     placeholder={"Blueberry Ice 2x\nStrawberry Ice 3x\nWatermelon Ice 1x"}
                     rows={6}
                     className="nc-input flex w-full px-3 py-2 text-sm"
@@ -456,7 +457,11 @@ export default function StockEntryPage() {
             />
           </div>
           <SegmentedChips options={PERIOD_OPTIONS} value={fPreset} onChange={v => applyPreset(v as DateRangePreset)} />
-          <div className="flex items-center gap-1.5 max-sm:w-full">
+          {/* No celular as datas vão para o fim da faixa (`order-last`), e o
+              "Limpar" sobe para a linha dos chips, onde sobra lugar: sozinho
+              numa linha própria ele era uma faixa vazia de 40px enquanto
+              invisível. */}
+          <div className="flex items-center gap-1.5 max-sm:order-last max-sm:w-full">
             <input
               type="date"
               value={dateFrom}
@@ -524,16 +529,11 @@ export default function StockEntryPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-none items-center gap-4 text-[11px]">
-                      <div className="hidden text-right sm:block">
-                        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Unidades</p>
-                        <p className="nc-num">{group.totalQty}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Investido</p>
-                        <p className="nc-num">{formatCurrency(group.totalCost)}</p>
-                      </div>
-                    </div>
+                    {/* Só o custo do dia. "UNIDADES" repetia o "N un." escrito
+                        ao lado, e os dois rótulos se repetiam em todo dia da
+                        lista; o que o número é, o trilho diz ("Custo das
+                        entradas") e a coluna "Total" da tabela confirma. */}
+                    <span className="nc-num flex-none text-[13px]">{formatCurrency(group.totalCost)}</span>
                   </button>
 
                   <AnimatePresence initial={false}>
@@ -556,14 +556,19 @@ export default function StockEntryPage() {
                             tabela arrastar de lado ali. O `overflow-x-auto`
                             fica como rede, para o nome fora do comum. */}
                         <div className="overflow-x-auto px-3 pb-2 pt-1">
-                          <table className="w-full min-w-0 text-[13px] sm:min-w-[440px]">
+                          {/* `table-fixed` com largura por coluna: em layout
+                              automático cada dia media as próprias colunas, e
+                              "Qtd" caía num lugar diferente em cada card da
+                              lista. Assim as colunas de todos os dias
+                              alinham, como uma tabela só. */}
+                          <table className="w-full min-w-0 table-fixed text-[13px] sm:min-w-[440px]">
                             <thead>
                               <tr style={{ color: "var(--nc-text-3)" }}>
-                                <th className="px-2 py-1.5 text-left font-normal">Produto</th>
-                                <th className="px-2 py-1.5 text-right font-normal">Qtd</th>
-                                <th className="hidden px-2 py-1.5 text-right font-normal sm:table-cell">Custo un.</th>
-                                <th className="px-2 py-1.5 text-right font-normal">Total</th>
-                                <th className="w-[40px] px-2 py-1.5" />
+                                <th scope="col" className="px-2 py-1.5 text-left font-normal">Produto</th>
+                                <th scope="col" className="w-[64px] px-2 py-1.5 text-right font-normal">Qtd</th>
+                                <th scope="col" className="hidden w-[112px] px-2 py-1.5 text-right font-normal sm:table-cell">Custo un.</th>
+                                <th scope="col" className="w-[112px] px-2 py-1.5 text-right font-normal">Total</th>
+                                <th className="w-[44px] px-2 py-1.5"><span className="sr-only">Ações</span></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -598,11 +603,8 @@ export default function StockEntryPage() {
                                       {formatCurrency(e.unitCost)}
                                     </td>
                                     <td className="nc-num px-2 py-1.5 text-right">{formatCurrency(e.totalCost)}</td>
-                                    <td className="px-2 py-1">
-                                      {/* No desktop a ação só aparece no hover da
-                                          linha; no toque não há hover, então fica
-                                          sempre visível abaixo de sm. */}
-                                      <div className="flex justify-end transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                                    <td className="px-2 py-1">
+                                      <div className="flex justify-end nc-reveal">
                                         <NcButton
                                           variant="danger"
                                           size="icon"
@@ -638,11 +640,11 @@ export default function StockEntryPage() {
           No celular ela vem ANTES da lista (`order-first`), como no Produtos: a
           lista de entradas rola por telas e um resumo embaixo dela não seria
           lido. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Investido em reposição</span>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Investido em reposição</h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Custo das entradas</span>
@@ -662,25 +664,17 @@ export default function StockEntryPage() {
 
         <Rule />
 
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Unidades que entraram</span>
-            <span className="nc-num text-sm">{totals.units}</span>
-          </div>
-          <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
-            <span className="text-[12.5px]">Custo médio por unidade</span>
-            <AnimatedNumber
-              value={avgUnitCost}
-              format={formatCurrency}
-              duration={0.7}
-              animateOnMount
-              className="nc-num text-xl font-semibold"
-            />
-          </div>
-          <div className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]" style={{ color: "var(--nc-text-3)" }}>
-            <span>modelos no período</span>
-            <span>{topModels.length}</span>
-          </div>
+        {/* Saíram "Unidades que entraram" (o "N un." logo acima) e "modelos no
+            período" (o "N no período" do bloco de modelos, logo abaixo): o
+            mesmo número duas vezes no mesmo trilho. */}
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12.5px]">Custo médio por unidade</span>
+          <AnimatedNumber
+            value={avgUnitCost}
+            format={formatCurrency}
+            duration={0.5}
+            className="nc-num text-xl font-semibold"
+          />
         </div>
 
         <Rule />
@@ -691,7 +685,7 @@ export default function StockEntryPage() {
         <div>
           <div className="mb-1.5 flex items-center gap-1.5">
             <Truck size={12} style={{ color: "var(--nc-alert)" }} />
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>A caminho</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>A caminho</h2>
           </div>
           {incoming.orders === 0 ? (
             <p className="py-2 text-xs" style={{ color: "var(--nc-text-3)" }}>Nenhuma compra aguardando recebimento.</p>
@@ -716,7 +710,7 @@ export default function StockEntryPage() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Modelos que mais entraram</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Modelos que mais entraram</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {topModels.length} no período
             </span>

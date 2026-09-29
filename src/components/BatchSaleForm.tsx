@@ -11,7 +11,7 @@ import { AnimatePresence, motion } from "motion/react";
 import SegmentedToggle from "@/components/motion/SegmentedToggle";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { formatCurrency } from "@/lib/currency";
-import { NcButton } from "@/components/nocturne";
+import { NcButton, Field } from "@/components/nocturne";
 import { sellersWithAssignedStock } from "@/lib/sellers-with-stock";
 
 type PaymentMethodValue =
@@ -99,7 +99,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
     setError(null);
 
     if (!isSeller && !formSellerId && type === "retirada_funcionario") {
-      setError("Selecione o funcionário para a retirada.");
+      setError("Selecione o vendedor da retirada.");
       return;
     }
     if (validLines.length === 0) {
@@ -185,8 +185,8 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
           de encolher abaixo do conteúdo. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {!isSeller && (
-          <div className="min-w-0 space-y-1.5">
-            <Label className="text-xs">Funcionário</Label>
+          <Field className="min-w-0 space-y-1.5">
+            <Label className="text-xs">Vendedor</Label>
             <Select value={formSellerId} onValueChange={v => { setFormSellerId(v); setLines([newLine()]); }}>
               <SelectTrigger><SelectValue placeholder="Selecione o vendedor" /></SelectTrigger>
               <SelectContent>
@@ -198,15 +198,15 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                 {sellerOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </Field>
         )}
-        <div className="min-w-0 space-y-1.5">
+        <Field className="min-w-0 space-y-1.5">
           <Label className="text-xs">Data</Label>
           {/* `w-full min-w-0` no próprio campo: o `w-full` do Input do shadcn
               não vence a largura intrínseca do seletor de data do Safari sem o
               `min-w-0` para liberar o encolhimento. */}
           <Input type="date" className="w-full min-w-0" value={date} onChange={e => setDate(e.target.value)} />
-        </div>
+        </Field>
       </div>
 
       {!isSeller && !formSellerId && (
@@ -217,7 +217,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="flex items-center gap-1.5 text-xs"><Layers size={14} /> Itens ({validLines.length})</Label>
+          <p className="flex items-center gap-1.5 text-xs font-medium leading-none"><Layers size={14} /> Itens ({validLines.length})</p>
           <NcButton variant="quiet" onClick={() => setLines(ls => [...ls, newLine()])}>
             <Plus size={13} />Adicionar item
           </NcButton>
@@ -255,7 +255,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                     {/* `min-w-0` porque o `w-full` do SelectTrigger, num item
                         de flex, não deixa ele encolher abaixo do conteúdo: o
                         nome do produto empurrava a lixeira para fora. */}
-                    <SelectTrigger className="h-9 min-w-0 flex-1 text-xs"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
+                    <SelectTrigger aria-label={`Produto do item ${idx + 1}`} className="h-9 min-w-0 flex-1 text-xs"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
                     <SelectContent>
                       {availableProducts.length === 0 && (
                         <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhum produto disponível.</div>
@@ -292,6 +292,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                       className="h-8 text-xs"
                       value={l.quantity}
                       onChange={e => setLine(l.key, { quantity: e.target.value })}
+                      aria-label={`Quantidade do item ${idx + 1}`}
                       placeholder="Qtd"
                     />
                   </div>
@@ -303,6 +304,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
                       className="h-8 text-xs"
                       value={l.unitPrice}
                       onChange={e => setLine(l.key, { unitPrice: e.target.value })}
+                      aria-label={`Preço unitário do item ${idx + 1}`}
                       placeholder="Preço un."
                       disabled={type === "retirada_funcionario" ? false : undefined}
                     />
@@ -346,24 +348,23 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
       </div>
 
       {type === "venda" && hasPaid && (
-        <div>
+        <Field>
           <Label className="mb-2 block text-xs">Forma de pagamento (itens recebidos)</Label>
           <SegmentedToggle value={paymentMethod} onChange={(v) => setPaymentMethod(v as PaymentMethodValue)} options={paidOpts} />
-        </div>
+        </Field>
       )}
 
       {type === "venda" && hasPending && (
-        <div>
+        <Field>
           <Label className="mb-2 block text-xs">Situação dos itens a receber</Label>
           <SegmentedToggle value={pendingMethod} onChange={(v) => setPendingMethod(v as PaymentMethodValue)} align="left" options={pendingOpts} />
-
-        </div>
+        </Field>
       )}
 
-      <div className="space-y-1.5">
+      <Field className="space-y-1.5">
         <Label className="text-xs">Observações</Label>
         <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Aplicada a todos os itens" />
-      </div>
+      </Field>
 
       {/* Resumo no mesmo desenho do rodapé do formulário único: fundo --nc-bg
           dentro do painel, régua que apaga nas pontas antes da linha final, e
@@ -394,7 +395,7 @@ export default function BatchSaleForm({ onDone }: { onDone: () => void }) {
           )}
           {type === "retirada_funcionario" && (
             <div className="nc-rule-top flex justify-between pt-1.5">
-              <span style={{ color: "var(--nc-text-2)" }}>Saldo devedor do funcionário</span>
+              <span style={{ color: "var(--nc-text-2)" }}>Saldo devedor do vendedor</span>
               <span style={{ color: "var(--nc-alert)" }}><AnimatedNumber className="nc-num font-semibold" value={total} format={formatCurrency} duration={0.25} /></span>
             </div>
           )}

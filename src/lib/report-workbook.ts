@@ -386,7 +386,7 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     ["Ticket médio", money(periodSales.length > 0 ? revenue / periodSales.length : 0), "Receita ÷ nº de vendas"],
     ["Vendas (qtd.)", periodSales.length, ""],
     ["Unidades vendidas", sum(periodSales, s => s.quantity), ""],
-    ["Retiradas de funcionário", money(sum(periodWithdrawals, s => s.totalPrice)), "Consumo da equipe, não é venda"],
+    ["Retiradas de vendedor", money(sum(periodWithdrawals, s => s.totalPrice)), "Consumo da equipe, não é venda"],
     ["Perdas (a custo)", money(sum(periodLosses, l => l.totalCost)), ""],
     ["Reposição de estoque", money(sum(periodEntries, e => e.totalCost)), "Investimento — não reduz o lucro"],
     ["Compras pedidas ao fornecedor", money(sum(periodOrders, o =>
@@ -486,9 +486,9 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     widths: [11, 28, 14, 14, 18, 7, 11, 11, 11, 11, 11, 12, 16, 22, 10, 12, 34],
   });
 
-  /* ---------------- Retiradas de funcionário ---------------- */
+  /* ---------------- Retiradas de vendedor ---------------- */
   add({
-    name: "Retiradas funcionário",
+    name: "Retiradas vendedor",
     about: "Produto que saiu para consumo da equipe — vira dívida do vendedor, não venda",
     scope: "periodo",
     autofilter: true,

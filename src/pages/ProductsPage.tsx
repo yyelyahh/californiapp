@@ -17,7 +17,7 @@ import { Stagger } from "@/components/motion/Stagger";
 import AnimatedNumber from "@/components/motion/AnimatedNumber";
 import { AnimatePresence, motion } from "motion/react";
 import { listItem, transitionBase } from "@/lib/motion";
-import { NcButton, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly } from "@/components/nocturne";
+import { NcButton, Rule, EYEBROW, RAIL_FIRST, STICKY_HEAD, BranchReadOnly, Field } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
 import { sortNames, sortCatalog, compareText } from "@/lib/catalog-order";
 import { lensStock, LENS_GERAL, LENS_CASA, type StockLens } from "@/lib/stock-lens";
@@ -722,16 +722,16 @@ export default function ProductsPage() {
           No celular ela vem ANTES da lista (`order-first`): o Dashboard pode
           deixar o trilho no fim porque a coluna dele é curta; aqui a lista de
           produtos rola por telas, e um resumo embaixo dela não seria lido. */}
-      <aside
+      <aside aria-label="Resumo"
         className={RAIL_FIRST}
         style={{ background: "var(--nc-rail)" }}
       >
         {/* O trilho acompanha a lente, como o da SalesPage acompanha a aba: um
             resumo da cidade ao lado da lista de um vendedor falaria de outra
             coisa. O sobretítulo é quem diz de quem é o número. */}
-        <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>
+        <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>
           {activeLens === LENS_GERAL ? "Capital em estoque" : `Em estoque · ${lensLabel}`}
-        </span>
+        </h2>
 
         <div>
           <span className="text-[11.5px]" style={{ color: "var(--nc-text-2)" }}>Potencial de venda</span>
@@ -792,7 +792,7 @@ export default function ProductsPage() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={EYEBROW} style={{ color: "var(--nc-text-3)" }}>Estoque por modelo</span>
+            <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Estoque por modelo</h2>
             <span className="nc-num text-[10.5px]" style={{ color: "var(--nc-text-3)" }}>
               {belowMin.length} de {modelStock.length} no mínimo
             </span>
@@ -852,7 +852,7 @@ export default function ProductsPage() {
             {/* Marca antes do modelo: o modelo sai da marca escolhida. Trocar a
                 marca limpa o modelo — nome que sobrou da marca anterior ou não
                 acha nada, ou acha um homônimo. */}
-            <div>
+            <Field>
               <Label className="text-xs">Marca</Label>
               <Select value={bulkForm.brand} onValueChange={v => setBulkForm(f => ({ ...f, brand: v, model: "" }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione uma marca" /></SelectTrigger>
@@ -862,8 +862,8 @@ export default function ProductsPage() {
                   ) : availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
+            </Field>
+            <Field>
               <Label className="text-xs">Modelo</Label>
               <Select value={bulkForm.model} onValueChange={v => setBulkForm(f => ({ ...f, model: v }))} disabled={!bulkForm.brand}>
                 <SelectTrigger>
@@ -875,16 +875,16 @@ export default function ProductsPage() {
                   ) : modelsOfBrand(bulkForm.brand).map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
             <div className="grid grid-cols-2 gap-3">
-              <div>
+              <Field>
                 <Label className="text-xs">Preço compra (R$)</Label>
                 <Input type="number" step="0.01" placeholder="Manter" value={bulkForm.purchasePrice} onChange={e => setBulkForm(f => ({ ...f, purchasePrice: e.target.value }))} />
-              </div>
-              <div>
+              </Field>
+              <Field>
                 <Label className="text-xs">Preço venda (R$)</Label>
                 <Input type="number" step="0.01" placeholder="Manter" value={bulkForm.salePrice} onChange={e => setBulkForm(f => ({ ...f, salePrice: e.target.value }))} />
-              </div>
+              </Field>
             </div>
             {bulkForm.model && (
               <div className="rounded-lg p-3 text-xs" style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
@@ -916,7 +916,7 @@ export default function ProductsPage() {
           </DialogHeader>
           <form onSubmit={handleBulkMinUpdate} className="space-y-4">
             {/* Mesma ordem do diálogo de preço: marca, depois o modelo dela. */}
-            <div>
+            <Field>
               <Label className="text-xs">Marca</Label>
               <Select value={bulkMinForm.brand} onValueChange={v => setBulkMinForm(f => ({ ...f, brand: v, model: "" }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione uma marca" /></SelectTrigger>
@@ -926,8 +926,8 @@ export default function ProductsPage() {
                   ) : availableBrands.map(b => (<SelectItem key={b} value={b}>{b}</SelectItem>))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
+            </Field>
+            <Field>
               <Label className="text-xs">Modelo</Label>
               <Select value={bulkMinForm.model} onValueChange={v => setBulkMinForm(f => ({ ...f, model: v }))} disabled={!bulkMinForm.brand}>
                 <SelectTrigger>
@@ -939,12 +939,12 @@ export default function ProductsPage() {
                   ) : modelsOfBrand(bulkMinForm.brand).map(m => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
+            </Field>
+            <Field>
               <Label className="text-xs">Estoque mínimo (unidades)</Label>
               <Input type="number" min="0" placeholder="Ex: 10" value={bulkMinForm.minStock} onChange={e => setBulkMinForm(f => ({ ...f, minStock: e.target.value }))} />
               <p className="mt-1 text-[11px]" style={{ color: "var(--nc-text-3)" }}>Alerta será exibido quando o estoque total do modelo ficar abaixo desse valor.</p>
-            </div>
+            </Field>
             {bulkMinForm.model && (
               <div className="rounded-lg p-3 text-xs" style={{ background: "var(--nc-bg)", boxShadow: "inset 0 0 0 1px var(--nc-track)" }}>
                 <p style={{ color: "var(--nc-text-2)" }}>
@@ -964,16 +964,16 @@ export default function ProductsPage() {
           <DialogHeader><DialogTitle>Editar produto</DialogTitle></DialogHeader>
           <form onSubmit={handleEdit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Marca</Label><Input value={editForm.brand} onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))} /></div>
-              <div><Label className="text-xs">Modelo</Label><Input value={editForm.model} onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))} /></div>
+              <Field><Label className="text-xs">Marca</Label><Input value={editForm.brand} onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))} /></Field>
+              <Field><Label className="text-xs">Modelo</Label><Input value={editForm.model} onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))} /></Field>
             </div>
-            <div><Label className="text-xs">Sabor</Label><Input value={editForm.flavor} onChange={e => setEditForm(f => ({ ...f, flavor: e.target.value }))} /></div>
-            <div><Label className="text-xs">Nome interno</Label><Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <Field><Label className="text-xs">Sabor</Label><Input value={editForm.flavor} onChange={e => setEditForm(f => ({ ...f, flavor: e.target.value }))} /></Field>
+            <Field><Label className="text-xs">Nome interno</Label><Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></Field>
             <div className="grid grid-cols-4 gap-3">
-              <div><Label className="text-xs">Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></div>
-              <div><Label className="text-xs">Venda (R$)</Label><Input type="number" step="0.01" value={editForm.salePrice} onChange={e => setEditForm(f => ({ ...f, salePrice: e.target.value }))} /></div>
-              <div><Label className="text-xs">Estoque</Label><Input type="number" min="0" value={editForm.stock} onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} /></div>
-              <div><Label className="text-xs">Mín.</Label><Input type="number" value={editForm.minStock} onChange={e => setEditForm(f => ({ ...f, minStock: e.target.value }))} /></div>
+              <Field><Label className="text-xs">Compra (R$)</Label><Input type="number" step="0.01" value={editForm.purchasePrice} onChange={e => setEditForm(f => ({ ...f, purchasePrice: e.target.value }))} /></Field>
+              <Field><Label className="text-xs">Venda (R$)</Label><Input type="number" step="0.01" value={editForm.salePrice} onChange={e => setEditForm(f => ({ ...f, salePrice: e.target.value }))} /></Field>
+              <Field><Label className="text-xs">Estoque</Label><Input type="number" min="0" value={editForm.stock} onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} /></Field>
+              <Field><Label className="text-xs">Mín.</Label><Input type="number" value={editForm.minStock} onChange={e => setEditForm(f => ({ ...f, minStock: e.target.value }))} /></Field>
             </div>
             <p className="text-[11px]" style={{ color: "var(--nc-text-3)" }}>
               Diminuir o estoque registra uma perda "Ajuste de inventário". Para aumentar, use a Entrada.
@@ -1081,9 +1081,7 @@ function FlavorRow({
         {formatCurrency(profit)}
       </td>
       <td className="px-2 py-1">
-        {/* No desktop as ações só aparecem no hover da linha; no toque não há
-            hover, então ficam sempre visíveis abaixo de sm. */}
-        <div className="flex justify-end gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+        <div className="flex justify-end gap-0.5 nc-reveal">
           {/* Sem excluir: produto se ARQUIVA (painel "Modelos"). A exclusão
               levava junto vendas, entradas e perdas do sabor, e hoje o banco
               nem oferece o DELETE (migration 20260924150000). */}

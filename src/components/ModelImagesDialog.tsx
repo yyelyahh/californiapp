@@ -14,7 +14,7 @@ import {
 import { ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { compareCatalog } from "@/lib/catalog-order";
-import { NcButton } from "@/components/nocturne";
+import { NcButton, Field } from "@/components/nocturne";
 
 /**
  * A MESMA chave que get_seller_catalog usa para casar a foto com o sabor: sem
@@ -155,7 +155,7 @@ export default function ModelImagesDialog() {
                     )}
                   </div>
                   <div className="flex items-end gap-2">
-                    <div className="flex-1">
+                    <Field className="flex-1">
                       <Label className="text-xs">URL da foto</Label>
                       <Input
                         type="url"
@@ -164,7 +164,7 @@ export default function ModelImagesDialog() {
                         onChange={e => setUrls(prev => ({ ...prev, [c.key]: e.target.value }))}
                         onBlur={() => save(c.key, c.brand, c.model)}
                       />
-                    </div>
+                    </Field>
                     <NcButton
                       variant={dirty ? "solid" : "quiet"}
                       size="md"
