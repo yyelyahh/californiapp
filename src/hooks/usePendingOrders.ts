@@ -82,7 +82,11 @@ export const ORDER_PAYMENT_CHOICES: { id: PaymentMethodValue; label: string; pai
 export const ORDER_NOTE_MAX = 80;
 
 /** O desfecho de confirmar/recusar, para a tela que mostra o resultado no próprio card. */
-export type OrderActionResult = { ok: true } | { ok: false; message: string } | { ok: false; cancelled: true };
+export type OrderActionResult =
+  | { ok: true }
+  /** `expired`: o banco recusou por `pedido_expirado` — a tela troca o card pelo aviso de vencido. */
+  | { ok: false; message: string; expired?: boolean }
+  | { ok: false; cancelled: true };
 
 /**
  * Erro de pedido em frase de gente. Lista de PERMISSÃO (src/pages/CLAUDE.md
@@ -215,10 +219,11 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
       }
       return { ok: true };
     } catch (err: any) {
-      const message = orderActionError(String(err?.message ?? ""));
+      const raw = String(err?.message ?? "");
+      const message = orderActionError(raw);
       if (!storefront) toast({ title: "Erro ao confirmar", description: message, variant: "destructive" });
       fetchPendingOrders({ silent: true });
-      return { ok: false, message };
+      return { ok: false, message, expired: raw.includes("pedido_expirado") };
     } finally {
       setProcessingOrder(null);
     }

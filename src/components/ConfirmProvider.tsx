@@ -36,10 +36,15 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [opts, setOpts] = useState<ConfirmOptions>({});
   const resolverRef = useRef<(v: boolean) => void>();
+  // Quem abriu. O diálogo não tem Trigger (é aberto por função), então sem isto
+  // o Radix devolve o foco ao <body> ao fechar e quem navega por teclado ou
+  // leitor de tela recomeça do topo da página.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const confirm = useCallback<ConfirmFn>((options) => {
     const normalized: ConfirmOptions =
       typeof options === "string" ? { description: options } : options;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpts(normalized);
     setOpen(true);
     return new Promise<boolean>((resolve) => {
@@ -61,6 +66,16 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       <AlertDialog open={open} onOpenChange={(o) => { if (!o) handleClose(false); }}>
         <AlertDialogContent
+          onCloseAutoFocus={(e) => {
+            // Se quem abriu ainda está na tela, o foco volta para ele. Se saiu
+            // (o card recusado some), a tela que chamou decide onde pôr o foco.
+            const el = returnFocusRef.current;
+            returnFocusRef.current = null;
+            if (el?.isConnected) {
+              e.preventDefault();
+              el.focus();
+            }
+          }}
           className={sf ? "storefront w-[calc(100%-40px)] max-w-[340px] gap-0 rounded-[24px] border-0 p-5" : undefined}
           style={sf ? { background: "var(--sf-bg)", border: "1px solid var(--sf-hairline)" } : undefined}
         >

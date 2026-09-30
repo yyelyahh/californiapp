@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { groupOpenSales, parseOrderNote, tagOrderLines, whatsappLink } from "@/lib/seller-orders";
+import {
+  firstName, groupOpenSales, mergeSaleLines, parseOrderNote, tagOrderLines, tierLadder, tierUpgradeGain, whatsappLink,
+} from "@/lib/seller-orders";
+import { COMMISSION_TIERS } from "@/lib/commissions";
 import type { Sale } from "@/types";
 
 const ORDER_A = "3f9a1c22-0b1e-4c1a-9d7e-5a2b6c8d0e11";
@@ -85,5 +88,42 @@ describe("link do WhatsApp", () => {
   it("sem dígito suficiente não vira link", () => {
     expect(whatsappLink("9981")).toBeNull();
     expect(whatsappLink(null)).toBeNull();
+  });
+  it("leva a mensagem pronta, codificada", () => {
+    expect(whatsappLink("(51) 99812-4410", "Oi, Lucas! R$ 90")).toBe(
+      "https://wa.me/5551998124410?text=Oi%2C%20Lucas!%20R%24%2090",
+    );
+  });
+  it("primeiro nome para a mensagem", () => {
+    expect(firstName("  Maria Eduarda Fagundes ")).toBe("Maria");
+    expect(firstName(null)).toBe("");
+  });
+});
+
+describe("linhas do grupo", () => {
+  it("soma o prêmio ao mesmo produto, na ordem da primeira aparição", () => {
+    expect(mergeSaleLines([
+      { productId: "p7", quantity: 2 },
+      { productId: "p1", quantity: 1 },
+      { productId: "p7", quantity: 1 },
+    ])).toEqual([{ productId: "p7", quantity: 3 }, { productId: "p1", quantity: 1 }]);
+  });
+});
+
+describe("quanto vale a próxima faixa", () => {
+  const [t10, t125, t15] = COMMISSION_TIERS;
+  it("reprecifica toda a receita paga do mês", () => {
+    expect(tierUpgradeGain(1030, t10, t125)).toBe(25.75);
+    expect(tierUpgradeGain(2000, t125, t15)).toBe(50);
+  });
+  it("na faixa mais alta ou sem receita, zero", () => {
+    expect(tierUpgradeGain(1030, t15, null)).toBe(0);
+    expect(tierUpgradeGain(0, t10, t125)).toBe(0);
+  });
+});
+
+describe("escada de faixas", () => {
+  it("sai das próprias faixas da comissão", () => {
+    expect(tierLadder(COMMISSION_TIERS)).toBe("10% até 10 un. · 12,5% de 11 a 15 · 15% a partir de 16");
   });
 });

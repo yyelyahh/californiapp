@@ -34,13 +34,13 @@ componente com hex na mão fica ilegível e ninguém descobre até ver a tela.
 | `--sf-text` | texto principal |
 | `--sf-text-muted` | texto secundário, rótulo de campo, descrição |
 | `--sf-text-faint` | terciário — ícone de busca, rótulo "Sabor", ícone de lixeira |
-| `--sf-text-dim` | placeholder, estado vazio, ícone de produto sem foto |
+| `--sf-text-dim` | placeholder, ícone de produto sem foto. **Texto** que precisa ser lido (vazio, carregando) usa `--sf-text-muted`: dim sobre o surface dá 3:1, abaixo do mínimo — a SellerSalesPage já trocou; a loja pública ainda usa dim nos estados |
 | `--sf-accent` | **dinheiro e ênfase** — preço, total, marca da casa, botão primário |
 | `--sf-accent-ink` | texto escuro sobre o accent |
 | `--sf-accent-tint` / `--sf-accent-line` | realce do item selecionado (fundo / borda) |
 | `--sf-accent-soft` | preenchimento de botão desabilitado |
-| `--sf-warn` | valor em aberto, ainda a receber (SellerSalesPage) |
-| `--sf-danger` | recusa, erro de pedido — não deu |
+| `--sf-warn` | valor em aberto, ainda a receber; pedido com menos de 6h de reserva (SellerSalesPage) |
+| `--sf-danger` | recusa, erro de pedido — não deu; pedido com menos de 1h ou vencido |
 
 `--sf-warn` e `--sf-danger` são separados de propósito. Não troque um pelo outro.
 
@@ -242,7 +242,7 @@ Tudo vem de `@/lib/motion` — `EASE_OUT`, `EASE_IN_OUT`, `fadeUp`, `stagger`,
 Toda lista trata carregando, erro e vazio, com a mesma moldura
 (`py-16 text-center text-[13px]`):
 
-- **Carregando** — texto em `--sf-text-dim`.
+- **Carregando** — texto em `--sf-text-dim` (na SellerSalesPage, `--sf-text-muted`: ver a tabela de tokens). Espera longa ganha saída ("Recarregar" depois de 15s na tela do vendedor).
 - **Erro** — ocupa o lugar da lista (não flutua por cima) e traz botão "Tentar de
   novo". Sem catálogo não há nada embaixo para o aviso atrapalhar, e o botão precisa
   estar onde a pessoa está olhando.

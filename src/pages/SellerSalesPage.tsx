@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Check, ChevronDown, Clock, Copy, LogOut, MessageCircle, Package, Plus, Share2, X } from "lucide-react";
+import {
+  Ban, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, LogOut, MessageCircle, Plus, Share2, X,
+} from "lucide-react";
 
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
@@ -12,14 +14,17 @@ import {
 } from "@/hooks/usePendingOrders";
 import { useOrderCustomers } from "@/hooks/useOrderCustomers";
 import {
-  computeSellerBalance, computeSellerConsumption, currentBalanceContext, getNextTier, isCommissionSeller,
-  PROJECT_START, type ConsumptionEntry,
+  COMMISSION_TIERS, computeSellerBalance, computeSellerConsumption, currentBalanceContext, getNextTier,
+  isCommissionSeller, PROJECT_START, unitsUntilNextTier, type ConsumptionEntry,
 } from "@/lib/commissions";
 import { buildSellerStock } from "@/lib/seller-stock";
-import { groupOpenSales, saleOpenAmount, tagOrderLines, whatsappLink, type OpenSaleGroup, type OrderLineTag } from "@/lib/seller-orders";
+import {
+  firstName, groupOpenSales, mergeSaleLines, saleOpenAmount, tagOrderLines, tierLadder, tierUpgradeGain, whatsappLink,
+  type OpenSaleGroup, type OrderLineTag,
+} from "@/lib/seller-orders";
 import { formatDateBR } from "@/lib/date-utils";
 import { orderRef } from "@/lib/order-ref";
-import { EASE_OUT, fadeUp, stagger } from "@/lib/motion";
+import { fadeUp, stagger } from "@/lib/motion";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { Product, Sale } from "@/types";
 import { formatCurrency as fmt } from "@/lib/currency";
@@ -43,10 +48,19 @@ import { formatCurrency as fmt } from "@/lib/currency";
  * lista "A receber" daqui é só leitura. Escolher "Pix" na confirmação gravava
  * a venda como quitada sem que ninguém da loja tivesse visto o dinheiro.
  *
+ * Vocabulário: "sua loja" é SÓ a vitrine do vendedor (/loja/<apelido>). O dono,
+ * que registra pagamento e faz o acerto, é "a California" — com "loja" nos dois
+ * papéis a tela chegou a dizer "a loja abre vazia até a loja te passar produto".
+ *
+ * Ordem da tela, do dono: pedidos esperando → comissão → a receber → vendas
+ * recebidas do mês.
+ *
  * Convenções de estilo (tokens, escala, movimento): ver src/pages/CLAUDE.md.
  */
 
 const COLUMN = "mx-auto w-full max-w-[480px]";
+/** O dono, nas frases da tela. Ver o bloco acima: "loja" é a vitrine do vendedor. */
+const OWNER = "a California";
 
 /**
  * A reserva do pedido, em horas. Espelha `order_reservation_ttl()` (24h) — o
@@ -55,16 +69,24 @@ const COLUMN = "mx-auto w-full max-w-[480px]";
 const RESERVATION_HOURS = 24;
 /** A partir de quanto falta o card passa a dizer "vence em". */
 const EXPIRY_WARNING_HOURS = 6;
+/** Abaixo disto o aviso de vencimento sobe de `--sf-warn` para `--sf-danger`. */
+const EXPIRY_URGENT_MINUTES = 60;
 /** Pedido com menos disto é "novo" e pulsa. Depois, pulsar é mentir. */
 const NEW_ORDER_MINUTES = 60;
-/** Quanto a confirmação fica na tela antes de sair sozinha. */
-const NOTICE_MS = 5000;
+/** Quanto a confirmação fica na tela antes de sair sozinha. Recusa e vencido ficam até fechar. */
+const CONFIRMED_NOTICE_MS = 8000;
+/** Dívida com isto ou mais de idade mostra os dias ("há 34 dias") na linha. */
+const OLD_DEBT_DAYS = 7;
+/** Carregamento que passa disto ganha o "Recarregar" (§8: toda espera tem saída). */
+const SLOW_LOAD_MS = 15000;
+/** O relógio da tela: a contagem "vence em" e o "novo" andam sozinhos. */
+const TICK_MS = 30000;
 
 /** Rótulos pequenos da tela: 11.5px, o piso da escala da loja (§4). */
 const LABEL = "text-[11.5px] font-bold uppercase tracking-[0.08em]";
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function timeAgo(dateStr: string, now: number) {
+  const diff = now - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
@@ -76,19 +98,28 @@ function timeAgo(dateStr: string) {
 }
 
 /** Quanto falta para a reserva vencer, em minutos (negativo = já venceu). */
-const minutesLeft = (createdAt: string) =>
-  RESERVATION_HOURS * 60 - (Date.now() - new Date(createdAt).getTime()) / 60000;
+const minutesLeft = (createdAt: string, now: number) =>
+  RESERVATION_HOURS * 60 - (now - new Date(createdAt).getTime()) / 60000;
 
+/**
+ * Arredonda para CIMA: com 1h20 sobrando, "Vence em 1h" encurtava o prazo que
+ * o vendedor ainda tem. E mostra os minutos — "1h20" decide diferente de "1h".
+ */
 function leftLabel(minutes: number) {
   if (minutes <= 0) return "Venceu";
-  if (minutes < 60) return `Vence em ${Math.max(1, Math.floor(minutes))} min`;
-  return `Vence em ${Math.floor(minutes / 60)}h`;
+  const total = Math.ceil(minutes);
+  if (total < 60) return `Vence em ${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m === 0 ? `Vence em ${h}h` : `Vence em ${h}h${String(m).padStart(2, "0")}`;
 }
 
 const isMySale = (s: Sale, sellerId?: string | null) =>
   s.sellerId === sellerId && (s.type || "venda") !== "retirada_funcionario";
 const byDateDesc = (a: { date: string }, b: { date: string }) =>
   new Date(b.date).getTime() - new Date(a.date).getTime();
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const units = (order: Order) => (order.order_items ?? []).reduce((a, i) => a + i.quantity, 0);
 
 /** "Grape Ice · Ignite V80" — o mesmo rótulo no pedido, no a receber e nas vendas. */
 function productParts(p: { flavor?: string | null; brand?: string | null; model?: string | null } | null | undefined) {
@@ -106,90 +137,89 @@ function ProductName({ flavor, device }: { flavor: string; device: string }) {
   );
 }
 
-type SellerPeriod = "month" | "lastMonth";
+/**
+ * A mensagem que abre o WhatsApp do cliente. Já escrita porque é o momento em
+ * que o vendedor está com pressa — e ele ainda edita antes de mandar.
+ */
+function customerMessage(kind: "declined" | "expired", order: Order, storeUrl: string | null) {
+  const name = firstName(order.customers?.name);
+  const hi = name ? `Oi, ${name}!` : "Oi!";
+  const ref = orderRef(order.id);
+  if (kind === "declined") return `${hi} Sobre o seu pedido ${ref}: não vou conseguir atender desta vez. Desculpa!`;
+  return [
+    `${hi} Seu pedido ${ref} passou de ${RESERVATION_HOURS}h e a reserva venceu.`,
+    storeUrl ? `Se ainda quiser, é só fazer de novo no catálogo: ${storeUrl}` : "",
+  ].filter(Boolean).join(" ");
+}
 
-const PERIODS: { id: SellerPeriod; label: string }[] = [
-  { id: "month", label: "Este mês" },
-  { id: "lastMonth", label: "Mês passado" },
-];
+type SellerPeriod = "month" | "lastMonth";
 
 /* ------------------------------------------------------------------ */
 /* Peças                                                                */
 /* ------------------------------------------------------------------ */
 
 /**
- * Mesmo padrão do `BrandChips` da loja: o preenchimento accent é uma peça só,
- * renderizada apenas pelo chip ativo, e o motion desliza ela de um para o
- * outro em vez de apagar aqui e acender ali.
+ * O mês da comissão e das vendas recebidas. Mora no cabeçalho da comissão, e
+ * não no topo da tela: ali ele ficava em cima dos pedidos, que não seguem
+ * período nenhum.
  *
- * Só "Este mês" e "Mês passado": a comissão fecha por MÊS e a faixa é do mês,
- * então um trimestre mostrava a faixa de um mês ao lado das unidades de três.
+ * Só este mês e o passado: a comissão fecha por MÊS e a faixa é do mês. A seta
+ * da ponta fica `aria-disabled`, não `disabled`: desligar o botão que acabou de
+ * ser apertado mandava o foco para o <body>.
  */
-function PeriodChips({ active, onChange }: { active: SellerPeriod; onChange: (id: SellerPeriod) => void }) {
-  const reduce = useReducedMotion();
-  const pillId = useId();
-
+function MonthStepper({ period, label, onChange }: { period: SellerPeriod; label: string; onChange: (p: SellerPeriod) => void }) {
+  const arrow = (target: SellerPeriod, aria: string, icon: ReactNode) => {
+    const off = period === target;
+    return (
+      <button
+        type="button"
+        onClick={() => !off && onChange(target)}
+        aria-disabled={off}
+        aria-label={aria}
+        className={`flex h-11 w-11 items-center justify-center rounded-full ${off ? "cursor-default opacity-30" : ""}`}
+        style={{ color: "var(--sf-text)" }}
+      >
+        {icon}
+      </button>
+    );
+  };
   return (
-    <div className="mt-3 flex gap-2" role="group" aria-label="Período">
-      {PERIODS.map(p => {
-        const isActive = p.id === active;
-        return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onChange(p.id)}
-            aria-pressed={isActive}
-            className="relative min-h-11 flex-none rounded-full px-4 text-[12.5px] font-bold transition-colors duration-200"
-            style={{
-              background: "var(--sf-surface)",
-              color: isActive ? "var(--sf-accent-ink)" : "var(--sf-text-muted)",
-            }}
-          >
-            {isActive && (
-              <motion.span
-                layoutId={reduce ? undefined : pillId}
-                className="absolute inset-0 rounded-full"
-                style={{ background: "var(--sf-accent)" }}
-                transition={{ duration: 0.28, ease: EASE_OUT }}
-              />
-            )}
-            <span className="relative z-10">{p.label}</span>
-          </button>
-        );
-      })}
+    <div className="-mr-2 flex flex-none items-center" role="group" aria-label="Mês">
+      {arrow("lastMonth", "Mês anterior", <ChevronLeft size={18} />)}
+      <span className="min-w-[80px] text-center text-[13px] font-bold" aria-live="polite">
+        {label}
+      </span>
+      {arrow("month", "Próximo mês", <ChevronRight size={18} />)}
     </div>
   );
 }
 
+/** Seção: 15px caixa-alta, o papel "seção" da escala da loja (§4). */
 function SectionTitle({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="mb-3 flex items-baseline justify-between gap-3">
-      <h2 className="text-[13px] font-extrabold uppercase tracking-[0.08em]" style={{ color: "var(--sf-text-muted)" }}>
-        {children}
-      </h2>
+    <div className={`flex items-center justify-between gap-3 ${aside ? "mb-2" : "mb-3"}`}>
+      <h2 className="text-[15px] font-extrabold uppercase tracking-[0.06em]">{children}</h2>
       {aside}
     </div>
   );
 }
 
-/** Uma linha de consumo dentro da conta do saldo: sempre um desconto. */
+/** Uma linha de consumo dentro da conta do saldo: detalhe da linha "Seu consumo", mais apagado que ela. */
 function ConsumptionRow({ entry, productLabel }: { entry: ConsumptionEntry; productLabel: (id: string) => ReactNode }) {
   const title =
     entry.kind === "retirada" && entry.sale
       ? productLabel(entry.sale.productId)
       : `Dívida${entry.debt?.notes ? ` · ${entry.debt.notes}` : ""}`;
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1.5 pl-3">
+    <div className="flex items-baseline justify-between gap-3 py-1 pl-3" style={{ color: "var(--sf-text-muted)" }}>
       <div className="min-w-0">
-        <p className="break-words text-[12.5px] leading-snug">{title}</p>
-        <p className="text-[11.5px]" style={{ color: "var(--sf-text-muted)" }}>
+        <p className="break-words text-xs leading-snug">{title}</p>
+        <p className="text-xs">
           {formatDateBR(entry.date)}
           {entry.kind === "retirada" && entry.sale ? ` · ${entry.sale.quantity} un. pelo custo` : ""}
         </p>
       </div>
-      <span className="flex-none text-[12.5px] tabular-nums" style={{ color: "var(--sf-text-muted)" }}>
-        −{fmt(entry.amount)}
-      </span>
+      <span className="flex-none text-xs tabular-nums">−{fmt(entry.amount)}</span>
     </div>
   );
 }
@@ -223,9 +253,72 @@ const TAG_LABEL: Record<Exclude<OrderLineTag, null>, string> = {
   desconto: "com desconto",
 };
 
+/**
+ * Link de WhatsApp em pílula. `solid` quando é A ação que sobrou (avisar da
+ * recusa); secundário quando é consequência de algo que já acabou (vencido no
+ * fim da lista, que não pode disputar o polegar com um pedido vivo).
+ */
+function WhatsAppPill({
+  href, label, linkRef, variant = "solid",
+}: { href: string; label: string; linkRef?: Ref<HTMLAnchorElement>; variant?: "solid" | "quiet" }) {
+  return (
+    <a
+      ref={linkRef}
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={`flex items-center justify-center gap-2 rounded-full font-extrabold ${
+        variant === "solid" ? "h-12 text-[13.5px]" : "min-h-11 flex-none whitespace-nowrap px-4 text-[12.5px]"
+      }`}
+      style={
+        variant === "solid"
+          ? { background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }
+          : { background: "var(--sf-surface-2)", color: "var(--sf-text)" }
+      }
+    >
+      <MessageCircle size={variant === "solid" ? 16 : 14} aria-hidden />
+      {label}
+    </a>
+  );
+}
+
+/**
+ * Pedido vencido, recolhido no fim da lista: não há o que decidir (o banco
+ * recusa), só avisar o cliente. Inteiro e no topo, ele empurrava para baixo o
+ * pedido que vencia em 9 minutos.
+ */
+function ExpiredOrderRow({ order, storeUrl }: { order: Order; storeUrl: string | null }) {
+  const reduce = useReducedMotion();
+  const name = order.customers?.name?.trim() || "Sem nome";
+  const wa = whatsappLink(order.customers?.whatsapp, customerMessage("expired", order, storeUrl));
+  return (
+    <motion.article
+      layout={!reduce}
+      initial={reduce ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      aria-label={`Pedido vencido de ${name}`}
+      className="flex items-center justify-between gap-3 rounded-[20px] px-4 py-3"
+      style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+    >
+      <div className="min-w-0">
+        <h3 className="break-words text-[13.5px] font-bold leading-snug">{name}</h3>
+        <p className="flex items-center gap-1 text-xs" style={{ color: "var(--sf-danger)" }}>
+          <Clock size={12} aria-hidden />
+          <span>
+            Venceu <span style={{ color: "var(--sf-text-muted)" }}>· {fmt(order.total_amount)} · {orderRef(order.id)}</span>
+          </span>
+        </p>
+      </div>
+      {wa && <WhatsAppPill href={wa} label={`Avisar ${firstName(name) || "cliente"}`} variant="quiet" />}
+    </motion.article>
+  );
+}
+
 /** Pedido chegando: o essencial visível sem rolar e as duas ações no polegar. */
 function OrderCard({
   order,
+  now,
   processing,
   busy,
   basePrice,
@@ -233,6 +326,7 @@ function OrderCard({
   onDecline,
 }: {
   order: Order;
+  now: number;
   processing: boolean;
   /** Outro pedido está sendo processado: este espera, e diz por quê. */
   busy: boolean;
@@ -241,19 +335,22 @@ function OrderCard({
   onDecline: (order: Order) => Promise<OrderActionResult>;
 }) {
   const reduce = useReducedMotion();
-  const noteId = useId();
+  const baseId = useId();
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const ageMinutes = (Date.now() - new Date(order.created_at).getTime()) / 60000;
-  const left = minutesLeft(order.created_at);
+  const ageMinutes = (now - new Date(order.created_at).getTime()) / 60000;
+  const left = minutesLeft(order.created_at, now);
   const expiring = left <= EXPIRY_WARNING_HOURS * 60;
+  const urgent = left < EXPIRY_URGENT_MINUTES;
   const isNew = ageMinutes < NEW_ORDER_MINUTES;
   const tags = useMemo(() => tagOrderLines(order.order_items ?? [], basePrice), [order.order_items, basePrice]);
-  const wa = whatsappLink(order.customers?.whatsapp);
   const name = order.customers?.name?.trim() || "Sem nome";
+  const phone = order.customers?.whatsapp;
+  const wa = whatsappLink(phone);
   const disabled = processing || busy;
+  const alertColor = urgent ? "var(--sf-danger)" : "var(--sf-warn)";
 
   const run = async (action: () => Promise<OrderActionResult>) => {
     setError(null);
@@ -267,11 +364,12 @@ function OrderCard({
       initial={reduce ? false : { opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
-      aria-labelledby={`${noteId}-name`}
+      aria-labelledby={`${baseId}-name`}
+      aria-busy={processing}
       className="rounded-[20px] p-4"
       style={{
         background: "var(--sf-surface)",
-        border: `1px solid ${expiring ? "var(--sf-warn)" : "var(--sf-accent-line)"}`,
+        border: `1px solid ${expiring ? alertColor : "var(--sf-accent-line)"}`,
       }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -279,7 +377,7 @@ function OrderCard({
           {expiring ? (
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${LABEL}`}
-              style={{ background: "var(--sf-surface-2)", color: "var(--sf-warn)" }}
+              style={{ background: "var(--sf-surface-2)", color: alertColor }}
             >
               <Clock size={12} aria-hidden />
               {leftLabel(left)}
@@ -307,42 +405,50 @@ function OrderCard({
           )}
           {/* Nome composto cortado é o vendedor sem saber para quem vai
               entregar — mesmo motivo dos itens logo abaixo. */}
-          <h3 id={`${noteId}-name`} className="mt-2 break-words text-base font-bold leading-tight">
+          <h3 id={`${baseId}-name`} className="mt-2 break-words text-base font-bold leading-tight">
             {name}
           </h3>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs" style={{ color: "var(--sf-text-muted)" }}>
+          <p className="flex flex-wrap items-center gap-x-2 text-xs" style={{ color: "var(--sf-text-muted)" }}>
             {wa ? (
+              // 44px de altura: é o alvo mais usado do card depois dos botões,
+              // e fica colado no nome — dedo grande erra para o título.
               <a
                 href={wa}
                 target="_blank"
                 rel="noreferrer"
-                className="-my-1 inline-flex items-center gap-1 py-1 font-semibold underline decoration-dotted underline-offset-4"
+                className="inline-flex min-h-11 items-center gap-1 font-semibold underline decoration-dotted underline-offset-4"
                 style={{ color: "var(--sf-text)" }}
-                aria-label={`Abrir conversa com ${name} no WhatsApp`}
+                aria-label={`WhatsApp de ${name}: ${phone}`}
               >
                 <MessageCircle size={13} aria-hidden />
-                {order.customers?.whatsapp}
+                {phone}
               </a>
             ) : (
-              <span>{order.customers?.whatsapp ?? "Sem WhatsApp"}</span>
+              <span className="inline-flex min-h-11 items-center">{phone ?? "Sem WhatsApp"}</span>
             )}
             {/* A mesma referência que vai na mensagem que o cliente encaminha:
                 é ela que casa o WhatsApp com o card quando a mesma pessoa faz
                 dois pedidos no mesmo dia. */}
-            <span className="tabular-nums">{orderRef(order.id)}</span>
+            <span className="tabular-nums" title="Número do pedido, o mesmo da mensagem do cliente">
+              {orderRef(order.id)}
+            </span>
           </p>
         </div>
         <div className="flex-none text-right">
           <p className="text-lg font-extrabold leading-tight tabular-nums" style={{ color: "var(--sf-accent)" }}>
             {fmt(order.total_amount)}
           </p>
-          <p className="mt-0.5 text-xs" style={{ color: "var(--sf-text-muted)" }}>
-            {timeAgo(order.created_at)}
-          </p>
+          {/* Uma hora só por card: quando o selo já diz "vence em", "há 22h"
+              repetiria a mesma informação do outro lado. */}
+          {!expiring && (
+            <p className="mt-0.5 text-xs" style={{ color: "var(--sf-text-muted)" }}>
+              {timeAgo(order.created_at, now)}
+            </p>
+          )}
         </div>
       </div>
 
-      <ul className="mt-3 space-y-2 rounded-2xl px-3.5 py-2.5" style={{ background: "var(--sf-surface-2)" }}>
+      <ul className="mt-2 space-y-2 rounded-2xl px-3.5 py-2.5" style={{ background: "var(--sf-surface-2)" }}>
         {order.order_items?.map(item => {
           const tag = tags.get(item.id);
           return (
@@ -352,12 +458,16 @@ function OrderCard({
               <span className="min-w-0 flex-1 break-words leading-snug">
                 <span className="font-extrabold">{item.quantity}×</span>{" "}
                 <ProductName {...productParts(item.products)} />
+                {/* O selo tem linha própria: ao lado do nome ele ora cabia, ora
+                    caía, e o mesmo pedido tinha duas caras. */}
                 {tag && (
-                  <span
-                    className="ml-1.5 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-[11px] font-bold"
-                    style={{ background: "var(--sf-accent-tint)", color: "var(--sf-accent)" }}
-                  >
-                    {TAG_LABEL[tag]}
+                  <span className="mt-1 flex">
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[11.5px] font-bold"
+                      style={{ background: "var(--sf-accent-tint)", color: "var(--sf-accent)" }}
+                    >
+                      {TAG_LABEL[tag]}
+                    </span>
                   </span>
                 )}
               </span>
@@ -381,21 +491,22 @@ function OrderCard({
         </p>
       )}
 
-      {/* Anotação da venda: o que o vendedor quer lembrar ("dia 20", "fiado").
-          Fechada por padrão — é exceção, e aberta ela empurraria as ações para
-          fora do polegar. Vai para a nota da venda, antes da referência. */}
+      {/* Anotação da venda: o que o vendedor quer que a California saiba
+          ("pagou em dinheiro", "entrega dia 20"). Fechada por padrão — é
+          exceção, e aberta ela empurraria as ações para fora do polegar. Vai
+          para a nota da venda, antes da referência. */}
       {noteOpen ? (
         <div className="mt-3">
-          <label htmlFor={noteId} className="text-xs font-semibold" style={{ color: "var(--sf-text-muted)" }}>
+          <label htmlFor={`${baseId}-note`} className="text-xs font-semibold" style={{ color: "var(--sf-text-muted)" }}>
             Anotação na venda (opcional)
           </label>
           <div className="mt-1.5 flex items-center gap-2">
             <input
-              id={noteId}
+              id={`${baseId}-note`}
               value={note}
               onChange={e => setNote(e.target.value)}
               maxLength={ORDER_NOTE_MAX}
-              placeholder="dia 20, fiado..."
+              placeholder="ex.: pagou em dinheiro"
               autoFocus
               className="h-11 min-w-0 flex-1 rounded-[14px] px-3 text-[15px] outline-none"
               style={{ background: "var(--sf-surface-2)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" }}
@@ -418,7 +529,8 @@ function OrderCard({
         <button
           type="button"
           onClick={() => setNoteOpen(true)}
-          className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-[12.5px] font-bold"
+          aria-label={`Anotar algo na venda de ${name}`}
+          className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[12.5px] font-bold"
           style={{ color: "var(--sf-text-muted)" }}
         >
           <Plus size={14} aria-hidden />
@@ -431,6 +543,7 @@ function OrderCard({
           type="button"
           disabled={disabled}
           onClick={() => run(() => onDecline(order))}
+          aria-label={`Recusar pedido de ${name}`}
           className="flex h-12 items-center justify-center rounded-full text-[13px] font-bold disabled:opacity-40"
           style={{ background: "var(--sf-surface-2)", color: "var(--sf-text-muted)" }}
         >
@@ -440,10 +553,14 @@ function OrderCard({
           type="button"
           disabled={disabled}
           onClick={() => run(() => onConfirm(order, note))}
+          aria-label={processing ? `Confirmando pedido de ${name}` : `Confirmar pedido de ${name}`}
           className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-full text-[13.5px] font-extrabold"
+          // Ocupado: o preenchimento esmaece (§6), mas a tinta passa a ser a
+          // clara — a escura sobre o accent a 30% dava ~2:1 e "Confirmando…"
+          // era justamente o que a pessoa precisava ler.
           style={{
             background: disabled ? "var(--sf-accent-soft)" : "var(--sf-accent)",
-            color: "var(--sf-accent-ink)",
+            color: disabled ? "var(--sf-text)" : "var(--sf-accent-ink)",
           }}
         >
           <Check size={16} strokeWidth={2.6} aria-hidden />
@@ -455,50 +572,146 @@ function OrderCard({
           {error}
         </p>
       ) : (
-        <p className="mt-2.5 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
-          {busy
-            ? "Esperando o outro pedido terminar."
-            : "Confirmar tira do seu estoque. A venda fica em A receber até a loja registrar o pagamento."}
-        </p>
+        busy && (
+          <p className="mt-2.5 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+            Esperando o outro pedido terminar.
+          </p>
+        )
       )}
     </motion.article>
   );
 }
 
-/** A confirmação, no lugar onde o card estava — não num toast do ERP por cima do cabeçalho. */
-function ConfirmedNotice({ name, total, onClose }: { name: string; total: number; onClose: () => void }) {
+type NoticeKind = "confirmed" | "declined" | "expired" | "gone";
+type Notice = {
+  key: string;
+  kind: NoticeKind;
+  order: Order;
+  /** O aviso nasceu de um gesto do vendedor (confirmar, recusar, confirmar vencido): o foco vai para ele. */
+  focus?: boolean;
+};
+
+/**
+ * O fim de um pedido, NO LUGAR do card — os avisos entram na mesma lista dos
+ * pedidos, na posição do pedido que acabou. Num bloco acima da lista, a
+ * confirmação do terceiro card nascia 600px acima da tela e sumia sem ser vista.
+ *
+ * Recusado e vencido trazem o "Avisar no WhatsApp" com a mensagem pronta e
+ * ficam até o vendedor fechar. Confirmado sai sozinho, mas não enquanto está
+ * com o foco do teclado (quem navega por teclado ou leitor de tela lê no ritmo
+ * dele) nem com o mouse em cima.
+ */
+function OrderNotice({ notice, storeUrl, onClose }: { notice: Notice; storeUrl: string | null; onClose: () => void }) {
   const reduce = useReducedMotion();
+  const { kind, order } = notice;
+  const name = order.customers?.name?.trim() || "cliente";
+  const boxRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<HTMLAnchorElement>(null);
+  const [paused, setPaused] = useState(false);
+  const wa =
+    kind === "declined" || kind === "expired"
+      ? whatsappLink(order.customers?.whatsapp, customerMessage(kind, order, storeUrl))
+      : null;
+
+  useEffect(() => {
+    if (!notice.focus) return;
+    // Recusado: o foco vai para a próxima ação (avisar). Confirmado: para o
+    // próprio aviso, que o leitor de tela lê inteiro.
+    (actionRef.current ?? boxRef.current)?.focus();
+    // Só na montagem: o foco acompanha o gesto que criou o aviso, uma vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (kind !== "confirmed" || paused) return;
+    const t = window.setTimeout(onClose, CONFIRMED_NOTICE_MS);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, paused]);
+
+  const n = units(order);
+  const copy: Record<NoticeKind, { title: string; body: string }> = {
+    confirmed: {
+      title: `Pedido de ${name} confirmado!`,
+      body: `${n === 1 ? "1 un. saiu" : `${n} un. saíram`} do seu estoque · ${fmt(order.total_amount)} foi para A receber.`,
+    },
+    declined: { title: `Pedido de ${name} recusado.`, body: "A reserva voltou para o catálogo. Avise o cliente:" },
+    expired: {
+      title: `O pedido de ${name} venceu.`,
+      body: `Passou de ${RESERVATION_HOURS}h e a reserva foi liberada.`,
+    },
+    gone: { title: `O pedido de ${name} saiu da lista.`, body: `${capitalize(OWNER)} já confirmou ou recusou por lá.` },
+  };
+  const good = kind === "confirmed";
+
   return (
     <motion.div
+      ref={boxRef}
       layout={!reduce}
-      initial={reduce ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={reduce ? false : { opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0 }}
-      className="flex items-center gap-3 rounded-[20px] px-4 py-3"
-      style={{ background: "var(--sf-accent-tint)", border: "1px solid var(--sf-accent-line)" }}
+      tabIndex={-1}
+      role="group"
+      aria-label={copy[kind].title}
+      data-notice={notice.key}
+      onFocus={e => {
+        // Só o foco de TECLADO pausa: o foco que o próprio aviso recebe depois
+        // do toque em "Confirmar" não é `:focus-visible`, e pausar ali deixaria
+        // o aviso preso na tela do celular até o próximo toque.
+        const target = e.target as HTMLElement;
+        try {
+          if (target.matches(":focus-visible")) setPaused(true);
+        } catch {
+          /* navegador sem :focus-visible: não pausa */
+        }
+      }}
+      onBlur={e => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
+      }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      className="rounded-[20px] px-4 py-3 outline-none"
+      style={
+        good
+          ? { background: "var(--sf-accent-tint)", border: "1px solid var(--sf-accent-line)" }
+          : { background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }
+      }
     >
-      <span
-        className="flex h-8 w-8 flex-none items-center justify-center rounded-full"
-        style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
-        aria-hidden
-      >
-        <Check size={16} strokeWidth={2.8} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="break-words text-[13.5px] font-bold leading-snug">Pedido de {name} confirmado!</p>
-        <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
-          {fmt(total)} foi para A receber.
-        </p>
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-full"
+          style={
+            good
+              ? { background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }
+              : { background: "var(--sf-surface-2)", color: "var(--sf-text-muted)" }
+          }
+          aria-hidden
+        >
+          {/* O ícone do estado não repete o "X" de fechar ao lado. */}
+          {kind === "expired" ? <Clock size={15} /> : kind === "declined" ? <Ban size={15} /> : <Check size={16} strokeWidth={2.8} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-[13.5px] font-bold leading-snug">{copy[kind].title}</p>
+          <p className="text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+            {copy[kind].body}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar aviso"
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-full"
+          style={{ color: "var(--sf-text-muted)" }}
+        >
+          <X size={15} />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Fechar aviso"
-        className="flex h-11 w-11 flex-none items-center justify-center rounded-full"
-        style={{ color: "var(--sf-text-muted)" }}
-      >
-        <X size={15} />
-      </button>
+      {wa && (
+        <div className="mt-2.5">
+          <WhatsAppPill href={wa} label={`Avisar ${firstName(name) || "o cliente"} no WhatsApp`} linkRef={actionRef} />
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -508,27 +721,38 @@ function ConfirmedNotice({ name, total, onClose }: { name: string; total: number
  *
  * O vendedor não marca recebimento: quem diz que o dinheiro chegou é o dono,
  * na tela de Vendas, depois de ver o dinheiro na conta. Aqui a linha serve para
- * o vendedor saber quem ainda deve e cobrar — por isso o nome e o WhatsApp do
- * cliente, e não só a referência do pedido.
+ * o vendedor saber quem ainda deve e cobrar — por isso o nome, a idade da
+ * dívida e o "Cobrar" com a mensagem pronta.
  *
- * `dinheiro_com_vendedor` diz outra coisa: o cliente já pagou, em dinheiro, e
- * o dinheiro está com o vendedor esperando o acerto com a loja.
+ * `withSeller` (`dinheiro_com_vendedor`) é outra conta: o cliente já pagou, em
+ * dinheiro, e quem deve é o VENDEDOR, à California. Por isso mora em bloco
+ * próprio, fora do total do que os clientes devem.
  */
 function OpenGroupRow({
   group,
   customer,
   itemsLabel,
+  now,
   divider,
+  withSeller,
 }: {
   group: OpenSaleGroup;
   customer: { name: string; whatsapp: string } | null | undefined;
   itemsLabel: ReactNode;
+  now: number;
   divider: boolean;
+  withSeller: boolean;
 }) {
-  const withSeller = group.sales.every(s => s.paymentMethod === "dinheiro_com_vendedor");
   const name = customer?.name?.trim();
   const title = name || (group.orderId ? `Pedido ${orderRef(group.orderId)}` : "Venda sem pedido");
-  const wa = withSeller ? null : whatsappLink(customer?.whatsapp);
+  const days = Math.floor((now - new Date(group.date).getTime()) / 86400000);
+  const first = firstName(name);
+  const chargeText = [
+    first ? `Oi, ${first}!` : "Oi!",
+    `Passando para lembrar ${group.orderId ? `do pedido ${orderRef(group.orderId)}` : "da compra"} de ${formatDateBR(group.date)}:`,
+    `ficou ${fmt(group.open)} em aberto. Me avisa quando puder acertar?`,
+  ].join(" ");
+  const wa = withSeller ? null : whatsappLink(customer?.whatsapp, chargeText);
 
   return (
     <div className="px-3.5 py-3" style={divider ? { borderTop: "1px solid var(--sf-hairline)" } : undefined}>
@@ -537,33 +761,34 @@ function OpenGroupRow({
           <p className="break-words text-[13.5px] font-bold leading-snug">{title}</p>
           <p className="mt-0.5 break-words text-[12.5px] leading-snug">{itemsLabel}</p>
           <p className="mt-0.5 text-xs" style={{ color: "var(--sf-text-muted)" }}>
-            {formatDateBR(group.date)} · {group.units} un.
+            {formatDateBR(group.date)}
+            {!withSeller && days >= OLD_DEBT_DAYS && (
+              <span className="font-semibold" style={{ color: "var(--sf-text)" }}> · há {days} dias</span>
+            )}
+            {" "}· {group.units} un.
             {group.orderId && name ? ` · ${orderRef(group.orderId)}` : ""}
             {group.note ? ` · ${group.note}` : ""}
           </p>
         </div>
         <div className="flex flex-none flex-col items-end">
-          <p className="text-[14px] font-extrabold tabular-nums" style={{ color: "var(--sf-warn)" }}>
+          <p
+            className="text-[14px] font-extrabold tabular-nums"
+            style={{ color: withSeller ? "var(--sf-text)" : "var(--sf-warn)" }}
+          >
             {fmt(group.open)}
           </p>
-          {withSeller ? (
-            <p className="mt-0.5 max-w-[120px] text-right text-[11.5px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
-              Dinheiro com você. Acerte com a loja.
-            </p>
-          ) : (
-            wa && (
-              <a
-                href={wa}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Cobrar ${name ?? "o cliente"} no WhatsApp`}
-                className="-mr-1 mt-0.5 inline-flex min-h-11 items-center gap-1 px-1 text-[12.5px] font-bold"
-                style={{ color: "var(--sf-text-muted)" }}
-              >
-                <MessageCircle size={14} aria-hidden />
-                Cobrar
-              </a>
-            )
+          {wa && (
+            <a
+              href={wa}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Cobrar ${name ?? "o cliente"} no WhatsApp`}
+              className="-mr-1 mt-0.5 inline-flex min-h-11 items-center gap-1 px-1 text-[12.5px] font-bold"
+              style={{ color: "var(--sf-text)" }}
+            >
+              <MessageCircle size={14} aria-hidden />
+              Cobrar
+            </a>
           )}
         </div>
       </div>
@@ -571,8 +796,8 @@ function OpenGroupRow({
   );
 }
 
-/** O link da loja, para quem ainda não vendeu nada: é por ele que o pedido chega. */
-function StoreLinkCard({ url }: { url: string }) {
+/** O link da loja com copiar e compartilhar. O mesmo no card de boas-vindas e no sheet "Minha loja". */
+function StoreLinkPanel({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const copy = async () => {
@@ -585,11 +810,7 @@ function StoreLinkCard({ url }: { url: string }) {
     }
   };
   return (
-    <section className="mt-4 rounded-[20px] p-4" style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-accent-line)" }}>
-      <h2 className="text-base font-bold">Sua loja está no ar</h2>
-      <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
-        Mande este link para os seus clientes. Cada pedido que eles fizerem aparece aqui para você confirmar.
-      </p>
+    <>
       <p
         className="mt-3 break-all rounded-[14px] px-3 py-2.5 text-[13px] font-semibold"
         style={{ background: "var(--sf-surface-2)" }}
@@ -619,7 +840,7 @@ function StoreLinkCard({ url }: { url: string }) {
         )}
       </div>
       <span className="sr-only" aria-live="polite">{copied ? "Link copiado" : ""}</span>
-    </section>
+    </>
   );
 }
 
@@ -628,16 +849,55 @@ function Money({ value, tone }: { value: number; tone: "accent" | "warn" | "plai
   return <span className="tabular-nums" style={{ color }}>{fmt(value)}</span>;
 }
 
+/** Linha da conta do saldo. Em texto cheio: os detalhes (consumo) é que ficam apagados, embaixo dela. */
 function LedgerLine({ label, value, sign, strong }: { label: ReactNode; value: number; sign?: "+" | "−"; strong?: boolean }) {
   return (
     <div className={`flex items-baseline justify-between gap-3 ${strong ? "pt-2 text-[13.5px] font-extrabold" : "py-1 text-[12.5px]"}`}>
-      <span className="min-w-0" style={strong ? undefined : { color: "var(--sf-text-muted)" }}>{label}</span>
-      <span className="flex-none tabular-nums" style={strong ? undefined : { color: "var(--sf-text-muted)" }}>
+      <span className="min-w-0">{label}</span>
+      <span className="flex-none tabular-nums">
         {sign ?? ""}{fmt(Math.abs(value))}
       </span>
     </div>
   );
 }
+
+/** Topo de sheet da tela: título, resumo e fechar. */
+function SheetTop({ title, subtitle, onClose }: { title: string; subtitle?: string; onClose: () => void }) {
+  return (
+    <div
+      className="flex flex-shrink-0 items-center justify-between px-5 pb-3.5 pt-5"
+      style={{ borderBottom: "1px solid var(--sf-hairline)" }}
+    >
+      <div className="min-w-0">
+        <SheetTitle className="text-[19px] font-extrabold" style={{ color: "var(--sf-text)" }}>
+          {title}
+        </SheetTitle>
+        {subtitle && (
+          <p className="mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Fechar"
+        className="flex h-11 w-11 flex-none items-center justify-center rounded-full"
+        style={{ background: "var(--sf-surface)", color: "var(--sf-text)" }}
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+const PILL_BUTTON =
+  "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-4 text-[12.5px] font-bold";
+const PILL_BUTTON_STYLE = { background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" };
+
+type ListRow =
+  | { type: "order"; key: string; createdAt: string; tail: boolean; order: Order }
+  | { type: "notice"; key: string; createdAt: string; tail: boolean; notice: Notice };
 
 /* ------------------------------------------------------------------ */
 /* Página                                                               */
@@ -660,14 +920,42 @@ export default function SellerSalesPage() {
   const [period, setPeriod] = useState<SellerPeriod>("month");
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [stockOpen, setStockOpen] = useState(false);
-  const [confirmed, setConfirmed] = useState<{ id: string; name: string; total: number }[]>([]);
-  const timers = useRef<number[]>([]);
-  useEffect(() => () => timers.current.forEach(t => window.clearTimeout(t)), []);
-  const later = (fn: () => void) => {
-    timers.current.push(window.setTimeout(fn, NOTICE_MS));
-  };
+  const [storeOpen, setStoreOpen] = useState(false);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [announcement, setAnnouncement] = useState("");
+  const stockButtonRef = useRef<HTMLButtonElement>(null);
+  const storeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // O relógio da tela: sem ele, "Vence em 1h" ficava parado até alguma outra
+  // coisa redesenhar o card, e o pedido vencia com o botão ainda aceso.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), TICK_MS);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const [slowLoad, setSlowLoad] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      setSlowLoad(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSlowLoad(true), SLOW_LOAD_MS);
+    return () => window.clearTimeout(t);
+  }, [loading]);
+
+  // Aviso que sai com o foco dentro dele (fechado ou vencido o tempo) leva o
+  // foco para o título dos pedidos: sem isso ele caía no <body> e quem navega
+  // por teclado recomeçava do topo.
+  const ordersTitleRef = useRef<HTMLDivElement>(null);
+  const dismiss = useCallback((key: string) => {
+    const box = document.querySelector(`[data-notice="${key}"]`);
+    if (box?.contains(document.activeElement)) ordersTitleRef.current?.focus({ preventScroll: true });
+    setNotices(prev => prev.filter(n => n.key !== key));
+  }, []);
 
   const mySeller = sellers.find(s => s.id === sellerId) ?? null;
+  const storeUrl = mySeller ? `${window.location.origin}/loja/${mySeller.slug || mySeller.id}` : null;
   const productById = useMemo(() => new Map<string, Product>(products.map(p => [p.id, p])), [products]);
   const basePrice = useCallback((id: string) => productById.get(id)?.salePrice, [productById]);
 
@@ -680,13 +968,20 @@ export default function SellerSalesPage() {
   );
 
   // O mês da tela. O contexto é o MESMO `currentBalanceContext` da
-  // Distribuição e do Dashboard: com "Este mês" o saldo aqui é, por
+  // Distribuição e do Dashboard: com o mês corrente o saldo aqui é, por
   // construção, o número que o admin vê do outro lado.
   const anchor = useMemo(() => (period === "lastMonth" ? subMonths(new Date(), 1) : new Date()), [period]);
   const monthName = format(anchor, "MMMM", { locale: ptBR });
   const balanceCtx = useMemo(
     () => currentBalanceContext({ sales, commissionPayments, sellerDebtPayments, sellerManualDebts }, anchor),
     [sales, commissionPayments, sellerDebtPayments, sellerManualDebts, anchor],
+  );
+  const inMonth = useCallback(
+    (iso: string) => {
+      const ts = new Date(iso).getTime();
+      return !isNaN(ts) && ts >= balanceCtx.start.getTime() && ts <= balanceCtx.end.getTime();
+    },
+    [balanceCtx],
   );
 
   const commission = useMemo(() => {
@@ -707,27 +1002,27 @@ export default function SellerSalesPage() {
 
   // Só as QUITADAS, pela data da venda — o mesmo recorte da comissão (venda
   // paga, fechada no mês em que foi feita). Por isso as unidades daqui batem
-  // com o "N/11 un. pagas" do bloco de cima. A que falta pagar mora em "A
-  // receber", uma vez só.
-  const receivedSales = useMemo(() => {
-    const startTs = balanceCtx.start.getTime();
-    const endTs = balanceCtx.end.getTime();
-    return sales
-      .filter(s => {
-        if (!isMySale(s, sellerId) || saleOpenAmount(s) > 0.01) return false;
-        const ts = new Date(s.date).getTime();
-        return !isNaN(ts) && ts >= startTs && ts <= endTs;
-      })
-      .sort(byDateDesc);
-  }, [sales, sellerId, balanceCtx]);
+  // com as "un. pagas" do bloco da comissão, e a receita daqui é a base do
+  // que a próxima faixa reprecifica. A que falta pagar mora em "A receber".
+  const receivedSales = useMemo(
+    () => sales.filter(s => isMySale(s, sellerId) && saleOpenAmount(s) <= 0.01 && inMonth(s.date)).sort(byDateDesc),
+    [sales, sellerId, inMonth],
+  );
   const receivedUnits = receivedSales.reduce((a, s) => a + s.quantity, 0);
   const receivedTotal = receivedSales.reduce((a, s) => a + s.totalPrice, 0);
+  // O mês ainda tem venda em aberto: a faixa dele pode mudar quando ela for paga.
+  const monthStillOpen = sales.some(s => isMySale(s, sellerId) && saleOpenAmount(s) > 0.01 && inMonth(s.date));
 
   // "A receber" não segue o período: venda em aberto não some na virada do
-  // mês, e é justamente ela que falta marcar. Legado (antes do PROJECT_START)
-  // não é cobrança de ninguém.
+  // mês, e é justamente ela que falta cobrar. Legado (antes do PROJECT_START)
+  // não é cobrança de ninguém. Duas contas, dois sentidos do dinheiro: o que os
+  // CLIENTES devem, e o que já está com o vendedor para acertar com a California.
   const openGroups = useMemo(() => groupOpenSales(sales, sellerId, PROJECT_START), [sales, sellerId]);
-  const openTotal = openGroups.reduce((a, g) => a + g.open, 0);
+  const isWithSeller = (g: OpenSaleGroup) => g.sales.every(s => s.paymentMethod === "dinheiro_com_vendedor");
+  const clientGroups = openGroups.filter(g => !isWithSeller(g));
+  const withSellerGroups = openGroups.filter(isWithSeller);
+  const clientTotal = clientGroups.reduce((a, g) => a + g.open, 0);
+  const withSellerTotal = withSellerGroups.reduce((a, g) => a + g.open, 0);
   const customers = useOrderCustomers(
     useMemo(
       () => openGroups.map(g => g.orderId).filter((id): id is string => !!id),
@@ -735,11 +1030,72 @@ export default function SellerSalesPage() {
     ),
   );
 
-  // Mais antigo primeiro: é o que está mais perto de vencer a reserva.
-  const orders = useMemo(
-    () => [...pendingOrders].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
-    [pendingOrders],
-  );
+  const isExpired = useCallback((o: Order) => minutesLeft(o.created_at, now) <= 0, [now]);
+  const waitingCount = pendingOrders.filter(o => !isExpired(o)).length;
+
+  /**
+   * Pedidos e avisos numa lista só, para o aviso nascer no lugar do card.
+   * Vivos pelo tempo que falta (o mais perto de vencer no topo); vencidos, e o
+   * aviso de vencido, no fim — eles não têm mais o que decidir.
+   */
+  const rows = useMemo<ListRow[]>(() => {
+    const list: ListRow[] = [
+      ...pendingOrders.map<ListRow>(o => ({ type: "order", key: o.id, createdAt: o.created_at, tail: isExpired(o), order: o })),
+      ...notices.map<ListRow>(n => ({
+        type: "notice", key: n.key, createdAt: n.order.created_at, tail: n.kind === "expired", notice: n,
+      })),
+    ];
+    return list.sort(
+      (a, b) => Number(a.tail) - Number(b.tail) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  }, [pendingOrders, notices, isExpired]);
+
+  /**
+   * Pedido que sai da lista sem passar por um gesto daqui (venceu na
+   * atualização, ou a California confirmou/recusou pelo ERP) não some calado:
+   * vira aviso. E pedido novo que chega na atualização é anunciado para quem
+   * usa leitor de tela. `handled` marca o que este vendedor está confirmando ou
+   * recusando AGORA — marcado ANTES da chamada, porque o hook tira o pedido da
+   * lista antes de devolver o resultado.
+   *
+   * A primeira carga não conta como "chegou": a linha de base só existe depois
+   * que o hook terminou de carregar pela primeira vez.
+   */
+  const handled = useRef(new Set<string>());
+  const expiredByServer = useRef(new Set<string>());
+  const baseline = useRef<Order[] | null>(null);
+  const sawLoading = useRef(false);
+  useEffect(() => {
+    if (loadingOrders) {
+      sawLoading.current = true;
+      return;
+    }
+    if (baseline.current === null) {
+      if (sawLoading.current) baseline.current = pendingOrders;
+      return;
+    }
+    const previous = baseline.current;
+    baseline.current = pendingOrders;
+    const current = new Set(pendingOrders.map(o => o.id));
+    const before = new Set(previous.map(o => o.id));
+    const vanished = previous.filter(o => !current.has(o.id) && !handled.current.has(o.id));
+    const arrived = pendingOrders.filter(o => !before.has(o.id));
+
+    const created = vanished.map<Notice>(o => {
+      const byServer = expiredByServer.current.has(o.id);
+      const expired = byServer || minutesLeft(o.created_at, Date.now()) <= 0;
+      return { key: `${expired ? "expired" : "gone"}-${o.id}`, kind: expired ? "expired" : "gone", order: o, focus: byServer };
+    });
+    if (created.length > 0) {
+      setNotices(prev => [...created, ...prev.filter(n => !vanished.some(o => o.id === n.order.id))]);
+    }
+
+    const said: string[] = [];
+    if (arrived.length === 1) said.push(`Pedido novo de ${arrived[0].customers?.name?.trim() || "cliente"}.`);
+    else if (arrived.length > 1) said.push(`${arrived.length} pedidos novos.`);
+    for (const n of created) if (!n.focus) said.push(n.kind === "expired" ? `Pedido de ${n.order.customers?.name ?? "cliente"} venceu.` : `Pedido de ${n.order.customers?.name ?? "cliente"} saiu da lista.`);
+    if (said.length > 0) setAnnouncement(said.join(" "));
+  }, [pendingOrders, loadingOrders]);
 
   const stock = useMemo(
     () => buildSellerStock(sellerId, { productAssignments, products, pendingOrders, productName: getProductName }),
@@ -747,30 +1103,53 @@ export default function SellerSalesPage() {
   );
 
   const neverSold = !sales.some(s => isMySale(s, sellerId));
-  const storeUrl = mySeller ? `${window.location.origin}/loja/${mySeller.slug || mySeller.id}` : null;
 
   const handleConfirm = async (order: Order, note: string) => {
+    handled.current.add(order.id);
     const result = await confirmOrder(order.id, "pendente", note);
     if (result.ok) {
-      const entry = { id: order.id, name: order.customers?.name?.trim() || "cliente", total: order.total_amount };
-      setConfirmed(prev => [entry, ...prev]);
-      later(() => setConfirmed(prev => prev.filter(c => c.id !== entry.id)));
+      setNotices(prev => [{ key: `confirmed-${order.id}`, kind: "confirmed", order, focus: true }, ...prev]);
+    } else {
+      handled.current.delete(order.id);
+      if ("expired" in result && result.expired) expiredByServer.current.add(order.id);
+    }
+    return result;
+  };
+
+  const handleDecline = async (order: Order) => {
+    handled.current.add(order.id);
+    const result = await declineOrder(order.id);
+    if (result.ok) {
+      setNotices(prev => [{ key: `declined-${order.id}`, kind: "declined", order, focus: true }, ...prev]);
+    } else {
+      handled.current.delete(order.id);
     }
     return result;
   };
 
   const groupItems = (g: OpenSaleGroup): ReactNode =>
-    g.sales.map((s, i) => (
-      <span key={s.id}>
+    mergeSaleLines(g.sales).map((line, i) => (
+      <span key={line.productId}>
         {i > 0 && <span style={{ color: "var(--sf-text-muted)" }}>, </span>}
-        {s.quantity > 1 && <span className="font-extrabold">{s.quantity}× </span>}
-        {productLabel(s.productId)}
+        {line.quantity > 1 && <span className="font-extrabold">{line.quantity}× </span>}
+        {productLabel(line.productId)}
       </span>
     ));
 
   const nextTier = commission ? getNextTier(commission.tier) : null;
+  const gap = commission ? unitsUntilNextTier(commission.units) : null;
+  const upgradeGain = commission ? tierUpgradeGain(receivedTotal, commission.tier, nextTier) : 0;
   const balance = commission?.balance ?? 0;
   const gain = commission ? commission.projectedBalance - commission.balance : 0;
+  const hasLedger =
+    !!commission &&
+    [commission.priorBalance, commission.accrued, commission.consumoTotal, commission.debtPaymentsTotal, commission.commPaid]
+      .some(v => Math.abs(v) > 0.01);
+
+  const ordersTitle =
+    waitingCount > 0
+      ? waitingCount === 1 ? "1 pedido esperando" : `${waitingCount} pedidos esperando`
+      : pendingOrders.length > 0 ? "Pedidos vencidos" : "Pedidos";
 
   return (
     // App-shell: a raiz ocupa a janela e não rola; só o <main> rola. Mesmo
@@ -781,334 +1160,459 @@ export default function SellerSalesPage() {
         <div className={`${COLUMN} px-5 pb-3 pt-4`}>
           <div className="flex items-center justify-between gap-2.5">
             <div className="min-w-0">
-              <h1
-                className="truncate text-sm font-extrabold uppercase tracking-[0.03em]"
-                style={{ color: "var(--sf-accent)" }}
-              >
-                Minhas vendas
-              </h1>
+              <h1 className="truncate text-[22px] font-extrabold leading-tight">Minhas vendas</h1>
               <p className="mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
                 {mySeller ? `Oi, ${mySeller.name}` : "Seus pedidos e sua comissão"}
               </p>
             </div>
-
-            <div className="flex flex-none items-center gap-2">
-              {/* Estoque é consulta, não filtro: fica ao lado de "sair", fora
-                  da fileira de períodos, onde parecia um terceiro período. */}
-              <button
-                type="button"
-                onClick={() => setStockOpen(true)}
-                className="flex h-11 items-center gap-1.5 rounded-full px-4 text-[12.5px] font-bold"
-                style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" }}
-              >
-                <Package size={15} aria-hidden />
-                Estoque
-              </button>
-              <button
-                type="button"
-                onClick={signOut}
-                aria-label="Sair da conta"
-                className="flex h-11 w-11 items-center justify-center rounded-full"
-                style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text-muted)" }}
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              aria-label="Sair da conta"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full"
+              style={PILL_BUTTON_STYLE}
+            >
+              <LogOut size={16} style={{ color: "var(--sf-text-muted)" }} />
+            </button>
           </div>
 
-          <PeriodChips active={period} onChange={setPeriod} />
+          {/* As duas consultas do vendedor, fixas no topo: o que está na mão
+              e o link da loja (que antes sumia depois da primeira venda). */}
+          <div className="mt-3 flex gap-2">
+            <button ref={stockButtonRef} type="button" onClick={() => setStockOpen(true)} className={PILL_BUTTON} style={PILL_BUTTON_STYLE}>
+              Estoque
+            </button>
+            {storeUrl && (
+              <button ref={storeButtonRef} type="button" onClick={() => setStoreOpen(true)} className={PILL_BUTTON} style={PILL_BUTTON_STYLE}>
+                Minha loja
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-10 pt-1.5`}>
-        {/* Pedidos — antes de tudo: é o que pede uma ação agora. Não segue o
-            período (pedido pendente é de hoje). */}
-        <section className="mt-4" aria-label="Pedidos esperando">
-          {orders.length > 0 && (
-            <SectionTitle>
-              {orders.length === 1 ? "1 pedido esperando" : `${orders.length} pedidos esperando`}
-            </SectionTitle>
-          )}
-          <div className="flex flex-col gap-3" aria-live="polite">
-            <AnimatePresence initial={false}>
-              {confirmed.map(c => (
-                <ConfirmedNotice
-                  key={`ok-${c.id}`}
-                  name={c.name}
-                  total={c.total}
-                  onClose={() => setConfirmed(prev => prev.filter(x => x.id !== c.id))}
-                />
-              ))}
-              {orders.map(order => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  processing={processingOrder === order.id}
-                  busy={!!processingOrder && processingOrder !== order.id}
-                  basePrice={basePrice}
-                  onConfirm={handleConfirm}
-                  onDecline={o => declineOrder(o.id)}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-          {ordersError ? (
-            <div className="rounded-[20px] px-4 py-8 text-center" style={{ background: "var(--sf-surface)" }}>
-              <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                {ordersError}
+      {/* O <main> ocupa a largura toda e a coluna mora DENTRO dele: com a coluna
+          no próprio <main>, a roda do mouse nas margens do desktop não rolava. */}
+      <main className="flex-1 overflow-y-auto overscroll-contain">
+        <div className={`${COLUMN} px-5 pb-10 pt-1.5`}>
+          <p className="sr-only" aria-live="polite">{announcement}</p>
+
+          {/* A demora é dita NO TOPO: embaixo dos pedidos ela ficava fora da tela. */}
+          {loading && slowLoad && (
+            <div
+              role="status"
+              className="mt-3 flex items-center justify-between gap-3 rounded-[18px] px-4 py-2"
+              style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+            >
+              <p className="text-[12.5px]" style={{ color: "var(--sf-text-muted)" }}>
+                Suas vendas estão demorando para carregar.
               </p>
               <button
                 type="button"
-                onClick={() => fetchPendingOrders()}
-                className="mt-3 h-11 rounded-full px-5 text-[13px] font-extrabold"
-                style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+                onClick={() => window.location.reload()}
+                className="min-h-11 flex-none px-1 text-[12.5px] font-extrabold"
+                style={{ color: "var(--sf-accent)" }}
               >
-                Tentar de novo
+                Recarregar
               </button>
             </div>
-          ) : (
-            orders.length === 0 && (
-              <p className="text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
-                {loadingOrders ? "Procurando pedidos novos…" : "Nenhum pedido esperando agora."}
-              </p>
-            )
           )}
-        </section>
 
-        {loading ? (
-          <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
-            Carregando suas vendas…
-          </p>
-        ) : (
-          <motion.div variants={stagger()} initial={reduceMotion ? "visible" : "hidden"} animate="visible">
-            {neverSold && orders.length === 0 && storeUrl && (
-              <motion.div variants={fadeUp}>
-                <StoreLinkCard url={storeUrl} />
-              </motion.div>
+          {/* Pedidos — antes de tudo: é o que pede uma ação agora. Não segue o
+              mês (pedido pendente é de hoje). */}
+          <section className="mt-4" aria-labelledby="pedidos-titulo">
+            <div id="pedidos-titulo" ref={ordersTitleRef} tabIndex={-1} className="outline-none">
+              <SectionTitle>{ordersTitle}</SectionTitle>
+            </div>
+            {waitingCount > 0 && (
+              // Uma vez só, para a lista inteira — embaixo de cada card ela se
+              // repetia seis vezes com seis pedidos.
+              <p className="-mt-1.5 mb-3 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                Confirmar tira do seu estoque. A venda fica em A receber até {OWNER} registrar o pagamento.
+              </p>
             )}
 
-            {/* Ordem da tela, do dono: comissão → a receber → vendas recebidas.
-                O que o vendedor vem ver primeiro é quanto tem para receber da
-                loja; depois o que ainda falta os clientes pagarem (e que, pago,
-                sobe a comissão); por último o que já entrou. */}
-            {showCommission && commission && (
-              <motion.section variants={fadeUp} className="mt-7">
-                <SectionTitle>Sua comissão · {monthName}</SectionTitle>
-                <div
-                  className="rounded-[20px] p-4"
-                  style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
-                >
-                  {/* O número do acerto, dito em frase: "saldo" solto e laranja
-                      parecia dívida justamente quando era dinheiro a receber. */}
-                  <p className="text-[19px] font-extrabold leading-snug">
-                    {balance > 0.01 ? (
-                      <>
-                        {period === "lastMonth" ? `No fim de ${monthName}, você tinha ` : "Você tem "}
-                        <Money value={balance} tone="accent" /> para receber no acerto.
-                      </>
-                    ) : balance < -0.01 ? (
-                      <>
-                        {period === "lastMonth" ? `No fim de ${monthName}, você devia ` : "Você deve "}
-                        <Money value={-balance} tone="warn" /> à loja.
-                      </>
-                    ) : (
-                      "Nada a acertar com a loja."
-                    )}
-                  </p>
-                  {balance < -0.01 && (
-                    <p className="mt-1 text-xs" style={{ color: "var(--sf-text-muted)" }}>
-                      Sai da sua próxima comissão.
-                    </p>
-                  )}
-
-                  {/* A faixa, com a distância até a próxima. Unidade PAGA, e a
-                      tela diz isso: "10 un." ao lado de 12 vendas parecia erro. */}
-                  <p className="mt-3 text-[13px] leading-snug">
-                    <span className="font-bold">Faixa {commission.tier.label}</span>
-                    <span style={{ color: "var(--sf-text-muted)" }}>
-                      {nextTier
-                        ? ` · ${commission.units}/${nextTier.min} un. pagas para ${nextTier.label}`
-                        : ` · ${commission.units} un. pagas, a faixa mais alta`}
-                    </span>
-                  </p>
-
-                  {period === "month" && commission.pendingToReceive > 0.01 && gain > 0.01 && (
-                    <p className="mt-1.5 text-[13px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
-                      Quando a loja receber os {fmt(commission.pendingToReceive)} em aberto, o saldo sobe{" "}
-                      <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>+{fmt(gain)}</span>
-                      {commission.projectedTier.rate > commission.tier.rate
-                        ? ` e você passa para ${commission.projectedTier.label}.`
-                        : "."}
-                    </p>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setLedgerOpen(o => !o)}
-                    aria-expanded={ledgerOpen}
-                    aria-controls="conta-do-saldo"
-                    className="mt-2 inline-flex min-h-11 items-center gap-1 text-[12.5px] font-bold"
-                    style={{ color: "var(--sf-text-muted)" }}
-                  >
-                    {ledgerOpen ? "Esconder a conta" : "Ver a conta"}
-                    <ChevronDown size={14} aria-hidden className={`transition-transform ${ledgerOpen ? "rotate-180" : ""}`} />
-                  </button>
-
-                  <AnimatePresence initial={false}>
-                    {ledgerOpen && (
-                      <motion.div
-                        id="conta-do-saldo"
-                        key="conta"
-                        initial={reduceMotion ? false : { opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                        className="overflow-hidden"
-                      >
-                        {/* A conta do `computeSellerBalance`, linha por linha:
-                            anterior + comissão − consumo + dívida paga − já pago. */}
-                        <div className="pt-1" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
-                          {Math.abs(commission.priorBalance) > 0.01 && (
-                            <LedgerLine
-                              label="Dos meses anteriores"
-                              value={commission.priorBalance}
-                              sign={commission.priorBalance < 0 ? "−" : "+"}
-                            />
-                          )}
-                          <LedgerLine
-                            label={`Comissão de ${monthName} (${commission.tier.label} sobre venda paga)`}
-                            value={commission.accrued}
-                            sign="+"
-                          />
-                          {commission.consumoTotal > 0.01 && (
-                            <>
-                              <LedgerLine label="Seu consumo" value={commission.consumoTotal} sign="−" />
-                              {consumoEntries.map(e => (
-                                <ConsumptionRow key={`${e.kind}-${e.id}`} entry={e} productLabel={productLabel} />
-                              ))}
-                            </>
-                          )}
-                          {commission.debtPaymentsTotal > 0.01 && (
-                            <LedgerLine label="Dívida que você pagou" value={commission.debtPaymentsTotal} sign="+" />
-                          )}
-                          {commission.commPaid > 0.01 && (
-                            <LedgerLine label="Já pago a você" value={commission.commPaid} sign="−" />
-                          )}
-                          <div style={{ borderTop: "1px solid var(--sf-hairline)" }} className="mt-1">
-                            <LedgerLine
-                              label="Saldo"
-                              value={balance}
-                              sign={balance < -0.01 ? "−" : undefined}
-                              strong
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.section>
-            )}
-
-            {openGroups.length > 0 && (
-              <motion.section variants={fadeUp} className="mt-7">
-                <SectionTitle aside={
-                  <span className="text-[15px] font-extrabold tabular-nums" style={{ color: "var(--sf-warn)" }}>
-                    {fmt(openTotal)}
-                  </span>
-                }>
-                  A receber
-                </SectionTitle>
-                <p className="-mt-1.5 mb-3 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
-                  De todos os meses. Sai daqui quando a loja registrar o pagamento, e só venda paga conta para a
-                  sua faixa.
-                </p>
-                <div
-                  className="overflow-hidden rounded-[18px]"
-                  style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
-                >
-                  {openGroups.map((g, i) => (
-                    <OpenGroupRow
-                      key={g.key}
-                      group={g}
-                      customer={customers[g.orderId ?? ""]}
-                      itemsLabel={groupItems(g)}
-                      divider={i > 0}
+            <div className="flex flex-col gap-3">
+              <AnimatePresence initial={false}>
+                {rows.map(row =>
+                  row.type === "notice" ? (
+                    <OrderNotice
+                      key={row.key}
+                      notice={row.notice}
+                      storeUrl={storeUrl}
+                      onClose={() => dismiss(row.key)}
                     />
-                  ))}
-                </div>
-              </motion.section>
-            )}
+                  ) : row.tail ? (
+                    <ExpiredOrderRow key={row.key} order={row.order} storeUrl={storeUrl} />
+                  ) : (
+                    <OrderCard
+                      key={row.key}
+                      order={row.order}
+                      now={now}
+                      processing={processingOrder === row.order.id}
+                      busy={!!processingOrder && processingOrder !== row.order.id}
+                      basePrice={basePrice}
+                      onConfirm={handleConfirm}
+                      onDecline={handleDecline}
+                    />
+                  ),
+                )}
+              </AnimatePresence>
+            </div>
 
-            <motion.section variants={fadeUp} className="mt-7">
-              <SectionTitle>Vendas recebidas · {monthName}</SectionTitle>
-              {receivedSales.length === 0 ? (
-                <p
-                  className="rounded-[18px] py-12 text-center text-[13px]"
-                  style={{ background: "var(--sf-surface)", color: "var(--sf-text-dim)" }}
-                >
-                  Nenhuma venda recebida em {monthName}.
+            {ordersError ? (
+              <div
+                role="alert"
+                className={`rounded-[20px] px-4 py-8 text-center ${rows.length > 0 ? "mt-3" : ""}`}
+                style={{ background: "var(--sf-surface)" }}
+              >
+                <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  {ordersError}
                 </p>
-              ) : (
-                <>
-                  <p className="-mt-1.5 mb-3 text-xs" style={{ color: "var(--sf-text-muted)" }}>
-                    {receivedSales.length === 1 ? "1 venda" : `${receivedSales.length} vendas`} · {receivedUnits} un. ·{" "}
-                    <span className="tabular-nums" style={{ color: "var(--sf-accent)" }}>{fmt(receivedTotal)}</span>
-                  </p>
+                <button
+                  type="button"
+                  onClick={() => fetchPendingOrders()}
+                  className="mt-3 h-11 rounded-full px-5 text-[13px] font-extrabold"
+                  style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+                >
+                  Tentar de novo
+                </button>
+              </div>
+            ) : (
+              rows.length === 0 && (
+                <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  {loadingOrders ? "Procurando pedidos novos…" : "Nenhum pedido esperando agora."}
+                </p>
+              )
+            )}
+          </section>
+
+          {loading ? (
+            <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+              Carregando suas vendas…
+            </p>
+          ) : (
+            <motion.div variants={stagger()} initial={reduceMotion ? "visible" : "hidden"} animate="visible">
+              {neverSold && pendingOrders.length === 0 && !ordersError && storeUrl && (
+                <motion.section
+                  variants={fadeUp}
+                  className="mt-4 rounded-[20px] p-4"
+                  style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-accent-line)" }}
+                >
+                  {/* Loja sem estoque abre vazia: mandar o link agora seria
+                      chamar o cliente para uma prateleira sem nada. */}
+                  {stock.units > 0 ? (
+                    <>
+                      <h2 className="text-base font-bold">Sua loja está no ar</h2>
+                      <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+                        Mande este link para os seus clientes. Cada pedido que eles fizerem aparece aqui para você
+                        confirmar.
+                      </p>
+                      <StoreLinkPanel url={storeUrl} />
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-base font-bold">Sua loja abre quando tiver estoque</h2>
+                      <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+                        Assim que {OWNER} te passar produto, é só mandar o link para os clientes. Ele fica em Minha
+                        loja, aqui em cima.
+                      </p>
+                    </>
+                  )}
+                </motion.section>
+              )}
+
+              {showCommission && commission && (
+                <motion.section variants={fadeUp} className="mt-7">
+                  <SectionTitle aside={<MonthStepper period={period} label={capitalize(monthName)} onChange={setPeriod} />}>
+                    Sua comissão
+                  </SectionTitle>
                   <div
-                    className="overflow-hidden rounded-[18px]"
+                    className="rounded-[20px] p-4"
                     style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
                   >
-                    {receivedSales.map((s, i) => (
-                      <SaleRow key={s.id} sale={s} label={productLabel(s.productId)} divider={i > 0} />
-                    ))}
+                    {/* O número do acerto, dito em frase: "saldo" solto e laranja
+                        parecia dívida justamente quando era dinheiro a receber. */}
+                    <p className="text-[19px] font-extrabold leading-snug">
+                      {balance > 0.01 ? (
+                        <>
+                          {period === "lastMonth" ? `No fim de ${monthName}, você tinha ` : "Você tem "}
+                          <Money value={balance} tone="accent" /> para receber.
+                        </>
+                      ) : balance < -0.01 ? (
+                        <>
+                          {period === "lastMonth" ? `No fim de ${monthName}, você devia ` : "Você deve "}
+                          <Money value={-balance} tone="warn" />.
+                        </>
+                      ) : (
+                        "Nada a acertar."
+                      )}
+                    </p>
+                    {balance < -0.01 && (
+                      <p className="mt-1 text-xs" style={{ color: "var(--sf-text-muted)" }}>
+                        Sai da sua próxima comissão.
+                      </p>
+                    )}
+
+                    {/* A faixa: a DISTÂNCIA é o assunto, e o que ela VALE vem
+                        junto — a faixa reprecifica o mês inteiro, não só a
+                        próxima venda. Sem o valor, "falta 1 unidade" não dizia
+                        por que correr atrás dela. */}
+                    <div className="mt-3.5 pt-3.5" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
+                      {period === "lastMonth" ? (
+                        <>
+                          <p className="text-[15px] font-extrabold leading-snug">
+                            {monthStillOpen
+                              ? `${capitalize(monthName)} está na faixa de ${commission.tier.label} por enquanto`
+                              : `${capitalize(monthName)} fechou na faixa de ${commission.tier.label}`}
+                          </p>
+                          <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                            {commission.units} un. pagas em {monthName}.
+                            {monthStillOpen && ` Ainda há venda de ${monthName} em aberto: paga, ela conta para ${monthName}.`}
+                          </p>
+                        </>
+                      ) : nextTier && gap !== null ? (
+                        <>
+                          <p className="text-[15px] font-extrabold leading-snug">
+                            {gap === 1 ? "Falta 1 unidade paga" : `Faltam ${gap} unidades pagas`} para {nextTier.label}
+                          </p>
+                          <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                            Hoje: {commission.tier.label}, com {commission.units} un. pagas. Chegando lá, todo o {monthName}{" "}
+                            passa a {nextTier.label}
+                            {upgradeGain > 0.01 ? (
+                              <>
+                                :{" "}
+                                <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>+{fmt(upgradeGain)}</span>{" "}
+                                no que já foi pago.
+                              </>
+                            ) : (
+                              "."
+                            )}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[15px] font-extrabold leading-snug">
+                          Você está na faixa mais alta: {commission.tier.label}
+                        </p>
+                      )}
+                    </div>
+
+                    {period === "month" && commission.pendingToReceive > 0.01 && gain > 0.01 && (
+                      <p className="mt-2.5 text-[13px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                        Quando receber os {fmt(commission.pendingToReceive)} em aberto, o saldo sobe{" "}
+                        <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>+{fmt(gain)}</span>
+                        {commission.projectedTier.rate > commission.tier.rate
+                          ? ` e você passa para ${commission.projectedTier.label}.`
+                          : "."}
+                      </p>
+                    )}
+
+                    {hasLedger && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setLedgerOpen(o => !o)}
+                          aria-expanded={ledgerOpen}
+                          aria-controls="conta-do-saldo"
+                          className="mt-2 inline-flex min-h-11 items-center gap-1 text-[12.5px] font-bold"
+                          style={{ color: "var(--sf-text-muted)" }}
+                        >
+                          {ledgerOpen ? "Esconder a conta" : "Ver a conta"}
+                          <ChevronDown size={14} aria-hidden className={`transition-transform ${ledgerOpen ? "rotate-180" : ""}`} />
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                          {ledgerOpen && (
+                            <motion.div
+                              id="conta-do-saldo"
+                              key="conta"
+                              initial={reduceMotion ? false : { opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              {/* A conta do `computeSellerBalance`, linha por linha:
+                                  anterior + comissão − consumo + dívida paga − já pago. */}
+                              <div className="pt-1" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
+                                {Math.abs(commission.priorBalance) > 0.01 && (
+                                  <LedgerLine
+                                    label="Dos meses anteriores"
+                                    value={commission.priorBalance}
+                                    sign={commission.priorBalance < 0 ? "−" : "+"}
+                                  />
+                                )}
+                                <LedgerLine
+                                  label={`Comissão de ${monthName} (${commission.tier.label} sobre venda paga)`}
+                                  value={commission.accrued}
+                                  sign="+"
+                                />
+                                {commission.consumoTotal > 0.01 && (
+                                  <>
+                                    <LedgerLine label="Seu consumo" value={commission.consumoTotal} sign="−" />
+                                    {consumoEntries.map(e => (
+                                      <ConsumptionRow key={`${e.kind}-${e.id}`} entry={e} productLabel={productLabel} />
+                                    ))}
+                                  </>
+                                )}
+                                {commission.debtPaymentsTotal > 0.01 && (
+                                  <LedgerLine label="Dívida que você pagou" value={commission.debtPaymentsTotal} sign="+" />
+                                )}
+                                {commission.commPaid > 0.01 && (
+                                  <LedgerLine label="Já pago a você" value={commission.commPaid} sign="−" />
+                                )}
+                                <div style={{ borderTop: "1px solid var(--sf-hairline)" }} className="mt-1">
+                                  <LedgerLine
+                                    label="Saldo"
+                                    value={balance}
+                                    sign={balance < -0.01 ? "−" : undefined}
+                                    strong
+                                  />
+                                </div>
+                                {/* A escada mora aqui, na conta: no card ela era a
+                                    quinta frase, e lida solta parecia imposto por
+                                    faixa. */}
+                                <p className="mt-2.5 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                                  Faixas: {tierLadder(COMMISSION_TIERS)}. A faixa vale para todas as vendas pagas do mês.
+                                </p>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
+                    )}
                   </div>
-                </>
+                </motion.section>
               )}
-            </motion.section>
-          </motion.div>
-        )}
+
+              {openGroups.length > 0 && (
+                <motion.section variants={fadeUp} className="mt-7">
+                  <SectionTitle aside={clientGroups.length > 0 && (
+                    <span className="text-[15px] font-extrabold tabular-nums" style={{ color: "var(--sf-warn)" }}>
+                      {fmt(clientTotal)}
+                    </span>
+                  )}>
+                    A receber
+                  </SectionTitle>
+                  {clientGroups.length > 0 && (
+                    <>
+                      <p className="-mt-1 mb-3 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                        O que os clientes ainda devem, de todos os meses. Sai daqui quando {OWNER} registrar o
+                        pagamento, e só venda paga conta para a sua faixa.
+                      </p>
+                      <div
+                        className="overflow-hidden rounded-[18px]"
+                        style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+                      >
+                        {clientGroups.map((g, i) => (
+                          <OpenGroupRow
+                            key={g.key}
+                            group={g}
+                            customer={customers[g.orderId ?? ""]}
+                            itemsLabel={groupItems(g)}
+                            now={now}
+                            divider={i > 0}
+                            withSeller={false}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* A outra direção do dinheiro: o cliente já pagou, quem deve
+                      é o vendedor. Somado ao total de cima, ele inflava o que
+                      "os clientes devem" com dinheiro que já está no bolso. */}
+                  {withSellerGroups.length > 0 && (
+                    <div className={clientGroups.length > 0 ? "mt-4" : ""}>
+                      <div className="mb-1 flex items-baseline justify-between gap-3">
+                        <h3 className="text-[13.5px] font-extrabold">Com você, para acertar</h3>
+                        <span className="text-[13.5px] font-extrabold tabular-nums">{fmt(withSellerTotal)}</span>
+                      </div>
+                      <p className="mb-2.5 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                        O cliente já pagou em dinheiro. Acerte com {OWNER}.
+                      </p>
+                      <div
+                        className="overflow-hidden rounded-[18px]"
+                        style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+                      >
+                        {withSellerGroups.map((g, i) => (
+                          <OpenGroupRow
+                            key={g.key}
+                            group={g}
+                            customer={customers[g.orderId ?? ""]}
+                            itemsLabel={groupItems(g)}
+                            now={now}
+                            divider={i > 0}
+                            withSeller
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </motion.section>
+              )}
+
+              <motion.section variants={fadeUp} className="mt-7">
+                <SectionTitle>Vendas recebidas · {monthName}</SectionTitle>
+                {receivedSales.length === 0 ? (
+                  <p className="-mt-1.5 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                    Nenhuma venda recebida em {monthName}.
+                  </p>
+                ) : (
+                  <>
+                    <p className="-mt-1.5 mb-3 text-xs" style={{ color: "var(--sf-text-muted)" }}>
+                      {receivedSales.length === 1 ? "1 venda" : `${receivedSales.length} vendas`} · {receivedUnits} un. ·{" "}
+                      <span className="tabular-nums" style={{ color: "var(--sf-accent)" }}>{fmt(receivedTotal)}</span>
+                    </p>
+                    <div
+                      className="overflow-hidden rounded-[18px]"
+                      style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+                    >
+                      {receivedSales.map((s, i) => (
+                        <SaleRow key={s.id} sale={s} label={productLabel(s.productId)} divider={i > 0} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </motion.section>
+            </motion.div>
+          )}
+        </div>
       </main>
 
+      {/* Os dois sheets são abertos por estado, sem Trigger do Radix: sem o
+          `onCloseAutoFocus` o foco caía no <body> ao fechar. A classe
+          `storefront` se repete porque o Radix porta isto para fora da árvore
+          da página — ver src/pages/CLAUDE.md §2. */}
+
       {/* Conferência de estoque. Sheet e não tela nova: é consulta de conferir e
-          fechar, e sair da tela perderia o período que o vendedor tinha escolhido.
-          A classe `storefront` se repete porque o Radix porta isto para fora da
-          árvore da página — ver src/pages/CLAUDE.md §2. */}
+          fechar, e sair da tela perderia o mês que o vendedor tinha escolhido. */}
       <Sheet open={stockOpen} onOpenChange={setStockOpen}>
         <SheetContent
           side="bottom"
           hideClose
+          onCloseAutoFocus={e => {
+            e.preventDefault();
+            stockButtonRef.current?.focus();
+          }}
           className={`storefront ${COLUMN} inset-x-0 flex h-[76vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
           style={{ background: "var(--sf-bg)", colorScheme: "dark" }}
         >
-          <div
-            className="flex flex-shrink-0 items-center justify-between px-5 pb-3.5 pt-5"
-            style={{ borderBottom: "1px solid var(--sf-hairline)" }}
-          >
-            <div className="min-w-0">
-              <SheetTitle className="text-[19px] font-extrabold" style={{ color: "var(--sf-text)" }}>
-                Meu estoque
-              </SheetTitle>
-              <p className="mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
-                {stock.units} un. · {stock.flavors} {stock.flavors === 1 ? "sabor" : "sabores"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setStockOpen(false)}
-              aria-label="Fechar"
-              className="flex h-10 w-10 flex-none items-center justify-center rounded-full"
-              style={{ background: "var(--sf-surface)", color: "var(--sf-text)" }}
-            >
-              <X size={15} />
-            </button>
-          </div>
+          <SheetTop
+            title="Meu estoque"
+            subtitle={`${stock.units} un. · ${stock.flavors} ${stock.flavors === 1 ? "sabor" : "sabores"}`}
+            onClose={() => setStockOpen(false)}
+          />
           <SheetDescription className="sr-only">
             O que o sistema diz que está com você, para conferir com o que tem em mãos.
           </SheetDescription>
 
           <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-7 pt-3">
-            {stock.groups.length === 0 ? (
-              <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
+            {loading ? (
+              <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                Carregando seu estoque…
+              </p>
+            ) : stock.groups.length === 0 ? (
+              <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
                 Nenhum produto com você ainda.
               </p>
             ) : (
@@ -1144,9 +1648,17 @@ export default function SellerSalesPage() {
                               com o que o sistema diz. Sabor cortado é
                               exatamente a conferência que não dá para fazer. */}
                           <p className="break-words text-[13.5px] font-bold leading-snug">{line.flavor}</p>
+                          {/* O livre vem feito: "6 com 3 em pedido" deixava a
+                              subtração para a cabeça de quem está na rua. */}
                           {line.reserved > 0 && (
-                            <p className="mt-0.5 text-xs" style={{ color: "var(--sf-warn)" }}>
-                              {line.reserved} em pedido esperando
+                            <p className="mt-0.5 text-xs" style={{ color: "var(--sf-text-muted)" }}>
+                              <span className="font-bold" style={{ color: "var(--sf-text)" }}>
+                                {(() => {
+                                  const free = Math.max(0, line.quantity - line.reserved);
+                                  return free === 1 ? "1 livre" : `${free} livres`;
+                                })()}
+                              </span>{" "}
+                              · {line.reserved} em pedido esperando
                             </p>
                           )}
                         </div>
@@ -1160,12 +1672,40 @@ export default function SellerSalesPage() {
                   É o que o sistema diz que está com você. Pedido esperando ainda conta aqui:
                   a peça só sai do seu estoque quando você confirma o pedido.
                   {stock.reserved > 0 && ` Hoje há ${stock.reserved} un. prometida${stock.reserved === 1 ? "" : "s"} em pedido.`}
+                  {/* Sem os pedidos, o "em pedido esperando" some de todas as
+                      linhas e tudo parece livre — a tela precisa dizer. */}
+                  {ordersError && " Os pedidos não carregaram agora, então as unidades prometidas podem não aparecer."}
                 </p>
               </div>
             )}
           </div>
         </SheetContent>
       </Sheet>
+
+      {storeUrl && (
+        <Sheet open={storeOpen} onOpenChange={setStoreOpen}>
+          <SheetContent
+            side="bottom"
+            hideClose
+            onCloseAutoFocus={e => {
+              e.preventDefault();
+              storeButtonRef.current?.focus();
+            }}
+            className={`storefront ${COLUMN} inset-x-0 flex max-h-[64vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
+            style={{ background: "var(--sf-bg)", colorScheme: "dark" }}
+          >
+            <SheetTop title="Minha loja" onClose={() => setStoreOpen(false)} />
+            <SheetDescription className="sr-only">O link da sua loja, para mandar aos clientes.</SheetDescription>
+            <div className="px-5 pb-7 pt-3">
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+                Mande este link para os seus clientes. Cada pedido que eles fizerem aparece aqui para você confirmar.
+                {stock.units === 0 && ` Agora você está sem estoque: sua loja abre vazia até ${OWNER} te passar produto.`}
+              </p>
+              <StoreLinkPanel url={storeUrl} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }
