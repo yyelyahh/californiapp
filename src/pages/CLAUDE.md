@@ -32,9 +32,9 @@ componente com hex na mão fica ilegível e ninguém descobre até ver a tela.
 | `--sf-border` | borda de input e chip |
 | `--sf-hairline` | borda de card, divisória, separador de rodapé |
 | `--sf-text` | texto principal |
-| `--sf-text-muted` | texto secundário, rótulo de campo, descrição |
-| `--sf-text-faint` | terciário — ícone de busca, rótulo "Sabor", ícone de lixeira |
-| `--sf-text-dim` | placeholder, ícone de produto sem foto. **Texto** que precisa ser lido (vazio, carregando) usa `--sf-text-muted`: dim sobre o surface dá 3:1, abaixo do mínimo — a SellerSalesPage já trocou; a loja pública ainda usa dim nos estados |
+| `--sf-text-muted` | texto secundário, rótulo de campo, descrição, estados vazio/carregando (≈ 6:1) |
+| `--sf-text-faint` | terciário — placeholder, ícone de busca, rótulo "Sabor", lixeira, preço riscado, pílula "N sabores" (≈ 4,8:1) |
+| `--sf-text-dim` | SÓ o que não precisa ser lido: ícone de produto sem foto, pontinho do trilho, sabor esgotado (≈ 3:1, abaixo do mínimo de texto) |
 | `--sf-accent` | **dinheiro e ênfase** — preço, total, marca da casa, botão primário |
 | `--sf-accent-ink` | texto escuro sobre o accent |
 | `--sf-accent-tint` / `--sf-accent-line` | realce do item selecionado (fundo / borda) |
@@ -82,9 +82,14 @@ sinalizador vindo de quem chama, não uma adivinhação no componente.
 ```tsx
 <div className="storefront flex h-[100dvh] flex-col overflow-hidden">
   <header className="flex-shrink-0">…</header>
-  <main className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-[100px] pt-1.5`}>…</main>
+  <main className="flex-1 overflow-y-auto overscroll-contain">
+    <div className={`${COLUMN} px-5 pb-[100px] pt-1.5`}>…</div>
+  </main>
 </div>
 ```
+
+O `<main>` que rola tem a largura da janela e só o conteúdo fica na coluna: com a
+coluna no próprio `<main>`, no computador a roda do mouse sobre as margens não rolava.
 
 App-shell: a raiz ocupa a janela e **não rola**; só o `<main>` rola. Assim o
 cabeçalho fica parado sem `sticky` e o documento não tem o que arrastar — nem na
@@ -135,8 +140,12 @@ pula degraus demais nessa faixa. Copie o valor exato em vez de arredondar.
 | `rounded-xl` | miniatura 56px do carrinho |
 
 Alturas: pílula primária `50` (`PILL_HEIGHT`), pílula da barra fixa `52`, botão de
-texto secundário `h-11`, input `h-[50px]`, busca `h-[42px]`. Botões-ícone:
-`h-10 w-10` no header, `h-9 w-9` sobre foto, `h-8 w-8` no topo do sheet.
+texto secundário `h-11`, input `h-[50px]`, busca `h-[42px]`, chip de marca `h-10`.
+Botões-ícone: `h-10 w-10` no header, sobre foto e no topo do sheet. Alvo de toque
+mínimo 44px nos botões pequenos: o `QtyStepper` tem botões `h-11` nos dois tamanhos
+(o `compact` só encolhe o desenho) e a lixeira do carrinho é `h-11 w-11` com margem
+negativa. O "+" do card é desenho (`aria-hidden`), não botão: o card inteiro já é o
+botão, e botão dentro de botão deixava dois alvos para a mesma ação.
 Sheets: detalhe `88vh`, carrinho `76vh`, checkout `84vh` (mais alto porque tem
 formulário e o teclado do celular sobe por cima), tira-dúvidas `64vh` (é só
 leitura: quem abre quer entender uma regra e voltar para o catálogo).
@@ -159,11 +168,37 @@ para `src/components/storefront/` e importe nas duas**, em vez de copiar.
   sheet abria sempre em "1" sem dizer que o sabor já tinha sido escolhido, e com o
   estoque todo no carrinho o toque virava varredura + check sem mexer em nada
   (o `addToCart` trava a soma no estoque), como se o item entrasse de novo a cada
-  toque. Confirmação que não confirma nada é pior que botão desligado.
-- `QtyStepper` — quantidade em pílula, com variante `compact` para lista.
+  toque. Confirmação que não confirma nada é pior que botão desligado. Depois do
+  check ele volta a `idle` e chama `onDone`; quem chama decide: o sheet do modelo
+  **fica aberto** quando há outro sabor com estoque (`keepDetailOpen` — montar o
+  combo é misturar sabores) e fecha quando o modelo tem um sabor só. Aberto, o
+  rodapé do sheet diz o combo do modelo (convite → "Mais N do V80…" → "Combo
+  ativo"). O carrinho, que na página mora na barra de baixo (escondida com sheet
+  aberto), aparece no canto direito da foto, espelhando a seta de voltar — no
+  canto ele não tira altura da lista de sabores.
+- `comboOffer` — o preço de combo de um modelo para ANUNCIAR no sheet, a partir do
+  `combo_price` do catálogo. Sem regra carregada, ou com a trava de custo comendo o
+  desconto, não promete nada. Quem cobra é o banco. O card NÃO repete o combo (era
+  a mesma regra em todos os cards): a regra mora no aviso do topo e o preço daquele
+  modelo, no sheet.
+- **Sheet do modelo, enxuto:** marca e modelo num título só ("Ignite V80", marca em
+  muted) com o preço na mesma linha; sem rótulo "Sabor" (o grupo tem `aria-label`);
+  o preço só aparece por sabor quando os sabores custam diferente; o estoque só
+  aparece quando limita (`LOW_STOCK` = 3, em `--sf-warn`) ou quando o sabor já está
+  no carrinho.
+- **Cabeçalho:** só a marca da casa (`<h1>`) e os dois botões. Sem subtítulo nem
+  "Oi, <nome>": o telefone fica guardado no aparelho e o cumprimento aparecia para
+  quem pegasse o celular depois. O cumprimento mora no checkout.
+- `QtyStepper` — quantidade em pílula, com variante `compact` para lista. `label`
+  entra no nome dos botões ("Aumentar quantidade de Menta Gelada").
 - `Field` — rótulo + controle, com `htmlFor` amarrado.
 - `SheetTopBar` — título + botão de fechar, com `border-bottom` hairline.
-- `BrandChips` — filtro horizontal com o realce deslizante.
+- `BrandChips` — ÍNDICE de marcas, não filtro: tocar rola a lista até a seção
+  (`jumpToBrand`) e o chip aceso acompanha a rolagem (`spyBrand`, com `spyLock`
+  para não piscar pelas marcas do caminho). Como filtro, "Todos" ficava aceso
+  enquanto a pessoa olhava outra marca. A fileira centraliza o chip com `scrollTo`
+  nela mesma, não `scrollIntoView` (no Chrome um scroll suave cancela o outro), e
+  esconde a barra (`.sf-no-scrollbar`).
 - `ProductMedia` — foto com fallback. `contain` + cópia borrada por trás para foto
   grande (as URLs são coladas à mão e vêm em qualquer proporção); `cover` em
   miniatura. Link quebrado cai no ícone `Package`, não no ícone quebrado do navegador.
@@ -242,11 +277,15 @@ Tudo vem de `@/lib/motion` — `EASE_OUT`, `EASE_IN_OUT`, `fadeUp`, `stagger`,
 Toda lista trata carregando, erro e vazio, com a mesma moldura
 (`py-16 text-center text-[13px]`):
 
-- **Carregando** — texto em `--sf-text-dim` (na SellerSalesPage, `--sf-text-muted`: ver a tabela de tokens). Espera longa ganha saída ("Recarregar" depois de 15s na tela do vendedor).
+- **Carregando** — na loja, dois cards-fantasma com `.sf-shimmer` no formato dos de
+  verdade (e "Carregando catálogo…" em `sr-only`); na SellerSalesPage, texto em
+  `--sf-text-muted`. Espera longa ganha saída ("Recarregar" depois de 15s na tela do vendedor).
 - **Erro** — ocupa o lugar da lista (não flutua por cima) e traz botão "Tentar de
   novo". Sem catálogo não há nada embaixo para o aviso atrapalhar, e o botão precisa
   estar onde a pessoa está olhando.
 - **Vazio** — a cópia muda se há busca ativa: `Nenhum produto encontrado para "x".`
+  com "Limpar busca". Sem busca, o vazio é a LOJA sem estoque ("A loja está sem
+  produtos agora"), com o WhatsApp da loja — e o aviso de promoção some junto.
 
 Erro de ação (não de carga) fica **colado no botão que a pessoa vai apertar de
 novo**, em `--sf-danger`, e some quando o sheet fecha — reabrir é um recomeço, não a
@@ -265,8 +304,21 @@ continuação da tentativa que falhou.
 ## 10. Voz da cópia
 
 pt-BR, segunda pessoa, direta e curta. Frase de ação no infinitivo no botão
-("Finalizar pedido", "Confirmar pedido", "Tentar de novo"). Sem ponto final em
-rótulo; ponto final em frase de estado. Exclamação só na confirmação.
+("Finalizar pedido", "Reservar pedido", "Tentar de novo"). Sem ponto final em
+rótulo; ponto final em frase de estado. Exclamação só na confirmação. Reticências
+sempre com o caractere "…", nunca "...".
+
+**Um ator só: a California.** Para o cliente, quem confirma, entrega e responde é
+"a California" (ou "a gente"), nunca "o vendedor" — é o mesmo WhatsApp da loja em
+todo link. O nome do vendedor só aparece na mensagem do pedido, que é para a loja.
+
+**O pedido é RESERVADO aqui e ENVIADO no WhatsApp.** O botão do checkout é
+"Reservar pedido", e o comprovante diz "Pedido reservado — falta enviar": "Pedido
+enviado!" fazia a pessoa fechar a aba antes de mandar a mensagem. O checkout
+mostra os itens (com "Editar", que volta ao carrinho — fechar o checkout também
+volta), diz que o pagamento é na entrega (Pix ou dinheiro) e, com o botão apagado,
+diz o que falta (`blockReason`). Erro que só se resolve conversando
+(`errorNeedsContact`) vem com o botão do WhatsApp ao lado.
 
 Erro de banco **nunca** aparece cru, e o mapa (`friendlyError`) é uma lista de
 **permissão**, não de tradução: o que não está nele vira a frase genérica.

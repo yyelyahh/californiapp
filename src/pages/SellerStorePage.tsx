@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { CSS_EASE_OUT, EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
@@ -27,6 +27,7 @@ import {
   X,
   Info,
   Tag,
+  Gift,
 } from "lucide-react";
 import { formatCurrency as fmt } from "@/lib/currency";
 
@@ -56,6 +57,12 @@ interface OrderReceipt {
   total: number;
   discount_total: number;
   discount_units: number;
+}
+
+/** Recusa do pedido em frase de gente; `contact` põe o WhatsApp da loja ao lado. */
+interface OrderError {
+  text: string;
+  contact: boolean;
 }
 
 /**
@@ -88,12 +95,22 @@ function friendlyError(message: string) {
   if (message.includes("whatsapp_invalido")) return "Confira seu WhatsApp: DDD + número";
   if (message.includes("carrinho_vazio")) return "Seu carrinho está vazio";
   if (message.includes("quantidade_invalida")) return "Quantidade inválida";
-  if (message.includes("pedido_muito_grande")) return "Pedido grande demais. Fale direto com o vendedor pelo WhatsApp.";
+  if (message.includes("pedido_muito_grande"))
+    return "Pedido grande demais para o catálogo. Chame a California no WhatsApp que a gente monta com você.";
   if (message.includes("muitos_pedidos_pendentes"))
-    return "Você já tem pedidos esperando resposta do vendedor. Fale com ele antes de mandar outro.";
+    return "Você já tem pedidos esperando resposta. Fale com a California no WhatsApp antes de mandar outro.";
   if (message.includes("estoque_insuficiente"))
-    return "Um dos itens não tem mais estoque suficiente. Ajustei seu carrinho — confira e confirme de novo.";
-  return "Não foi possível enviar o pedido. Tente novamente.";
+    return "Um dos itens não tem mais estoque suficiente. Ajustamos seu carrinho — confira abaixo e reserve de novo.";
+  return "Não foi possível reservar o pedido. Tente de novo.";
+}
+
+/**
+ * Erro que só se resolve conversando: nesses a mensagem vem com o botão do
+ * WhatsApp da loja ao lado. "Fale com a California" sem um jeito de falar era
+ * um beco — com o checkout aberto, o botão flutuante fica escondido.
+ */
+function errorNeedsContact(message: string) {
+  return message.includes("pedido_muito_grande") || message.includes("muitos_pedidos_pendentes");
 }
 
 /**
@@ -108,7 +125,7 @@ function orderErrorMessage(message: string, cart: CartItem[]) {
   const productId = message.split("estoque_insuficiente:")[1]?.trim();
   const item = productId ? cart.find(i => i.product_id === productId) : undefined;
   if (item) {
-    return `Acabou o estoque de ${item.flavor || item.model || "um item"}. Ajustei seu carrinho — confira e confirme de novo.`;
+    return `Acabou o estoque de ${item.flavor || item.model || "um item"}. Ajustamos seu carrinho — confira abaixo e reserve de novo.`;
   }
   return friendlyError(message);
 }
@@ -200,9 +217,6 @@ function readStoredPhone() {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Chip "Todos" — valor sentinela do filtro de marca. */
-const ALL = "__all__";
-
 /**
  * A loja é da empresa, não de cada vendedor: o cabeçalho mostra sempre a marca
  * da casa. O nome do vendedor continua indo na mensagem de WhatsApp do pedido,
@@ -244,7 +258,16 @@ interface ModelGroup {
   brand: string;
   model: string;
   flavors: CatalogRow[];
+  /**
+   * Os sabores que a BUSCA achou, quando ela casou pelo sabor e não pelo
+   * modelo. Buscar "menta" mostrava "V80 · 1 sabor" sem dizer qual — o card
+   * agora escreve o nome.
+   */
+  matches?: string[];
 }
+
+/** "1 unidade", "3 unidades" — o "item(ns)" que o leitor de tela soletrava. */
+const unitsLabel = (n: number) => `${n} ${n === 1 ? "unidade" : "unidades"}`;
 
 interface BrandGroup {
   key: string;
@@ -322,6 +345,9 @@ const MEDIA_RATIO = "4 / 3";
 /* ------------------------------------------------------------------ */
 /* Peças de UI do tema                                                  */
 /* ------------------------------------------------------------------ */
+
+/** Abaixo disso (inclusive) o sabor mostra quanto resta; acima, o estoque não limita ninguém. */
+const LOW_STOCK = 3;
 
 /** Altura padrão das pílulas da loja. As animações precisam dela em número. */
 const PILL_HEIGHT = 50;
@@ -429,7 +455,7 @@ const WISP_CYCLE = 0.52;
  *
  * O item entra no carrinho já no toque (`onPress`) — se a pessoa fechar o
  * sheet no meio da animação, nada se perde. O `onDone` só roda depois do
- * check, e é ele que fecha o sheet.
+ * check, e é quem chama que decide se o sheet fecha ou fica para outro sabor.
  */
 function AddToCartButton({
   label,
@@ -546,7 +572,13 @@ function AddToCartButton({
             {...sweep}
             onAnimationComplete={() => {
               setPhase("done");
-              timer.current = window.setTimeout(onDone, CHECK_HOLD_MS);
+              // O botão volta a "idle" depois do check: quando o sheet fica
+              // aberto para outro sabor (ver `keepDetailOpen`), ele precisa
+              // aceitar o próximo toque em vez de ficar preso no check.
+              timer.current = window.setTimeout(() => {
+                onDone();
+                setPhase("idle");
+              }, CHECK_HOLD_MS);
             }}
           />
         )}
@@ -995,8 +1027,8 @@ function Field({ id, label, children }: { id: string; label: string; children: R
  */
 function DiscountLines({ preview }: { preview: DiscountPreview }) {
   const linhas = [
-    { key: "combo", icon: "🏷️", label: "Combo de modelo", units: preview.comboUnits, amount: preview.comboTotal },
-    { key: "fidelidade", icon: "🎁", label: "Fidelidade", units: preview.loyaltyUnits, amount: preview.loyaltyTotal },
+    { key: "combo", Icon: Tag, label: "Combo de modelo", units: preview.comboUnits, amount: preview.comboTotal },
+    { key: "fidelidade", Icon: Gift, label: "Fidelidade", units: preview.loyaltyUnits, amount: preview.loyaltyTotal },
   ].filter(l => l.amount > 0);
 
   if (linhas.length === 0) return null;
@@ -1005,8 +1037,9 @@ function DiscountLines({ preview }: { preview: DiscountPreview }) {
     <div className="flex flex-col gap-1.5">
       {linhas.map(l => (
         <div key={l.key} className="flex items-center justify-between text-[13px]">
-          <span style={{ color: "var(--sf-text-muted)" }}>
-            {l.icon} {l.label} · {l.units === 1 ? "1 unidade" : `${l.units} unidades`}
+          <span className="flex items-center gap-1.5" style={{ color: "var(--sf-text-muted)" }}>
+            <l.Icon size={13} aria-hidden style={{ color: "var(--sf-accent)" }} />
+            {l.label} · {unitsLabel(l.units)}
           </span>
           <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>
             −{fmt(l.amount)}
@@ -1017,24 +1050,33 @@ function DiscountLines({ preview }: { preview: DiscountPreview }) {
   );
 }
 
-function SheetTopBar({ title, onClose }: { title: string; onClose: () => void }) {
+/**
+ * Cabeçalho comum aos sheets. Com `backLabel`, o botão é uma seta à esquerda
+ * e não um X: o checkout VOLTA para o carrinho em vez de fechar tudo — quem
+ * sai dali quase sempre quer mexer num item, não recomeçar pelo catálogo.
+ */
+function SheetTopBar({ title, onClose, backLabel }: { title: string; onClose: () => void; backLabel?: string }) {
+  const button = (
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label={backLabel ?? "Fechar"}
+      className="flex h-10 w-10 flex-none items-center justify-center rounded-full"
+      style={{ background: "var(--sf-surface)", color: "var(--sf-text)" }}
+    >
+      {backLabel ? <ArrowLeft size={16} /> : <X size={16} />}
+    </button>
+  );
   return (
     <div
-      className="flex flex-shrink-0 items-center justify-between px-5 pb-3.5 pt-5"
+      className={`flex flex-shrink-0 items-center gap-3 px-5 pb-3 pt-4 ${backLabel ? "" : "justify-between"}`}
       style={{ borderBottom: "1px solid var(--sf-hairline)" }}
     >
+      {backLabel && button}
       <SheetTitle className="text-[19px] font-extrabold" style={{ color: "var(--sf-text)" }}>
         {title}
       </SheetTitle>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Fechar"
-        className="flex h-8 w-8 items-center justify-center rounded-full"
-        style={{ background: "var(--sf-surface)", color: "var(--sf-text)" }}
-      >
-        <X size={15} />
-      </button>
+      {!backLabel && button}
     </div>
   );
 }
@@ -1047,6 +1089,7 @@ function QtyStepper({
   decDisabled,
   incDisabled,
   compact = false,
+  label,
 }: {
   qty: number;
   onDec: () => void;
@@ -1054,24 +1097,29 @@ function QtyStepper({
   decDisabled: boolean;
   incDisabled: boolean;
   compact?: boolean;
+  /** O que está sendo contado ("Menta Gelada"): entra no nome dos botões. */
+  label?: string;
 }) {
-  const pad = compact ? "px-2.5 py-1.5" : "px-3.5 py-[11px]";
-  const icon = compact ? 11 : 13;
+  // 44px de alvo nos dois tamanhos: o `compact` só encolhe o desenho. Antes o
+  // botão do carrinho tinha 31×23 e o polegar acertava o vizinho.
+  const btn = `flex h-11 ${compact ? "w-10" : "w-11"} items-center justify-center disabled:opacity-40`;
+  const icon = compact ? 12 : 13;
+  const de = label ? ` de ${label}` : "";
   return (
     <div
       className="flex w-fit items-center rounded-full"
       style={{ background: "var(--sf-surface)", color: "var(--sf-text)" }}
     >
-      <button type="button" onClick={onDec} disabled={decDisabled} className={`${pad} disabled:opacity-40`}>
+      <button type="button" onClick={onDec} disabled={decDisabled} aria-label={`Diminuir quantidade${de}`} className={btn}>
         <Minus size={icon} />
       </button>
       <span
-        className={`text-center font-bold ${compact ? "w-[22px] text-[12.5px]" : "w-7 text-sm"}`}
+        className={`text-center font-bold ${compact ? "w-[22px] text-[12.5px]" : "w-6 text-sm"}`}
         aria-live="polite"
       >
         {qty}
       </span>
-      <button type="button" onClick={onInc} disabled={incDisabled} className={`${pad} disabled:opacity-40`}>
+      <button type="button" onClick={onInc} disabled={incDisabled} aria-label={`Aumentar quantidade${de}`} className={btn}>
         <Plus size={icon} />
       </button>
     </div>
@@ -1083,6 +1131,10 @@ function QtyStepper({
  * chip pintar o próprio fundo, só o ativo renderiza o `motion.span` com
  * `layoutId`, então o motion anima a peça deslizando do chip antigo pro novo.
  * Mesmo padrão do `SegmentedToggle`, adaptado ao tema da loja.
+ *
+ * São um ÍNDICE, não um filtro: tocar leva à seção da marca, e o chip aceso
+ * acompanha a rolagem. Como filtro, "Todos" ficava aceso enquanto a pessoa
+ * olhava a Oxbar, e o chip mentia sobre o que estava na tela.
  */
 function BrandChips({
   chips,
@@ -1096,13 +1148,20 @@ function BrandChips({
   const reduce = useReducedMotion();
   const pillId = useId();
   const activeRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
-  // A linha rola na horizontal: sem isso, tocar numa marca fora da área
-  // visível faz o pill viajar pra fora da tela.
+  // A linha rola na horizontal: sem isso, a marca acesa pela rolagem ficaria
+  // fora da área visível e o pill viajaria pra fora da tela. `scrollTo` na
+  // própria linha, não `scrollIntoView`: este roda JUNTO com a rolagem suave
+  // da lista, e no Chrome um `scrollIntoView` suave cancela o outro.
   useEffect(() => {
     const el = activeRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest", inline: "center" });
+    const nav = navRef.current;
+    if (!el || !nav) return;
+    nav.scrollTo({
+      left: el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2,
+      behavior: reduce ? "auto" : "smooth",
+    });
   }, [active, reduce]);
 
   return (
@@ -1110,7 +1169,13 @@ function BrandChips({
     // o gesto de "voltar" do navegador no celular.
     // layoutScroll: avisa o motion que este container rola, senão ele mede a
     // posição do pill sem descontar o scroll e a peça pousa no lugar errado.
-    <motion.div layoutScroll className="mt-3.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5">
+    <motion.nav
+      ref={navRef}
+      layoutScroll
+      aria-label="Marcas"
+      // `relative`: é o que faz o `offsetLeft` dos chips ser medido a partir daqui.
+      className="sf-no-scrollbar relative mt-3.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5"
+    >
       {chips.map(c => {
         const isActive = c.key === active;
         return (
@@ -1119,8 +1184,8 @@ function BrandChips({
             ref={isActive ? activeRef : undefined}
             type="button"
             onClick={() => onChange(c.key)}
-            aria-pressed={isActive}
-            className="relative flex-none rounded-full px-4 py-2 text-[12.5px] font-bold transition-colors duration-200"
+            aria-current={isActive ? "true" : undefined}
+            className="relative h-10 flex-none rounded-full px-4 text-[12.5px] font-bold transition-colors duration-200"
             style={{
               background: "var(--sf-surface)",
               color: isActive ? "var(--sf-accent-ink)" : "var(--sf-text-muted)",
@@ -1138,7 +1203,7 @@ function BrandChips({
           </button>
         );
       })}
-    </motion.div>
+    </motion.nav>
   );
 }
 
@@ -1159,6 +1224,10 @@ const NOTICE_MS_FEATURED = 6000;
 /** Largura do card no trilho. O resto é a espiada do próximo. */
 const NOTICE_WIDTH = "86%";
 const NOTICE_GAP = "10px";
+/** Pontinhos do trilho, em px: o ponto, o vão e a pílula do aviso atual. */
+const DOT = 5;
+const DOT_GAP = 6;
+const DOT_ACTIVE = 14;
 
 interface Notice {
   key: string;
@@ -1333,7 +1402,7 @@ function StoreNotices({ notices, active = true }: { notices: Notice[]; active?: 
                     Com movimento reduzido a borda accent parada já basta. */}
                 {n.featured && k === i && active && !reduce && <NoticeTrace />}
                 <span
-                  className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]"
+                  className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em]"
                   style={{ color: "var(--sf-accent)" }}
                 >
                   <Icon size={12} />
@@ -1350,17 +1419,30 @@ function StoreNotices({ notices, active = true }: { notices: Notice[]; active?: 
       </button>
 
       {total > 1 && (
-        <div className="mt-2 flex justify-center gap-1.5">
-          {notices.map((n, k) => (
+        // Os pontos ficam parados e uma pílula só desliza por cima do atual —
+        // `transform`, não `width`: animar a largura de cada ponto recalculava
+        // o layout da linha a cada quadro. A pílula (14px) centrada num ponto
+        // não encosta nos vizinhos, que estão a 11px de distância.
+        <div className="mt-2 flex justify-center">
+          <div aria-hidden className="relative flex" style={{ gap: DOT_GAP }}>
+            {notices.map(n => (
+              <span
+                key={n.key}
+                className="rounded-full"
+                style={{ width: DOT, height: DOT, background: "var(--sf-text-dim)" }}
+              />
+            ))}
             <span
-              key={n.key}
-              className="h-[5px] rounded-full transition-all duration-300"
+              className="absolute left-0 top-0 rounded-full"
               style={{
-                width: k === i ? 14 : 5,
-                background: k === i ? "var(--sf-accent)" : "var(--sf-text-dim)",
+                width: DOT_ACTIVE,
+                height: DOT,
+                background: "var(--sf-accent)",
+                transform: `translateX(${i * (DOT + DOT_GAP) - (DOT_ACTIVE - DOT) / 2}px)`,
+                transition: reduce ? undefined : `transform 0.3s ${CSS_EASE_OUT}`,
               }}
             />
-          ))}
+          </div>
         </div>
       )}
     </div>
@@ -1371,6 +1453,28 @@ function StoreNotices({ notices, active = true }: { notices: Notice[]; active?: 
 /* Card do catálogo                                                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * O preço de combo de um modelo, para ANUNCIAR no sheet — quem cobra é o banco.
+ *
+ * `combo_price` vem por linha de `get_seller_catalog`, já com a trava de custo
+ * aplicada; aqui só se escolhe o que dizer. Sem regra carregada, ou quando a
+ * trava comeu o desconto inteiro, não há combo para prometer.
+ */
+function comboOffer(rows: CatalogRow[], minUnits: number | undefined) {
+  if (!minUnits || minUnits < 2) return null;
+  const withDiscount = rows.filter(r => r.available > 0 && r.combo_price < r.sale_price);
+  if (withDiscount.length === 0) return null;
+  const prices = withDiscount.map(r => r.combo_price);
+  const price = Math.min(...prices);
+  return { minUnits, price, varies: prices.some(p => p !== price) };
+}
+
+/**
+ * O card diz o essencial para decidir abrir: foto, modelo, quantos sabores e
+ * preço. O combo NÃO mora aqui — era a mesma regra repetida em todos os cards;
+ * a regra está no aviso do topo, e o preço de combo DAQUELE modelo aparece no
+ * sheet, que é onde a pessoa escolhe o segundo sabor.
+ */
 function ProductCard({
   model,
   onOpen,
@@ -1392,20 +1496,8 @@ function ProductCard({
   const flavorCount = inStock.length || allRows.length;
   const allOut = inStock.length === 0;
 
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={e => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      className="cursor-pointer overflow-hidden rounded-[20px]"
-      style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
-    >
+  const body = (
+    <>
       <div className="relative w-full" style={{ aspectRatio: MEDIA_RATIO }}>
         <ProductMedia
           src={firstModelImage(allRows)}
@@ -1414,36 +1506,36 @@ function ProductCard({
           priority={priority}
         />
 
-        {allOut && (
+        {allOut ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[2px]">
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--sf-text-muted)" }}>
               Esgotado
             </span>
           </div>
+        ) : (
+          // Desenho, não botão: o card inteiro já é o botão, e um botão dentro
+          // de outro deixava o leitor de tela com dois alvos para a mesma ação.
+          <span
+            aria-hidden
+            className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+            style={{
+              background: "var(--sf-accent)",
+              color: "var(--sf-accent-ink)",
+              border: "2px solid var(--sf-bg)",
+            }}
+          >
+            <Plus size={15} strokeWidth={2.4} />
+          </span>
         )}
-
-        {/* Abre o mesmo sheet do card: o sabor sempre tem que ser escolhido,
-            então não existe "adicionar às cegas". */}
-        <button
-          type="button"
-          aria-label={`Ver opções de ${model.model || "produto"}`}
-          onClick={e => {
-            e.stopPropagation();
-            onOpen();
-          }}
-          className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
-          style={{
-            background: "var(--sf-accent)",
-            color: "var(--sf-accent-ink)",
-            border: "2px solid var(--sf-bg)",
-          }}
-        >
-          <Plus size={15} strokeWidth={2.4} />
-        </button>
       </div>
 
       <div className="px-4 pb-4 pt-3.5">
         <p className="truncate text-base font-bold">{model.model || "Sem modelo"}</p>
+        {model.matches && model.matches.length > 0 && (
+          <p className="mt-0.5 line-clamp-2 text-[12.5px]" style={{ color: "var(--sf-text-muted)" }}>
+            {model.matches.join(" · ")}
+          </p>
+        )}
         <div className="mt-2.5 flex items-center justify-between gap-3">
           <span
             className="flex-none rounded-full px-2.5 py-1 text-[11px] font-semibold"
@@ -1456,6 +1548,38 @@ function ProductCard({
           </span>
         </div>
       </div>
+    </>
+  );
+
+  const frame = "overflow-hidden rounded-[20px]";
+  const frameStyle = { background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" };
+
+  // Esgotado não abre nada: o sheet só mostraria uma lista de linhas mortas.
+  // O card fica (a pessoa sabe que o modelo existe e pode perguntar por ele),
+  // mas sem fingir que é tocável.
+  if (allOut) {
+    return (
+      <div className={frame} style={{ ...frameStyle, opacity: 0.7 }}>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`cursor-pointer ${frame}`}
+      style={frameStyle}
+    >
+      {body}
     </div>
   );
 }
@@ -1492,7 +1616,8 @@ export default function SellerStorePage() {
   /** Falha ao carregar o catálogo — ocupa o lugar da lista. */
   const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
-  const [activeBrand, setActiveBrand] = useState<string>(ALL);
+  /** A marca cuja seção está no topo da lista — é ela que o chip acende. */
+  const [activeBrand, setActiveBrand] = useState<string>("");
   /** Os números das promoções, vindos do banco. Ver StoreRules. */
   const [rules, setRules] = useState<StoreRules | null>(null);
 
@@ -1510,23 +1635,74 @@ export default function SellerStorePage() {
    * dele faria o aviso piscar abrindo e fechando.
    */
   const [noticesOpen, setNoticesOpen] = useState(true);
+  /**
+   * O botão flutuante do WhatsApp some enquanto a pessoa DESCE a lista e volta
+   * quando ela sobe. Parado no canto, ele pousava justo em cima do preço do
+   * card de baixo — e é descendo que se lê preço.
+   */
+  const [fabHidden, setFabHidden] = useState(false);
   const scrollWatch = useRef<{ el: HTMLElement; fn: () => void } | null>(null);
+  const mainEl = useRef<HTMLElement | null>(null);
+  /** As seções de marca montadas, para o índice de chips saber onde cada uma está. */
+  const sectionEls = useRef(new Map<string, HTMLElement>());
+  /**
+   * Até quando a rolagem é NOSSA (o toque num chip). Enquanto a lista desliza
+   * até a marca escolhida ela passa por cima das outras, e o chip aceso
+   * piscaria por todas elas no caminho.
+   */
+  const spyLock = useRef(0);
+  const lastScrollTop = useRef(0);
+
+  /** Acende o chip da marca que ocupa o topo da lista. */
+  const spyBrand = useCallback((el: HTMLElement) => {
+    if (Date.now() < spyLock.current || sectionEls.current.size === 0) return;
+    const top = el.getBoundingClientRect().top;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+    let current: { key: string; y: number } | null = null;
+    let first: { key: string; y: number } | null = null;
+    let last: { key: string; y: number } | null = null;
+    for (const [key, s] of sectionEls.current) {
+      const y = s.getBoundingClientRect().top - top;
+      if (!first || y < first.y) first = { key, y };
+      if (!last || y > last.y) last = { key, y };
+      if (y <= 24 && (!current || y > current.y)) current = { key, y };
+    }
+    // No fim da lista a última marca pode nunca chegar ao topo: se ela está à
+    // vista, é ela que a pessoa está olhando.
+    const pick = atBottom ? last : current ?? first;
+    if (pick) setActiveBrand(pick.key);
+  }, []);
+
   // Ref de callback em vez de efeito: a tela de comprovante troca a árvore
   // inteira, e na volta o <main> é outro elemento. O efeito com `[]` ficaria
   // ouvindo um nó que não existe mais.
-  const mainRef = useCallback((el: HTMLElement | null) => {
-    if (scrollWatch.current) {
-      scrollWatch.current.el.removeEventListener("scroll", scrollWatch.current.fn);
-      scrollWatch.current = null;
-    }
-    if (!el) return;
-    const fn = () => setNoticesOpen(open => (open ? el.scrollTop <= 40 : el.scrollTop < 8));
-    el.addEventListener("scroll", fn, { passive: true });
-    scrollWatch.current = { el, fn };
-    // A lista pode nascer rolada (voltar do comprovante, restaurar posição):
-    // o estado tem que sair certo já na montagem.
-    fn();
-  }, []);
+  const mainRef = useCallback(
+    (el: HTMLElement | null) => {
+      if (scrollWatch.current) {
+        scrollWatch.current.el.removeEventListener("scroll", scrollWatch.current.fn);
+        scrollWatch.current = null;
+      }
+      mainEl.current = el;
+      if (!el) return;
+      const fn = () => {
+        const y = el.scrollTop;
+        setNoticesOpen(open => (open ? y <= 40 : y < 8));
+        // Só conta o movimento que passa de alguns px: o repique do fim da
+        // lista e o dedo parado não podem ficar acendendo e apagando o botão.
+        const dy = y - lastScrollTop.current;
+        if (y <= 40) setFabHidden(false);
+        else if (Math.abs(dy) > 6) setFabHidden(dy > 0);
+        if (Math.abs(dy) > 6 || y <= 40) lastScrollTop.current = y;
+        spyBrand(el);
+      };
+      el.addEventListener("scroll", fn, { passive: true });
+      scrollWatch.current = { el, fn };
+      // A lista pode nascer rolada (voltar do comprovante, restaurar posição):
+      // o estado tem que sair certo já na montagem.
+      fn();
+    },
+    [spyBrand],
+  );
 
   // A chave do carrinho é o que está NO ENDEREÇO, não o id resolvido: por
   // apelido, o id só existe depois de uma ida ao banco, e ler o carrinho com
@@ -1535,6 +1711,11 @@ export default function SellerStorePage() {
   const [cart, setCart] = useState<CartItem[]>(() => readStoredCart(handle));
   /** O que a reconciliação com o catálogo mexeu no carrinho guardado. */
   const [cartNotice, setCartNotice] = useState<string | null>(null);
+  /**
+   * QUAIS itens a reconciliação mexeu. "Confira" sem dizer onde mandava a
+   * pessoa comparar o carrinho com a memória; as linhas marcadas dizem.
+   */
+  const [changedIds, setChangedIds] = useState<Map<string, string>>(() => new Map());
   const [cartOpen, setCartOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
@@ -1556,7 +1737,7 @@ export default function SellerStorePage() {
   /** Pedido aceito, pronto, esperando a água escoar para virar tela. */
   const pendingSuccess = useRef<SuccessOrder | null>(null);
   /** Erro a mostrar depois que a água sair da frente. */
-  const pendingError = useRef<string | null>(null);
+  const pendingError = useRef<OrderError | null>(null);
   /**
    * O token que faz "tentar de novo" continuar sendo O MESMO pedido.
    *
@@ -1567,7 +1748,16 @@ export default function SellerStorePage() {
    */
   const clientToken = useRef<string | null>(null);
   /** Recusa do pedido, mostrada dentro do checkout — a água devolve a pessoa nele. */
-  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<OrderError | null>(null);
+  /**
+   * "Combo ativado" por alguns segundos acima da barra do carrinho. Sem ele o
+   * total caía de R$ 220 para R$ 206 sem explicação, com o card dizendo R$ 110.
+   * Só dispara quando a PESSOA mexe no carrinho (`userTouchedCart`): o
+   * carrinho que volta do localStorage já com combo não é novidade para ninguém.
+   */
+  const [comboFlash, setComboFlash] = useState<number | null>(null);
+  const userTouchedCart = useRef(false);
+  const prevComboTotal = useRef(0);
 
   // Detalhe do produto: um único sheet na página, não um por card.
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -1725,24 +1915,27 @@ export default function SellerStorePage() {
   useEffect(() => {
     if (rows.length === 0 || cart.length === 0) return;
     const saiu: string[] = [];
-    let mudou = false;
+    /** product_id → o que mudou, dito na própria linha do carrinho. */
+    const mexidos = new Map<string, string>();
     const next = cart.flatMap<CartItem>(item => {
       const fresh = rows.find(r => r.product_id === item.product_id);
       if (!fresh || fresh.available <= 0) {
         saiu.push(item.flavor || item.model || "um item");
-        mudou = true;
+        mexidos.set(item.product_id, "");
         return [];
       }
       const quantity = Math.min(item.quantity, fresh.available);
-      if (quantity !== item.quantity || fresh.sale_price !== item.sale_price) mudou = true;
+      if (quantity !== item.quantity) mexidos.set(item.product_id, `Só ${fresh.available} em estoque agora`);
+      else if (fresh.sale_price !== item.sale_price) mexidos.set(item.product_id, "Preço atualizado");
       return [{ ...fresh, quantity }];
     });
-    if (!mudou) return;
+    if (mexidos.size === 0) return;
     setCart(next);
+    setChangedIds(mexidos);
     setCartNotice(
       saiu.length > 0
         ? `Tiramos do carrinho: ${saiu.join(", ")} — acabou o estoque.`
-        : "Ajustamos as quantidades do seu carrinho ao estoque de agora.",
+        : "Atualizamos seu carrinho com o estoque e os preços de agora — veja as linhas marcadas.",
     );
   }, [rows, cart]);
 
@@ -1758,18 +1951,8 @@ export default function SellerStorePage() {
 
   const sellerName = rows[0]?.seller_name ?? "";
 
-  /** Marcas para os chips — do catálogo inteiro, não do resultado filtrado. */
-  const brands = useMemo(() => {
-    const set = new Set<string>();
-    rows.forEach(r => {
-      const b = (r.brand || "").trim();
-      if (b) set.add(b);
-    });
-    return Array.from(set).sort(compareBrands);
-  }, [rows]);
-
-  const groups = useMemo(() => {
-    const q = query.trim().toLowerCase();
+  /** Todos os modelos, com todos os sabores — o sheet de detalhe lê daqui. */
+  const allModels = useMemo(() => {
     const modelMap = new Map<string, ModelGroup>();
     rows.forEach((r, idx) => {
       const hasKey = (r.brand || "").trim() !== "" || (r.model || "").trim() !== "";
@@ -1777,23 +1960,36 @@ export default function SellerStorePage() {
       if (!modelMap.has(key)) modelMap.set(key, { key, brand: r.brand, model: r.model, flavors: [] });
       modelMap.get(key)!.flavors.push(r);
     });
-
-    let models = Array.from(modelMap.values());
-    if (activeBrand !== ALL) models = models.filter(m => (m.brand || "").trim() === activeBrand);
-    if (q) {
-      models = models
-        .map(m => ({
-          ...m,
-          flavors: m.flavors.filter(r =>
-            [r.brand, r.model, r.flavor, r.name].some(v => (v || "").toLowerCase().includes(q)),
-          ),
-        }))
-        .filter(m => m.flavors.length > 0);
-    }
+    const models = Array.from(modelMap.values());
     models.forEach(m =>
       m.flavors.sort((a, b) => (a.flavor || "").localeCompare(b.flavor || "", undefined, { numeric: true })),
     );
-    models.sort((a, b) => (a.model || "").localeCompare(b.model || "", undefined, { numeric: true }));
+    return models;
+  }, [rows]);
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const has = (v: string | null | undefined) => (v || "").toLowerCase().includes(q);
+
+    let models = allModels;
+    if (q) {
+      // Busca que casa com a marca ou o modelo traz o modelo inteiro. A que só
+      // casa com o sabor traz os sabores achados, e o card escreve quais são.
+      models = models.flatMap(m => {
+        if (has(m.brand) || has(m.model)) return [m];
+        const flavors = m.flavors.filter(r => has(r.flavor) || has(r.name));
+        if (flavors.length === 0) return [];
+        const partial = flavors.length < m.flavors.length;
+        return [{ ...m, flavors, matches: partial ? flavors.map(f => f.flavor || f.name) : undefined }];
+      });
+    }
+    // Esgotado vai para o fim da marca: ele fica à vista (a pessoa pode
+    // perguntar por ele), mas não empurra para baixo o que dá para comprar.
+    const soldOut = (m: ModelGroup) => (m.flavors.some(f => f.available > 0) ? 0 : 1);
+    models = [...models].sort(
+      (a, b) =>
+        soldOut(a) - soldOut(b) || (a.model || "").localeCompare(b.model || "", undefined, { numeric: true }),
+    );
 
     const brandMap = new Map<string, BrandGroup>();
     models.forEach(m => {
@@ -1803,7 +1999,21 @@ export default function SellerStorePage() {
     });
 
     return Array.from(brandMap.values()).sort((a, b) => compareBrands(a.brand, b.brand));
-  }, [rows, query, activeBrand]);
+  }, [allModels, query]);
+
+  /**
+   * Leva a lista até a seção da marca. O chip acende na hora, e a vigia da
+   * rolagem fica quieta enquanto a lista desliza (ver `spyLock`).
+   */
+  const jumpToBrand = (key: string) => {
+    const main = mainEl.current;
+    const section = sectionEls.current.get(key);
+    if (!main || !section) return;
+    const top = section.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop - 8;
+    setActiveBrand(key);
+    spyLock.current = Date.now() + 800;
+    main.scrollTo({ top: Math.max(0, top), behavior: reduceMotion ? "auto" : "smooth" });
+  };
 
   const cartCount = useMemo(() => cart.reduce((a, i) => a + i.quantity, 0), [cart]);
 
@@ -1837,6 +2047,23 @@ export default function SellerStorePage() {
   );
   const { total, fullTotal, discountTotal } = preview;
 
+  // Ver `comboFlash`. A ordem dos dois efeitos importa: o primeiro lê se foi a
+  // pessoa que mexeu, o segundo zera a marca depois de QUALQUER mudança do
+  // carrinho — senão um toque sem combo ficaria "armado" até a próxima.
+  useEffect(() => {
+    const antes = prevComboTotal.current;
+    prevComboTotal.current = preview.comboTotal;
+    if (userTouchedCart.current && antes === 0 && preview.comboTotal > 0) setComboFlash(preview.comboTotal);
+  }, [preview.comboTotal]);
+  useEffect(() => {
+    userTouchedCart.current = false;
+  }, [cart]);
+  useEffect(() => {
+    if (comboFlash === null) return;
+    const t = window.setTimeout(() => setComboFlash(null), 3500);
+    return () => window.clearTimeout(t);
+  }, [comboFlash]);
+
   /**
    * Os avisos que giram acima da busca.
    *
@@ -1847,7 +2074,9 @@ export default function SellerStorePage() {
    */
   const notices = useMemo<Notice[]>(() => {
     const list: Notice[] = [];
-    if (rules && rules.combo_discount > 0 && rules.combo_min_units > 1) {
+    // Loja sem produto não anuncia promoção: "leve dois do mesmo modelo" em
+    // cima de uma lista vazia é oferta de coisa que não existe.
+    if (rules && rules.combo_discount > 0 && rules.combo_min_units > 1 && rows.length > 0) {
       list.push({
         key: "combo",
         icon: Tag,
@@ -1863,10 +2092,10 @@ export default function SellerStorePage() {
       icon: Info,
       eyebrow: "Tira-dúvidas",
       title: "Ficou com dúvida?",
-      body: "Toque no i ao lado do carrinho: fidelidade, combo e como o pedido chega ao vendedor.",
+      body: "Toque no i ao lado do carrinho: fidelidade, combo, pagamento e entrega.",
     });
     return list;
-  }, [rules]);
+  }, [rules, rows.length]);
 
   /**
    * As perguntas do tira-dúvidas.
@@ -1896,12 +2125,12 @@ export default function SellerStorePage() {
     list.push({
       q: "Como o pedido é confirmado?",
       a: rules
-        ? `Você finaliza aqui e manda a mensagem no WhatsApp. O estoque fica guardado para você por ${rules.reservation_hours} horas, até o vendedor confirmar.`
-        : "Você finaliza aqui e manda a mensagem no WhatsApp. O estoque fica guardado para você até o vendedor confirmar.",
+        ? `Você reserva aqui e manda o pedido no WhatsApp da California. O estoque fica guardado para você por ${rules.reservation_hours} horas, até a gente confirmar e combinar a entrega.`
+        : "Você reserva aqui e manda o pedido no WhatsApp da California. O estoque fica guardado para você até a gente confirmar e combinar a entrega.",
     });
     list.push({
       q: "Como eu pago?",
-      a: "Pix ou dinheiro, direto com o vendedor na entrega. Nada é cobrado por aqui.",
+      a: "Pix ou dinheiro, na entrega. Nada é cobrado por aqui.",
     });
     list.push({
       q: "O preço pode mudar depois que eu enviar?",
@@ -1910,15 +2139,15 @@ export default function SellerStorePage() {
     return list;
   }, [rules]);
 
-  /** Modelo aberto no sheet de detalhe, achado entre os grupos já montados. */
-  const detailModel = useMemo(() => {
-    if (!detailKey) return null;
-    for (const g of groups) {
-      const m = g.models.find(mm => mm.key === detailKey);
-      if (m) return m;
-    }
-    return null;
-  }, [detailKey, groups]);
+  /**
+   * Modelo aberto no sheet de detalhe — sempre COM TODOS os sabores, mesmo
+   * que a busca tenha achado um só: é no sheet que se monta o combo, e ele
+   * se monta misturando sabores.
+   */
+  const detailModel = useMemo(
+    () => (detailKey ? allModels.find(m => m.key === detailKey) ?? null : null),
+    [detailKey, allModels],
+  );
 
   const selectedFlavor =
     detailModel?.flavors.find(f => f.product_id === selectedId) ??
@@ -1931,6 +2160,21 @@ export default function SellerStorePage() {
   const room = Math.max(0, available - inCart);
   const clampedQty = Math.min(Math.max(1, qty), Math.max(room, 1));
 
+  /** Um preço só no modelo: ele vai no título, não repetido em cada sabor. */
+  const detailPrices = detailModel?.flavors.filter(f => f.available > 0).map(f => f.sale_price) ?? [];
+  const detailSamePrice = detailPrices.every(p => p === detailPrices[0]);
+  const detailCombo = detailModel ? comboOffer(detailModel.flavors, rules?.combo_min_units) : null;
+  /** Unidades DESTE modelo no carrinho — é o que decide se o combo já vale. */
+  const modelUnitsInCart = detailModel
+    ? detailModel.flavors.reduce((a, f) => a + (cartQtyById.get(f.product_id) ?? 0), 0)
+    : 0;
+  /**
+   * O sheet fica aberto depois de adicionar quando ainda há outro sabor para
+   * escolher: fechar a cada item obrigava a reabrir o modelo para montar o
+   * combo, que é justamente misturar sabores. Com um sabor só, fecha como antes.
+   */
+  const keepDetailOpen = (detailModel?.flavors.filter(f => f.available > 0).length ?? 0) > 1;
+
   const openDetail = (model: ModelGroup) => {
     const first = model.flavors.find(f => f.available > 0) ?? model.flavors[0];
     setSelectedId(first?.product_id ?? "");
@@ -1940,6 +2184,7 @@ export default function SellerStorePage() {
 
   const addToCart = (row: CatalogRow, requested = 1) => {
     const qtyToAdd = Math.min(Math.max(1, requested), row.available);
+    userTouchedCart.current = true;
     setCart(prev => {
       const existing = prev.find(i => i.product_id === row.product_id);
       if (existing) {
@@ -1955,6 +2200,7 @@ export default function SellerStorePage() {
   };
 
   const setItemQty = (productId: string, q: number) => {
+    userTouchedCart.current = true;
     setCart(prev =>
       prev.map(i => (i.product_id === productId ? { ...i, quantity: Math.min(Math.max(1, q), i.available) } : i)),
     );
@@ -1988,11 +2234,20 @@ export default function SellerStorePage() {
     });
     lines.push(`──────────────────────────────`);
     if (recibo.discountTotal > 0) {
-      // "Desconto", não "Fidelidade": o recibo do banco devolve UM número, que
-      // hoje pode ser fidelidade, combo de modelo ou os dois juntos. Nomear a
-      // regra errada na mensagem que vai para o vendedor é pior que não nomear.
-      const un = recibo.discountUnits === 1 ? "unidade" : "unidades";
-      lines.push(`🎁 Desconto (${recibo.discountUnits} ${un}): -${fmt(recibo.discountTotal)}`);
+      // O recibo do banco devolve UM número, que pode ser fidelidade, combo de
+      // modelo ou os dois juntos. Quando a prévia desta tela chegou exatamente
+      // ao mesmo valor, a divisão dela é a do banco e dá para nomear cada
+      // regra. Se as contas divergem, fica o genérico: nomear a regra errada
+      // na mensagem que vai para a loja é pior que não nomear.
+      const bate = Math.abs(preview.discountTotal - recibo.discountTotal) < 0.005;
+      if (bate) {
+        if (preview.comboTotal > 0)
+          lines.push(`🏷️ Combo de modelo (${unitsLabel(preview.comboUnits)}): -${fmt(preview.comboTotal)}`);
+        if (preview.loyaltyTotal > 0)
+          lines.push(`🎁 Fidelidade (${unitsLabel(preview.loyaltyUnits)}): -${fmt(preview.loyaltyTotal)}`);
+      } else {
+        lines.push(`🎁 Desconto (${unitsLabel(recibo.discountUnits)}): -${fmt(recibo.discountTotal)}`);
+      }
     }
     lines.push(`💰 Total: ${fmt(recibo.total)}`);
     if (freight.trim()) {
@@ -2009,11 +2264,35 @@ export default function SellerStorePage() {
    */
   const canSubmit = cart.length > 0 && phoneComplete && !lookupLoading && customerName.length > 1;
 
+  /**
+   * Por que o botão está apagado, dito ao lado dele. Desligado e mudo, ele
+   * parecia quebrado para quem ainda não tinha digitado o nome.
+   */
+  const blockReason =
+    cart.length === 0
+      ? "Seu carrinho está vazio."
+      : !phoneComplete
+        ? "Informe seu WhatsApp com DDD para reservar."
+        : lookupLoading
+          ? "Buscando seu cadastro…"
+          : customerName.length <= 1
+            ? "Falta seu nome para reservar."
+            : null;
+
+  /** Checkout → carrinho. É "voltar", não "fechar": o carrinho continua ali. */
+  const backToCart = () => {
+    if (submitting) return;
+    setOrderError(null);
+    setCheckout(false);
+    setCartOpen(true);
+  };
+
   /** Troca a página para o comprovante. Roda com a tela coberta pela água. */
   const revealSuccess = () => {
     setSuccess(pendingSuccess.current);
     setCart([]);
     setCartNotice(null);
+    setChangedIds(new Map());
     setCheckout(false);
     setFreight("");
     // Pedido aceito fecha o ciclo do token: o PRÓXIMO pedido tem que ser um
@@ -2114,8 +2393,11 @@ export default function SellerStorePage() {
       // `signal.aborted` em vez de ler o texto do erro: a mensagem do
       // AbortError muda entre navegador e versão do supabase-js, o sinal não.
       pendingError.current = controller.signal.aborted
-        ? "A conexão demorou demais. Toque em confirmar de novo — se o pedido já tiver entrado, ele não duplica."
-        : orderErrorMessage(msg, cart);
+        ? {
+            text: "A conexão demorou demais. Toque em reservar de novo — se o pedido já tiver entrado, ele não duplica.",
+            contact: false,
+          }
+        : { text: orderErrorMessage(msg, cart), contact: errorNeedsContact(msg) };
       if (msg.includes("estoque_insuficiente")) load();
       orderAccepted.current = false;
     } finally {
@@ -2158,7 +2440,7 @@ export default function SellerStorePage() {
   };
 
   const floodLayer = (
-    <FloodLayer phase={flood} busyLabel="Enviando pedido..." onCovered={onFloodCovered} onGone={onFloodGone} />
+    <FloodLayer phase={flood} busyLabel="Reservando seu pedido…" onCovered={onFloodCovered} onGone={onFloodGone} />
   );
 
   /* ---------------- Link inválido ---------------- */
@@ -2168,7 +2450,9 @@ export default function SellerStorePage() {
   if (resolving) {
     return (
       <main className="storefront flex h-[100dvh] items-center justify-center overflow-hidden p-6">
-        <p className="text-[13px]" style={{ color: "var(--sf-text-dim)" }}>Abrindo a loja…</p>
+        <p role="status" className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+          Abrindo a loja…
+        </p>
       </main>
     );
   }
@@ -2192,11 +2476,17 @@ export default function SellerStorePage() {
   if (!validId) {
     return (
       <main className="storefront flex h-[100dvh] items-center justify-center overflow-hidden p-6">
-        <div className={`${COLUMN} space-y-2 text-center`}>
+        <div className={`${COLUMN} flex flex-col items-center gap-3 text-center`}>
           <h1 className="text-xl font-bold">Link inválido</h1>
           <p className="text-sm" style={{ color: "var(--sf-text-muted)" }}>
-            Este endereço de loja não é válido. Peça ao vendedor o link correto do catálogo.
+            Peça o link certo a quem te enviou, ou chame a California no WhatsApp.
           </p>
+          {/* Endereço errado não é beco: o WhatsApp da loja é o mesmo em todo
+              link, então dá para pedir o catálogo direto. */}
+          <PillButton href={storeWhatsAppLink()} className="mt-2">
+            <WhatsAppIcon size={16} />
+            Falar no WhatsApp
+          </PillButton>
         </div>
       </main>
     );
@@ -2233,16 +2523,18 @@ export default function SellerStorePage() {
             <DrawnCheck size={30} strokeWidth={2.6} />
           </motion.div>
           <motion.div variants={fadeUp}>
-            {/* "Confirmado" era mentira: o pedido nasce PENDENTE e o vendedor
-                ainda pode recusar. Quem lia isso e depois recebia uma recusa
-                tinha recebido uma confirmação que nunca existiu. */}
-            <h2 className="mb-2 text-[21px] font-extrabold">Pedido enviado!</h2>
+            {/* "Confirmado" era mentira: o pedido nasce PENDENTE e ainda pode
+                ser recusado. "Enviado" também era: o pedido só chega à loja
+                quando a pessoa manda a mensagem, e quem lia o título e fechava
+                a aba deixava a reserva vencer sem conversa nenhuma. O título
+                diz o que aconteceu E o que falta. */}
+            <h2 className="mb-2 text-[21px] font-extrabold">Pedido reservado — falta enviar</h2>
             {/* O WhatsApp NÃO abre sozinho: em celular isso troca de aplicativo
                 sem aviso, e quem só queria conferir o resumo se perde. O envio
                 é um toque, e o botão fica aqui até a pessoa querer. */}
             <p className="text-[13.5px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
-              Seu pedido <span className="font-bold">{success.ref}</span> está reservado. Toque abaixo para mandar
-              o pedido no nosso WhatsApp. A gente confirma e fala com você.
+              O pedido <span className="font-bold">{success.ref}</span> está guardado. Mande no WhatsApp para a gente
+              confirmar e combinar a entrega.
             </p>
           </motion.div>
 
@@ -2254,8 +2546,9 @@ export default function SellerStorePage() {
               className="w-full rounded-2xl px-4 py-3 text-[13px]"
               style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
             >
-              <p className="font-bold">
-                🎁 {success.discountUnits === 1 ? "Uma unidade saiu" : `${success.discountUnits} unidades saíram`} com
+              <p className="flex items-center justify-center gap-1.5 font-bold">
+                <Gift size={15} aria-hidden />
+                {success.discountUnits === 1 ? "Uma unidade saiu" : `${success.discountUnits} unidades saíram`} com
                 desconto
               </p>
               <p className="mt-0.5" style={{ color: "var(--sf-text-muted)" }}>
@@ -2289,7 +2582,10 @@ export default function SellerStorePage() {
   /* ---------------- 2. Catálogo ---------------- */
 
   const overlayOpen = detailKey !== null || cartOpen || checkout;
-  const chips = [{ key: ALL, label: "Todos" }, ...brands.map(b => ({ key: b, label: b }))];
+  // Os chips seguem as seções que estão NA TELA: com uma busca ativa, marca
+  // sem resultado não vira um chip que leva a lugar nenhum.
+  const chips = groups.map(g => ({ key: g.key, label: g.brand || "Sem marca" }));
+  const shownBrand = chips.some(c => c.key === activeBrand) ? activeBrand : chips[0]?.key ?? "";
 
   return (
     // App-shell: a raiz ocupa exatamente a altura da janela e não rola. Só o
@@ -2299,17 +2595,15 @@ export default function SellerStorePage() {
     <div className="storefront flex h-[100dvh] flex-col overflow-hidden">
       <header className="flex-shrink-0">
         <div className={`${COLUMN} px-5 pb-3 pt-4`}>
-        <div className="flex items-start justify-between gap-2.5">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-extrabold tracking-[0.03em]" style={{ color: "var(--sf-accent)" }}>
-              {COMPANY.toUpperCase()}
-            </p>
-            {/* Só cumprimenta pelo nome depois que ele existe — hoje isso só
-                acontece se a pessoa já passou pelo checkout uma vez. */}
-            <p className="mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
-              {customerName ? `Oi, ${customerName} — escolha seu produto` : "Escolha seu produto"}
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-2.5">
+          {/* Só a marca da casa. O subtítulo "Escolha seu produto" não dizia
+              nada que a lista logo abaixo não diga, e a versão "Oi, <nome>"
+              cumprimentava pelo nome de quem usou o celular antes — o telefone
+              fica guardado no aparelho. O cumprimento mora no checkout, depois
+              que a pessoa digita o próprio WhatsApp. */}
+          <h1 className="min-w-0 truncate text-sm font-extrabold tracking-[0.03em]" style={{ color: "var(--sf-accent)" }}>
+            {COMPANY.toUpperCase()}
+          </h1>
 
           {/* O tira-dúvidas mora ao LADO do carrinho, com o mesmo desenho: são
               as duas coisas que a pessoa procura no alto da tela. O aviso que
@@ -2328,14 +2622,14 @@ export default function SellerStorePage() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              aria-label={`Abrir carrinho${cartCount > 0 ? ` com ${cartCount} item(ns)` : ""}`}
+              aria-label={`Abrir carrinho${cartCount > 0 ? ` com ${unitsLabel(cartCount)}` : ""}`}
               className="relative flex h-10 w-10 flex-none items-center justify-center rounded-full"
               style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-border)", color: "var(--sf-text)" }}
             >
               <ShoppingCart size={17} />
               {cartCount > 0 && (
                 <span
-                  className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold"
+                  className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-extrabold"
                   style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
                 >
                   {cartCount}
@@ -2364,7 +2658,8 @@ export default function SellerStorePage() {
             style={{ color: "var(--sf-text-faint)" }}
           />
           <Input
-            placeholder="Buscar produtos..."
+            aria-label="Buscar modelo ou sabor"
+            placeholder="Buscar modelo ou sabor…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="h-[42px] rounded-full border-0 pl-[38px] pr-4 text-[13.5px]"
@@ -2372,14 +2667,15 @@ export default function SellerStorePage() {
           />
         </div>
 
-        {chips.length > 1 && <BrandChips chips={chips} active={activeBrand} onChange={setActiveBrand} />}
+        {chips.length > 1 && <BrandChips chips={chips} active={shownBrand} onChange={jumpToBrand} />}
         </div>
       </header>
 
-      <main
-        ref={mainRef}
-        className={`${COLUMN} flex-1 overflow-y-auto overscroll-contain px-5 pb-[100px] pt-1.5`}
-      >
+      {/* O <main> que rola ocupa a LARGURA INTEIRA; só o conteúdo dele fica
+          na coluna de 480px. Com a coluna no próprio <main>, no computador a
+          rodinha do mouse sobre as margens não rolava nada. */}
+      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain">
+        <div className={`${COLUMN} px-5 pb-[100px] pt-1.5`}>
         {/* Quando a reconciliação esvazia o carrinho, a barra de baixo some
             junto e o aviso ficaria escondido num sheet que a pessoa não tem
             mais motivo para abrir. Aqui ele encontra quem precisa dele. */}
@@ -2392,9 +2688,27 @@ export default function SellerStorePage() {
           </p>
         )}
         {loading ? (
-          <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
-            Carregando catálogo...
-          </p>
+          // Cards-fantasma no formato dos de verdade, com o mesmo brilho das
+          // fotos: num 4G ruim a espera ganha forma em vez de uma frase solta
+          // no meio da tela. A frase continua, para o leitor de tela.
+          <div role="status" className="mt-5 flex flex-col gap-4">
+            <span className="sr-only">Carregando catálogo…</span>
+            <span aria-hidden className="sf-shimmer h-[18px] w-24 rounded-full" />
+            {[0, 1].map(k => (
+              <div
+                key={k}
+                aria-hidden
+                className="overflow-hidden rounded-[20px]"
+                style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
+              >
+                <div className="sf-shimmer w-full" style={{ aspectRatio: MEDIA_RATIO }} />
+                <div className="flex flex-col gap-3 px-4 pb-4 pt-3.5">
+                  <span className="sf-shimmer h-4 w-28 rounded-full" />
+                  <span className="sf-shimmer h-5 w-full rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : loadError ? (
           // A falha ocupa o lugar da lista em vez de flutuar por cima dela: sem
           // catálogo não há nada embaixo para o aviso atrapalhar, e o botão de
@@ -2412,13 +2726,47 @@ export default function SellerStorePage() {
               Tentar de novo
             </button>
           </div>
+        ) : groups.length === 0 && query.trim() ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+              Nenhum produto encontrado para "{query.trim()}".
+            </p>
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="h-11 rounded-full px-5 text-[13px] font-bold"
+              style={{ background: "var(--sf-surface)", color: "var(--sf-accent)" }}
+            >
+              Limpar busca
+            </button>
+          </div>
         ) : groups.length === 0 ? (
-          <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
-            {query.trim() ? `Nenhum produto encontrado para "${query.trim()}".` : "Nenhum produto encontrado."}
-          </p>
+          // Loja sem estoque não é "nenhum produto encontrado" — isso soava
+          // como busca errada, e a pessoa ficava sem ter o que fazer. Aqui ela
+          // ganha o motivo e a conversa com a loja.
+          <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
+            <p className="text-[15px] font-bold">A loja está sem produtos agora</p>
+            <p className="text-[13px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+              Chame a California no WhatsApp para saber quando chega mais.
+            </p>
+            <div className="mt-2 w-full max-w-[280px]">
+              <PillButton href={storeWhatsAppLink()}>
+                <WhatsAppIcon size={16} />
+                Falar no WhatsApp
+              </PillButton>
+            </div>
+          </div>
         ) : (
           groups.map((g, gi) => (
-            <section key={g.key} className="mt-5">
+            <section
+              key={g.key}
+              // A vigia da rolagem (`spyBrand`) mede daqui onde cada marca está.
+              ref={el => {
+                if (el) sectionEls.current.set(g.key, el);
+                else sectionEls.current.delete(g.key);
+              }}
+              className="mt-5"
+            >
               <h2
                 className="mb-3 text-[15px] font-extrabold uppercase tracking-[0.06em]"
                 style={{ color: isFeatured(g.brand) ? "var(--sf-accent)" : "var(--sf-text)" }}
@@ -2443,6 +2791,7 @@ export default function SellerStorePage() {
             </section>
           ))
         )}
+        </div>
       </main>
 
       {/* Barra do carrinho — some enquanto um sheet está aberto. */}
@@ -2452,6 +2801,28 @@ export default function SellerStorePage() {
           style={{ background: "linear-gradient(to top, var(--sf-bg) 70%, transparent)" }}
         >
           <div className={`${COLUMN} px-5 pb-[26px] pt-3`}>
+            {/* O total da barra acabou de cair sem ninguém explicar: por
+                alguns segundos a barra diz de onde veio. */}
+            <AnimatePresence>
+              {comboFlash !== null && (
+                <motion.p
+                  role="status"
+                  className="mx-auto mb-2 flex w-fit items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12.5px] font-bold"
+                  style={{
+                    background: "var(--sf-accent-tint)",
+                    border: "1px solid var(--sf-accent-line)",
+                    color: "var(--sf-text)",
+                  }}
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, y: 6 }}
+                  transition={{ duration: 0.28, ease: EASE_OUT }}
+                >
+                  <Tag size={13} aria-hidden style={{ color: "var(--sf-accent)" }} />
+                  Combo ativado · <span style={{ color: "var(--sf-accent)" }}>−{fmt(comboFlash)}</span>
+                </motion.p>
+              )}
+            </AnimatePresence>
             <PillButton height={52} onClick={() => setCartOpen(true)} className="shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
               <ShoppingCart size={15} />
               Ver carrinho · {cartCount} · {fmt(total)}
@@ -2470,13 +2841,24 @@ export default function SellerStorePage() {
             className={`${COLUMN} flex justify-end px-5`}
             style={{ paddingBottom: cartCount > 0 ? 96 : 26 }}
           >
+            {/* Some DESCENDO a lista e volta subindo (ver `fabHidden`). Sai
+                por `transform`/`opacity`, sem mexer no layout, e fica fora do
+                alcance do toque e do Tab enquanto está escondido. */}
             <a
               href={storeWhatsAppLink()}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Falar com a loja no WhatsApp"
-              className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-              style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+              aria-label="Falar com a California no WhatsApp"
+              aria-hidden={fabHidden || undefined}
+              tabIndex={fabHidden ? -1 : undefined}
+              className={`${fabHidden ? "pointer-events-none" : "pointer-events-auto"} flex h-14 w-14 items-center justify-center rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.4)]`}
+              style={{
+                background: "var(--sf-accent)",
+                color: "var(--sf-accent-ink)",
+                opacity: fabHidden ? 0 : 1,
+                transform: fabHidden ? "translateY(16px) scale(0.9)" : "none",
+                transition: reduceMotion ? undefined : `opacity 0.24s ${CSS_EASE_OUT}, transform 0.24s ${CSS_EASE_OUT}`,
+              }}
             >
               <WhatsAppIcon size={26} />
             </a>
@@ -2518,47 +2900,90 @@ export default function SellerStorePage() {
                 <button
                   type="button"
                   onClick={() => setDetailKey(null)}
-                  aria-label="Voltar"
-                  className="absolute left-3.5 top-3.5 flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-md"
+                  aria-label="Voltar ao catálogo"
+                  className="absolute left-3.5 top-3.5 flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-md"
                   style={{ background: "rgba(20,20,26,0.7)", color: "var(--sf-text)" }}
                 >
                   <ArrowLeft size={16} />
                 </button>
+                {/* O carrinho no canto oposto da seta, com o mesmo desenho do
+                    cabeçalho: com o sheet aberto a barra de baixo some, e quem
+                    terminou de escolher os sabores só saía pela seta. No canto
+                    da foto ele não rouba altura da lista de sabores. */}
+                {cartCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailKey(null);
+                      setCartOpen(true);
+                    }}
+                    aria-label={`Ver carrinho com ${unitsLabel(cartCount)}, ${fmt(total)}`}
+                    className="absolute right-3.5 top-3.5 flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-md"
+                    style={{ background: "rgba(20,20,26,0.7)", color: "var(--sf-text)" }}
+                  >
+                    <ShoppingCart size={16} />
+                    <span
+                      className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-extrabold"
+                      style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+                    >
+                      {cartCount}
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* layoutScroll: avisa o motion que este bloco rola, senão ele mede
                   a posição do realce do sabor sem descontar o scroll e a peça
                   pousa fora do lugar. Mesmo cuidado do `BrandChips`. */}
               <motion.div layoutScroll className="flex-1 overflow-y-auto px-5 pb-3 pt-5">
-                <p
-                  className="mb-1 text-[11.5px] font-bold uppercase tracking-[0.06em]"
-                  style={{ color: "var(--sf-accent)" }}
-                >
-                  {detailModel.brand || "Sem marca"}
-                </p>
-                <h2 className="mb-[18px] text-[22px] font-extrabold leading-tight">
-                  {detailModel.model || "Sem modelo"}
-                </h2>
+                {/* Marca e modelo num título só: modelo não tem identidade
+                    sozinho ("10K" da Elfbar ≠ "10K" da Ignite), e o sobretítulo
+                    com a marca era um rótulo a mais em cima do título. O preço
+                    único do modelo fica na mesma linha, dito uma vez em vez de
+                    repetido em cada sabor; só quando os sabores custam
+                    diferente é que cada linha mostra o seu. */}
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="min-w-0 text-[22px] font-extrabold leading-tight">
+                    {detailModel.brand && (
+                      <span style={{ color: "var(--sf-text-muted)" }}>{detailModel.brand} </span>
+                    )}
+                    {detailModel.model || "Sem modelo"}
+                  </h2>
+                  {detailPrices.length > 0 && (
+                    <p className="flex-none text-[15px] font-extrabold" style={{ color: "var(--sf-accent)" }}>
+                      {detailSamePrice ? fmt(detailPrices[0]) : `A partir de ${fmt(Math.min(...detailPrices))}`}
+                    </p>
+                  )}
+                </div>
 
-                <p
-                  className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.08em]"
-                  style={{ color: "var(--sf-text-faint)" }}
-                >
-                  Sabor
-                </p>
                 {/* O realce do sabor escolhido é uma peça única: só o item ativo
                     renderiza o `motion.span` com `layoutId`, então o motion
                     desliza a caixinha da opção antiga para a nova em vez de
-                    apagar aqui e acender ali. Mesmo padrão do `BrandChips`. */}
-                <div className="flex flex-col gap-2">
+                    apagar aqui e acender ali. Mesmo padrão do `BrandChips`.
+                    Sem rótulo "Sabor" visível: uma lista de sabores embaixo de
+                    um modelo não precisa de título; o leitor de tela recebe o
+                    nome do grupo. */}
+                <div role="group" aria-label="Sabor" className="mt-[18px] flex flex-col gap-2">
                   {detailModel.flavors.map(f => {
                     const out = f.available <= 0;
                     const active = f.product_id === (selectedFlavor?.product_id ?? "");
                     const noCarrinho = cartQtyById.get(f.product_id) ?? 0;
+                    // Estoque só quando ele limita: "8 em estoque" em toda
+                    // linha era um número que ninguém usava para decidir.
+                    const pouco = !out && f.available <= LOW_STOCK;
+                    const detalhe = out
+                      ? "Esgotado"
+                      : [
+                          noCarrinho > 0 ? `${noCarrinho} no carrinho` : null,
+                          pouco ? (noCarrinho > 0 ? `só ${f.available}` : `Só ${f.available} em estoque`) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
                     return (
                       <button
                         key={f.product_id}
                         type="button"
+                        aria-pressed={active}
                         disabled={out}
                         onClick={() => {
                           setSelectedId(f.product_id);
@@ -2604,20 +3029,27 @@ export default function SellerStorePage() {
                             )}
                           </span>
                           <span className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{f.flavor || "Sem sabor"}</p>
-                            <p
-                              className="mt-0.5 text-[11.5px]"
-                              style={{ color: out ? "var(--sf-text-dim)" : "var(--sf-text-faint)" }}
-                            >
-                              {out
-                                ? "Esgotado"
-                                : noCarrinho > 0
-                                  ? `${noCarrinho} no carrinho · ${f.available} em estoque`
-                                  : `${f.available} em estoque`}
-                            </p>
+                            {/* Duas linhas, não reticências: nome de sabor longo
+                                é cortado justo na parte que o diferencia
+                                ("Pêssego Manga Maracujá com …"). */}
+                            <p className="line-clamp-2 text-sm font-semibold">{f.flavor || "Sem sabor"}</p>
+                            {detalhe && (
+                              <p
+                                className="mt-0.5 text-[11.5px]"
+                                // `--sf-warn` é "está acabando" — o mesmo papel que
+                                // ele tem na tela do vendedor.
+                                style={{
+                                  color: out ? "var(--sf-text-dim)" : pouco ? "var(--sf-warn)" : "var(--sf-text-faint)",
+                                }}
+                              >
+                                {detalhe}
+                              </p>
+                            )}
                           </span>
                         </div>
-                        <span className="relative z-10 flex-none text-sm font-bold">{fmt(f.sale_price)}</span>
+                        {!detailSamePrice && (
+                          <span className="relative z-10 flex-none text-sm font-bold">{fmt(f.sale_price)}</span>
+                        )}
                       </button>
                     );
                   })}
@@ -2625,33 +3057,85 @@ export default function SellerStorePage() {
               </motion.div>
 
               <div
-                className="flex flex-shrink-0 items-center gap-2.5 px-5 pb-7 pt-3.5"
+                className="flex flex-shrink-0 flex-col gap-3 px-5 pb-7 pt-3.5"
                 style={{ borderTop: "1px solid var(--sf-hairline)", background: "var(--sf-bg)" }}
               >
-                <QtyStepper
-                  qty={room <= 0 ? 0 : clampedQty}
-                  onDec={() => setQty(Math.max(1, clampedQty - 1))}
-                  onInc={() => setQty(Math.min(room, clampedQty + 1))}
-                  decDisabled={room <= 0 || clampedQty <= 1}
-                  incDisabled={clampedQty >= room}
-                />
-                {/* O botão fala do que ainda cabe, não do estoque cru: com tudo
-                    já no carrinho ele desliga em vez de confirmar um toque que
-                    não muda nada, e com o item já escolhido ele diz "mais". */}
-                <AddToCartButton
-                  disabled={!selectedFlavor || available <= 0 || room <= 0}
-                  label={
-                    available <= 0
-                      ? "Esgotado"
-                      : room <= 0
-                        ? `${inCart} no carrinho`
-                        : `${inCart > 0 ? "Adicionar mais" : "Adicionar"} · ${fmt(
-                            (selectedFlavor?.sale_price ?? 0) * clampedQty,
-                          )}`
-                  }
-                  onPress={() => selectedFlavor && addToCart(selectedFlavor, clampedQty)}
-                  onDone={() => setDetailKey(null)}
-                />
+                {/* O combo dito onde ele se monta: quanto falta, ou que já vale.
+                    A frase troca com um fade curto quando o estado muda — é a
+                    confirmação de que o segundo sabor ativou o desconto. */}
+                {detailCombo && (() => {
+                  const preco = `${detailCombo.varies ? "a partir de " : ""}${fmt(detailCombo.price)}`;
+                  const nome = detailModel.model || "modelo";
+                  const falta = detailCombo.minUnits - modelUnitsInCart;
+                  const estado = modelUnitsInCart === 0 ? "convite" : falta > 0 ? "falta" : "ativo";
+                  return (
+                    <motion.p
+                      key={estado}
+                      role="status"
+                      className="flex items-start gap-2 text-[12.5px] leading-snug"
+                      style={{ color: estado === "ativo" ? "var(--sf-text)" : "var(--sf-text-muted)" }}
+                      initial={reduceMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.28, ease: EASE_OUT }}
+                    >
+                      <Tag size={13} aria-hidden className="mt-px flex-none" style={{ color: "var(--sf-accent)" }} />
+                      <span>
+                        {estado === "convite" &&
+                          `${detailCombo.minUnits} ou mais do ${nome}, misturando sabores: ${preco} cada.`}
+                        {estado === "falta" && `Mais ${falta} do ${nome}, de qualquer sabor, e cada um sai por ${preco}.`}
+                        {estado === "ativo" && (
+                          <>
+                            <span className="font-bold">Combo ativo:</span> {preco} cada {nome}.
+                          </>
+                        )}
+                      </span>
+                    </motion.p>
+                  );
+                })()}
+
+                <div className="flex items-center gap-2.5">
+                  <QtyStepper
+                    qty={room <= 0 ? 0 : clampedQty}
+                    onDec={() => setQty(Math.max(1, clampedQty - 1))}
+                    onInc={() => setQty(Math.min(room, clampedQty + 1))}
+                    decDisabled={room <= 0 || clampedQty <= 1}
+                    incDisabled={clampedQty >= room}
+                    label={selectedFlavor?.flavor || undefined}
+                  />
+                  {/* O botão fala do que ainda cabe, não do estoque cru: com tudo
+                      já no carrinho ele desliga em vez de confirmar um toque que
+                      não muda nada, e com o item já escolhido ele diz "mais". */}
+                  <AddToCartButton
+                    disabled={!selectedFlavor || available <= 0 || room <= 0}
+                    label={
+                      available <= 0
+                        ? "Esgotado"
+                        : room <= 0
+                          ? `${inCart} no carrinho`
+                          : `${inCart > 0 ? "Adicionar mais" : "Adicionar"} · ${fmt(
+                              (selectedFlavor?.sale_price ?? 0) * clampedQty,
+                            )}`
+                    }
+                    onPress={() => selectedFlavor && addToCart(selectedFlavor, clampedQty)}
+                    onDone={() => {
+                      if (!keepDetailOpen) {
+                        setDetailKey(null);
+                        return;
+                      }
+                      setQty(1);
+                      // O sabor escolhido esgotou no carrinho: deixar ele
+                      // marcado era um beco (quantidade 0, botão apagado). A
+                      // seleção passa para o próximo sabor que ainda cabe; se
+                      // nenhum cabe mais, não há o que escolher e o sheet fecha.
+                      const cabe = (f: CatalogRow) => f.available > (cartQtyById.get(f.product_id) ?? 0);
+                      if (selectedFlavor && !cabe(selectedFlavor)) {
+                        const next = detailModel.flavors.find(cabe);
+                        if (next) setSelectedId(next.product_id);
+                        else setDetailKey(null);
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </>
           )}
@@ -2697,7 +3181,10 @@ export default function SellerStorePage() {
         onOpenChange={o => {
           // O aviso já foi lido quando o carrinho fecha: mantê-lo faria a
           // próxima abertura falar de uma correção de dias atrás.
-          if (!o) setCartNotice(null);
+          if (!o) {
+            setCartNotice(null);
+            setChangedIds(new Map());
+          }
           setCartOpen(o);
         }}
       >
@@ -2708,7 +3195,7 @@ export default function SellerStorePage() {
           style={{ background: "var(--sf-bg)" }}
         >
           <SheetTopBar title="Seu carrinho" onClose={() => setCartOpen(false)} />
-          <SheetDescription className="sr-only">{cartCount} item(ns) selecionado(s).</SheetDescription>
+          <SheetDescription className="sr-only">{unitsLabel(cartCount)} no carrinho.</SheetDescription>
 
           <div className="flex-1 overflow-y-auto px-5 pt-2">
             {/* O carrinho volta do localStorage e é reconciliado com o catálogo
@@ -2723,7 +3210,7 @@ export default function SellerStorePage() {
               </p>
             )}
             {cart.length === 0 ? (
-              <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-dim)" }}>
+              <p className="py-16 text-center text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
                 Seu carrinho está vazio.
               </p>
             ) : (
@@ -2741,30 +3228,43 @@ export default function SellerStorePage() {
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13.5px] font-bold">{i.model || "Sem modelo"}</p>
-                    <p className="mb-2 mt-0.5 truncate text-xs" style={{ color: "var(--sf-text-muted)" }}>
+                    <p className="mt-0.5 line-clamp-2 text-xs" style={{ color: "var(--sf-text-muted)" }}>
                       {i.flavor || "Sem sabor"}
                     </p>
-                    <QtyStepper
-                      compact
-                      qty={i.quantity}
-                      onDec={() => setItemQty(i.product_id, i.quantity - 1)}
-                      onInc={() => setItemQty(i.product_id, i.quantity + 1)}
-                      decDisabled={i.quantity <= 1}
-                      incDisabled={i.quantity >= i.available}
-                    />
+                    {/* A linha que o estoque mexeu diz isso nela mesma: o
+                        "ajustamos" do aviso aponta para algum lugar. */}
+                    {changedIds.get(i.product_id) && (
+                      <p className="mt-0.5 text-xs font-semibold" style={{ color: "var(--sf-warn)" }}>
+                        {changedIds.get(i.product_id)}
+                      </p>
+                    )}
+                    <div className="mt-1.5">
+                      <QtyStepper
+                        compact
+                        qty={i.quantity}
+                        onDec={() => setItemQty(i.product_id, i.quantity - 1)}
+                        onInc={() => setItemQty(i.product_id, i.quantity + 1)}
+                        decDisabled={i.quantity <= 1}
+                        incDisabled={i.quantity >= i.available}
+                        label={i.flavor || i.model}
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex flex-none flex-col items-end gap-3">
+                  <div className="flex flex-none flex-col items-end gap-1">
                     <span className="text-[13.5px] font-extrabold" style={{ color: "var(--sf-accent)" }}>
                       {fmt(i.sale_price * i.quantity)}
                     </span>
+                    {/* 44px de alvo em volta de um ícone pequeno; a margem
+                        negativa devolve o espaço para a linha não crescer. */}
                     <button
                       type="button"
                       onClick={() => removeItem(i.product_id)}
                       aria-label={`Remover ${i.flavor || i.model}`}
+                      className="-mr-3 flex h-11 w-11 items-center justify-center rounded-full"
                       style={{ color: "var(--sf-text-faint)" }}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -2783,7 +3283,7 @@ export default function SellerStorePage() {
               </span>
               <span className="flex items-baseline gap-2">
                 {discountTotal > 0 && (
-                  <span className="text-[13px] line-through" style={{ color: "var(--sf-text-dim)" }}>
+                  <span className="text-[13px] line-through" style={{ color: "var(--sf-text-faint)" }}>
                     {fmt(fullTotal)}
                   </span>
                 )}
@@ -2810,10 +3310,13 @@ export default function SellerStorePage() {
         open={checkout}
         onOpenChange={o => {
           if (submitting) return;
-          // O aviso morre junto com o sheet: reabrir o checkout é um recomeço,
-          // não a continuação da tentativa que deu errado.
-          if (!o) setOrderError(null);
-          setCheckout(o);
+          // Fechar o checkout (arrastar, tocar fora, Esc) VOLTA ao carrinho —
+          // o mesmo que a seta. Ia direto para o catálogo, e quem só queria
+          // tirar um item precisava achar o carrinho de novo. O aviso de erro
+          // morre junto: reabrir o checkout é um recomeço, não a continuação
+          // da tentativa que deu errado.
+          if (!o) backToCart();
+          else setCheckout(true);
         }}
       >
         <SheetContent
@@ -2825,17 +3328,60 @@ export default function SellerStorePage() {
           className={`storefront ${COLUMN} inset-x-0 flex h-[84vh] flex-col gap-0 rounded-b-none rounded-t-[28px] border-0 p-0`}
           style={{ background: "var(--sf-bg)" }}
         >
-          <SheetTopBar
-            title="Finalizar pedido"
-            onClose={() => {
-              if (submitting) return;
-              setOrderError(null);
-              setCheckout(false);
-            }}
-          />
-          <SheetDescription className="sr-only">Confirme seus dados e envie o pedido.</SheetDescription>
+          <SheetTopBar title="Finalizar pedido" onClose={backToCart} backLabel="Voltar ao carrinho" />
+          <SheetDescription className="sr-only">Confira o pedido, informe seus dados e reserve.</SheetDescription>
 
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-[18px]">
+            {/* O que está sendo reservado, à vista no passo que decide. Antes o
+                checkout era só formulário: a pessoa confirmava sem ver os
+                itens, e depois de uma recusa por estoque o "confira" não tinha
+                o que conferir. As linhas que o estoque mexeu dizem isso nelas. */}
+            <section
+              aria-labelledby="checkout-itens"
+              className="pb-4"
+              style={{ borderBottom: "1px solid var(--sf-hairline)" }}
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <h3 id="checkout-itens" className="text-[13.5px] font-bold">
+                  Seu pedido · {unitsLabel(cartCount)}
+                </h3>
+                <button
+                  type="button"
+                  onClick={backToCart}
+                  className="-mr-2 h-10 rounded-full px-2 text-[13px] font-bold"
+                  style={{ color: "var(--sf-accent)" }}
+                >
+                  Editar
+                </button>
+              </div>
+              {cartNotice && (
+                <p
+                  className="mb-2 rounded-2xl px-3.5 py-2.5 text-[12.5px]"
+                  style={{ background: "var(--sf-surface)", color: "var(--sf-text-muted)" }}
+                >
+                  {cartNotice}
+                </p>
+              )}
+              <ul className="flex flex-col gap-1.5">
+                {cart.map(i => (
+                  <li key={i.product_id} className="flex items-start justify-between gap-3 text-[13px]">
+                    <span className="min-w-0" style={{ color: "var(--sf-text-muted)" }}>
+                      <span className="font-bold" style={{ color: "var(--sf-text)" }}>
+                        {i.quantity}×
+                      </span>{" "}
+                      {i.model} · {i.flavor || "Sem sabor"}
+                      {changedIds.get(i.product_id) && (
+                        <span className="block text-xs font-semibold" style={{ color: "var(--sf-warn)" }}>
+                          {changedIds.get(i.product_id)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex-none font-semibold">{fmt(i.sale_price * i.quantity)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
             {/* O WhatsApp é a chave do cliente: assim que fica completo, o
                 efeito de fidelidade dispara e o resto do formulário se decide
                 sozinho — cartão de boas-vindas se já é cadastrado, campo de
@@ -2844,6 +3390,7 @@ export default function SellerStorePage() {
               <Input
                 id="cliente-whats"
                 inputMode="numeric"
+                autoComplete="tel-national"
                 value={formatPhoneDisplay(phoneInput)}
                 onChange={e => setPhoneInput(onlyDigits(e.target.value))}
                 placeholder="(11) 90000-0000"
@@ -2853,8 +3400,8 @@ export default function SellerStorePage() {
             </Field>
 
             {lookupLoading && (
-              <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                Buscando seu cadastro...
+              <p role="status" className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                Buscando seu cadastro…
               </p>
             )}
 
@@ -2864,26 +3411,27 @@ export default function SellerStorePage() {
                 style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
               >
                 <p className="text-[15px] font-bold">Oi, {loyalty.customer_name}!</p>
+                {/* "Cliente Frequente", não "Nível Frequente": o nome do nível é
+                    um adjetivo de quem compra, e sem o "Cliente" a palavra
+                    solta parecia código do sistema. O nome vem cru do banco. */}
                 <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
-                  Nível <span style={{ color: "var(--sf-accent)" }}>{loyalty.loyalty_tier}</span> ·{" "}
-                  {loyalty.total_units} {loyalty.total_units === 1 ? "unidade" : "unidades"} compradas
+                  Cliente <span style={{ color: "var(--sf-accent)" }}>{loyalty.loyalty_tier}</span> ·{" "}
+                  {unitsLabel(loyalty.total_units)} {loyalty.total_units === 1 ? "comprada" : "compradas"}
                 </p>
                 {/* Três frases possíveis, e a ordem importa: o desconto que JÁ
                     entrou neste carrinho vem antes do que ainda falta. Quem
                     acabou de ganhar não quer ler quanto falta para o próximo. */}
-                <p className="mt-1 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                <p className="mt-1 flex items-start gap-1.5 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  <Gift size={14} aria-hidden className="mt-0.5 flex-none" style={{ color: "var(--sf-accent)" }} />
                   {preview.loyaltyUnits > 0 ? (
-                    <>
-                      🎁{" "}
-                      <span className="font-bold" style={{ color: "var(--sf-accent)" }}>
-                        {preview.loyaltyUnits === 1 ? "Uma unidade" : `${preview.loyaltyUnits} unidades`} deste
-                        pedido{preview.loyaltyUnits === 1 ? " sai" : " saem"} com desconto!
-                      </span>
-                    </>
+                    <span className="font-bold" style={{ color: "var(--sf-accent)" }}>
+                      {preview.loyaltyUnits === 1 ? "Uma unidade" : `${preview.loyaltyUnits} unidades`} deste
+                      pedido{preview.loyaltyUnits === 1 ? " sai" : " saem"} com desconto!
+                    </span>
                   ) : loyalty.units_until_next_discount === 1 ? (
-                    "Falta 1 unidade para a próxima sair com desconto 🎁"
+                    <span>Falta 1 unidade para a próxima sair com desconto</span>
                   ) : (
-                    `Faltam ${loyalty.units_until_next_discount} unidades para a próxima sair com desconto`
+                    <span>Faltam {loyalty.units_until_next_discount} unidades para a próxima sair com desconto</span>
                   )}
                 </p>
               </div>
@@ -2894,12 +3442,23 @@ export default function SellerStorePage() {
                 {/* Quem ainda não é cliente é exatamente quem a fidelidade
                     precisa convencer, e para essa pessoa ela era invisível: o
                     cartão só existia para quem já tinha cadastro. */}
+                {/* O ciclo vem de `get_store_rules`, como em todo o resto da
+                    loja: o "6" digitado aqui era o único número de regra que
+                    não mudaria junto com a função SQL. Sem as regras, a frase
+                    promete a fidelidade sem inventar o número. */}
                 <p
-                  className="rounded-2xl px-4 py-3 text-[13px]"
+                  className="flex items-start gap-2 rounded-2xl px-4 py-3 text-[13px]"
                   style={{ background: "var(--sf-surface)", color: "var(--sf-text-muted)" }}
                 >
-                  🎁 <span className="font-bold" style={{ color: "var(--sf-text)" }}>Primeira compra?</span> A cada 6
-                  unidades compradas, uma sai com metade do preço.
+                  <Gift size={14} aria-hidden className="mt-0.5 flex-none" style={{ color: "var(--sf-accent)" }} />
+                  <span>
+                    <span className="font-bold" style={{ color: "var(--sf-text)" }}>
+                      Primeira compra?
+                    </span>{" "}
+                    {rules
+                      ? `A cada ${rules.loyalty_cycle} unidades compradas, uma sai com metade do preço.`
+                      : "Suas compras aqui passam a contar para a fidelidade."}
+                  </span>
                 </p>
                 <Field id="cliente-nome" label="Seu nome">
                   <Input
@@ -2907,6 +3466,7 @@ export default function SellerStorePage() {
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
                     placeholder="ex: Pedro"
+                    autoComplete="given-name"
                     maxLength={80}
                     className={`h-[50px] px-4 ${FIELD_CLASS}`}
                     style={FIELD_STYLE}
@@ -2938,7 +3498,7 @@ export default function SellerStorePage() {
                 </span>
                 <span className="flex items-baseline gap-2">
                   {discountTotal > 0 && (
-                    <span className="text-[13px] line-through" style={{ color: "var(--sf-text-dim)" }}>
+                    <span className="text-[13px] line-through" style={{ color: "var(--sf-text-faint)" }}>
                       {fmt(fullTotal)}
                     </span>
                   )}
@@ -2947,19 +3507,47 @@ export default function SellerStorePage() {
                   </span>
                 </span>
               </div>
+              {/* A pergunta de quem está prestes a apertar o botão é "vou
+                  pagar agora?". A resposta morava só no tira-dúvidas. */}
+              <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--sf-text-muted)" }}>
+                Pagamento na entrega, em Pix ou dinheiro. Depois de reservar, é só mandar no WhatsApp.
+              </p>
             </div>
           </div>
 
           <div className="flex-shrink-0 px-5 pb-7 pt-3.5" style={{ borderTop: "1px solid var(--sf-hairline)" }}>
             {/* O motivo da recusa fica colado no botão que a pessoa vai apertar
-                de novo — é o único lugar em que ele muda o que ela faz. */}
-            {orderError && (
-              <p className="mb-3 text-[13px] font-semibold" style={{ color: "var(--sf-danger)" }}>
-                {orderError}
-              </p>
+                de novo — é o único lugar em que ele muda o que ela faz. Quando
+                só uma conversa resolve, o WhatsApp da loja vem junto: com o
+                checkout aberto o botão flutuante fica escondido. */}
+            {orderError ? (
+              <div className="mb-3 flex flex-col gap-2">
+                <p role="alert" className="text-[13px] font-semibold" style={{ color: "var(--sf-danger)" }}>
+                  {orderError.text}
+                </p>
+                {orderError.contact && (
+                  <a
+                    href={storeWhatsAppLink()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-11 w-fit items-center gap-2 rounded-full px-4 text-[13px] font-bold"
+                    style={{ background: "var(--sf-surface)", color: "var(--sf-accent)" }}
+                  >
+                    <WhatsAppIcon size={15} />
+                    Falar com a California
+                  </a>
+                )}
+              </div>
+            ) : (
+              blockReason &&
+              !submitting && (
+                <p className="mb-3 text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
+                  {blockReason}
+                </p>
+              )
             )}
             <PillButton onClick={confirmOrder} disabled={!canSubmit || submitting}>
-              Confirmar pedido
+              Reservar pedido
             </PillButton>
           </div>
         </SheetContent>

@@ -678,8 +678,13 @@
     --sf-border: rgba(255, 255, 255, 0.08);   /* inputs e chips */
     --sf-hairline: rgba(255, 255, 255, 0.06); /* bordas de card e divisórias */
     --sf-text: #f5f3ee;
-    --sf-text-muted: rgba(245, 243, 238, 0.55);
-    --sf-text-faint: rgba(245, 243, 238, 0.45);
+    /* Contraste medido sobre o --sf-surface (o fundo mais claro onde texto
+     * pequeno aparece): muted ≈ 6:1, faint ≈ 4,8:1 — os dois acima dos 4,5:1
+     * de texto pequeno. O faint estava em 0,45 (≈ 4:1) e carregava o "N
+     * sabores" em 11px. O dim (≈ 3:1) é só para o que não precisa ser LIDO:
+     * ícone de produto sem foto, pontinho do trilho, sabor esgotado. */
+    --sf-text-muted: rgba(245, 243, 238, 0.6);
+    --sf-text-faint: rgba(245, 243, 238, 0.5);
     --sf-text-dim: rgba(245, 243, 238, 0.35);
     --sf-accent: #8fc1e3;
     --sf-accent-tint: rgba(143, 193, 227, 0.12);
@@ -742,8 +747,31 @@
     --sf-accent-ink: #eaf3f8;
   }
 
+  /* Placeholder é texto que se lê ("(11) 90000-0000", "ex: Pedro"): faint,
+   * não dim — o dim sobre o campo ficava em 3:1. */
   .storefront ::placeholder {
-    color: var(--sf-text-dim);
+    color: var(--sf-text-faint);
+  }
+
+  /* O que o navegador desenha sozinho também é da loja: seleção e cursor de
+   * texto no accent, em vez do azul-padrão do sistema. */
+  .storefront ::selection {
+    background: var(--sf-accent-line); /* token: vira junto no tema invertido */
+    color: var(--sf-text);
+  }
+  .storefront input,
+  .storefront textarea {
+    caret-color: var(--sf-accent);
+  }
+
+  /* Linha que rola na horizontal sem barra (os chips de marca). No celular a
+   * barra já é invisível; no computador ela aparecia cinza embaixo dos chips,
+   * e a linha continua rolando pela roda e pelo arraste. */
+  .storefront .sf-no-scrollbar {
+    scrollbar-width: none;
+  }
+  .storefront .sf-no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* Esqueleto da foto que ainda está vindo (ver ProductMedia).
@@ -752,7 +780,8 @@
    * que pode durar dez segundos numa rede ruim: o resto do app só anima em
    * resposta a um toque. Baixo contraste de propósito — um brilho forte
    * atravessando a lista inteira de cards viraria o assunto da tela.
-   * Sai do ar assim que o `onLoad` acontece. */
+   * Sai do ar assim que o `onLoad` acontece. Os cards-fantasma do catálogo
+   * carregando usam a mesma peça: é a mesma espera, só que da lista inteira. */
   .storefront .sf-shimmer {
     background: linear-gradient(
       100deg,
