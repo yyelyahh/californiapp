@@ -4,6 +4,7 @@ import { toast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
+import { formatCurrency } from "@/lib/currency";
 
 /**
  * Pedidos do catálogo esperando decisão.
@@ -31,7 +32,7 @@ export type OrderItem = {
   quantity: number;
   unit_price: number;
   created_at: string;
-  products: { name: string; brand: string; flavor: string } | null;
+  products: { name: string; brand: string; model: string | null; flavor: string } | null;
 };
 
 export type Order = {
@@ -80,6 +81,31 @@ export const ORDER_PAYMENT_CHOICES: { id: PaymentMethodValue; label: string; pai
  */
 export const ORDER_NOTE_MAX = 80;
 
+/** O desfecho de confirmar/recusar, para a tela que mostra o resultado no próprio card. */
+export type OrderActionResult = { ok: true } | { ok: false; message: string } | { ok: false; cancelled: true };
+
+/**
+ * Erro de pedido em frase de gente. Lista de PERMISSÃO (src/pages/CLAUDE.md
+ * §10): o que não está aqui vira a frase genérica, nunca o texto cru do banco.
+ *
+ * O `create_sale` avisa estoque como `estoque_insuficiente:<qtd>` /
+ * `estoque_vendedor_insuficiente:<qtd>` — o número depois dos dois-pontos é a
+ * QUANTIDADE que sobrou, não o produto, então a mensagem não tem como dizer
+ * qual sabor faltou sem inventar.
+ */
+export function orderActionError(raw: string): string {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return "Você está sem internet. Reconecte e tente de novo.";
+  if (raw.includes("Failed to fetch") || raw.includes("NetworkError")) return "A conexão caiu no meio. Tente de novo.";
+  if (raw.includes("pedido_expirado"))
+    return "Este pedido passou das 24h e a reserva já foi liberada. Peça ao cliente para refazer no catálogo.";
+  if (raw.includes("pedido_ja_processado")) return "Este pedido já tinha sido confirmado ou recusado.";
+  if (raw.includes("estoque_vendedor_insuficiente"))
+    return "Um dos sabores deste pedido não tem mais unidades suficientes com você. Confira no Estoque.";
+  if (raw.includes("estoque_insuficiente")) return "Não há mais estoque suficiente para este pedido na cidade.";
+  if (raw.includes("nao_autorizado")) return "Este pedido não é da sua loja.";
+  return "Não deu certo. Tente de novo.";
+}
+
 export function usePendingOrders(options?: { storefront?: boolean }) {
   const storefront = options?.storefront === true;
   const { refreshSales, sellers } = useStore();
@@ -88,30 +114,45 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
 
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  // Erro da CARGA (não de ação). A loja mostra no lugar da lista, com "Tentar
+  // de novo" (§8); o ERP segue com o toast.
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
 
   // silent = atualização em segundo plano: não pisca o "Carregando..." nem avisa erro de rede.
   const fetchPendingOrders = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
     if (!silent) setLoadingOrders(true);
-    // Carimba como 'expirada' o que passou das 24h antes de listar, senão
-    // pedido morto continuaria aqui pedindo uma decisão que não existe mais.
-    // O estoque dele já voltou ao catálogo sozinho (o cálculo do `available`
-    // ignora reserva vencida), então isto é só a limpeza da lista — se falhar,
-    // nada trava: no máximo um card a mais aparece até a próxima passagem.
-    await supabase.rpc("expire_stale_orders");
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, flavor))")
-      .eq("status", "pendente")
-      .order("created_at", { ascending: false });
-    if (error) {
-      if (!silent) toast({ title: "Erro ao carregar pedidos", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      // Carimba como 'expirada' o que passou das 24h antes de listar, senão
+      // pedido morto continuaria aqui pedindo uma decisão que não existe mais.
+      // O estoque dele já voltou ao catálogo sozinho (o cálculo do `available`
+      // ignora reserva vencida), então isto é só a limpeza da lista — se falhar,
+      // nada trava: no máximo um card a mais aparece até a próxima passagem.
+      await supabase.rpc("expire_stale_orders");
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, customers(name, whatsapp), sellers(name), order_items(*, products(name, brand, model, flavor))")
+        .eq("status", "pendente")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
       setPendingOrders((data as Order[]) ?? []);
+      setOrdersError(null);
+    } catch (err: any) {
+      if (!silent) {
+        if (storefront) {
+          setOrdersError(
+            navigator.onLine
+              ? "Não deu para carregar os pedidos."
+              : "Você está sem internet. Reconecte e tente de novo.",
+          );
+        }
+        else toast({ title: "Erro ao carregar pedidos", description: err?.message, variant: "destructive" });
+      }
+    } finally {
+      if (!silent) setLoadingOrders(false);
     }
-    if (!silent) setLoadingOrders(false);
-  }, []);
+  }, [storefront]);
 
   useEffect(() => {
     fetchPendingOrders();
@@ -141,8 +182,17 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
    * em `sales.notes`, senão a coluna da SalesPage (140px) só mostraria o
    * "Pedido via catálogo #<uuid>".
    */
-  const confirmOrder = async (orderId: string, method: PaymentMethodValue, notes?: string) => {
-    if (processingOrder) return;
+  /**
+   * Na loja (`storefront`) o resultado volta para a tela, que o mostra no
+   * próprio card; o toast é do ERP e sai com o tema dele por cima do cabeçalho
+   * da loja. No ERP segue o toast de sempre.
+   */
+  const confirmOrder = async (
+    orderId: string,
+    method: PaymentMethodValue,
+    notes?: string,
+  ): Promise<OrderActionResult> => {
+    if (processingOrder) return { ok: false, message: "Espere o pedido anterior terminar." };
     setProcessingOrder(orderId);
     try {
       const trimmed = notes?.trim();
@@ -154,49 +204,55 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
       if (error) throw error;
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
       await refreshSales();
-      const paid = ORDER_PAYMENT_CHOICES.find(c => c.id === method)?.paid;
-      toast({
-        title: "Pedido confirmado",
-        description: paid
-          ? "Estoque atualizado e venda registrada como recebida."
-          : "Estoque atualizado. A venda entrou como falta receber.",
-      });
+      if (!storefront) {
+        const paid = ORDER_PAYMENT_CHOICES.find(c => c.id === method)?.paid;
+        toast({
+          title: "Pedido confirmado",
+          description: paid
+            ? "Estoque atualizado e venda registrada como recebida."
+            : "Estoque atualizado. A venda entrou como falta receber.",
+        });
+      }
+      return { ok: true };
     } catch (err: any) {
-      const raw = String(err?.message ?? "");
-      // Pedido vencido é o caso mais provável de dar erro aqui, e a mensagem
-      // crua do Postgres não diz nada para quem está com o celular na mão.
-      const description = raw.includes("pedido_expirado")
-        ? "Este pedido passou das 24h e a reserva já foi liberada. Peça ao cliente para refazer no catálogo."
-        : raw.includes("pedido_ja_processado")
-          ? "Este pedido já tinha sido confirmado ou recusado."
-          : raw.includes("estoque")
-            ? "Não há mais estoque suficiente para este pedido."
-            : raw || "Tente novamente.";
-      toast({ title: "Erro ao confirmar", description, variant: "destructive" });
+      const message = orderActionError(String(err?.message ?? ""));
+      if (!storefront) toast({ title: "Erro ao confirmar", description: message, variant: "destructive" });
       fetchPendingOrders({ silent: true });
+      return { ok: false, message };
     } finally {
       setProcessingOrder(null);
     }
   };
 
-  const declineOrder = async (orderId: string) => {
+  const declineOrder = async (orderId: string): Promise<OrderActionResult> => {
+    // O diálogo diz DE QUEM é o pedido: com dois cards parecidos na tela, "Tem
+    // certeza?" não diz qual dos dois vai sumir.
+    const order = pendingOrders.find(o => o.id === orderId);
+    const who = order?.customers?.name?.trim();
+    const amount = order ? formatCurrency(order.total_amount) : null;
     const ok = await confirm({
-      title: "Recusar pedido",
-      description: "Tem certeza? Essa ação não pode ser desfeita e o pedido será cancelado.",
+      title: who ? `Recusar o pedido de ${who}?` : "Recusar pedido?",
+      description: [
+        amount ? `${amount}. ` : "",
+        "A reserva volta para o catálogo e não dá para desfazer. O cliente não é avisado sozinho: combine com ele pelo WhatsApp.",
+      ].join(""),
       confirmText: "Recusar",
       cancelText: "Voltar",
       storefront,
     });
-    if (!ok) return;
-    if (processingOrder) return;
+    if (!ok) return { ok: false, cancelled: true };
+    if (processingOrder) return { ok: false, message: "Espere o pedido anterior terminar." };
     setProcessingOrder(orderId);
     try {
       const { error } = await supabase.rpc("decline_order", { p_order_id: orderId });
       if (error) throw error;
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-      toast({ title: "Pedido recusado", description: "O pedido foi cancelado com sucesso." });
+      if (!storefront) toast({ title: "Pedido recusado", description: "O pedido foi cancelado com sucesso." });
+      return { ok: true };
     } catch (err: any) {
-      toast({ title: "Erro ao recusar", description: err?.message || "Tente novamente.", variant: "destructive" });
+      const message = orderActionError(String(err?.message ?? ""));
+      if (!storefront) toast({ title: "Erro ao recusar", description: message, variant: "destructive" });
+      return { ok: false, message };
     } finally {
       setProcessingOrder(null);
     }
@@ -220,6 +276,7 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
   return {
     pendingOrders: visibleOrders,
     loadingOrders,
+    ordersError,
     processingOrder,
     fetchPendingOrders,
     confirmOrder,

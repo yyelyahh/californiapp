@@ -72,7 +72,9 @@ muda nada: ele continua saindo com o Nocturne. E o tema não dá para deduzir do
 DOM, porque o Radix já tirou o elemento da árvore da página. Quem sabe é a tela
 que chama, e ela avisa: `useConfirm` aceita `storefront: true`, e
 `usePendingOrders({ storefront: true })` repassa isso no diálogo de recusar
-pedido. Peça nova compartilhada entre os dois temas segue esse caminho — um
+pedido. O toast (`use-toast`) é do ERP e pinta pelo tema global: na loja ele
+não aparece — com `storefront: true` o hook devolve o desfecho e a tela o mostra
+no próprio card (confirmação no lugar do card, erro colado nos botões, §8). Peça nova compartilhada entre os dois temas segue esse caminho — um
 sinalizador vindo de quem chama, não uma adivinhação no componente.
 
 ## 3. Esqueleto da página
