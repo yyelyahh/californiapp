@@ -97,6 +97,9 @@ export type OrderActionResult =
  * QUANTIDADE que sobrou, não o produto, então a mensagem não tem como dizer
  * qual sabor faltou sem inventar.
  */
+/** A mensagem de um erro qualquer: o do Supabase não é `Error`, é um objeto com `message`. */
+const errorText = (err: unknown) => String((err as { message?: unknown } | null)?.message ?? "");
+
 export function orderActionError(raw: string): string {
   if (typeof navigator !== "undefined" && !navigator.onLine) return "Você está sem internet. Reconecte e tente de novo.";
   if (raw.includes("Failed to fetch") || raw.includes("NetworkError")) return "A conexão caiu no meio. Tente de novo.";
@@ -142,7 +145,7 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
       if (error) throw error;
       setPendingOrders((data as Order[]) ?? []);
       setOrdersError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!silent) {
         if (storefront) {
           setOrdersError(
@@ -151,7 +154,7 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
               : "Você está sem internet. Reconecte e tente de novo.",
           );
         }
-        else toast({ title: "Erro ao carregar pedidos", description: err?.message, variant: "destructive" });
+        else toast({ title: "Erro ao carregar pedidos", description: errorText(err), variant: "destructive" });
       }
     } finally {
       if (!silent) setLoadingOrders(false);
@@ -218,8 +221,8 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
         });
       }
       return { ok: true };
-    } catch (err: any) {
-      const raw = String(err?.message ?? "");
+    } catch (err: unknown) {
+      const raw = errorText(err);
       const message = orderActionError(raw);
       if (!storefront) toast({ title: "Erro ao confirmar", description: message, variant: "destructive" });
       fetchPendingOrders({ silent: true });
@@ -254,8 +257,8 @@ export function usePendingOrders(options?: { storefront?: boolean }) {
       setPendingOrders(prev => prev.filter(o => o.id !== orderId));
       if (!storefront) toast({ title: "Pedido recusado", description: "O pedido foi cancelado com sucesso." });
       return { ok: true };
-    } catch (err: any) {
-      const message = orderActionError(String(err?.message ?? ""));
+    } catch (err: unknown) {
+      const message = orderActionError(errorText(err));
       if (!storefront) toast({ title: "Erro ao recusar", description: message, variant: "destructive" });
       return { ok: false, message };
     } finally {

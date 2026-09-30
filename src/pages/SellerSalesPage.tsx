@@ -19,11 +19,13 @@ import {
 } from "@/lib/commissions";
 import { buildSellerStock } from "@/lib/seller-stock";
 import {
-  firstName, groupOpenSales, mergeSaleLines, saleOpenAmount, tagOrderLines, tierLadder, tierUpgradeGain, whatsappLink,
+  firstName, groupOpenSales, mergeSaleLines, RESERVATION_HOURS, saleOpenAmount, tagOrderLines, tierLadder, tierUpgradeGain, whatsappLink,
   type OpenSaleGroup, type OrderLineTag,
 } from "@/lib/seller-orders";
 import { formatDateBR } from "@/lib/date-utils";
 import { orderRef } from "@/lib/order-ref";
+import { storeWhatsAppLink } from "@/lib/store-contact";
+import { useRecentExpiredOrders } from "@/hooks/useRecentExpiredOrders";
 import { fadeUp, stagger } from "@/lib/motion";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { Product, Sale } from "@/types";
@@ -62,11 +64,6 @@ const COLUMN = "mx-auto w-full max-w-[480px]";
 /** O dono, nas frases da tela. Ver o bloco acima: "loja" é a vitrine do vendedor. */
 const OWNER = "a California";
 
-/**
- * A reserva do pedido, em horas. Espelha `order_reservation_ttl()` (24h) — o
- * banco é quem recusa (`pedido_expirado`); aqui só avisa antes, no card.
- */
-const RESERVATION_HOURS = 24;
 /** A partir de quanto falta o card passa a dizer "vence em". */
 const EXPIRY_WARNING_HOURS = 6;
 /** Abaixo disto o aviso de vencimento sobe de `--sf-warn` para `--sf-danger`. */
@@ -209,7 +206,7 @@ function ConsumptionRow({ entry, productLabel }: { entry: ConsumptionEntry; prod
   const title =
     entry.kind === "retirada" && entry.sale
       ? productLabel(entry.sale.productId)
-      : `Dívida${entry.debt?.notes ? ` · ${entry.debt.notes}` : ""}`;
+      : entry.debt?.notes?.trim() || "Dívida sem descrição";
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 pl-3" style={{ color: "var(--sf-text-muted)" }}>
       <div className="min-w-0">
@@ -287,7 +284,15 @@ function WhatsAppPill({
  * recusa), só avisar o cliente. Inteiro e no topo, ele empurrava para baixo o
  * pedido que vencia em 9 minutos.
  */
-function ExpiredOrderRow({ order, storeUrl }: { order: Order; storeUrl: string | null }) {
+function ExpiredOrderRow({
+  order, storeUrl, away, onDismiss,
+}: {
+  order: Order;
+  storeUrl: string | null;
+  /** Venceu com a tela fechada: vem da busca de vencidos, e o vendedor dispensa quando quiser. */
+  away?: boolean;
+  onDismiss?: () => void;
+}) {
   const reduce = useReducedMotion();
   const name = order.customers?.name?.trim() || "Sem nome";
   const wa = whatsappLink(order.customers?.whatsapp, customerMessage("expired", order, storeUrl));
@@ -298,19 +303,39 @@ function ExpiredOrderRow({ order, storeUrl }: { order: Order; storeUrl: string |
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       aria-label={`Pedido vencido de ${name}`}
-      className="flex items-center justify-between gap-3 rounded-[20px] px-4 py-3"
+      className="rounded-[20px] px-4 py-3"
       style={{ background: "var(--sf-surface)", border: "1px solid var(--sf-hairline)" }}
     >
-      <div className="min-w-0">
-        <h3 className="break-words text-[13.5px] font-bold leading-snug">{name}</h3>
-        <p className="flex items-center gap-1 text-xs" style={{ color: "var(--sf-danger)" }}>
-          <Clock size={12} aria-hidden />
-          <span>
-            Venceu <span style={{ color: "var(--sf-text-muted)" }}>· {fmt(order.total_amount)} · {orderRef(order.id)}</span>
-          </span>
-        </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="break-words text-[13.5px] font-bold leading-snug">{name}</h3>
+          {/* "Venceu" sozinho não dizia o que aconteceu: diz o porquê, e o
+              quanto e qual pedido, para o vendedor saber de quem se trata. */}
+          <p className="text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+            <span className="inline-flex items-center gap-1 font-semibold" style={{ color: "var(--sf-danger)" }}>
+              <Clock size={12} aria-hidden />
+              {away ? "Venceu enquanto você estava fora" : `Venceu: passou de ${RESERVATION_HOURS}h sem confirmar`}
+            </span>{" "}
+            · {fmt(order.total_amount)} · {orderRef(order.id)}
+          </p>
+        </div>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label={`Dispensar o aviso do pedido de ${name}`}
+            className="flex h-11 w-11 flex-none items-center justify-center rounded-full"
+            style={{ color: "var(--sf-text-muted)" }}
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
-      {wa && <WhatsAppPill href={wa} label={`Avisar ${firstName(name) || "cliente"}`} variant="quiet" />}
+      {wa && (
+        <div className="mt-2 flex">
+          <WhatsAppPill href={wa} label={`Avisar ${firstName(name) || "o cliente"} no WhatsApp`} variant="quiet" />
+        </div>
+      )}
     </motion.article>
   );
 }
@@ -375,9 +400,16 @@ function OrderCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {expiring ? (
+            // Urgência sobe de FORMA, não só de cor: o laranja e o vermelho da
+            // loja ficam a ~10° um do outro, e "vence em 10 min" parecia igual a
+            // "vence em 1h20". Abaixo de 1h o selo vira cheio.
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${LABEL}`}
-              style={{ background: "var(--sf-surface-2)", color: alertColor }}
+              style={
+                urgent
+                  ? { background: "var(--sf-danger)", color: "var(--sf-accent-ink)" }
+                  : { background: "var(--sf-surface-2)", color: alertColor }
+              }
             >
               <Clock size={12} aria-hidden />
               {leftLabel(left)}
@@ -395,7 +427,9 @@ function OrderCard({
                 <span className="relative flex h-1.5 w-1.5" aria-hidden>
                   <span
                     className="absolute inline-flex h-full w-full rounded-full opacity-70 motion-safe:animate-ping"
-                    style={{ background: "var(--sf-accent)" }}
+                    // Chama a atenção na chegada e para: pulsando para sempre
+                    // ele deixava de dizer "chegou agora".
+                    style={{ background: "var(--sf-accent)", animationIterationCount: 6 }}
                   />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: "var(--sf-accent)" }} />
                 </span>
@@ -426,10 +460,10 @@ function OrderCard({
             ) : (
               <span className="inline-flex min-h-11 items-center">{phone ?? "Sem WhatsApp"}</span>
             )}
-            {/* A mesma referência que vai na mensagem que o cliente encaminha:
-                é ela que casa o WhatsApp com o card quando a mesma pessoa faz
-                dois pedidos no mesmo dia. */}
-            <span className="tabular-nums" title="Número do pedido, o mesmo da mensagem do cliente">
+            {/* A mesma referência que vai na mensagem que o cliente manda para
+                a California: é ela que casa a conversa com o card quando a
+                mesma pessoa faz dois pedidos no mesmo dia. */}
+            <span className="tabular-nums" title="Número do pedido, o mesmo da mensagem que o cliente mandou para a California">
               {orderRef(order.id)}
             </span>
           </p>
@@ -497,15 +531,26 @@ function OrderCard({
           para a nota da venda, antes da referência. */}
       {noteOpen ? (
         <div className="mt-3">
-          <label htmlFor={`${baseId}-note`} className="text-xs font-semibold" style={{ color: "var(--sf-text-muted)" }}>
-            Anotação na venda (opcional)
-          </label>
+          <div className="flex items-baseline justify-between gap-2">
+            <label htmlFor={`${baseId}-note`} className="text-xs font-semibold" style={{ color: "var(--sf-text-muted)" }}>
+              Anotação para a California (opcional)
+            </label>
+            {/* O limite do banco (80) à vista, antes de a pessoa bater nele. */}
+            <span
+              id={`${baseId}-note-count`}
+              className="flex-none text-xs tabular-nums"
+              style={{ color: note.length >= ORDER_NOTE_MAX ? "var(--sf-warn)" : "var(--sf-text-muted)" }}
+            >
+              {note.length}/{ORDER_NOTE_MAX}
+            </span>
+          </div>
           <div className="mt-1.5 flex items-center gap-2">
             <input
               id={`${baseId}-note`}
               value={note}
               onChange={e => setNote(e.target.value)}
               maxLength={ORDER_NOTE_MAX}
+              aria-describedby={`${baseId}-note-count`}
               placeholder="ex.: pagou em dinheiro"
               autoFocus
               className="h-11 min-w-0 flex-1 rounded-[14px] px-3 text-[15px] outline-none"
@@ -538,21 +583,24 @@ function OrderCard({
         </button>
       )}
 
+      {/* `aria-disabled`, não `disabled`: desligar o botão que acabou de ser
+          tocado mandava o foco para o <body> durante a confirmação, e o leitor
+          de tela nunca ouvia o "Confirmando". O clique ocupado não faz nada. */}
       <div className={`${noteOpen ? "mt-3" : "mt-1"} grid grid-cols-3 gap-2`}>
         <button
           type="button"
-          disabled={disabled}
-          onClick={() => run(() => onDecline(order))}
+          aria-disabled={disabled}
+          onClick={() => !disabled && run(() => onDecline(order))}
           aria-label={`Recusar pedido de ${name}`}
-          className="flex h-12 items-center justify-center rounded-full text-[13px] font-bold disabled:opacity-40"
+          className={`flex h-12 items-center justify-center rounded-full text-[13px] font-bold ${disabled ? "cursor-default opacity-40" : ""}`}
           style={{ background: "var(--sf-surface-2)", color: "var(--sf-text-muted)" }}
         >
           Recusar
         </button>
         <button
           type="button"
-          disabled={disabled}
-          onClick={() => run(() => onConfirm(order, note))}
+          aria-disabled={disabled}
+          onClick={() => !disabled && run(() => onConfirm(order, note))}
           aria-label={processing ? `Confirmando pedido de ${name}` : `Confirmar pedido de ${name}`}
           className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-full text-[13.5px] font-extrabold"
           // Ocupado: o preenchimento esmaece (§6), mas a tinta passa a ser a
@@ -597,9 +645,15 @@ type Notice = {
  * confirmação do terceiro card nascia 600px acima da tela e sumia sem ser vista.
  *
  * Recusado e vencido trazem o "Avisar no WhatsApp" com a mensagem pronta e
- * ficam até o vendedor fechar. Confirmado sai sozinho, mas não enquanto está
- * com o foco do teclado (quem navega por teclado ou leitor de tela lê no ritmo
- * dele) nem com o mouse em cima.
+ * ficam até o vendedor fechar. Confirmado sai sozinho, mas só depois que o
+ * vendedor SAI dele: enquanto o foco está no aviso (e ele vai para lá depois do
+ * toque em "Confirmar"), com o dedo ou o mouse em cima, o relógio não anda. Quem
+ * foi interrompido volta e o aviso ainda está lá; quem usa leitor de tela lê no
+ * ritmo dele.
+ *
+ * Confirmar não tem volta para o vendedor (estoque e venda já foram gravados),
+ * então o aviso entrega o caminho de volta: avisar a California, com o pedido
+ * já escrito na mensagem.
  */
 function OrderNotice({ notice, storeUrl, onClose }: { notice: Notice; storeUrl: string | null; onClose: () => void }) {
   const reduce = useReducedMotion();
@@ -607,10 +661,17 @@ function OrderNotice({ notice, storeUrl, onClose }: { notice: Notice; storeUrl: 
   const name = order.customers?.name?.trim() || "cliente";
   const boxRef = useRef<HTMLDivElement>(null);
   const actionRef = useRef<HTMLAnchorElement>(null);
+  const titleId = useId();
   const [paused, setPaused] = useState(false);
   const wa =
     kind === "declined" || kind === "expired"
       ? whatsappLink(order.customers?.whatsapp, customerMessage(kind, order, storeUrl))
+      : null;
+  const undoHref =
+    kind === "confirmed"
+      ? storeWhatsAppLink(
+          `Oi! Confirmei por engano o pedido ${orderRef(order.id)} de ${name} (${fmt(order.total_amount)}). Pode desfazer?`,
+        )
       : null;
 
   useEffect(() => {
@@ -652,25 +713,19 @@ function OrderNotice({ notice, storeUrl, onClose }: { notice: Notice; storeUrl: 
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0 }}
       tabIndex={-1}
-      role="group"
-      aria-label={copy[kind].title}
+      // Sem `role`/`aria-label`: o rótulo repetia o título, e o leitor de tela
+      // lia a frase duas vezes. Focado, o aviso é lido pelo conteúdo.
+      aria-labelledby={titleId}
       data-notice={notice.key}
-      onFocus={e => {
-        // Só o foco de TECLADO pausa: o foco que o próprio aviso recebe depois
-        // do toque em "Confirmar" não é `:focus-visible`, e pausar ali deixaria
-        // o aviso preso na tela do celular até o próximo toque.
-        const target = e.target as HTMLElement;
-        try {
-          if (target.matches(":focus-visible")) setPaused(true);
-        } catch {
-          /* navegador sem :focus-visible: não pausa */
-        }
-      }}
+      onFocus={() => setPaused(true)}
       onBlur={e => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
       }}
+      onPointerDown={() => setPaused(true)}
       onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseLeave={() => {
+        if (!boxRef.current?.contains(document.activeElement)) setPaused(false);
+      }}
       className="rounded-[20px] px-4 py-3 outline-none"
       style={
         good
@@ -692,10 +747,21 @@ function OrderNotice({ notice, storeUrl, onClose }: { notice: Notice; storeUrl: 
           {kind === "expired" ? <Clock size={15} /> : kind === "declined" ? <Ban size={15} /> : <Check size={16} strokeWidth={2.8} />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="break-words text-[13.5px] font-bold leading-snug">{copy[kind].title}</p>
+          <h3 id={titleId} className="break-words text-[13.5px] font-bold leading-snug">{copy[kind].title}</h3>
           <p className="text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
             {copy[kind].body}
           </p>
+          {undoHref && (
+            <a
+              href={undoHref}
+              target="_blank"
+              rel="noreferrer"
+              className="-my-1 inline-flex min-h-11 items-center text-xs font-bold underline underline-offset-4"
+              style={{ color: "var(--sf-text)" }}
+            >
+              Confirmou por engano? Avise a California
+            </a>
+          )}
         </div>
         <button
           type="button"
@@ -708,8 +774,16 @@ function OrderNotice({ notice, storeUrl, onClose }: { notice: Notice; storeUrl: 
         </button>
       </div>
       {wa && (
-        <div className="mt-2.5">
-          <WhatsAppPill href={wa} label={`Avisar ${firstName(name) || "o cliente"} no WhatsApp`} linkRef={actionRef} />
+        <div className={kind === "declined" ? "mt-2.5" : "mt-2 flex"}>
+          {/* Recusado: avisar é A ação que sobrou (cheia). Vencido: a mesma
+              pílula discreta da linha de vencido — duas caras para o mesmo
+              estado confundiam. */}
+          <WhatsAppPill
+            href={wa}
+            label={`Avisar ${firstName(name) || "o cliente"} no WhatsApp`}
+            linkRef={actionRef}
+            variant={kind === "declined" ? "solid" : "quiet"}
+          />
         </div>
       )}
     </motion.div>
@@ -799,24 +873,36 @@ function OpenGroupRow({
 /** O link da loja com copiar e compartilhar. O mesmo no card de boas-vindas e no sheet "Minha loja". */
 function StoreLinkPanel({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
+  // Navegador embutido do Instagram/WhatsApp costuma negar a área de
+  // transferência: a falha era muda e o vendedor achava que tinha copiado.
+  const [copyFailed, setCopyFailed] = useState(false);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url);
+      setCopyFailed(false);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
       setCopied(false);
+      setCopyFailed(true);
     }
   };
   return (
     <>
+      {/* `select-all`: um toque seleciona o link inteiro, o plano B quando o
+          copiar falha. */}
       <p
-        className="mt-3 break-all rounded-[14px] px-3 py-2.5 text-[13px] font-semibold"
+        className="mt-3 select-all break-all rounded-[14px] px-3 py-2.5 text-[13px] font-semibold"
         style={{ background: "var(--sf-surface-2)" }}
       >
         {url}
       </p>
+      {copyFailed && (
+        <p role="alert" className="mt-2 text-[12.5px] font-semibold leading-snug" style={{ color: "var(--sf-danger)" }}>
+          Não deu para copiar daqui. Toque no link acima e segure para copiar.
+        </p>
+      )}
       <div className="mt-3 flex gap-2">
         <button
           type="button"
@@ -897,7 +983,9 @@ const PILL_BUTTON_STYLE = { background: "var(--sf-surface)", border: "1px solid 
 
 type ListRow =
   | { type: "order"; key: string; createdAt: string; tail: boolean; order: Order }
-  | { type: "notice"; key: string; createdAt: string; tail: boolean; notice: Notice };
+  | { type: "notice"; key: string; createdAt: string; tail: boolean; notice: Notice }
+  /** Venceu com a tela fechada (`useRecentExpiredOrders`). */
+  | { type: "away"; key: string; createdAt: string; tail: true; order: Order };
 
 /* ------------------------------------------------------------------ */
 /* Página                                                               */
@@ -916,6 +1004,16 @@ export default function SellerSalesPage() {
     pendingOrders, loadingOrders, ordersError, processingOrder, fetchPendingOrders, confirmOrder, declineOrder,
   } = usePendingOrders({ storefront: true });
   const reduceMotion = useReducedMotion();
+  // Vencidos com a tela fechada: a lista só lê `pendente`, então sem isto eles
+  // não existiam para o vendedor (ver o hook).
+  const { expiredOrders: awayExpired, dismissExpired } = useRecentExpiredOrders(sellerId);
+  // Quando o vendedor pediu a lista de novo: é o que o erro repetido mostra, e
+  // o que diz que o "Tentar de novo" fez alguma coisa.
+  const [retriedAt, setRetriedAt] = useState<Date | null>(null);
+  const refreshOrders = () => {
+    setRetriedAt(new Date());
+    fetchPendingOrders();
+  };
 
   const [period, setPeriod] = useState<SellerPeriod>("month");
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -1039,16 +1137,22 @@ export default function SellerSalesPage() {
    * aviso de vencido, no fim — eles não têm mais o que decidir.
    */
   const rows = useMemo<ListRow[]>(() => {
+    // O que venceu com a tela fechada entra no fim, com os outros vencidos —
+    // menos o que a própria sessão já está mostrando (card ou aviso).
+    const shown = new Set([...pendingOrders.map(o => o.id), ...notices.map(n => n.order.id)]);
     const list: ListRow[] = [
       ...pendingOrders.map<ListRow>(o => ({ type: "order", key: o.id, createdAt: o.created_at, tail: isExpired(o), order: o })),
       ...notices.map<ListRow>(n => ({
         type: "notice", key: n.key, createdAt: n.order.created_at, tail: n.kind === "expired", notice: n,
       })),
+      ...awayExpired
+        .filter(o => !shown.has(o.id))
+        .map<ListRow>(o => ({ type: "away", key: `away-${o.id}`, createdAt: o.created_at, tail: true, order: o })),
     ];
     return list.sort(
       (a, b) => Number(a.tail) - Number(b.tail) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
-  }, [pendingOrders, notices, isExpired]);
+  }, [pendingOrders, notices, awayExpired, isExpired]);
 
   /**
    * Pedido que sai da lista sem passar por um gesto daqui (venceu na
@@ -1106,6 +1210,9 @@ export default function SellerSalesPage() {
 
   const handleConfirm = async (order: Order, note: string) => {
     handled.current.add(order.id);
+    // O rótulo do botão muda para "Confirmando", mas leitor de tela não anuncia
+    // troca de rótulo: a região viva diz.
+    setAnnouncement(`Confirmando pedido de ${order.customers?.name?.trim() || "cliente"}…`);
     const result = await confirmOrder(order.id, "pendente", note);
     if (result.ok) {
       setNotices(prev => [{ key: `confirmed-${order.id}`, kind: "confirmed", order, focus: true }, ...prev]);
@@ -1193,7 +1300,10 @@ export default function SellerSalesPage() {
 
       {/* O <main> ocupa a largura toda e a coluna mora DENTRO dele: com a coluna
           no próprio <main>, a roda do mouse nas margens do desktop não rolava. */}
-      <main className="flex-1 overflow-y-auto overscroll-contain">
+      {/* `scrollbar-gutter`: no desktop a barra de rolagem do <main> empurrava
+          a coluna para a esquerda, desalinhada da coluna do cabeçalho. Com o
+          espaço reservado dos dois lados, as duas ficam no mesmo eixo. */}
+      <main className="flex-1 overflow-y-auto overscroll-contain" style={{ scrollbarGutter: "stable both-edges" }}>
         <div className={`${COLUMN} px-5 pb-10 pt-1.5`}>
           <p className="sr-only" aria-live="polite">{announcement}</p>
 
@@ -1221,8 +1331,24 @@ export default function SellerSalesPage() {
           {/* Pedidos — antes de tudo: é o que pede uma ação agora. Não segue o
               mês (pedido pendente é de hoje). */}
           <section className="mt-4" aria-labelledby="pedidos-titulo">
-            <div id="pedidos-titulo" ref={ordersTitleRef} tabIndex={-1} className="outline-none">
-              <SectionTitle>{ordersTitle}</SectionTitle>
+            <div className="flex items-start justify-between gap-3">
+              <div id="pedidos-titulo" ref={ordersTitleRef} tabIndex={-1} className="min-w-0 outline-none">
+                <SectionTitle>{ordersTitle}</SectionTitle>
+              </div>
+              {/* A lista se atualiza sozinha a cada minuto, mas quem acabou de
+                  ouvir "mandei o pedido" não espera um minuto: aqui ele pede
+                  agora. Fora do rótulo da seção, para não entrar no nome dela. */}
+              {!ordersError && (
+                <button
+                  type="button"
+                  aria-disabled={loadingOrders}
+                  onClick={() => !loadingOrders && refreshOrders()}
+                  className="-mr-2 -mt-[11px] min-h-11 min-w-[92px] flex-none px-2 text-[12.5px] font-bold"
+                  style={{ color: "var(--sf-text-muted)" }}
+                >
+                  {loadingOrders ? "Atualizando…" : "Atualizar"}
+                </button>
+              )}
             </div>
             {waitingCount > 0 && (
               // Uma vez só, para a lista inteira — embaixo de cada card ela se
@@ -1240,7 +1366,20 @@ export default function SellerSalesPage() {
                       key={row.key}
                       notice={row.notice}
                       storeUrl={storeUrl}
-                      onClose={() => dismiss(row.key)}
+                      onClose={() => {
+                        // Fechar o aviso de vencido também vale como "já vi": ele
+                        // não volta pela busca de vencidos na próxima visita.
+                        if (row.notice.kind === "expired") dismissExpired(row.notice.order.id);
+                        dismiss(row.key);
+                      }}
+                    />
+                  ) : row.type === "away" ? (
+                    <ExpiredOrderRow
+                      key={row.key}
+                      order={row.order}
+                      storeUrl={storeUrl}
+                      away
+                      onDismiss={() => dismissExpired(row.order.id)}
                     />
                   ) : row.tail ? (
                     <ExpiredOrderRow key={row.key} order={row.order} storeUrl={storeUrl} />
@@ -1268,14 +1407,21 @@ export default function SellerSalesPage() {
               >
                 <p className="text-[13px]" style={{ color: "var(--sf-text-muted)" }}>
                   {ordersError}
+                  {/* Falhou de novo: a hora da tentativa é a prova de que o
+                      botão fez alguma coisa. */}
+                  {retriedAt && !loadingOrders && ` Última tentativa às ${format(retriedAt, "HH:mm")}.`}
                 </p>
                 <button
                   type="button"
-                  onClick={() => fetchPendingOrders()}
-                  className="mt-3 h-11 rounded-full px-5 text-[13px] font-extrabold"
-                  style={{ background: "var(--sf-accent)", color: "var(--sf-accent-ink)" }}
+                  aria-disabled={loadingOrders}
+                  onClick={() => !loadingOrders && refreshOrders()}
+                  className="mt-3 h-11 min-w-[148px] rounded-full px-5 text-[13px] font-extrabold"
+                  style={{
+                    background: loadingOrders ? "var(--sf-accent-soft)" : "var(--sf-accent)",
+                    color: loadingOrders ? "var(--sf-text)" : "var(--sf-accent-ink)",
+                  }}
                 >
-                  Tentar de novo
+                  {loadingOrders ? "Procurando…" : "Tentar de novo"}
                 </button>
               </div>
             ) : (
@@ -1371,6 +1517,18 @@ export default function SellerSalesPage() {
                             {monthStillOpen && ` Ainda há venda de ${monthName} em aberto: paga, ela conta para ${monthName}.`}
                           </p>
                         </>
+                      ) : commission.units === 0 ? (
+                        // Vendedor sem venda paga no mês (o novo, sobretudo):
+                        // "Faltam 11 unidades" sem a regra não ensinava nada. A
+                        // regra primeiro, a escada logo abaixo.
+                        <>
+                          <p className="text-[15px] font-extrabold leading-snug">
+                            Sua comissão começa em {COMMISSION_TIERS[0].label} e sobe com as unidades pagas do mês
+                          </p>
+                          <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                            {tierLadder(COMMISSION_TIERS)}.
+                          </p>
+                        </>
                       ) : nextTier && gap !== null ? (
                         <>
                           <p className="text-[15px] font-extrabold leading-snug">
@@ -1395,14 +1553,30 @@ export default function SellerSalesPage() {
                           Você está na faixa mais alta: {commission.tier.label}
                         </p>
                       )}
+                      {/* Sem conta para abrir, a escada não teria onde aparecer. */}
+                      {!hasLedger && commission.units > 0 && (
+                        <p className="mt-1.5 text-xs leading-snug" style={{ color: "var(--sf-text-muted)" }}>
+                          Faixas: {tierLadder(COMMISSION_TIERS)}. A faixa vale para todas as vendas pagas do mês.
+                        </p>
+                      )}
                     </div>
 
-                    {period === "month" && commission.pendingToReceive > 0.01 && gain > 0.01 && (
+                    {/* A projeção fala nas MESMAS duas contas do "A receber" lá
+                        embaixo e diz onde o saldo CHEGA, não quanto sobe: "R$ 445
+                        em aberto" não batia com R$ 360 + R$ 85, e um "+R$ 81"
+                        ao lado do "+R$ 25" da faixa parecia somar os dois. */}
+                    {period === "month" && gain > 0.01 && (clientTotal > 0.01 || withSellerTotal > 0.01) && (
                       <p className="mt-2.5 text-[13px] leading-snug" style={{ color: "var(--sf-text-muted)" }}>
-                        Quando receber os {fmt(commission.pendingToReceive)} em aberto, o saldo sobe{" "}
-                        <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>+{fmt(gain)}</span>
+                        {clientTotal > 0.01 && withSellerTotal > 0.01
+                          ? `Quando receber os ${fmt(clientTotal)} dos clientes e os ${fmt(withSellerTotal)} que estão com você, o saldo vai a `
+                          : clientTotal > 0.01
+                            ? `Quando receber os ${fmt(clientTotal)} dos clientes, o saldo vai a `
+                            : `Quando acertar os ${fmt(withSellerTotal)} que estão com você, o saldo vai a `}
+                        <span className="font-extrabold" style={{ color: "var(--sf-accent)" }}>
+                          {fmt(commission.projectedBalance)}
+                        </span>
                         {commission.projectedTier.rate > commission.tier.rate
-                          ? ` e você passa para ${commission.projectedTier.label}.`
+                          ? `, já em ${commission.projectedTier.label}.`
                           : "."}
                       </p>
                     )}
@@ -1446,10 +1620,23 @@ export default function SellerSalesPage() {
                                   value={commission.accrued}
                                   sign="+"
                                 />
-                                {commission.consumoTotal > 0.01 && (
+                                {/* Consumo (retirada de produto, pelo custo) e
+                                    dívida lançada (adiantamento, vale) são duas
+                                    coisas: "Adiantamento" dentro de "Seu consumo"
+                                    não dizia o que era. A soma das duas é o
+                                    `consumoTotal` do saldo, como antes. */}
+                                {commission.retiradasTotal > 0.01 && (
                                   <>
-                                    <LedgerLine label="Seu consumo" value={commission.consumoTotal} sign="−" />
-                                    {consumoEntries.map(e => (
+                                    <LedgerLine label="Seu consumo (pelo custo)" value={commission.retiradasTotal} sign="−" />
+                                    {consumoEntries.filter(e => e.kind === "retirada").map(e => (
+                                      <ConsumptionRow key={`${e.kind}-${e.id}`} entry={e} productLabel={productLabel} />
+                                    ))}
+                                  </>
+                                )}
+                                {commission.manualDebtsTotal > 0.01 && (
+                                  <>
+                                    <LedgerLine label="Dívidas lançadas" value={commission.manualDebtsTotal} sign="−" />
+                                    {consumoEntries.filter(e => e.kind === "divida").map(e => (
                                       <ConsumptionRow key={`${e.kind}-${e.id}`} entry={e} productLabel={productLabel} />
                                     ))}
                                   </>
@@ -1559,8 +1746,11 @@ export default function SellerSalesPage() {
                   </p>
                 ) : (
                   <>
+                    {/* Unidades e total, sem "N vendas": a contagem era de LINHAS
+                        de venda, e um pedido com prêmio vira duas. As unidades
+                        são as mesmas "un. pagas" da comissão, lá em cima. */}
                     <p className="-mt-1.5 mb-3 text-xs" style={{ color: "var(--sf-text-muted)" }}>
-                      {receivedSales.length === 1 ? "1 venda" : `${receivedSales.length} vendas`} · {receivedUnits} un. ·{" "}
+                      {receivedUnits} un. pagas ·{" "}
                       <span className="tabular-nums" style={{ color: "var(--sf-accent)" }}>{fmt(receivedTotal)}</span>
                     </p>
                     <div
@@ -1655,7 +1845,7 @@ export default function SellerSalesPage() {
                               <span className="font-bold" style={{ color: "var(--sf-text)" }}>
                                 {(() => {
                                   const free = Math.max(0, line.quantity - line.reserved);
-                                  return free === 1 ? "1 livre" : `${free} livres`;
+                                  return free === 0 ? "Nenhuma livre" : free === 1 ? "1 livre" : `${free} livres`;
                                 })()}
                               </span>{" "}
                               · {line.reserved} em pedido esperando

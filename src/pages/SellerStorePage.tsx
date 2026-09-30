@@ -6,6 +6,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { CSS_EASE_OUT, EASE_IN_OUT, EASE_OUT, fadeUp, stagger } from "@/lib/motion";
 import { formatPhoneDisplay, isValidPhone, onlyDigits } from "@/lib/phone";
 import { orderRef } from "@/lib/order-ref";
+import { storeWhatsAppLink } from "@/lib/store-contact";
 import { proxiedImage } from "@/lib/image-proxy";
 import { previewCartDiscount, type DiscountPreview } from "@/lib/cart-discount";
 
@@ -209,16 +210,9 @@ const ALL = "__all__";
  */
 const COMPANY = "California Company";
 
-/**
- * WhatsApp da loja (+55 51 9714-1255), só dígitos, no formato do wa.me. O
- * pedido finalizado vai direto para esta conversa, e o botão flutuante do
- * catálogo abre a mesma conversa para quem só quer tirar uma dúvida.
- */
-const STORE_WHATSAPP = "555197141255";
-
-function storeWhatsAppLink(text?: string) {
-  return `https://wa.me/${STORE_WHATSAPP}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
-}
+// O WhatsApp da loja (`storeWhatsAppLink`) mora em @/lib/store-contact: o
+// pedido finalizado vai direto para esta conversa, o botão flutuante do
+// catálogo abre a mesma, e a tela do vendedor também fala com ela.
 
 /**
  * Glifo do WhatsApp desenhado (o lucide não tem marcas). Pinta por

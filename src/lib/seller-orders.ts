@@ -1,6 +1,14 @@
 import type { Sale } from "@/types";
 
 /**
+ * A reserva do pedido, em horas. Espelha `order_reservation_ttl()` (24h) — o
+ * banco é quem recusa (`pedido_expirado`); a tela do vendedor só avisa antes
+ * ("vence em") e acha os vencidos pela mesma conta. Um número só aqui: estava
+ * escrito na tela e no hook de vencidos.
+ */
+export const RESERVATION_HOURS = 24;
+
+/**
  * Peças da tela do vendedor (/minhas-vendas) que são conta, não desenho —
  * aqui para o teste alcançar sem montar a página.
  */

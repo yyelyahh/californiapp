@@ -10,6 +10,7 @@ target_fingerprint: "sha256:783cc6af8d5833ca90a64f81631a3df988d90afaa6d3ffdfba24
 target_path: "C:\\Users\\base2\\Documents\\californiapp\\src\\pages\\SellerSalesPage.tsx"
 timestamp: 2026-09-30T14-18-43Z
 slug: src-pages-sellersalespage-tsx
+closed: true
 ---
 # Critique 3 — Minhas vendas (src/pages/SellerSalesPage.tsx)
 
