@@ -1,38 +1,41 @@
-import type { Expense, Sale, StockLoss } from "@/types";
+import type { Expense, Sale } from "@/types";
 
 /**
- * O resultado de um período — a conta ÚNICA de lucro do sistema.
+ * O resultado de um período — a conta ÚNICA de lucro do sistema, usada pelo
+ * Dashboard, pela Distribuição e pelo relatório em Excel.
  *
- * Dashboard, Distribuição e o relatório em Excel calculavam isso cada um do seu
- * jeito, e os três ignoravam duas saídas de dinheiro que o razão
- * (`financial_events`) sempre contou: as PERDAS e o que se gasta com os
- * VENDEDORES. O efeito mais visível era na Distribuição: o "distribuível aos
- * sócios" é o lucro menos o saldo devido aos vendedores, e pagar a comissão
- * zerava o saldo sem tirar nada do lucro — pagar comissão AUMENTAVA o que os
- * sócios podiam retirar.
+ * LUCRO LÍQUIDO = RECEBIDO − CPV da parte paga − DESPESAS. Decisões do dono:
  *
- * As regras são as do razão, perna por perna:
- * - receita e CPV só de `venda`; o CPV usa o custo CONGELADO na venda
- *   (`costOf`, que lê `sale_costs`), não o custo de hoje do produto — senão
- *   cada lote novo reescreveria o lucro dos meses passados;
- * - perda sai pelo custo gravado nela;
- * - CUSTO DOS VENDEDORES = comissão paga em dinheiro + consumo do vendedor
- *   (retirada) a custo − dívida que ele devolveu em dinheiro. A retirada é
- *   comissão paga em mercadoria: ela entra no saldo do vendedor pelo preço e
- *   custa à empresa o custo da unidade; quando ele paga em dinheiro, o saldo
- *   dele volta a subir e o dinheiro entra aqui como abatimento.
+ * - O LUCRO É DO RECEBIDO: venda em aberto ainda não deu lucro. A conta parte
+ *   do que já foi pago das vendas do período, e o CPV é só o da parte paga de
+ *   cada venda (custo × pago ÷ total; venda de valor zero conta o custo
+ *   inteiro). A margem é sempre sobre o recebido. A receita (vendido pelo
+ *   valor cheio) continua aqui para o faturamento, o ticket e a barra
+ *   recebido/a receber, mas não entra no lucro. O pagamento entra na data da
+ *   VENDA (não há data de pagamento), então quitar em setembro uma venda de
+ *   agosto sobe o lucro de agosto.
+ * - PERDAS não descontam.
+ * - VENDEDORES não descontam aqui: a comissão sai na Distribuição, pela
+ *   comissão APURADA do período (`computeSellerBalance().accrued`), uma vez
+ *   só. Antes o lucro descontava a comissão PAGA e a Distribuição o saldo a
+ *   pagar: a comissão de agosto paga em setembro pesava em agosto (saldo) e
+ *   de novo em setembro (pagamento). A retirada do vendedor é comissão paga em
+ *   mercadoria, então já está dentro da apurada.
+ * - Juro de empréstimo e pagamento a investidor são da sociedade, não da
+ *   operação de uma filial.
  *
- * O que NÃO entra: juro de empréstimo e pagamento a investidor, que são da
- * sociedade e não da operação de uma filial.
+ * O CPV usa o custo CONGELADO na venda (`costOf`, que lê `sale_costs`), não o
+ * custo de hoje do produto — senão cada lote novo reescreveria o lucro dos
+ * meses passados.
+ *
+ * O razão (`financial_events`) segue outra base (venda inteira, perdas e
+ * vendedores descontados): o lucro acumulado de lá não fecha com este.
  *
  * Testada em src/test/period-result.test.ts.
  */
 export type PeriodResultInput = {
   sales: Sale[];
   expenses: Expense[];
-  stockLosses: StockLoss[];
-  commissionPayments: { amount: number; date: string }[];
-  sellerDebtPayments: { amount: number; date: string }[];
   /** Custo UNITÁRIO da venda, congelado nela (ver `saleUnitCost` no StoreContext). */
   costOf: (sale: Sale) => number;
   inPeriod: (iso: string) => boolean;
@@ -45,23 +48,20 @@ export function computePeriodResult(input: PeriodResultInput) {
   const sum = <T,>(list: T[], f: (x: T) => number) => list.reduce((a, x) => a + f(x), 0);
 
   const sales = input.sales.filter(s => s.type === "venda" && inPeriod(s.date));
-  const withdrawals = input.sales.filter(s => s.type === "retirada_funcionario" && inPeriod(s.date));
 
   const revenue = sum(sales, s => s.totalPrice);
   const received = sum(sales, s => s.paidAmount || 0);
   const receivable = sum(sales, s => Math.max(0, s.totalPrice - (s.paidAmount || 0)));
-  const cogs = sum(sales, s => costOf(s) * s.quantity);
-  const grossProfit = revenue - cogs;
+  /** A fração já paga da venda, entre 0 e 1. */
+  const paidShare = (s: Sale) =>
+    s.totalPrice > 0 ? Math.min(1, Math.max(0, (s.paidAmount || 0) / s.totalPrice)) : 1;
+  /** CPV da parte PAGA — o custo do que já virou recebido. */
+  const cogs = sum(sales, s => costOf(s) * s.quantity * paidShare(s));
+  const grossProfit = received - cogs;
 
   const expenses = sum(input.expenses.filter(e => inPeriod(e.date)), e => e.amount);
-  const losses = sum(input.stockLosses.filter(l => inPeriod(l.date)), l => l.totalCost);
 
-  const commissionsPaid = sum(input.commissionPayments.filter(p => inPeriod(p.date)), p => p.amount);
-  const consumptionCost = sum(withdrawals, s => costOf(s) * s.quantity);
-  const debtReceived = sum(input.sellerDebtPayments.filter(p => inPeriod(p.date)), p => p.amount);
-  const sellerCost = commissionsPaid + consumptionCost - debtReceived;
-
-  const netProfit = grossProfit - expenses - losses - sellerCost;
+  const netProfit = grossProfit - expenses;
 
   return {
     sales,
@@ -71,15 +71,11 @@ export function computePeriodResult(input: PeriodResultInput) {
     receivable,
     cogs,
     grossProfit,
-    grossMargin: revenue > 0 ? (grossProfit / revenue) * 100 : 0,
+    /** Margens sobre o RECEBIDO, a mesma base do lucro. */
+    grossMargin: received > 0 ? (grossProfit / received) * 100 : 0,
     expenses,
-    losses,
-    commissionsPaid,
-    consumptionCost,
-    debtReceived,
-    sellerCost,
     netProfit,
-    netMargin: revenue > 0 ? (netProfit / revenue) * 100 : 0,
+    netMargin: received > 0 ? (netProfit / received) * 100 : 0,
     /** Faturamento ÷ quantidade de vendas — a mesma conta da tela de Vendas. */
     ticket: sales.length > 0 ? revenue / sales.length : 0,
   };

@@ -225,10 +225,9 @@ export default function Dashboard() {
   const computeStats = useMemo(() => {
     /**
      * O resultado sai de `computePeriodResult` (src/lib/period-result.ts), a
-     * MESMA conta da Distribuição e do relatório. Aqui o lucro líquido não
-     * descontava perdas nem o custo dos vendedores (comissão paga, consumo a
-     * custo) — o razão desconta os dois, e o Dashboard mostrava um lucro maior
-     * que o real. O CPV usa o custo congelado de cada venda (`saleUnitCost`).
+     * MESMA conta da Distribuição e do relatório: recebido − CPV − despesas
+     * (sem perdas nem vendedores; a comissão sai na Distribuição). O CPV usa
+     * o custo congelado de cada venda (`saleUnitCost`).
      *
      * Ticket médio = FATURAMENTO ÷ contagem de vendas, a conta da tela de
      * Vendas (`totals.ticket`); era recebido ÷ vendas, que caía justamente no
@@ -238,9 +237,6 @@ export default function Dashboard() {
       const result = computePeriodResult({
         sales: store.sales,
         expenses: store.expenses,
-        stockLosses: store.stockLosses,
-        commissionPayments: store.commissionPayments,
-        sellerDebtPayments: store.sellerDebtPayments,
         costOf: store.saleUnitCost,
         inPeriod: filterFn,
       });
@@ -248,7 +244,7 @@ export default function Dashboard() {
       const restock = store.stockEntries.filter(e => filterFn(e.date)).reduce((sum, e) => sum + e.totalCost, 0);
       return { ...result, restock };
     };
-  }, [store.sales, store.expenses, store.stockEntries, store.stockLosses, store.commissionPayments, store.sellerDebtPayments, store.saleUnitCost]);
+  }, [store.sales, store.expenses, store.stockEntries, store.saleUnitCost]);
 
   const isGeral = filter === GERAL;
 
@@ -447,6 +443,12 @@ export default function Dashboard() {
         monthLong: partial ? `${longLabel} · até o dia ${date.getDate()}` : longLabel,
         partial,
         receita: r.revenue,
+        // A base da margem: o lucro é do recebido (`computePeriodResult`).
+        recebido: r.received,
+        // O GRÁFICO desenha o lucro BRUTO (recebido − CPV), decisão do dono;
+        // o líquido segue aqui para a aba "Evolução 6 meses" do Excel.
+        lucroBruto: r.grossProfit,
+        margemBruta: r.grossMargin,
         lucro: r.netProfit,
         margem: r.netMargin,
         // O gráfico não desenha as de baixo; o relatório imprime. Ficam aqui
@@ -454,8 +456,6 @@ export default function Dashboard() {
         // como as duas leituras do mínimo já divergiram uma vez.
         cogs: r.cogs,
         despesas: r.expenses,
-        perdas: r.losses,
-        vendedores: r.sellerCost,
         vendas: r.salesCount,
         unidades: r.sales.reduce((sum, s) => sum + s.quantity, 0),
       });
@@ -478,24 +478,24 @@ export default function Dashboard() {
       return {
         ...m,
         receitaCheia: solid ? m.receita : null,
-        lucroCheio: solid ? m.lucro : null,
+        lucroCheio: solid ? m.lucroBruto : null,
         receitaParcial: dashed ? m.receita : null,
-        lucroParcial: dashed ? m.lucro : null,
+        lucroParcial: dashed ? m.lucroBruto : null,
       };
     });
   }, [monthlyData]);
   const partialMonth = monthlyData.find(m => m.partial);
 
   /**
-   * Margem dos seis meses do gráfico = lucro somado ÷ receita somada. Era a
-   * média simples das margens de cada mês: um mês fraco, de R$ 300 e margem
-   * −80%, pesava tanto quanto um de R$ 30 mil, e o número ao lado do gráfico
-   * não fechava com as duas curvas que ele resume.
+   * Margem dos seis meses do gráfico = lucro BRUTO somado ÷ RECEBIDO somado,
+   * a mesma conta da margem de cada mês no tooltip. Era a média
+   * simples das margens de cada mês: um mês fraco, de R$ 300 e margem −80%,
+   * pesava tanto quanto um de R$ 30 mil.
    */
   const sixMonthMargin = useMemo(() => {
-    const revenue = monthlyData.reduce((s, m) => s + m.receita, 0);
-    const profit = monthlyData.reduce((s, m) => s + m.lucro, 0);
-    return revenue > 0 ? (profit / revenue) * 100 : 0;
+    const received = monthlyData.reduce((s, m) => s + m.recebido, 0);
+    const profit = monthlyData.reduce((s, m) => s + m.lucroBruto, 0);
+    return received > 0 ? (profit / received) * 100 : 0;
   }, [monthlyData]);
 
   /**
@@ -804,7 +804,7 @@ export default function Dashboard() {
             <span className="h-0.5 w-3.5" style={{ background: "var(--nc-accent)" }} /> Receita
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-0.5 w-3.5" style={{ background: "var(--nc-profit)" }} /> Lucro líquido
+            <span className="h-0.5 w-3.5" style={{ background: "var(--nc-profit)" }} /> Lucro bruto
           </span>
           {/* O tracejado explicado na legenda, e não só no tooltip: quem não
               passa o mouse no último ponto também precisa saber que ele é
@@ -816,7 +816,7 @@ export default function Dashboard() {
             </span>
           )}
           <span className="pl-3" style={{ borderLeft: "1px solid var(--nc-divider)" }}>
-            Margem em 6 meses{" "}
+            Margem bruta em 6 meses{" "}
             <strong className="nc-num font-semibold" style={{ color: "var(--nc-text)" }}>
               {formatPct(sixMonthMargin)}
             </strong>
@@ -876,15 +876,28 @@ export default function Dashboard() {
                         <span style={{ color: "var(--nc-text-2)" }}>Receita</span>
                         <span className="nc-num font-semibold" style={{ color: CHART_REVENUE }}>{formatCurrency(d.receita)}</span>
                       </p>
+                      {/* O recebido não tem curva, mas é a base do lucro e da
+                          margem logo abaixo: sem ele aqui, a margem não se
+                          confere contra nenhum número do tooltip. */}
                       <p className="flex items-center justify-between gap-4">
-                        <span style={{ color: "var(--nc-text-2)" }}>Lucro líquido</span>
-                        <span className="nc-num font-semibold" style={{ color: d.lucro >= 0 ? CHART_PROFIT : CHART_LOSS }}>
-                          {formatCurrency(d.lucro)}
+                        <span style={{ color: "var(--nc-text-2)" }}>Recebido</span>
+                        <span className="nc-num font-semibold" style={{ color: "var(--nc-ok)" }}>{formatCurrency(d.recebido)}</span>
+                      </p>
+                      {/* Recebido − CPV = lucro bruto, na ordem da conta: a
+                          curva verde se confere linha a linha aqui. */}
+                      <p className="flex items-center justify-between gap-4">
+                        <span style={{ color: "var(--nc-text-2)" }}>− CPV</span>
+                        <span className="nc-num font-semibold">{formatCurrency(d.cogs)}</span>
+                      </p>
+                      <p className="flex items-center justify-between gap-4">
+                        <span style={{ color: "var(--nc-text-2)" }}>Lucro bruto</span>
+                        <span className="nc-num font-semibold" style={{ color: d.lucroBruto >= 0 ? CHART_PROFIT : CHART_LOSS }}>
+                          {formatCurrency(d.lucroBruto)}
                         </span>
                       </p>
                       <p className="nc-rule-top mt-1 flex items-center justify-between gap-4 pt-1">
-                        <span style={{ color: "var(--nc-text-2)" }}>Margem</span>
-                        <span className="nc-num font-semibold">{formatPct(d.margem)}</span>
+                        <span style={{ color: "var(--nc-text-2)" }}>Margem bruta</span>
+                        <span className="nc-num font-semibold">{formatPct(d.margemBruta)}</span>
                       </p>
                     </div>
                   </div>
@@ -892,11 +905,11 @@ export default function Dashboard() {
               }}
             />
             <Area type="monotone" dataKey="receitaCheia" stroke={CHART_REVENUE} strokeWidth={2} fill="url(#gradReceita)" name="Receita" />
-            <Area type="monotone" dataKey="lucroCheio" stroke={CHART_PROFIT} strokeWidth={2} fill="url(#gradLucro)" name="Lucro Líquido" />
+            <Area type="monotone" dataKey="lucroCheio" stroke={CHART_PROFIT} strokeWidth={2} fill="url(#gradLucro)" name="Lucro bruto" />
             {/* O trecho do mês em curso: mesma cor, traço interrompido e
                 preenchimento pela metade. */}
             <Area type="monotone" dataKey="receitaParcial" stroke={CHART_REVENUE} strokeWidth={2} strokeDasharray="4 4" fill="url(#gradReceita)" fillOpacity={0.5} name="Receita (parcial)" />
-            <Area type="monotone" dataKey="lucroParcial" stroke={CHART_PROFIT} strokeWidth={2} strokeDasharray="4 4" fill="url(#gradLucro)" fillOpacity={0.5} name="Lucro Líquido (parcial)" />
+            <Area type="monotone" dataKey="lucroParcial" stroke={CHART_PROFIT} strokeWidth={2} strokeDasharray="4 4" fill="url(#gradLucro)" fillOpacity={0.5} name="Lucro bruto (parcial)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -1021,7 +1034,7 @@ export default function Dashboard() {
             {/* A base da comparação ESCRITA, não num `title`: "+12%" sem dizer
                 contra o quê é número que não se explica. */}
             <span className="nc-num text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>
-              margem {formatPct(periodStats.netMargin)}
+              margem {formatPct(periodStats.netMargin)} do recebido
               {profitDelta && <> · <Delta delta={profitDelta} /> vs {profitDelta.label}</>}
             </span>
           </div>
@@ -1148,18 +1161,23 @@ export default function Dashboard() {
         <h2 className={cn(EYEBROW, "font-normal font-normal")} style={{ color: "var(--nc-text-3)" }}>Resultado</h2>
         <ScopeTag>{periodTag}</ScopeTag>
       </div>
-      {/* A conta começa na receita. Ela morava no bloco "Receita", logo acima
-          no trilho; com ele virando a faixa do veredito, o Resultado passou a
-          abrir com "− CPV" sem dizer de onde se subtrai. */}
+      {/* A conta começa no RECEBIDO: o lucro é do que já entrou
+          (`computePeriodResult`). A receita cheia mora no Resumo; abrir aqui
+          com ela faria "receita − CPV" não fechar com o lucro bruto. */}
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Receita</span>
-        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.revenue)}</span>
+        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>Recebido</span>
+        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.received)}</span>
       </div>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− CPV</span>
-        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.cogs)}</span>
+      <div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− CPV</span>
+          <span className="nc-num text-sm">{formatCurrencyShort(periodStats.cogs)}</span>
+        </div>
+        <span className="block text-[11px]" style={{ color: "var(--nc-text-3)" }}>
+          custo da parte paga das vendas
+        </span>
       </div>
-      {/* Subtotal da conta: receita − CPV. Era um bloco à parte, com ícone,
+      {/* Subtotal da conta: recebido − CPV. Era um bloco à parte, com ícone,
           para um número que se lê aqui, no meio da mesma subtração, e cuja
           margem já estava no rodapé deste bloco. */}
       <div className="flex items-baseline justify-between gap-2">
@@ -1178,29 +1196,14 @@ export default function Dashboard() {
           <Delta delta={delta(periodStats.expenses, prevStats?.stats.expenses)} invert />
         </span>
       </div>
-      {/* As duas saídas que o lucro daqui não contava e o razão sempre contou.
-          Sem elas na tela, o "Lucro líquido" embaixo não fecharia com as
-          linhas de cima. */}
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Perdas</span>
-        <span className="nc-num text-sm">{formatCurrencyShort(periodStats.losses)}</span>
-      </div>
-      {/* A composição fica escrita embaixo: era um `title`, e "Vendedores" é
-          a única linha da conta que não se explica pelo nome. */}
-      <div>
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[12.5px]" style={{ color: "var(--nc-text-2)" }}>− Vendedores</span>
-          <span className="nc-num text-sm">{formatCurrencyShort(periodStats.sellerCost)}</span>
-        </div>
-        <span className="block text-[11px]" style={{ color: "var(--nc-text-3)" }}>
-          comissão paga + consumo a custo − dívida devolvida
-        </span>
-      </div>
+      {/* Sem "− Perdas" e sem "− Vendedores": o lucro não desconta nenhum dos
+          dois (decisão do dono; a comissão sai na Distribuição, pela apurada
+          do período). Linha subtraída aqui que não sai do lucro faria a conta
+          não fechar. */}
       <div className="nc-rule-top flex items-baseline justify-between gap-2 pt-2.5">
         <span className="text-[12.5px]">Lucro líquido</span>
-        {/* Lucro em --nc-profit, a MESMA cor da série "Lucro líquido" do
-            gráfico e da legenda dele — o mesmo número em duas peças da mesma
-            tela não pode ter duas cores. Estava em --nc-accent, que é a cor da
+        {/* Lucro em --nc-profit, a cor de lucro da tela (a série de lucro
+            bruto do gráfico usa a mesma). Estava em --nc-accent, que é a cor da
             RECEITA (a série de cima no gráfico, a barra do recebido): as duas
             pontas da conta saíam iguais justamente onde a tela existe para
             separá-las. Prejuízo continua em --nc-crit, que é o mesmo #F09595
@@ -1215,7 +1218,7 @@ export default function Dashboard() {
         </span>
       </div>
       <div className="flex items-baseline justify-between gap-2 text-[11.5px] nc-num" style={{ color: "var(--nc-text-3)" }}>
-        <span>margem líquida</span>
+        <span>margem líquida do recebido</span>
         <span>{formatPct(periodStats.netMargin)}</span>
       </div>
     </div>

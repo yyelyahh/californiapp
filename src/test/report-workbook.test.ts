@@ -72,7 +72,7 @@ function input(over: Partial<ReportInput> = {}): ReportInput {
     dividends: [],
     financialEvents: [],
     modelStats: [],
-    monthly: [{ monthLong: "Setembro/2026", receita: 300, cogs: 120, despesas: 800, perdas: 0, vendedores: 0, lucro: -620, margem: -206.7, vendas: 2, unidades: 3 }],
+    monthly: [{ monthLong: "Setembro/2026", receita: 300, recebido: 200, cogs: 80, despesas: 800, lucro: -680, margem: -340, vendas: 2, unidades: 3 }],
     position: {
       cash: 1234.5, inventory: 400, receivables: 100, partnerCapital: 0,
       loansOutstanding: 600, accumulatedProfit: 180, distributedProfit: 300, retainedEarnings: -120,
@@ -184,12 +184,14 @@ describe("buildReport — Resumo", () => {
   const resumo = find(buildReport(input()), "Resumo");
   const value = (label: string) => resumo.rows.find(r => r[0] === label)?.[1];
 
-  it("soma a receita e o lucro do período", () => {
+  it("soma a receita, e o lucro sai só do recebido", () => {
     expect(value("Receita")).toBe(300);
-    expect(value("CPV (custo dos produtos vendidos)")).toBe(120);
-    expect(value("Lucro bruto")).toBe(180);
+    // v2 (R$ 100) está em aberto: o custo dela ainda não entra.
+    expect(value("CPV (custo dos produtos vendidos)")).toBe(80);
+    expect(value("Lucro bruto")).toBe(120);
     expect(value("Despesas")).toBe(800);
-    expect(value("Lucro líquido")).toBe(-620);
+    expect(value("Lucro líquido")).toBe(-680);
+    expect(value("Margem líquida (%)")).toBe(-340);
   });
 
   it("separa o que já entrou do que falta", () => {

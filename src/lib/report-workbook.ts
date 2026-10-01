@@ -74,11 +74,11 @@ export interface ReportSheet {
 export interface MonthlyRow {
   monthLong: string;
   receita: number;
+  /** A base do lucro e da margem (ver period-result). */
+  recebido: number;
+  /** CPV da parte paga. */
   cogs: number;
   despesas: number;
-  perdas: number;
-  /** Comissão paga + consumo a custo − dívida devolvida (ver period-result). */
-  vendedores: number;
   lucro: number;
   margem: number;
   vendas: number;
@@ -268,11 +268,8 @@ export function buildReport(input: ReportInput): ReportSheet[] {
   const sum = <T,>(list: T[], f: (x: T) => number) => list.reduce((a, x) => a + f(x), 0);
 
   // A MESMA conta de resultado do Dashboard e da Distribuição
-  // (src/lib/period-result.ts). O relatório fazia a sua, sem perdas nem
-  // custo dos vendedores, e o "Lucro líquido" da planilha discordava do razão.
-  const result = computePeriodResult({
-    sales, expenses, stockLosses, commissionPayments, sellerDebtPayments, costOf, inPeriod,
-  });
+  // (src/lib/period-result.ts) — o relatório já fez a sua e discordou da tela.
+  const result = computePeriodResult({ sales, expenses, costOf, inPeriod });
   const { revenue, received, receivable, cogs, grossProfit, netProfit } = result;
   const expensesTotal = result.expenses;
 
@@ -338,10 +335,9 @@ export function buildReport(input: ReportInput): ReportSheet[] {
 
   /* ---------------- Sócios ---------------- */
   const totalPartnerPct = sum(partners, p => p.percentage || 0);
-  // Igual à Distribuição: lucro − pagamentos a investidor − saldo devido aos
-  // vendedores. O relatório não descontava o investidor e dava um alvo maior
-  // que o da tela.
-  const distributable = Math.max(0, netProfit - sum(periodDividends, d => d.amount) - commissionPayable);
+  // Igual à Distribuição: lucro − pagamentos a investidor − comissão APURADA
+  // no período (paga ou não, uma vez só).
+  const distributable = Math.max(0, netProfit - sum(periodDividends, d => d.amount) - commissionAccrued);
   const partnerRows = partners.map(partner => {
     const mine = proLaborePayments.filter(w => w.partnerId === partner.id);
     const periodAmt = sum(mine.filter(w => inPeriod(w.date)), w => w.amount);
@@ -375,14 +371,12 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     ["Receita", money(revenue), "Vendas do período pelo valor cheio"],
     ["Recebido", money(received), "A parte da receita que já entrou"],
     ["A receber", money(receivable), "O que falta entrar dessas vendas"],
-    ["CPV (custo dos produtos vendidos)", money(cogs), ""],
-    ["Lucro bruto", money(grossProfit), "Receita − CPV"],
-    ["Margem bruta (%)", pct(revenue > 0 ? (grossProfit / revenue) * 100 : 0), ""],
+    ["CPV (custo dos produtos vendidos)", money(cogs), "Custo da parte paga das vendas"],
+    ["Lucro bruto", money(grossProfit), "Recebido − CPV"],
+    ["Margem bruta (%)", pct(result.grossMargin), "Sobre o recebido"],
     ["Despesas", money(expensesTotal), ""],
-    ["Perdas", money(result.losses), "Pelo custo gravado na perda"],
-    ["Custo dos vendedores", money(result.sellerCost), "Comissão paga + consumo a custo − dívida devolvida"],
-    ["Lucro líquido", money(netProfit), "Lucro bruto − despesas − perdas − vendedores"],
-    ["Margem líquida (%)", pct(revenue > 0 ? (netProfit / revenue) * 100 : 0), ""],
+    ["Lucro líquido", money(netProfit), "Lucro bruto − despesas (perdas e vendedores não entram)"],
+    ["Margem líquida (%)", pct(result.netMargin), "Sobre o recebido"],
     ["Ticket médio", money(periodSales.length > 0 ? revenue / periodSales.length : 0), "Receita ÷ nº de vendas"],
     ["Vendas (qtd.)", periodSales.length, ""],
     ["Unidades vendidas", sum(periodSales, s => s.quantity), ""],
@@ -402,7 +396,7 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     ["Saldo a pagar aos vendedores", money(commissionPayable), "Soma dos saldos positivos"],
     [],
     section("SÓCIOS E CAPITAL NO PERÍODO"),
-    ["Distribuível", money(distributable), "Lucro líquido − saldo dos vendedores"],
+    ["Distribuível", money(distributable), "Lucro líquido − investidores − comissão apurada"],
     ["Pró-labore e retiradas pagas", money(sum(periodProLabore, p => p.amount)), ""],
     ["Aportes recebidos", money(sum(periodContributions, c => c.amount)), ""],
     ["Empréstimos pagos (principal)", money(sum(periodLoanPayments, p => p.principalAmount)), ""],
@@ -450,13 +444,13 @@ export function buildReport(input: ReportInput): ReportSheet[] {
     scope: "proprio",
     autofilter: true,
     rows: [
-      ["Mês", "Receita", "CPV", "Lucro bruto", "Despesas", "Perdas", "Vendedores", "Lucro líquido", "Margem (%)", "Vendas", "Unidades"],
+      ["Mês", "Receita", "Recebido", "CPV do recebido", "Lucro bruto", "Despesas", "Lucro líquido", "Margem s/ recebido (%)", "Vendas", "Unidades"],
       ...monthly.map(m => [
-        m.monthLong, money(m.receita), money(m.cogs), money(m.receita - m.cogs),
-        money(m.despesas), money(m.perdas), money(m.vendedores), money(m.lucro), pct(m.margem), m.vendas, m.unidades,
+        m.monthLong, money(m.receita), money(m.recebido), money(m.cogs), money(m.recebido - m.cogs),
+        money(m.despesas), money(m.lucro), pct(m.margem), m.vendas, m.unidades,
       ]),
     ],
-    widths: [16, 14, 14, 14, 14, 12, 12, 14, 12, 10, 10],
+    widths: [16, 14, 14, 16, 14, 14, 14, 20, 10, 10],
   });
 
   /* ---------------- Vendas ---------------- */

@@ -9,23 +9,43 @@ const sale = (id: string, over: Partial<Sale> = {}): Sale => ({
 });
 
 const base = (over: Partial<PeriodResultInput> = {}): PeriodResultInput => ({
-  sales: [], expenses: [], stockLosses: [], commissionPayments: [], sellerDebtPayments: [],
+  sales: [], expenses: [],
   costOf: () => 68,
   inPeriod: (iso) => iso.startsWith("2026-09"),
   ...over,
 });
 
 describe("computePeriodResult", () => {
-  it("lucro = receita − CPV − despesas − perdas − custo dos vendedores", () => {
+  it("lucro = recebido − CPV − despesas", () => {
     const r = computePeriodResult(base({
       sales: [sale("v1"), sale("v2")],
       expenses: [{ id: "e1", description: "frete", category: "Frete", amount: 20, date: "2026-09-02T12:00:00" }],
-      stockLosses: [{ id: "l1", productId: "p1", quantity: 1, unitCost: 68, totalCost: 68, date: "2026-09-03T12:00:00" }],
-      commissionPayments: [{ amount: 30, date: "2026-09-20T12:00:00" }],
     }));
     expect(r.revenue).toBe(300);
     expect(r.cogs).toBe(136);
-    expect(r.netProfit).toBe(300 - 136 - 20 - 68 - 30);
+    expect(r.netProfit).toBe(300 - 136 - 20);
+  });
+
+  it("lucro e margem são do RECEBIDO: venda em aberto não dá lucro nem custo", () => {
+    const r = computePeriodResult(base({
+      sales: [
+        sale("paga"),
+        sale("aberta", { paidAmount: 0 }),
+        sale("metade", { paidAmount: 75 }),
+      ],
+    }));
+    expect(r.revenue).toBe(450);
+    expect(r.received).toBe(225);
+    // 68 inteiro da paga + 34 da metade; a aberta não entra.
+    expect(r.cogs).toBe(102);
+    expect(r.grossProfit).toBe(123);
+    expect(r.netMargin).toBeCloseTo((123 / 225) * 100);
+  });
+
+  it("venda de valor zero conta o custo inteiro", () => {
+    const r = computePeriodResult(base({ sales: [sale("brinde", { totalPrice: 0, unitPrice: 0, paidAmount: 0 })] }));
+    expect(r.cogs).toBe(68);
+    expect(r.netMargin).toBe(0);
   });
 
   it("o CPV usa o custo da VENDA (congelado), não um custo único do produto", () => {
@@ -36,30 +56,21 @@ describe("computePeriodResult", () => {
     expect(r.cogs).toBe(135);
   });
 
-  it("retirada é comissão paga em mercadoria: custa o custo da unidade, não entra na receita", () => {
+  it("retirada de vendedor não mexe no lucro: ela sai como comissão, na Distribuição", () => {
     const r = computePeriodResult(base({
       sales: [sale("r1", { type: "retirada_funcionario", paidAmount: 0 })],
     }));
     expect(r.revenue).toBe(0);
-    expect(r.consumptionCost).toBe(68);
-    expect(r.netProfit).toBe(-68);
-  });
-
-  it("dívida de vendedor recebida em dinheiro abate o custo dos vendedores", () => {
-    const r = computePeriodResult(base({
-      sales: [sale("r1", { type: "retirada_funcionario", paidAmount: 0 })],
-      sellerDebtPayments: [{ amount: 150, date: "2026-09-15T12:00:00" }],
-    }));
-    // Vendeu ao vendedor por 150 o que custou 68.
-    expect(r.netProfit).toBe(82);
+    expect(r.cogs).toBe(0);
+    expect(r.netProfit).toBe(0);
   });
 
   it("fora do período não entra", () => {
     const r = computePeriodResult(base({
       sales: [sale("ago", { date: "2026-08-31T12:00:00" })],
-      commissionPayments: [{ amount: 30, date: "2026-08-31T12:00:00" }],
+      expenses: [{ id: "e1", description: "frete", category: "Frete", amount: 20, date: "2026-08-31T12:00:00" }],
     }));
     expect(r.revenue).toBe(0);
-    expect(r.sellerCost).toBe(0);
+    expect(r.expenses).toBe(0);
   });
 });

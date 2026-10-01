@@ -96,7 +96,7 @@ export default function CommissionsPage() {
   const {
     sellers, partners, sales, expenses, products, productAssignments, dividends,
     commissionPayments, proLaborePayments, sellerDebtPayments, sellerManualDebts,
-    stockLosses, saleUnitCost,
+    saleUnitCost,
     addCommissionPayment, addProLaborePayment,
     deleteCommissionPayment, deleteProLaborePayment,
     addSellerDebtPayment, addSellerManualDebt,
@@ -164,14 +164,10 @@ export default function CommissionsPage() {
   const periodMetrics = useMemo(() => {
     // Índice de produtos para lookups O(1) dentro dos loops.
     // === LUCRO DO PERÍODO — a MESMA conta do Dashboard e do relatório ===
-    // (src/lib/period-result.ts). Ela desconta o custo dos vendedores, e é isso
-    // que conserta o distribuível: antes o lucro daqui ignorava a comissão
-    // PAGA, então pagar a comissão zerava o saldo devido sem tirar nada do
-    // lucro — e o "distribuível aos sócios" SUBIA justamente quando o dinheiro
-    // saía. Agora pagar comissão tira o mesmo valor do lucro e do saldo, e o
-    // distribuível não se mexe.
+    // (src/lib/period-result.ts): recebido − CPV − despesas. Os vendedores
+    // NÃO saem do lucro; saem aqui embaixo, no distribuível.
     const result = computePeriodResult({
-      sales, expenses, stockLosses, commissionPayments, sellerDebtPayments,
+      sales, expenses,
       costOf: saleUnitCost,
       inPeriod,
     });
@@ -196,7 +192,13 @@ export default function CommissionsPage() {
     const totalSellerBalance = perSeller.reduce((a, x) => a + Math.max(0, x.balance), 0);
 
     // === Distribuível aos sócios ===
-    const distribuivel = Math.max(0, netProfit - totalSellerBalance);
+    // Desconta a comissão APURADA do período (a que os vendedores ganharam
+    // nele, paga ou não), uma vez só. Não o saldo a pagar: com o saldo, pagar
+    // a comissão fazia o distribuível SUBIR, e a de agosto paga em setembro
+    // pesava nos dois meses. A retirada do vendedor é comissão paga em
+    // mercadoria: já está dentro da apurada.
+    const periodCommission = perSeller.reduce((a, x) => a + x.accrued, 0);
+    const distribuivel = Math.max(0, netProfit - periodCommission);
     const totalPartnerPct = partners.reduce((a, p) => a + (p.percentage || 0), 0);
 
     // === Retiradas dos sócios ===
@@ -216,11 +218,11 @@ export default function CommissionsPage() {
 
     return {
       revenue, cogs, grossProfit, periodExpenses, periodInvestorPayments, netProfit,
-      periodLosses: result.losses, periodSellerCost: result.sellerCost,
+      periodCommission,
       perSeller, totalSellerBalance, priorPayableSum, periodPayableSum,
       perPartner, totalWithdrawalsPeriod, distribuivel,
     };
-  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, stockLosses, saleUnitCost, period, start, end, closedStart, closedEnd, PROJECT_START]);
+  }, [sales, expenses, sellers, partners, commissionPayments, withdrawals, sellerDebtPayments, sellerManualDebts, dividends, products, saleUnitCost, period, start, end, closedStart, closedEnd, PROJECT_START]);
 
   /**
    * A lista de vendedores mostra os ATIVOS. Arquivado só aparece com o botão
@@ -822,11 +824,14 @@ export default function CommissionsPage() {
           ) : (
             <>
               <div className="mt-1.5 flex h-[5px] gap-0.5">
-                <div style={{ flex: Math.max(periodMetrics.totalSellerBalance, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
+                <div style={{ flex: Math.max(periodMetrics.periodCommission, 0.001), background: "var(--nc-alert)", borderRadius: 2 }} />
                 <div style={{ flex: Math.max(periodMetrics.distribuivel, 0.001), background: "var(--nc-accent)", borderRadius: 2 }} />
               </div>
+              {/* Comissão GANHA no período (paga ou não) + sócios = o lucro
+                  líquido. O que falta pagar aos vendedores é outra pergunta e
+                  mora no card de vendedores. */}
               <div className="nc-num mt-1.5 flex justify-between gap-2 text-[11px]" style={{ color: "var(--nc-text-2)" }}>
-                <span style={{ color: "var(--nc-alert)" }}>vendedores {formatCurrencyShort(periodMetrics.totalSellerBalance)}</span>
+                <span style={{ color: "var(--nc-alert)" }}>comissão {formatCurrencyShort(periodMetrics.periodCommission)}</span>
                 <span>sócios {formatCurrencyShort(periodMetrics.distribuivel)}</span>
               </div>
             </>
@@ -854,20 +859,16 @@ export default function CommissionsPage() {
               />
             </span>
           </div>
-          {/* O que já saiu do lucro antes da divisão. "Vendedores" é comissão
-              paga + consumo a custo − dívida devolvida: é por ele estar aqui
-              que pagar comissão não aumenta mais o distribuível. */}
+          {/* O que já saiu do lucro antes da divisão. A comissão não está
+              aqui: ela é a parte "comissão" da barra acima. */}
           <div
             className="nc-num flex items-baseline justify-between gap-2 text-[11.5px]"
             style={{ color: "var(--nc-text-3)" }}
-            title={`Despesas ${formatCurrencyShort(periodMetrics.periodExpenses)} · perdas ${formatCurrencyShort(periodMetrics.periodLosses)} · vendedores ${formatCurrencyShort(periodMetrics.periodSellerCost)} · investidores ${formatCurrencyShort(periodMetrics.periodInvestorPayments)}`}
+            title={`Despesas ${formatCurrencyShort(periodMetrics.periodExpenses)} · investidores ${formatCurrencyShort(periodMetrics.periodInvestorPayments)}`}
           >
-            <span>despesas, perdas, vendedores e investidores</span>
+            <span>despesas e investidores</span>
             <span>
-              {formatCurrencyShort(
-                periodMetrics.periodExpenses + periodMetrics.periodLosses
-                + periodMetrics.periodSellerCost + periodMetrics.periodInvestorPayments,
-              )}
+              {formatCurrencyShort(periodMetrics.periodExpenses + periodMetrics.periodInvestorPayments)}
             </span>
           </div>
         </div>
