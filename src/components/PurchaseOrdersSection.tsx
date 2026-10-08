@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
-import { Plus, Trash2, Truck, PackageCheck, History } from "lucide-react";
+import { Plus, Trash2, Truck, PackageCheck, History, Pencil } from "lucide-react";
 import { todayDateString, formatDateBR } from "@/lib/date-utils";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -42,10 +42,11 @@ const INSET_BOX: React.CSSProperties = {
  * Aguardando recebimento sai em `--nc-alert` — é o mesmo papel do "a receber"
  * do painel: já saiu dinheiro, ainda não chegou a mercadoria.
  */
-function OrderRow({ order, onReceive, onDelete }: {
+function OrderRow({ order, onReceive, onDelete, onEdit }: {
   order: PurchaseOrder;
   onReceive?: (o: PurchaseOrder) => void;
   onDelete?: (id: string) => void;
+  onEdit?: (o: PurchaseOrder) => void;
 }) {
   const isPending = order.status === "pending";
   const total = order.items.reduce((s, it) => s + it.unitPrice * it.expectedQuantity, 0) + order.freightCost;
@@ -68,6 +69,9 @@ function OrderRow({ order, onReceive, onDelete }: {
         <div className="flex flex-none items-center gap-1.5">
           {isPending && onReceive && onDelete ? (
             <>
+              {onEdit && <NcButton variant="ghost" size="icon" title={`Editar compra #${order.number}`} aria-label={`Editar compra #${order.number}`} onClick={() => onEdit(order)}>
+                <Pencil size={13} />
+              </NcButton>}
               <NcButton variant="outline" onClick={() => onReceive(order)}>
                 <Truck size={13} />Receber
               </NcButton>
@@ -118,7 +122,7 @@ function OrderRow({ order, onReceive, onDelete }: {
 const emptyItem = (): DraftItem => ({ brand: "", brandNew: "", model: "", modelNew: "", quantity: "", unitPrice: "" });
 
 export default function PurchaseOrdersSection() {
-  const { products, purchaseOrders, addPurchaseOrder, deletePurchaseOrder, receivePurchaseOrder } = useStore();
+  const { products, purchaseOrders, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, receivePurchaseOrder } = useStore();
   const { branches, branchId } = useBranch();
   /** Filial padrão de uma linha nova: a ativa; em "Todas", a primeira da lista.
    *  A compra pode ser recebida em "Todas" de propósito — ela é central, e a
@@ -127,6 +131,7 @@ export default function PurchaseOrdersSection() {
   const confirm = useConfirm();
 
   const [newOpen, setNewOpen] = useState(false);
+  const [editing, setEditing] = useState<PurchaseOrder | null>(null);
   const [date, setDate] = useState(todayDateString());
   const [notes, setNotes] = useState("");
   const [freightNew, setFreightNew] = useState("");
@@ -168,7 +173,26 @@ export default function PurchaseOrdersSection() {
    */
   const [draftFrom, setDraftFrom] = useState<number | null>(null);
 
-  const resetNew = () => { setDate(todayDateString()); setNotes(""); setFreightNew(""); setItems([emptyItem()]); setDraftFrom(null); };
+  const resetNew = () => { setEditing(null); setDate(todayDateString()); setNotes(""); setFreightNew(""); setItems([emptyItem()]); setDraftFrom(null); };
+
+  const openEdit = (order: PurchaseOrder) => {
+    if (order.status !== "pending") return;
+    setEditing(order);
+    setDate(order.date);
+    setNotes(order.notes ?? "");
+    setFreightNew(String(order.freightCost));
+    setDraftFrom(null);
+    setItems(order.items.map(item => {
+      const knownBrand = brands.includes(item.brand);
+      const knownModel = knownBrand && modelsFor(item.brand).includes(item.model);
+      return {
+        brand: knownBrand ? item.brand : "__new__", brandNew: knownBrand ? "" : item.brand,
+        model: knownModel ? item.model : "__new__", modelNew: knownModel ? "" : item.model,
+        quantity: String(item.expectedQuantity), unitPrice: String(item.unitPrice),
+      };
+    }));
+    setNewOpen(true);
+  };
 
   /**
    * A compra montada pelo Dashboard chega no estado do link (ver
@@ -212,26 +236,33 @@ export default function PurchaseOrdersSection() {
   }, [location.state]);
 
   const handleCreate = async () => {
+    if (saving) return;
     const payload = items
       .map(i => ({
         brand: resolveBrand(i),
         model: resolveModel(i),
-        expectedQuantity: parseInt(i.quantity, 10) || 0,
-        unitPrice: Number(i.unitPrice.replace(",", ".")) || 0,
-      }))
-      .filter(i => i.brand && i.model);
-    if (payload.length === 0) { toast.error("Informe marca e modelo"); return; }
-    if (payload.some(i => i.expectedQuantity <= 0)) { toast.error("Quantidade esperada deve ser maior que zero"); return; }
+        expectedQuantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice.replace(",", ".")),
+      }));
+    if (payload.length === 0 || payload.some(i => !i.brand || !i.model)) { toast.error("Informe marca e modelo de todos os produtos"); return; }
+    if (payload.some(i => !Number.isInteger(i.expectedQuantity) || i.expectedQuantity <= 0)) { toast.error("Quantidade esperada deve ser um número inteiro maior que zero"); return; }
+    const freightCost = Number(freightNew.replace(",", "."));
+    if (!date || !Number.isFinite(freightCost) || freightCost < 0 || payload.some(i => !Number.isFinite(i.unitPrice) || i.unitPrice < 0)) { toast.error("Verifique a data, o frete e os valores unitários"); return; }
     setSaving(true);
-    await addPurchaseOrder({
-      date,
-      notes: notes || undefined,
-      freightCost: Number(freightNew.replace(",", ".")) || 0,
-      items: payload,
-    });
-    setSaving(false);
-    resetNew();
-    setNewOpen(false);
+    try {
+      const input = { date, notes: notes || undefined, freightCost, items: payload };
+      if (editing) {
+        if (!await updatePurchaseOrder(editing.id, input, editing.updatedAt)) return;
+      } else {
+        await addPurchaseOrder(input);
+      }
+      resetNew();
+      setNewOpen(false);
+    } catch {
+      toast.error("Não foi possível salvar a compra. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openReceive = (order: PurchaseOrder) => {
@@ -321,7 +352,7 @@ export default function PurchaseOrdersSection() {
                 <History size={13} />Histórico
               </NcButton>
             )}
-            <NcButton onClick={() => setNewOpen(true)}>
+            <NcButton onClick={() => { resetNew(); setNewOpen(true); }}>
               <Plus size={13} />Nova compra
             </NcButton>
           </div>
@@ -337,6 +368,7 @@ export default function PurchaseOrdersSection() {
               <OrderRow
                 key={order.id}
                 order={order}
+                onEdit={openEdit}
                 onReceive={openReceive}
                 onDelete={async (id) => { if (await confirm({ title: "Excluir compra", description: "Excluir esta compra aguardando recebimento?" })) deletePurchaseOrder(id); }}
               />
@@ -366,16 +398,16 @@ export default function PurchaseOrdersSection() {
       </Sheet>
 
       {/* Nova compra */}
-      <Sheet open={newOpen} onOpenChange={(v) => { setNewOpen(v); if (!v) resetNew(); }}>
-        <SheetContent className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
+      <Sheet open={newOpen} onOpenChange={(v) => { if (saving) return; setNewOpen(v); if (!v) resetNew(); }}>
+        <SheetContent aria-describedby={undefined} className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Compras"
-            title="Nova compra"
-            description={draftFrom
+            title={editing ? `Editar compra #${editing.number}` : "Nova compra"}
+            description={editing ? undefined : draftFrom
               ? `${draftFrom} modelo${draftFrom === 1 ? "" : "s"} abaixo do mínimo, vindos do Dashboard, com o que falta pedir e o custo médio. Confira com o fornecedor antes de registrar.`
               : "Registre o pedido agora; os sabores entram no recebimento."}
           />
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
+          <fieldset disabled={saving} className="min-w-0 flex-1 overflow-y-auto px-5 py-5 space-y-5 overscroll-contain">
             <section className="space-y-3">
               <h3 className={cn(EYEBROW, "font-normal")} style={{ color: "var(--nc-text-3)" }}>Pedido</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -462,14 +494,14 @@ export default function PurchaseOrdersSection() {
                 </div>
               </div>
             </section>
-          </div>
+          </fieldset>
           <SheetFooter className="px-5 py-3" style={{ borderTop: "1px solid var(--nc-track)", background: "var(--nc-rail)" }}>
             <div className="flex w-full items-center justify-between gap-3">
               <p className="text-[11px]" style={{ color: "var(--nc-text-2)" }}>
                 Total <span className="nc-num font-medium" style={{ color: "var(--nc-text)" }}>{brl(draftItemsTotal + draftFreight)}</span>
               </p>
               <NcButton variant="solid" size="md" onClick={handleCreate} disabled={saving}>
-                {saving ? "Salvando…" : "Registrar compra"}
+                {saving ? "Salvando…" : editing ? "Salvar alterações" : "Registrar compra"}
               </NcButton>
             </div>
           </SheetFooter>
