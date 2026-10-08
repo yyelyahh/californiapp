@@ -174,6 +174,24 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_layouts: {
+        Row: {
+          layout: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          layout: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          layout?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       deleted_products: {
         Row: {
           brand: string
@@ -838,6 +856,32 @@ export type Database = {
         }
         Relationships: []
       }
+      sale_costs: {
+        Row: {
+          created_at: string
+          sale_id: string
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          sale_id: string
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          sale_id?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_costs_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: true
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales: {
         Row: {
           branch_id: string
@@ -973,6 +1017,7 @@ export type Database = {
       }
       sellers: {
         Row: {
+          archived_at: string | null
           branch_id: string
           created_at: string
           debt_percentage: number
@@ -983,6 +1028,7 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          archived_at?: string | null
           branch_id: string
           created_at?: string
           debt_percentage?: number
@@ -993,6 +1039,7 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          archived_at?: string | null
           branch_id?: string
           created_at?: string
           debt_percentage?: number
@@ -1283,6 +1330,17 @@ export type Database = {
       }
     }
     Functions: {
+      add_branch_stock: {
+        Args: {
+          p_branch_id: string
+          p_min_stock?: number
+          p_product_id: string
+          p_quantity: number
+          p_sale_price?: number
+          p_unit_cost?: number
+        }
+        Returns: number
+      }
       combo_discount: { Args: never; Returns: number }
       combo_min_units: { Args: never; Returns: number }
       combo_unit_price: {
@@ -1353,6 +1411,8 @@ export type Database = {
         Returns: number
       }
       delete_sale: { Args: { p_sale_id: string }; Returns: undefined }
+      delete_stock_entry: { Args: { p_entry_id: string }; Returns: undefined }
+      delete_stock_loss: { Args: { p_loss_id: string }; Returns: undefined }
       expire_stale_orders: { Args: never; Returns: number }
       get_branch_products: {
         Args: { p_branch_id?: string }
@@ -1426,6 +1486,18 @@ export type Database = {
         Args: { p_branch_id: string; p_product_id: string; p_quantity: number }
         Returns: number
       }
+      ledger_position: {
+        Args: never
+        Returns: {
+          accumulated_profit: number
+          cash: number
+          distributed_profit: number
+          inventory: number
+          loan: number
+          partner_capital: number
+          receivable: number
+        }[]
+      }
       loyalty_cycle: { Args: never; Returns: number }
       loyalty_unit_price: {
         Args: { p_purchase_price: number; p_sale_price: number }
@@ -1437,6 +1509,34 @@ export type Database = {
       product_model_key: {
         Args: { p_brand: string; p_id: string; p_model: string }
         Returns: string
+      }
+      register_stock_loss: {
+        Args: {
+          p_branch_id: string
+          p_date?: string
+          p_product_id: string
+          p_quantity: number
+          p_reason?: string
+          p_seller_id?: string
+        }
+        Returns: {
+          branch_id: string
+          created_at: string
+          date: string
+          id: string
+          product_id: string
+          quantity: number
+          reason: string | null
+          seller_id: string | null
+          total_cost: number
+          unit_cost: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "stock_losses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_model_image: {
         Args: { p_brand: string; p_image_url: string; p_model: string }
