@@ -1225,9 +1225,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .update({ status: "received", received_at: new Date().toISOString() })
         .eq("id", id)
         .eq("status", "pending")
+        .eq("updated_at", order.updatedAt ?? "")
         .select("*");
       if (claimErr || !claimed || claimed.length === 0) {
-        toast.error("Esta compra já foi recebida");
+        toast.error("Esta compra foi alterada ou já foi recebida. Atualize a página e confira novamente.");
         return false;
       }
 
