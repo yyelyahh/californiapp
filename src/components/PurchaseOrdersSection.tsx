@@ -399,7 +399,7 @@ export default function PurchaseOrdersSection() {
 
       {/* Nova compra */}
       <Sheet open={newOpen} onOpenChange={(v) => { if (saving) return; setNewOpen(v); if (!v) resetNew(); }}>
-        <SheetContent aria-describedby={editing ? undefined : undefined} className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
+        <SheetContent aria-describedby={undefined} className="nocturne w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col overscroll-contain">
           <NcSheetHeader
             eyebrow="Compras"
             title={editing ? `Editar compra #${editing.number}` : "Nova compra"}
