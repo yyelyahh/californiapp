@@ -365,7 +365,11 @@ interface StoreContextType {
   getLoanRemaining: (loanId: string) => number;
 }
 
-const StoreContext = createContext<StoreContextType | null>(null);
+// Fast Refresh may keep the mounted provider while re-evaluating this module.
+// Preserve the context identity so refreshed consumers still read that provider.
+const StoreContext: React.Context<StoreContextType | null> =
+  import.meta.hot?.data.storeContext ?? createContext<StoreContextType | null>(null);
+if (import.meta.hot) import.meta.hot.data.storeContext = StoreContext;
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
