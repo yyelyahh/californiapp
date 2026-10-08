@@ -1413,6 +1413,17 @@ export type Database = {
       delete_sale: { Args: { p_sale_id: string }; Returns: undefined }
       delete_stock_entry: { Args: { p_entry_id: string }; Returns: undefined }
       delete_stock_loss: { Args: { p_loss_id: string }; Returns: undefined }
+      edit_pending_purchase_order: {
+        Args: {
+          p_date: string
+          p_expected_updated_at: string
+          p_freight_cost: number
+          p_items: Json
+          p_notes: string
+          p_order_id: string
+        }
+        Returns: Json
+      }
       expire_stale_orders: { Args: never; Returns: number }
       get_branch_products: {
         Args: { p_branch_id?: string }
