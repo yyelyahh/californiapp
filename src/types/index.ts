@@ -335,7 +335,15 @@ export interface PurchaseOrder {
   freightCost: number;
   receivedAt?: string;
   createdAt: string;
+  updatedAt?: string;
   items: PurchaseOrderItem[];
+}
+
+export interface PurchaseOrderInput {
+  date: string;
+  notes?: string;
+  freightCost?: number;
+  items: { brand: string; model: string; expectedQuantity: number; unitPrice?: number }[];
 }
 
 export interface PurchaseReceiptItemInput {

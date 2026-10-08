@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   PurchaseOrder,
   PurchaseOrderItem,
+  PurchaseOrderInput,
   PurchaseReceiptItemInput,
   Product,
   StockEntry,
@@ -243,6 +244,7 @@ interface StoreContextType {
     items: { brand: string; model: string; expectedQuantity: number; unitPrice?: number }[];
   }) => Promise<void>;
   deletePurchaseOrder: (id: string) => Promise<void>;
+  updatePurchaseOrder: (id: string, o: PurchaseOrderInput, updatedAt?: string) => Promise<boolean>;
   receivePurchaseOrder: (id: string, items: PurchaseReceiptItemInput[], date: string) => Promise<boolean>;
   loading: boolean;
   loadProgress: LoadProgress;
