@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Corrigir perda do contexto de dados durante atualização da prévia e verificar a Entrada autenticada.
+- [x] Corrigir perda do contexto de dados durante atualização da prévia e verificar a Entrada autenticada.
 
 - [x] Permitir editar compras a caminho com salvamento atômico, sem editar compras recebidas; validar formulário e testes.
 
