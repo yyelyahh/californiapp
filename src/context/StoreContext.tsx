@@ -1027,6 +1027,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     freightCost: Number(r.freight_cost ?? 0),
     receivedAt: r.received_at ?? undefined,
     createdAt: r.created_at,
+    updatedAt: r.updated_at,
     items: (r.purchase_order_items ?? []).map(
       (i): PurchaseOrderItem => ({
         id: i.id,
@@ -1103,6 +1104,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     [],
   );
+
+  const updatePurchaseOrder = useCallback(async (id: string, o: PurchaseOrderInput, updatedAt?: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.rpc("edit_pending_purchase_order", {
+        p_order_id: id,
+        p_date: o.date,
+        p_notes: o.notes ?? "",
+        p_freight_cost: o.freightCost ?? 0,
+        p_expected_updated_at: updatedAt ?? "",
+        p_items: o.items.map(i => ({
+          brand: i.brand, model: i.model,
+          expected_quantity: i.expectedQuantity, unit_price: i.unitPrice ?? 0,
+        })),
+      });
+      if (error || !data) {
+        toast.error(error?.message.includes("compra_ja_recebida")
+          ? "Esta compra já foi recebida e não pode ser editada"
+          : error?.message.includes("compra_alterada")
+            ? "Esta compra mudou. Atualize a página e confira antes de editar."
+            : "Não foi possível salvar a compra. Tente novamente.");
+        return false;
+      }
+      setPurchaseOrdersRaw(prev => prev.map(order => order.id === id ? mapPurchaseOrder(data) : order));
+      toast.success("Compra atualizada");
+      return true;
+    } catch {
+      toast.error("Não foi possível salvar a compra. Tente novamente.");
+      return false;
+    }
+  }, []);
 
   const deletePurchaseOrder = useCallback(async (id: string) => {
     const { error } = await supabase
@@ -2852,6 +2883,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       saleUnitCost,
       purchaseOrders,
       addPurchaseOrder,
+      updatePurchaseOrder,
       deletePurchaseOrder,
       receivePurchaseOrder,
       partnerContributions,
@@ -2960,6 +2992,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       saleUnitCost,
       purchaseOrders,
       addPurchaseOrder,
+      updatePurchaseOrder,
       deletePurchaseOrder,
       receivePurchaseOrder,
       partnerContributions,
