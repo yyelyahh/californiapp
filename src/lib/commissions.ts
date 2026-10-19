@@ -29,7 +29,14 @@ export const COMMISSION_TIERS: CommissionTier[] = [
  */
 export const NON_COMMISSION_SELLERS = ["gab", "leo", "luis"];
 
-export function isCommissionSeller(seller: { name?: string }): boolean {
+/**
+ * Exceções por cadastro: o Luis de Porto Alegre vende com comissão (decisão
+ * do dono), enquanto o Luis de Ivoti segue como dono, sem comissão.
+ */
+export const COMMISSION_SELLER_IDS = ["39d75fa2-dd4a-4aaf-874a-059732e94915"];
+
+export function isCommissionSeller(seller: { id?: string; name?: string }): boolean {
+  if (seller.id && COMMISSION_SELLER_IDS.includes(seller.id)) return true;
   return !NON_COMMISSION_SELLERS.includes((seller.name || "").trim().toLowerCase());
 }
 
