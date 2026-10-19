@@ -10,6 +10,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AnimatePresence, motion } from "motion/react";
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
+import { compareCatalog } from "@/lib/catalog-order";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { NcButton, NcSheetHeader, NcTabsList, EYEBROW, Field } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
@@ -160,6 +161,10 @@ export default function BranchTransferSheet() {
    * do produto. O que já entrou no lote sai do disponível: senão a pessoa
    * adicionaria duas vezes o mesmo sabor e o banco recusaria o lote inteiro no
    * fim, quando a caixa já está fechada.
+   *
+   * Ordem marca → modelo → sabor, a mesma do resto do sistema
+   * (`compareCatalog`): com a lista misturada, quem procura o que vai mandar
+   * percorre a caixa inteira para cada sabor.
    */
   const originItems = useMemo(() => {
     const base = origin === CASA
@@ -170,7 +175,8 @@ export default function BranchTransferSheet() {
           .filter(i => !!i.product);
     return base
       .map(i => ({ ...i, remaining: i.available - (inLines.get(`${origin}|${i.product.id}`) ?? 0) }))
-      .filter(i => i.remaining > 0);
+      .filter(i => i.remaining > 0)
+      .sort((a, b) => compareCatalog(a.product, b.product));
   }, [origin, products, productAssignments, availableOf, inLines]);
 
   const picked = originItems.find(i => i.product.id === productId);
