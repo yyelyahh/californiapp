@@ -10,6 +10,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AnimatePresence, motion } from "motion/react";
 import { useStore } from "@/context/StoreContext";
 import { useBranch } from "@/context/BranchContext";
+import { compareCatalog } from "@/lib/catalog-order";
 import { todayDateString, localDateToISO, formatDateBR } from "@/lib/date-utils";
 import { NcButton, NcSheetHeader, NcTabsList, EYEBROW, Field } from "@/components/nocturne";
 import { cn } from "@/lib/utils";
